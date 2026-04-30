@@ -1,15 +1,24 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api } from '../api'
-import DataGridModal from './DataGridModal'
 import ColumnValuesModal from './ColumnValuesModal'
 import StageTimeline from './StageTimeline'
 import AIAssistantPanel from './AIAssistantPanel'
+import ManualTransformsCard from './ManualTransformsCard'
+import DataGridViewer from './DataGridViewer'
 
 export default function DataPage({ dataset, setDataset }) {
-  const [viewStageId, setViewStageId] = useState(null)
+  const [viewStageId, setViewStageId] = useState('current')
   const [viewStageLabel, setViewStageLabel] = useState(null)
   const [activeVar, setActiveVar] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
+  const [suggestions, setSuggestions] = useState([])
+  const [statuses, setStatuses] = useState({})
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!dataset) return
+    loadSuggestions()
+  }, [dataset?.id])
 
   const refreshDataset = async () => {
     try {
@@ -20,6 +29,43 @@ export default function DataPage({ dataset, setDataset }) {
       console.error('Failed to refresh dataset', err)
     }
   }
+
+  const loadSuggestions = async () => {
+    setSuggestionsLoading(true)
+    try {
+      const r = await api.cleanSuggestions(dataset.id)
+      setSuggestions(r.suggestions || [])
+      setStatuses({})
+    } catch (err) {
+      console.error('Failed to load cleaning suggestions', err)
+    } finally {
+      setSuggestionsLoading(false)
+    }
+  }
+
+  const handleApplied = async () => {
+    await refreshDataset()
+    await loadSuggestions()
+  }
+
+  const actOnSuggestion = async (suggestion, accept) => {
+    if (!accept) {
+      setStatuses((current) => ({ ...current, [suggestion.id]: 'skipped' }))
+      return
+    }
+    try {
+      await api.cleanApply(dataset.id, { action: suggestion.action, variable: suggestion.variable })
+      setStatuses((current) => ({ ...current, [suggestion.id]: 'applied' }))
+      await refreshDataset()
+      await loadSuggestions()
+    } catch (err) {
+      alert('Apply failed: ' + err.message)
+    }
+  }
+
+  const missing = suggestions.filter((s) => s.kind === 'missing').length
+  const outliers = suggestions.filter((s) => s.kind === 'outliers').length
+  const types = suggestions.filter((s) => s.kind === 'type').length
 
   return (
     <>
@@ -33,7 +79,7 @@ export default function DataPage({ dataset, setDataset }) {
           <div>
             <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Raw data</p>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-              Browse the full dataset in an Excel-style grid.
+              Browse, inspect, and export the active dataset.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -45,20 +91,88 @@ export default function DataPage({ dataset, setDataset }) {
             >
               Download CSV
             </a>
-            <button
-              className="ax-btn prim"
-              onClick={() => {
-                setViewStageId('current')
-                setViewStageLabel(null)
-              }}
-            >
-              View data grid
-            </button>
+            {viewStageId !== 'current' && (
+              <button
+                className="ax-btn prim"
+                onClick={() => {
+                  setViewStageId('current')
+                  setViewStageLabel(null)
+                }}
+              >
+                Show current stage
+              </button>
+            )}
           </div>
         </div>
       </div>
 
+      <div style={{ marginBottom: 16 }}>
+        <DataGridViewer
+          datasetId={dataset.id}
+          variables={dataset.variables || []}
+          stageId={viewStageId === 'current' ? null : viewStageId}
+          stageLabel={viewStageLabel}
+          refreshKey={historyKey}
+        />
+      </div>
+
       <AIAssistantPanel datasetId={dataset.id} context="data" />
+
+      <ManualTransformsCard dataset={dataset} onApplied={handleApplied} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+        <StatCard label="Missing" value={missing} />
+        <StatCard label="Outliers" value={outliers} />
+        <StatCard label="Type issues" value={types} />
+      </div>
+
+      <p className="ax-lbl">Suggested fixes</p>
+      {suggestionsLoading ? (
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>Analyzing...</p>
+      ) : suggestions.length === 0 ? (
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>No issues found. Your data looks clean.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {suggestions.map((s) => {
+            const st = statuses[s.id]
+            return (
+              <div key={s.id} className="ax-card" style={{ padding: '10px 12px', opacity: st ? 0.4 : 1 }}>
+                <div className="ax-row" style={{ alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <KindBadge kind={s.kind} />
+                      <span style={{ fontSize: 12, fontWeight: 500 }}>{s.variable}</span>
+                      {st && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: '1px 6px',
+                            background: st === 'applied' ? 'var(--color-background-success)' : 'var(--color-background-secondary)',
+                            color: st === 'applied' ? 'var(--color-text-success)' : 'var(--color-text-secondary)',
+                            borderRadius: 4,
+                            marginLeft: 6,
+                          }}
+                        >
+                          {st === 'applied' ? 'Applied' : 'Skipped'}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                      {s.description}
+                    </p>
+                  </div>
+                  {!st && (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="ax-btn" onClick={() => actOnSuggestion(s, false)}>Skip</button>
+                      <button className="ax-btn prim" onClick={() => actOnSuggestion(s, true)}>Apply</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <p className="ax-lbl">Data history</p>
       <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '0 0 6px' }}>
@@ -110,18 +224,6 @@ export default function DataPage({ dataset, setDataset }) {
         </table>
       </div>
 
-      {viewStageId && (
-        <DataGridModal
-          datasetId={dataset.id}
-          variables={dataset.variables || []}
-          stageId={viewStageId === 'current' ? null : viewStageId}
-          stageLabel={viewStageLabel}
-          onClose={() => {
-            setViewStageId(null)
-            setViewStageLabel(null)
-          }}
-        />
-      )}
       {activeVar && (
         <ColumnValuesModal
           datasetId={dataset.id}
@@ -130,5 +232,29 @@ export default function DataPage({ dataset, setDataset }) {
         />
       )}
     </>
+  )
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div style={{ background: 'var(--color-background-primary)', borderRadius: 6, padding: 12, border: '0.5px solid var(--color-border-tertiary)' }}>
+      <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 22, fontWeight: 500, margin: '4px 0 0' }}>{value}</p>
+    </div>
+  )
+}
+
+function KindBadge({ kind }) {
+  const map = {
+    missing: { bg: '#FAEEDA', fg: '#854F0B', label: 'Missing' },
+    outliers: { bg: '#FCEBEB', fg: '#A32D2D', label: 'Outliers' },
+    type: { bg: '#E6F1FB', fg: '#185FA5', label: 'Type' },
+    expand: { bg: '#EEEDFE', fg: '#3C3489', label: 'Expand' },
+  }
+  const c = map[kind] || map.missing
+  return (
+    <span style={{ fontSize: 10, padding: '1px 6px', background: c.bg, color: c.fg, borderRadius: 4 }}>
+      {c.label}
+    </span>
   )
 }
