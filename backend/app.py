@@ -33,6 +33,10 @@ from sklearn.metrics import (
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload cap
 
+@app.route("/")
+def home():
+    return "API is running 🚀"
+
 _cors_raw = os.environ.get("CORS_ORIGINS", "*")
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 CORS(app, origins=_cors_origins)
@@ -2312,6 +2316,8 @@ def _save_analysis(session, ds_id, kind, config, result):
     )
     session.add(a)
     session.commit()
+
+
 
 # ========================================================================
 if __name__ == "__main__":
