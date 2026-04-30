@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import DataPage from './DataPage'
-import CleanPage from './CleanPage'
 import ExpandPage from './ExpandPage'
 import DescribePage from './DescribePage'
 import TestsPage from './TestsPage'
@@ -13,7 +12,6 @@ import ReportPage from './ReportPage'
 
 const TABS = [
   { key: 'data', label: 'Data' },
-  { key: 'clean', label: 'Clean' },
   { key: 'expand', label: 'Expand' },
   { key: 'describe', label: 'Describe' },
   { key: 'tests', label: 'Tests' },
@@ -56,7 +54,8 @@ export default function ProjectWorkspace() {
     )
   }
 
-  const page = renderTab(tab, { dataset, setDataset, activeModel, setActiveModel, go })
+  const effectiveTab = tab === 'clean' ? 'data' : tab
+  const page = renderTab(effectiveTab, { dataset, setDataset, activeModel, setActiveModel, go })
 
   return (
     <>
@@ -65,7 +64,7 @@ export default function ProjectWorkspace() {
           <NavLink
             key={t.key}
             to={`/projects/${id}/${t.key}`}
-            className={() => `ax-subnav-item ${t.key === tab ? 'active' : ''}`}
+            className={() => `ax-subnav-item ${t.key === effectiveTab ? 'active' : ''}`}
             end
           >
             {t.label}
@@ -90,8 +89,6 @@ function renderTab(tab, props) {
   switch (tab) {
     case 'data':
       return <DataPage dataset={props.dataset} setDataset={props.setDataset} />
-    case 'clean':
-      return <CleanPage dataset={props.dataset} setDataset={props.setDataset} />
     case 'expand':
       return <ExpandPage dataset={props.dataset} setDataset={props.setDataset} />
     case 'describe':
