@@ -1,0 +1,49 @@
+# Render blueprint — deploys backend API, frontend static site, and postgres DB
+services:
+  # --- backend API ---
+  - type: web
+    name: simu-cast-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: simu-cast-db
+          property: connectionString
+      # Lock CORS to the web service's public URL. If you rename the web
+      # service or use a custom domain, update this value.
+      - key: CORS_ORIGINS
+        value: https://simu-cast-web.onrender.com
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+  # --- frontend static site ---
+  # NOTE: rootDir is NOT used — Render's rootDir + staticPublishPath combo
+  # can resolve paths incorrectly, causing CSS/JS to be served as text/plain.
+  # Using cd in buildCommand + full path in staticPublishPath is more reliable.
+  - type: web
+    name: simu-cast-web
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://simu-cast-api.onrender.com
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+# --- database ---
+databases:
+  - name: simu-cast-db
+    plan: free
+    databaseName: simucast
+    user: simucast
