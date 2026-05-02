@@ -4,15 +4,34 @@ import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
 
 const ALGOS = [
-  { key: 'logistic', label: 'Logistic regression', task: 'classification', interpretable: true,
+  { key: 'logistic', label: 'Logistic Regression', task: 'classification', interpretable: true,
     desc: 'Linear, fast, interpretable. Good baseline for classification.' },
-  { key: 'rf',       label: 'Random forest',       task: 'both',           interpretable: false,
+  { key: 'rf',       label: 'Random Forest',       task: 'both',           interpretable: false,
     desc: 'Ensemble of trees. Handles non-linearity, less tuning needed.' },
-  { key: 'gbm',      label: 'Gradient boost',      task: 'both',           interpretable: false,
-    desc: 'Strong tabular performance. Slower than random forest, often wins.' },
-  { key: 'linear',   label: 'Linear regression',   task: 'regression',     interpretable: true,
+  { key: 'tree',     label: 'Decision Tree',       task: 'both',           interpretable: false,
+    desc: 'Single tree model. Easy to inspect, but can overfit without depth limits.' },
+  { key: 'linear',   label: 'Linear Regression',   task: 'regression',     interpretable: true,
     desc: 'Linear baseline for regression. Coefficients directly interpretable.' },
 ]
+
+const PARAM_DEFS = {
+  logistic: [
+    { key: 'C', label: 'Regularization C', type: 'number', min: 0.001, max: 100, step: 0.1, defaultValue: 1 },
+    { key: 'max_iter', label: 'Max iterations', type: 'number', min: 100, max: 5000, step: 100, defaultValue: 1000 },
+  ],
+  rf: [
+    { key: 'n_estimators', label: 'Trees', type: 'number', min: 10, max: 500, step: 10, defaultValue: 100 },
+    { key: 'max_depth', label: 'Max depth', type: 'numberOrBlank', min: 1, max: 50, step: 1, defaultValue: '' },
+    { key: 'min_samples_leaf', label: 'Min samples per leaf', type: 'number', min: 1, max: 50, step: 1, defaultValue: 1 },
+  ],
+  tree: [
+    { key: 'max_depth', label: 'Max depth', type: 'numberOrBlank', min: 1, max: 50, step: 1, defaultValue: '' },
+    { key: 'min_samples_leaf', label: 'Min samples per leaf', type: 'number', min: 1, max: 50, step: 1, defaultValue: 1 },
+  ],
+  linear: [
+    { key: 'fit_intercept', label: 'Fit intercept', type: 'checkbox', defaultValue: true },
+  ],
+}
 
 export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [target, setTarget] = useState('')
@@ -21,6 +40,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [testSize, setTestSize] = useState(0.2)
   const [stratify, setStratify] = useState(true)
   const [classWeight, setClassWeight] = useState(false)
+  const [modelParams, setModelParams] = useState(defaultModelParams())
   const [features, setFeatures] = useState([])
   const [chosenAlgos, setChosenAlgos] = useState(['logistic', 'rf'])
   const [plan, setPlan] = useState(null)
@@ -30,6 +50,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [results, setResults] = useState(null)
   const [activeResultIdx, setActiveResultIdx] = useState(0)
   const [models, setModels] = useState([])
+  const [draftReady, setDraftReady] = useState(false)
 
   const variables = dataset?.variables || []
   const candidateFeatures = variables.filter((v) => v.name !== target)
@@ -39,6 +60,47 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     if (!dataset) return
     api.listModels(dataset.id).then(setModels).catch(console.error)
   }, [dataset?.id])
+
+  useEffect(() => {
+    if (!dataset?.id) return
+    setDraftReady(false)
+    const raw = window.localStorage.getItem(`simucast.models.${dataset.id}`)
+    if (!raw) {
+      setDraftReady(true)
+      return
+    }
+    try {
+      const saved = JSON.parse(raw)
+      setTarget(saved.target || '')
+      setTargetMode(saved.targetMode || 'auto')
+      setPositiveClass(saved.positiveClass || '')
+      setTestSize(saved.testSize ?? 0.2)
+      setStratify(saved.stratify ?? true)
+      setClassWeight(saved.classWeight ?? false)
+      setFeatures(saved.features || [])
+      setChosenAlgos(saved.chosenAlgos || ['logistic', 'rf'])
+      setModelParams(saved.modelParams || defaultModelParams())
+    } catch (err) {
+      console.warn('Could not restore model draft', err)
+    } finally {
+      setDraftReady(true)
+    }
+  }, [dataset?.id])
+
+  useEffect(() => {
+    if (!dataset?.id || !draftReady) return
+    window.localStorage.setItem(`simucast.models.${dataset.id}`, JSON.stringify({
+      target,
+      targetMode,
+      positiveClass,
+      testSize,
+      stratify,
+      classWeight,
+      features,
+      chosenAlgos,
+      modelParams,
+    }))
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams)])
 
   // Refresh plan whenever target/features/algos change.
   useEffect(() => {
@@ -95,17 +157,20 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     if (!plan) return true
     return a.task === 'both' || a.task === plan.task
   })
+  const visibleAlgoKeys = visibleAlgos.map((a) => a.key)
+  const selectedAlgos = chosenAlgos.filter((a) => visibleAlgoKeys.includes(a))
 
   const train = async () => {
-    if (!target || features.length === 0 || chosenAlgos.length === 0) return
+    if (!target || features.length === 0 || selectedAlgos.length === 0) return
     setTraining(true)
     setResults(null)
     try {
       const r = await api.trainManyModels(dataset.id, {
         target,
         features,
-        algorithms: chosenAlgos,
+        algorithms: selectedAlgos,
         target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight),
+        model_params: modelParams,
       })
       setResults(r)
       setActiveResultIdx(0)
@@ -121,6 +186,40 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const useInWhatIf = (model) => {
     setActiveModel(model)
     onGo('whatif')
+  }
+
+  const canPrepareWhatIf = (model) => ['linear', 'logistic', 'tree', 'rf'].includes(model.algorithm)
+  const prepareAndUseInWhatIf = async (model) => {
+    if (model.has_whatif) {
+      useInWhatIf(model)
+      return
+    }
+    try {
+      await api.prepareModelForWhatIf(model.id)
+      const ready = { ...model, has_whatif: true }
+      setActiveModel(ready)
+      const list = await api.listModels(dataset.id)
+      setModels(list)
+      onGo('whatif')
+    } catch (err) {
+      alert('Could not prepare model for What-if: ' + err.message)
+    }
+  }
+
+  const restoreModelSettings = (model) => {
+    const metrics = model.metrics || {}
+    setTarget(model.target || '')
+    setFeatures(model.features || [])
+    setChosenAlgos([model.algorithm].filter(Boolean))
+    setTestSize(metrics.split?.test_size ?? 0.2)
+    setStratify(metrics.split?.stratified ?? true)
+    setClassWeight(metrics.class_weight === 'balanced')
+    setModelParams({
+      ...defaultModelParams(),
+      [model.algorithm]: metrics.model_params || defaultModelParams()[model.algorithm] || {},
+    })
+    setResults(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
@@ -276,7 +375,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                     onChange={() => toggleAlgo(a.key)}
                   />
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{a.label}</p>
+                    <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{algoLabelForTask(a.key, plan?.task)}</p>
                     <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{a.desc}</p>
                   </div>
                 </div>
@@ -295,22 +394,40 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       <div className="ax-row" style={{ margin: '8px 0 16px', justifyContent: 'flex-end' }}>
         <button
           className="ax-btn prim"
-          disabled={training || !plan || chosenAlgos.length === 0 || (plan.hard_blocks || []).length > 0}
+          disabled={training || !plan || selectedAlgos.length === 0 || (plan.hard_blocks || []).length > 0}
           onClick={train}
           type="button"
         >
-          {training ? `Training ${chosenAlgos.length} model${chosenAlgos.length === 1 ? '' : 's'}…` : `Train ${chosenAlgos.length} model${chosenAlgos.length === 1 ? '' : 's'}`}
+          {training ? `Training ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}...` : `Train ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}`}
         </button>
       </div>
 
       {/* Results */}
       {results && (
-        <ResultsPanel
-          results={results}
-          activeIdx={activeResultIdx}
-          setActiveIdx={setActiveResultIdx}
-          onUseInWhatIf={useInWhatIf}
-        />
+        <>
+          <ResultsPanel
+            results={results}
+            activeIdx={activeResultIdx}
+            setActiveIdx={setActiveResultIdx}
+            onUseInWhatIf={useInWhatIf}
+          />
+          <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Tune parameters</p>
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
+              Defaults were used for the first training run. Adjust settings here, then train again to compare a tuned run.
+            </p>
+            <ParameterSettings
+              selectedAlgos={selectedAlgos}
+              modelParams={modelParams}
+              setModelParams={setModelParams}
+            />
+            <div style={{ textAlign: 'right', marginTop: 10 }}>
+              <button className="ax-btn prim" disabled={training || selectedAlgos.length === 0} onClick={train}>
+                Train again with tuned settings
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Previous models */}
@@ -323,17 +440,20 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                 <div className="ax-row">
                   <div>
                     <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>
-                      {m.algorithm} · {m.target}
+                      {algoLabelForTask(m.algorithm, m.metrics?.task)} - {m.target}
                     </p>
                     <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
                       {formatMetrics(m.metrics)}
                     </p>
                   </div>
-                  {m.has_whatif && (
-                    <button className="ax-btn" onClick={() => useInWhatIf(m)} type="button">
-                      Use in what-if →
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <button className="ax-btn" onClick={() => restoreModelSettings(m)} type="button">
+                      Restore settings
                     </button>
-                  )}
+                    <button className="ax-btn" onClick={() => prepareAndUseInWhatIf(m)} type="button">
+                      Use in What-if
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -370,6 +490,58 @@ function Step({ n, title, disabled, children }) {
         <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{title}</p>
       </div>
       <div style={{ pointerEvents: disabled ? 'none' : 'auto' }}>{children}</div>
+    </div>
+  )
+}
+
+function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
+  if (!selectedAlgos.length) {
+    return (
+      <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '10px 0 0' }}>
+        Select at least one compatible model to view its default settings.
+      </p>
+    )
+  }
+  const update = (algo, key, value) => {
+    setModelParams({
+      ...modelParams,
+      [algo]: {
+        ...(modelParams[algo] || {}),
+        [key]: value,
+      },
+    })
+  }
+  return (
+    <div style={{ marginTop: 12, borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 12 }}>
+      <p className="ax-lbl" style={{ marginTop: 0 }}>Current settings</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+        {selectedAlgos.map((algo) => (
+          <div key={algo} className="ax-card" style={{ padding: '10px 12px' }}>
+            <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 8px' }}>{algoLabel(algo)}</p>
+            {(PARAM_DEFS[algo] || []).map((def) => {
+              const value = modelParams[algo]?.[def.key] ?? def.defaultValue
+              return (
+                <label key={def.key} style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 8, alignItems: 'center', fontSize: 11, marginBottom: 6 }}>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>{def.label}</span>
+                  {def.type === 'checkbox' ? (
+                    <input type="checkbox" checked={!!value} onChange={(e) => update(algo, def.key, e.target.checked)} />
+                  ) : (
+                    <input
+                      type="number"
+                      min={def.min}
+                      max={def.max}
+                      step={def.step}
+                      value={value}
+                      placeholder={def.type === 'numberOrBlank' ? 'None' : undefined}
+                      onChange={(e) => update(algo, def.key, e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  )}
+                </label>
+              )
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -443,6 +615,11 @@ function PreprocessingPlan({ plan }) {
           {plan.multicollinearity.length > 4 ? ` | +${plan.multicollinearity.length - 4} more` : ''}
         </PlanLine>
       )}
+      {(plan.excluded_features || []).length > 0 && (
+        <PlanLine label="Excluded">
+          Identifier/constant columns removed: {plan.excluded_features.map((x) => x.feature).join(', ')}
+        </PlanLine>
+      )}
       {plan.warnings.length > 0 && (
         <div
           style={{
@@ -497,11 +674,9 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf }) {
       <div className="ax-card" style={{ padding: 14, marginTop: 8 }}>
         <div className="ax-row" style={{ marginBottom: 10 }}>
           <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{active.label} — details</p>
-          {active.has_whatif && (
-            <button className="ax-btn" onClick={() => onUseInWhatIf(active)} type="button">
-              Use in what-if →
-            </button>
-          )}
+          <button className="ax-btn" onClick={() => active.has_whatif ? onUseInWhatIf(active) : api.prepareModelForWhatIf(active.id).then(() => onUseInWhatIf({ ...active, has_whatif: true })).catch((err) => alert('Could not prepare model for What-if: ' + err.message))} type="button">
+            Use in What-if
+          </button>
         </div>
         <ModelDetail model={active} />
       </div>
@@ -520,9 +695,9 @@ function ComparisonTable({ models, activeIdx, onPick }) {
             {task === 'classification' ? (
               <>
                 <th>Accuracy</th>
-                <th>F1</th>
                 <th>Precision</th>
                 <th>Recall</th>
+                <th>F1</th>
                 <th>AUC</th>
               </>
             ) : (
@@ -569,10 +744,10 @@ function ComparisonTable({ models, activeIdx, onPick }) {
                 {task === 'classification' ? (
                   <>
                     <td>{pct(mt.accuracy)}</td>
-                    <td>{num(mt.f1)}</td>
                     <td>{num(mt.precision)}</td>
                     <td>{num(mt.recall)}</td>
-                    <td>{num(mt.auc)}</td>
+                    <td>{num(mt.f1)}</td>
+                    <td>{mt.auc == null ? 'n/a' : num(mt.auc)}</td>
                   </>
                 ) : (
                   <>
@@ -603,21 +778,24 @@ function ComparisonTable({ models, activeIdx, onPick }) {
 }
 
 function ModelDetail({ model }) {
-  const importance = model.feature_importance || {}
-  const impLabels = Object.keys(importance)
-  const impValues = Object.values(importance)
+  const influence = normalizeInfluence(model.feature_influence || model.feature_importance)
+  const impLabels = influence.map((item) => item.feature)
+  const impValues = influence.map((item) => item.relative_strength ?? item.strength)
   const cm = model.metrics?.confusion_matrix
 
   return (
     <>
       {impLabels.length > 0 && (
         <>
-          <p className="ax-lbl" style={{ marginTop: 0 }}>Feature importance</p>
+          <p className="ax-lbl" style={{ marginTop: 0 }}>Feature influence</p>
+          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '-4px 0 8px' }}>
+            Influence is aggregated to original dataset columns. It may be affected by correlated features.
+          </p>
           <div style={{ height: Math.max(200, impLabels.length * 22), marginBottom: 14 }}>
             <Bar
               data={{
                 labels: impLabels,
-                datasets: [{ label: 'Importance', data: impValues, backgroundColor: '#7F77DD', borderRadius: 2 }],
+                datasets: [{ label: 'Influence', data: impValues, backgroundColor: '#7F77DD', borderRadius: 2 }],
               }}
               options={{
                 indexAxis: 'y',
@@ -630,6 +808,15 @@ function ModelDetail({ model }) {
                 },
               }}
             />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
+            {influence.map((item) => (
+              <div key={item.feature} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px', gap: 8, fontSize: 11 }}>
+                <strong>{item.feature}</strong>
+                <span>{Math.round((item.relative_strength ?? 0) * 100)}%</span>
+                <span style={{ color: directionColor(item.direction) }}>{directionLabel(item.direction)}</span>
+              </div>
+            ))}
           </div>
         </>
       )}
@@ -701,6 +888,33 @@ function formatMetrics(m) {
   }
   return `R² ${num(m.r2)} · RMSE ${num(m.rmse)}`
 }
+
+function normalizeInfluence(value) {
+  if (Array.isArray(value)) return value
+  if (!value || typeof value !== 'object') return []
+  const entries = Object.entries(value)
+  const max = Math.max(...entries.map(([, v]) => Number(v) || 0), 1)
+  return entries.map(([feature, strength]) => ({
+    feature,
+    strength: Number(strength) || 0,
+    relative_strength: (Number(strength) || 0) / max,
+    direction: null,
+  }))
+}
+
+function directionLabel(direction) {
+  if (direction === 'positive') return 'Increases'
+  if (direction === 'negative') return 'Decreases'
+  if (direction === 'mixed') return 'Mixed'
+  return 'Model-derived'
+}
+
+function directionColor(direction) {
+  if (direction === 'positive') return 'var(--color-text-success)'
+  if (direction === 'negative') return 'var(--color-text-danger)'
+  return 'var(--color-text-secondary)'
+}
+
 function pct(v) {
   if (v == null) return '—'
   return `${(v * 100).toFixed(1)}%`
@@ -708,6 +922,25 @@ function pct(v) {
 function num(v) {
   if (v == null) return '—'
   return Number(v).toFixed(3)
+}
+
+function defaultModelParams() {
+  return Object.fromEntries(
+    Object.entries(PARAM_DEFS).map(([algo, defs]) => [
+      algo,
+      Object.fromEntries(defs.map((def) => [def.key, def.defaultValue])),
+    ]),
+  )
+}
+
+function algoLabel(algo) {
+  return ALGOS.find((a) => a.key === algo)?.label || algo
+}
+
+function algoLabelForTask(algo, task) {
+  if (algo === 'rf') return task === 'classification' ? 'Random Forest Classifier' : task === 'regression' ? 'Random Forest Regressor' : 'Random Forest'
+  if (algo === 'tree') return task === 'classification' ? 'Decision Tree Classifier' : task === 'regression' ? 'Decision Tree Regressor' : 'Decision Tree'
+  return algoLabel(algo)
 }
 
 function targetOptions(mode, positiveClass, testSize, stratify, classWeight) {
@@ -719,3 +952,4 @@ function targetOptions(mode, positiveClass, testSize, stratify, classWeight) {
   if (classWeight) options.class_weight = 'balanced'
   return options
 }
+

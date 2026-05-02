@@ -15,6 +15,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const [statuses, setStatuses] = useState({})
   const [selectedActions, setSelectedActions] = useState({})
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [applyingAll, setApplyingAll] = useState(false)
 
   useEffect(() => {
     if (!dataset) return
@@ -64,6 +65,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   }
 
   const handleApplied = async () => {
+    setViewStageId('current')
+    setViewStageLabel(null)
     await refreshDataset()
     await loadSuggestions()
   }
@@ -77,10 +80,32 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       const action = selectedActions[suggestion.id] || suggestion.action
       await api.cleanApply(dataset.id, { action, variable: suggestion.variable })
       setStatuses((current) => ({ ...current, [suggestion.id]: 'applied' }))
-      await refreshDataset()
-      await loadSuggestions()
+      await handleApplied()
     } catch (err) {
       alert('Apply failed: ' + err.message)
+    }
+  }
+
+  const applyAllSuggestions = async () => {
+    const todo = suggestions.filter((s) => !statuses[s.id])
+    if (!todo.length || applyingAll) return
+    if (!window.confirm(`Apply ${todo.length} suggested fix${todo.length === 1 ? '' : 'es'} using the selected methods?`)) return
+    setApplyingAll(true)
+    try {
+      const applied = {}
+      for (const suggestion of todo) {
+        const action = selectedActions[suggestion.id] || suggestion.action
+        await api.cleanApply(dataset.id, { action, variable: suggestion.variable })
+        applied[suggestion.id] = 'applied'
+      }
+      setStatuses((current) => ({ ...current, ...applied }))
+      await handleApplied()
+    } catch (err) {
+      alert('Apply all failed: ' + err.message)
+      await refreshDataset()
+      await loadSuggestions()
+    } finally {
+      setApplyingAll(false)
     }
   }
 
@@ -129,6 +154,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 
       <div style={{ marginBottom: 16 }}>
         <DataGridViewer
+          key={`${dataset.id}:${dataset.current_stage_id}:${historyKey}`}
           datasetId={dataset.id}
           variables={dataset.variables || []}
           stageId={viewStageId === 'current' ? null : viewStageId}
@@ -152,7 +178,14 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         <StatCard label="Type issues" value={types} />
       </div>
 
-      <p className="ax-lbl">Suggested fixes</p>
+      <div className="ax-row" style={{ marginBottom: 8 }}>
+        <p className="ax-lbl" style={{ margin: 0 }}>Suggested fixes</p>
+        {suggestions.length > 0 && (
+          <button className="ax-btn prim" onClick={applyAllSuggestions} disabled={applyingAll || suggestionsLoading}>
+            {applyingAll ? 'Applying...' : 'Apply all'}
+          </button>
+        )}
+      </div>
       {suggestionsLoading ? (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>Analyzing...</p>
       ) : suggestions.length === 0 ? (

@@ -170,6 +170,11 @@ export default function ReportPage({ dataset }) {
                               Mapping: {Object.entries(it.detail.mapping).map(([from, to]) => `${from} to ${to}`).join('; ')}
                             </p>
                           )}
+                          {it.feature_influence && (
+                            <p style={{ margin: '4px 0 0' }}>
+                              Feature influence: {normalizeInfluence(it.feature_influence).slice(0, 5).map((x) => x.feature).join(', ')}
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -212,7 +217,7 @@ function sectionHtml(sec) {
           it.created_at ? `${escapeHtml(new Date(it.created_at).toLocaleString())} - ` : ''
         }${it.kind ? `<strong>${escapeHtml(it.kind)}</strong>: ` : ''}${
           escapeHtml(it.summary || it.result?.interpretation || formatInline(it.metrics) || JSON.stringify(it.result || it.metrics || it.detail || {}).slice(0, 180))
-        }${notesHtml(it.detail?.notes)}${mappingHtml(it.detail?.mapping)}</div>`
+        }${influenceHtml(it.feature_influence)}${notesHtml(it.detail?.notes)}${mappingHtml(it.detail?.mapping)}</div>`
       )).join('')
     : ''
   return `<section><h2>${escapeHtml(sec.title)}</h2>${body}${stats}${items}</section>`
@@ -228,6 +233,18 @@ function mappingHtml(mapping) {
   return `<details style="margin-top:6px;"><summary>Category mapping</summary><ul>${
     Object.entries(mapping).map(([from, to]) => `<li>${escapeHtml(from)} to ${escapeHtml(to)}</li>`).join('')
   }</ul></details>`
+}
+
+function influenceHtml(value) {
+  const influence = normalizeInfluence(value)
+  if (!influence.length) return ''
+  return `<div style="margin-top:6px;"><strong>Feature influence:</strong> ${escapeHtml(influence.slice(0, 5).map((x) => x.feature).join(', '))}</div>`
+}
+
+function normalizeInfluence(value) {
+  if (Array.isArray(value)) return value
+  if (!value || typeof value !== 'object') return []
+  return Object.entries(value).map(([feature, strength]) => ({ feature, strength }))
 }
 
 function fmtHtml(v) {

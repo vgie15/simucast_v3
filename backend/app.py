@@ -7,6 +7,8 @@ import json
 import time
 import uuid
 import re
+import base64
+import pickle
 from difflib import SequenceMatcher
 from datetime import datetime
 
@@ -22,7 +24,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from scipy import stats
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
@@ -846,9 +849,14 @@ _CATEGORY_ABBREVIATIONS = {
     "uni": "university",
     "lo": "low",
     "hi": "high",
+    "mid": "middle",
+    "med": "middle",
     "y": "yes",
     "n": "no",
 }
+
+_YES_VALUES = {"1", "1.0", "yes", "y", "true", "t"}
+_NO_VALUES = {"0", "0.0", "no", "n", "false", "f"}
 
 def _normalize_category_value(value):
     if value is None or pd.isna(value):
@@ -859,13 +867,60 @@ def _normalize_category_value(value):
         text = re.sub(rf"\b{re.escape(old)}\b", new, text)
     return re.sub(r"\s+", " ", text).strip()
 
+def _binary_category_groups(values, column_name=""):
+    yes_values = []
+    no_values = []
+    unknown = []
+    has_numeric_token = False
+    has_text_token = False
+    for value in values:
+        text = str(value).strip()
+        norm = _normalize_category_value(value)
+        if norm in _YES_VALUES:
+            yes_values.append(text)
+            has_numeric_token = has_numeric_token or norm in {"1", "1.0"}
+            has_text_token = has_text_token or norm not in {"1", "1.0"}
+        elif norm in _NO_VALUES:
+            no_values.append(text)
+            has_numeric_token = has_numeric_token or norm in {"0", "0.0"}
+            has_text_token = has_text_token or norm not in {"0", "0.0"}
+        else:
+            unknown.append(text)
+
+    if not yes_values or not no_values:
+        return []
+    booleanish_name = bool(re.search(r"(^has_|^is_|^can_|^will_|_flag$|_status$)", str(column_name).lower()))
+    mixed_binary = has_numeric_token and has_text_token
+    if unknown and not (mixed_binary or booleanish_name):
+        return []
+
+    groups = []
+    if len(set(yes_values)) > 1 or any(v != "Yes" for v in yes_values):
+        groups.append({
+            "values": sorted(set(yes_values)),
+            "normalized_values": ["yes"],
+            "suggested_label": "Yes",
+            "reason": "Detected mixed binary values that represent Yes.",
+            "kind": "binary",
+        })
+    if len(set(no_values)) > 1 or any(v != "No" for v in no_values):
+        groups.append({
+            "values": sorted(set(no_values)),
+            "normalized_values": ["no"],
+            "suggested_label": "No",
+            "reason": "Detected mixed binary values that represent No.",
+            "kind": "binary",
+        })
+    return groups
+
 def _title_category_label(text):
     if not text:
         return ""
     small = {"of", "and", "or", "the"}
     return " ".join(part if part in small else part[:1].upper() + part[1:] for part in str(text).split())
 
-def _category_groups(values, threshold=0.88):
+def _category_groups(values, column_name="", threshold=0.88):
+    binary_groups = _binary_category_groups(values, column_name)
     normalized = {}
     for value in values:
         norm = _normalize_category_value(value)
@@ -896,7 +951,16 @@ def _category_groups(values, threshold=0.88):
                 "suggested_label": _title_category_label(label_source),
                 "reason": "Rule-based normalization and fuzzy matching found similar category labels.",
             })
-    return groups
+
+    merged = []
+    seen = set()
+    for group in binary_groups + groups:
+        key = tuple(sorted(group.get("values") or []))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(group)
+    return merged
 
 @app.route("/api/datasets/<ds_id>/categories/suggestions", methods=["GET"])
 def category_suggestions(ds_id):
@@ -912,14 +976,19 @@ def category_suggestions(ds_id):
             if var.get("dtype") not in ("category", "binary"):
                 continue
             col = var["name"]
-            uniques = [v for v in df[col].dropna().unique().tolist()]
+            counts = df[col].dropna().astype(str).value_counts()
+            uniques = counts.index.tolist()
             if len(uniques) < 2 or len(uniques) > 120:
                 continue
-            groups = _category_groups(uniques)
+            groups = _category_groups(uniques, col)
             if groups:
                 suggestions.append({
                     "column": col,
                     "unique_count": len(uniques),
+                    "unique_values": [
+                        {"value": str(value), "count": int(count)}
+                        for value, count in counts.items()
+                    ],
                     "groups": groups,
                 })
         return jsonify({"suggestions": suggestions})
@@ -1037,6 +1106,71 @@ def create_activity_note(ds_id):
             ref_id=ref_id,
         )
         return jsonify(activity_payload(entry))
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/activity/<activity_id>", methods=["DELETE"])
+def delete_or_undo_activity(ds_id, activity_id):
+    """Remove a documentation entry. If it is the current data-stage step, undo by restoring its parent stage first."""
+    reverse = str(request.args.get("reverse", "false")).lower() == "true"
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        entry = s.query(ActivityLog).filter_by(id=activity_id, dataset_id=ds_id).first()
+        if not entry:
+            return {"error": "activity not found"}, 404
+        detail = jload(entry.detail) or {}
+        stage_id = entry.ref_id if entry.ref_type == "stage" else detail.get("related_stage_id")
+        model_id = entry.ref_id if entry.ref_type == "model" else detail.get("related_model_id")
+        analysis_id = entry.ref_id if entry.ref_type == "analysis" else detail.get("related_analysis_id")
+        restored_to = None
+        if reverse and stage_id and stage_id != "original":
+            stage = s.query(DatasetStage).filter_by(id=stage_id, dataset_id=ds_id).first()
+            if not stage:
+                return {"error": "stage not found"}, 404
+            parent_id = stage.parent_stage_id or "original"
+            if parent_id == "original":
+                rows = jload(ds.data) or []
+                df = pd.DataFrame(rows)
+                ds.current_stage_id = None
+                ds.row_count = len(df)
+                ds.col_count = len(df.columns)
+            else:
+                parent = s.query(DatasetStage).filter_by(id=parent_id, dataset_id=ds_id).first()
+                if not parent:
+                    return {"error": "parent stage not found"}, 404
+                ds.current_stage_id = parent.id
+                ds.variables = parent.variables
+                ds.row_count = parent.row_count
+                ds.col_count = parent.col_count
+            restored_to = parent_id
+            log_activity(
+                s,
+                ds_id,
+                "restore",
+                f"Undid step: {entry.summary}",
+                detail={"category": "data_prep", "action_type": "undo_step", "undone_activity_id": activity_id, "undone_stage_id": stage_id, "restored_to": restored_to},
+                ref_type="stage",
+                ref_id=restored_to,
+                commit=False,
+            )
+        elif reverse and model_id:
+            model = s.query(Model).filter_by(id=model_id, dataset_id=ds_id).first()
+            if model:
+                s.delete(model)
+            restored_to = "model_deleted"
+        elif reverse and analysis_id:
+            analysis = s.query(Analysis).filter_by(id=analysis_id, dataset_id=ds_id).first()
+            if analysis:
+                s.delete(analysis)
+            restored_to = "analysis_deleted"
+        elif reverse and entry.kind in {"report", "whatif"}:
+            restored_to = "log_only"
+        s.delete(entry)
+        s.commit()
+        return jsonify({"ok": True, "restored_to": restored_to})
     finally:
         s.close()
 
@@ -2058,16 +2192,60 @@ def do_pca(ds_id):
 ALGORITHM_CATALOG = {
     "logistic": {"label": "Logistic regression", "task": "classification", "needs_scaling": True,  "interpretable": True},
     "rf":       {"label": "Random forest",       "task": "both",          "needs_scaling": False, "interpretable": False},
-    "gbm":      {"label": "Gradient boost",      "task": "both",          "needs_scaling": False, "interpretable": False},
+    "tree":     {"label": "Decision tree",       "task": "both",          "needs_scaling": False, "interpretable": False},
     "linear":   {"label": "Linear regression",   "task": "regression",    "needs_scaling": True,  "interpretable": True},
 }
+
+MODEL_PARAM_DEFAULTS = {
+    "logistic": {"C": 1.0, "max_iter": 1000},
+    "rf": {"n_estimators": 100, "max_depth": None, "min_samples_leaf": 1},
+    "tree": {"max_depth": None, "min_samples_leaf": 1},
+    "linear": {"fit_intercept": True},
+}
+
+def _model_default_params(algo):
+    return dict(MODEL_PARAM_DEFAULTS.get(algo, {}))
+
+def _algo_label_for_task(algo, task=None):
+    if algo == "rf":
+        return "Random Forest Classifier" if task == "classification" else "Random Forest Regressor" if task == "regression" else "Random Forest"
+    if algo == "tree":
+        return "Decision Tree Classifier" if task == "classification" else "Decision Tree Regressor" if task == "regression" else "Decision Tree"
+    return ALGORITHM_CATALOG.get(algo, {}).get("label", algo)
+
+def _sanitize_model_params(algo, params=None):
+    clean = _model_default_params(algo)
+    params = params or {}
+    if algo == "logistic":
+        clean["C"] = min(max(_parse_num(params.get("C"), clean["C"], float), 0.001), 100.0)
+        clean["max_iter"] = min(max(_parse_num(params.get("max_iter"), clean["max_iter"], int), 100), 5000)
+    elif algo == "rf":
+        clean["n_estimators"] = min(max(_parse_num(params.get("n_estimators"), clean["n_estimators"], int), 10), 500)
+        depth = params.get("max_depth", clean["max_depth"])
+        clean["max_depth"] = None if depth in (None, "", "none", "None") else min(max(_parse_num(depth, 10, int), 1), 50)
+        clean["min_samples_leaf"] = min(max(_parse_num(params.get("min_samples_leaf"), clean["min_samples_leaf"], int), 1), 50)
+    elif algo == "tree":
+        depth = params.get("max_depth", clean["max_depth"])
+        clean["max_depth"] = None if depth in (None, "", "none", "None") else min(max(_parse_num(depth, 10, int), 1), 50)
+        clean["min_samples_leaf"] = min(max(_parse_num(params.get("min_samples_leaf"), clean["min_samples_leaf"], int), 1), 50)
+    elif algo == "linear":
+        clean["fit_intercept"] = bool(params.get("fit_intercept", clean["fit_intercept"]))
+    return clean
+
+def _is_identifier_feature(series, row_count):
+    nunique = series.nunique(dropna=True)
+    if nunique <= 1:
+        return "constant"
+    if row_count > 0 and nunique == row_count:
+        return "identifier"
+    return None
 
 
 def _detect_task(y):
     """Heuristic: small distinct count + non-continuous → classification."""
-    return y.nunique() <= 10 and (
+    return (
         pd.api.types.is_object_dtype(y)
-        or pd.api.types.is_integer_dtype(y)
+        or pd.api.types.is_categorical_dtype(y)
         or pd.api.types.is_bool_dtype(y)
     )
 
@@ -2083,6 +2261,17 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     features = [f for f in features if f in df.columns and f != target]
     if not features:
         raise ValueError("pick at least one feature")
+    excluded_features = []
+    kept_features = []
+    for f in features:
+        reason = _is_identifier_feature(df[f], len(df))
+        if reason:
+            excluded_features.append({"feature": f, "reason": reason})
+        else:
+            kept_features.append(f)
+    features = kept_features
+    if not features:
+        raise ValueError("all selected features were identifiers or constant columns")
 
     sub = df[features + [target]]
     rows_before = len(sub)
@@ -2096,6 +2285,10 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     class_weight = target_options.get("class_weight") if target_options.get("class_weight") in ("balanced", None) else None
     y = sub_clean[target]
     task = "classification" if _detect_task(y) else "regression"
+    algorithms = [
+        a for a in algorithms or []
+        if ALGORITHM_CATALOG.get(a) and (ALGORITHM_CATALOG[a]["task"] == "both" or ALGORITHM_CATALOG[a]["task"] == task)
+    ]
     target_classes = [str(x) for x in y.dropna().astype(str).value_counts().index.tolist()] if task == "classification" else []
     target_mode = target_options.get("mode") or ("binary" if task == "classification" and len(target_classes) == 2 else "multiclass")
     positive_class = target_options.get("positive_class") or (target_classes[0] if target_classes else None)
@@ -2174,6 +2367,9 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         warnings.append(f"Only {rows_after} complete rows after dropping missing — consider Expand or imputation.")
 
     # leakage heuristics: features with same uniqueness as rows ≈ id-like
+    if excluded_features:
+        warnings.append("Identifier or constant columns were excluded from modeling: " + ", ".join(x["feature"] for x in excluded_features))
+
     for c in features:
         nunique = df[c].nunique(dropna=True)
         if nunique <= 1:
@@ -2218,6 +2414,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         "task": task,
         "target": target,
         "features": features,
+        "excluded_features": excluded_features,
         "rows_used": rows_after,
         "rows_dropped": dropped,
         "encoding": encoding,
@@ -2234,6 +2431,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
             "stratified": bool(task == "classification" and stratify_split),
         },
         "class_weight": class_weight if task == "classification" else None,
+        "model_params": {a: _model_default_params(a) for a in algorithms or [] if a in ALGORITHM_CATALOG},
         "multicollinearity": multicollinearity,
         "validation_checks": validation_checks,
         "hard_blocks": hard_blocks,
@@ -2241,13 +2439,113 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     }
 
 
-def _train_one(df, target, features, algo, test_size, plan):
+def _original_feature_name(encoded_feature, original_features, sep="="):
+    if encoded_feature in original_features:
+        return encoded_feature
+    if sep in encoded_feature:
+        candidate = encoded_feature.split(sep, 1)[0]
+        if candidate in original_features:
+            return candidate
+    return encoded_feature
+
+def _feature_influence_from_model(clf, encoded_columns, original_features, algo):
+    rows = {}
+    if hasattr(clf, "feature_importances_"):
+        for col, value in zip(encoded_columns, clf.feature_importances_):
+            original = _original_feature_name(col, original_features)
+            entry = rows.setdefault(original, {"feature": original, "strength": 0.0, "direction_score": 0.0})
+            entry["strength"] += abs(float(value))
+    elif hasattr(clf, "coef_"):
+        coef_arr = np.asarray(clf.coef_)
+        if coef_arr.ndim == 2 and coef_arr.shape[0] > 1:
+            coef = np.mean(np.abs(coef_arr), axis=0)
+            signed_coef = np.mean(coef_arr, axis=0)
+        else:
+            coef = coef_arr.ravel()
+            signed_coef = coef
+        for col, value in zip(encoded_columns, coef):
+            original = _original_feature_name(col, original_features)
+            entry = rows.setdefault(original, {"feature": original, "strength": 0.0, "direction_score": 0.0})
+            entry["strength"] += abs(float(value))
+            entry["direction_score"] += float(signed_coef[list(encoded_columns).index(col)])
+
+    if not rows:
+        return []
+    max_strength = max((v["strength"] for v in rows.values()), default=1.0) or 1.0
+    influence = []
+    for entry in rows.values():
+        strength = entry["strength"]
+        direction = None
+        if algo in ("linear", "logistic"):
+            signed = entry.get("direction_score", 0.0)
+            if abs(signed) < strength * 0.15:
+                direction = "mixed"
+            else:
+                direction = "positive" if signed > 0 else "negative"
+        influence.append({
+            "feature": entry["feature"],
+            "strength": float(strength),
+            "relative_strength": float(strength / max_strength),
+            "direction": direction,
+        })
+    return sorted(influence, key=lambda x: -x["strength"])[:15]
+
+
+def _serialize_estimator(model):
+    return base64.b64encode(pickle.dumps(model)).decode("ascii")
+
+
+def _deserialize_estimator(payload):
+    return pickle.loads(base64.b64decode(payload.encode("ascii")))
+
+
+def _whatif_input_matrix(bundle, inputs):
+    """Apply the same encoding/scaling contract used when the model was trained."""
+    sep = bundle.get("dummy_sep", "=")
+    raw_features = bundle.get("raw_features") or []
+    original_features = bundle.get("original_features") or [f.get("name") for f in raw_features]
+    row = {}
+    for feature in raw_features:
+        name = feature.get("name")
+        if not name:
+            continue
+        value = inputs.get(name, feature.get("default") if feature.get("kind") == "categorical" else feature.get("mean"))
+        if feature.get("kind") == "categorical":
+            row[name] = "" if value is None else str(value)
+        else:
+            try:
+                row[name] = float(value)
+            except Exception:
+                row[name] = float(feature.get("mean") or 0)
+    for name in original_features:
+        if name not in row:
+            try:
+                row[name] = float(inputs.get(name, 0))
+            except Exception:
+                row[name] = inputs.get(name, "")
+
+    X_raw = pd.DataFrame([row], columns=original_features)
+    X = pd.get_dummies(X_raw, drop_first=True, prefix_sep=sep)
+    encoded_features = bundle.get("features") or bundle.get("encoded_features") or X.columns.tolist()
+    X = X.reindex(columns=encoded_features, fill_value=0)
+
+    if bundle.get("scaled"):
+        means = bundle.get("feature_means") or {}
+        stds = bundle.get("feature_stds") or {}
+        for col in X.columns:
+            scale = stds.get(col, 1) or 1
+            X[col] = (X[col].astype(float) - means.get(col, 0)) / scale
+    return X
+
+
+def _train_one(df, target, features, algo, test_size, plan, model_params=None):
     """Train a single model. Returns a dict with metrics + importance.
 
     The transparent preprocessing plan is reused so every algorithm in a
     multi-train run sees an identical pipeline.
     """
     data = df[features + [target]].dropna()
+    params = _sanitize_model_params(algo, model_params)
     X_raw = data[features].copy()
     X = X_raw.copy()
     y = data[target]
@@ -2286,11 +2584,11 @@ def _train_one(df, target, features, algo, test_size, plan):
 
     if is_classification:
         if algo == "rf":
-            clf = RandomForestClassifier(n_estimators=100, random_state=42, class_weight=plan.get("class_weight"))
-        elif algo == "gbm":
-            clf = GradientBoostingClassifier(random_state=42)
+            clf = RandomForestClassifier(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42, class_weight=plan.get("class_weight"))
+        elif algo == "tree":
+            clf = DecisionTreeClassifier(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42, class_weight=plan.get("class_weight"))
         elif algo == "logistic":
-            clf = LogisticRegression(max_iter=1000, class_weight=plan.get("class_weight"))
+            clf = LogisticRegression(C=params["C"], max_iter=params["max_iter"], class_weight=plan.get("class_weight"))
         else:
             raise ValueError(f"algorithm '{algo}' not supported for classification")
         clf.fit(X_train, y_train)
@@ -2303,6 +2601,7 @@ def _train_one(df, target, features, algo, test_size, plan):
             "f1": float(f1_score(y_test, y_pred, average="weighted", zero_division=0)),
             "split": plan.get("split"),
             "class_weight": plan.get("class_weight"),
+            "model_params": params,
         }
         if len(np.unique(y)) == 2 and hasattr(clf, "predict_proba"):
             try:
@@ -2313,13 +2612,11 @@ def _train_one(df, target, features, algo, test_size, plan):
         metrics["confusion_matrix"] = confusion_matrix(y_test, y_pred).tolist()
     else:
         if algo == "rf":
-            from sklearn.ensemble import RandomForestRegressor
-            clf = RandomForestRegressor(n_estimators=100, random_state=42)
-        elif algo == "gbm":
-            from sklearn.ensemble import GradientBoostingRegressor
-            clf = GradientBoostingRegressor(random_state=42)
+            clf = RandomForestRegressor(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42)
+        elif algo == "tree":
+            clf = DecisionTreeRegressor(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42)
         elif algo == "linear":
-            clf = LinearRegression()
+            clf = LinearRegression(fit_intercept=params["fit_intercept"])
         else:
             raise ValueError(f"algorithm '{algo}' not supported for regression")
         clf.fit(X_train, y_train)
@@ -2330,47 +2627,59 @@ def _train_one(df, target, features, algo, test_size, plan):
             "rmse": float(np.sqrt(mean_squared_error(y_test, y_pred))),
             "mae": float(np.mean(np.abs(y_test - y_pred))),
             "split": plan.get("split"),
+            "model_params": params,
         }
 
-    importance = {}
-    if hasattr(clf, "feature_importances_"):
-        importance = dict(zip(X.columns, clf.feature_importances_.tolist()))
-    elif hasattr(clf, "coef_"):
-        coef = np.asarray(clf.coef_).ravel()
-        importance = dict(zip(X.columns, np.abs(coef).tolist()))
-    importance = dict(sorted(importance.items(), key=lambda kv: -kv[1])[:15])
+    influence = _feature_influence_from_model(clf, X.columns.tolist(), features, algo)
 
-    coefficients = None
-    if algo in ("logistic", "linear") and hasattr(clf, "coef_"):
-        coef = np.asarray(clf.coef_).ravel().tolist()
-        intercept = float(np.asarray(clf.intercept_).ravel()[0]) if hasattr(clf, "intercept_") else 0.0
-        # if we scaled, store the scaler stats so what-if can apply the same transform
-        feature_means = {c: float(scaler.mean_[i]) if scaler is not None else float(X[c].mean())
-                         for i, c in enumerate(X.columns)}
-        feature_stds = {c: float(scaler.scale_[i]) if scaler is not None else float(X[c].std() or 1)
-                        for i, c in enumerate(X.columns)}
-        coefficients = {
-            "features": X.columns.tolist(),
-            "coef": coef,
-            "intercept": intercept,
-            "task": metrics["task"],
-            "target": target,
-            "target_mode": plan.get("target_mode"),
-            "positive_class": plan.get("positive_class"),
-            "class_labels": class_labels,
-            "target_context": plan.get("target_context"),
-            "feature_means": feature_means,
-            "feature_stds": feature_stds,
-            "raw_features": _whatif_raw_features(X_raw),
-            "dummy_sep": "=",
-            "scaled": scaler is not None,
-        }
+    feature_means = {c: float(scaler.mean_[i]) if scaler is not None else float(X[c].mean())
+                     for i, c in enumerate(X.columns)}
+    feature_stds = {c: float(scaler.scale_[i]) if scaler is not None else float(X[c].std() or 1)
+                    for i, c in enumerate(X.columns)}
+    coefficients = {
+        "prediction_kind": "fitted_model",
+        "estimator_b64": _serialize_estimator(clf),
+        "algorithm": algo,
+        "features": X.columns.tolist(),
+        "encoded_features": X.columns.tolist(),
+        "original_features": features,
+        "task": metrics["task"],
+        "target": target,
+        "target_mode": plan.get("target_mode"),
+        "positive_class": plan.get("positive_class"),
+        "class_labels": class_labels,
+        "model_classes": np.asarray(getattr(clf, "classes_", [])).ravel().tolist() if hasattr(clf, "classes_") else None,
+        "target_context": plan.get("target_context"),
+        "feature_means": feature_means,
+        "feature_stds": feature_stds,
+        "raw_features": _whatif_raw_features(X_raw),
+        "dummy_sep": "=",
+        "scaled": scaler is not None,
+        "model_behavior": "stepwise" if algo in ("tree", "rf") else "smooth",
+        "preprocessing_pipeline": {
+            "encoding": plan.get("encoding"),
+            "scaling": plan.get("scaling"),
+            "features": features,
+            "encoded_features": X.columns.tolist(),
+        },
+    }
+
+    if algo in ("linear", "logistic") and hasattr(clf, "coef_"):
+        coef_array = np.asarray(clf.coef_)
+        coefficients.update({
+            "coef": coef_array.ravel().tolist(),
+            "coef_matrix": coef_array.tolist(),
+            "intercept": float(np.asarray(clf.intercept_).ravel()[0]) if hasattr(clf, "intercept_") else 0.0,
+            "intercepts": np.asarray(clf.intercept_).ravel().tolist() if hasattr(clf, "intercept_") else [0.0],
+            "classes": np.asarray(getattr(clf, "classes_", [])).ravel().tolist() if hasattr(clf, "classes_") else None,
+        })
 
     return {
         "metrics": metrics,
-        "importance": importance,
+        "importance": influence,
         "coefficients": coefficients,
         "encoded_features": X.columns.tolist(),
+        "model_params": params,
     }
 
 def _whatif_raw_features(X_raw):
@@ -2432,6 +2741,7 @@ def train_model(ds_id):
     features = body.get("features") or []
     algo = body.get("algorithm", "logistic")
     target_options = body.get("target_options") or {}
+    model_params = body.get("model_params") or {}
     test_size = min(max(_parse_num(body.get("test_size", target_options.get("test_size")), 0.2, float), 0.05), 0.5)
 
     s = db()
@@ -2449,7 +2759,7 @@ def train_model(ds_id):
         if plan.get("hard_blocks"):
             return {"error": plan["hard_blocks"][0]["message"], "hard_blocks": plan["hard_blocks"], "preprocessing_plan": plan}, 400
         try:
-            result = _train_one(df, target, plan["features"], algo, test_size, plan)
+            result = _train_one(df, target, plan["features"], algo, test_size, plan, model_params.get(algo, model_params))
         except ValueError as e:
             return {"error": str(e)}, 400
 
@@ -2470,8 +2780,8 @@ def train_model(ds_id):
             s,
             ds_id,
             "model",
-            f"Trained {algo} model for '{target}'",
-            detail={"category": "model", "action_type": "train_model", "algorithm": algo, "target": target, "features": plan["features"]},
+            f"Trained {_algo_label_for_task(algo, plan['task'])} model for '{target}'",
+            detail={"category": "model", "action_type": "train_model", "algorithm": algo, "target": target, "features": plan["features"], "parameters": result["model_params"], "preprocessing": plan},
             ref_type="model",
             ref_id=model_id,
             commit=False,
@@ -2485,7 +2795,9 @@ def train_model(ds_id):
             "features": plan["features"],
             "metrics": result["metrics"],
             "feature_importance": result["importance"],
+            "feature_influence": result["importance"],
             "preprocessing_plan": plan,
+            "model_params": result["model_params"],
             "has_whatif": result["coefficients"] is not None,
         }))
     finally:
@@ -2502,6 +2814,7 @@ def train_many_models(ds_id):
     features = body.get("features") or []
     algorithms = body.get("algorithms") or ["logistic"]
     target_options = body.get("target_options") or {}
+    model_params = body.get("model_params") or {}
     test_size = min(max(_parse_num(body.get("test_size", target_options.get("test_size")), 0.2, float), 0.05), 0.5)
 
     s = db()
@@ -2535,7 +2848,7 @@ def train_many_models(ds_id):
         results = []
         for algo in valid:
             try:
-                r = _train_one(df, target, plan["features"], algo, test_size, plan)
+                r = _train_one(df, target, plan["features"], algo, test_size, plan, model_params.get(algo))
                 model_id = str(uuid.uuid4())
                 m = Model(
                     id=model_id,
@@ -2553,8 +2866,8 @@ def train_many_models(ds_id):
                     s,
                     ds_id,
                     "model",
-                    f"Trained {ALGORITHM_CATALOG[algo]['label']} model for '{target}'",
-                    detail={"category": "model", "action_type": "train_model", "algorithm": algo, "target": target, "features": plan["features"]},
+                    f"Trained {_algo_label_for_task(algo, plan['task'])} model for '{target}'",
+                    detail={"category": "model", "action_type": "train_model", "algorithm": algo, "target": target, "features": plan["features"], "parameters": r["model_params"], "preprocessing": plan},
                     ref_type="model",
                     ref_id=model_id,
                     commit=False,
@@ -2563,11 +2876,13 @@ def train_many_models(ds_id):
                 results.append({
                     "id": model_id,
                     "algorithm": algo,
-                    "label": ALGORITHM_CATALOG[algo]["label"],
+                    "label": _algo_label_for_task(algo, plan["task"]),
                     "target": target,
                     "features": plan["features"],
                     "metrics": r["metrics"],
                     "feature_importance": r["importance"],
+                    "feature_influence": r["importance"],
+                    "model_params": r["model_params"],
                     "has_whatif": r["coefficients"] is not None,
                 })
             except Exception as e:
@@ -2591,9 +2906,58 @@ def list_models(ds_id):
             "target": r.target,
             "metrics": jload(r.metrics),
             "feature_importance": jload(r.feature_importance),
+            "feature_influence": jload(r.feature_importance),
+            "features": jload(r.features),
             "has_whatif": r.coefficients is not None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         } for r in rows])
+    finally:
+        s.close()
+
+@app.route("/api/models/<model_id>/prepare_whatif", methods=["POST"])
+def prepare_model_for_whatif(model_id):
+    """Backfill prediction metadata for older models so What-if can use them."""
+    s = db()
+    try:
+        m = s.query(Model).filter_by(id=model_id).first()
+        if not m:
+            return {"error": "model not found"}, 404
+        if m.coefficients:
+            return jsonify({"ok": True, "id": m.id, "has_whatif": True})
+        if m.algorithm not in ALGORITHM_CATALOG:
+            return {"error": "Unsupported model algorithm."}, 400
+        ds = s.query(Dataset).filter_by(id=m.dataset_id).first()
+        if not ds:
+            return {"error": "dataset not found"}, 404
+        features = jload(m.features) or []
+        metrics = jload(m.metrics) or {}
+        params = metrics.get("model_params") or _model_default_params(m.algorithm)
+        target_options = {
+            "test_size": (metrics.get("split") or {}).get("test_size", 0.2),
+            "stratify": (metrics.get("split") or {}).get("stratified", True),
+        }
+        if metrics.get("class_weight"):
+            target_options["class_weight"] = metrics.get("class_weight")
+        df = df_from_dataset(ds, s)
+        plan = _build_preprocessing_plan(df, m.target, features, [m.algorithm], target_options)
+        result = _train_one(df, m.target, plan["features"], m.algorithm, target_options["test_size"], plan, params)
+        if not result["coefficients"]:
+            return {"error": "Could not prepare this model for What-if."}, 400
+        m.coefficients = jdump(clean_json(result["coefficients"]))
+        m.feature_importance = jdump(clean_json(result["importance"]))
+        m.metrics = jdump(clean_json(result["metrics"]))
+        log_activity(
+            s,
+            m.dataset_id,
+            "model",
+            f"Prepared {m.name} for What-if analysis",
+            detail={"category": "model", "action_type": "prepare_whatif", "model_id": m.id, "features": plan["features"]},
+            ref_type="model",
+            ref_id=m.id,
+            commit=False,
+        )
+        s.commit()
+        return jsonify({"ok": True, "id": m.id, "has_whatif": True})
     finally:
         s.close()
 
@@ -2655,7 +3019,7 @@ def _whatif_extrapolation_risk(inputs, raw_features):
 
 @app.route("/api/models/<model_id>/predict", methods=["POST"])
 def whatif_predict(model_id):
-    """Make a live prediction from a linear/logistic model using user-supplied values."""
+    """Make a live prediction from any trained model using user-supplied values."""
     body = request.get_json() or {}
     inputs = body.get("inputs", {})  # {feature_name: value}
 
@@ -2667,6 +3031,68 @@ def whatif_predict(model_id):
         coef = jload(m.coefficients)
         if not coef:
             return {"error": "what-if not supported for this model"}, 400
+
+        extrapolation = _whatif_extrapolation_risk(inputs, coef.get("raw_features") or [])
+        if coef.get("estimator_b64"):
+            estimator = _deserialize_estimator(coef["estimator_b64"])
+            X_input = _whatif_input_matrix(coef, inputs)
+            target_context = coef.get("target_context")
+            behavior = coef.get("model_behavior") or ("stepwise" if m.algorithm in ("tree", "rf") else "smooth")
+            note = "Tree-based models can change in steps as inputs cross learned split thresholds." if behavior == "stepwise" else None
+
+            if coef.get("task") == "classification":
+                predicted_raw = estimator.predict(X_input)[0]
+                classes = list(coef.get("model_classes") or np.asarray(getattr(estimator, "classes_", [])).ravel().tolist())
+                class_labels = coef.get("class_labels") or [str(c) for c in classes]
+                positive = coef.get("positive_class")
+                prob = None
+                if hasattr(estimator, "predict_proba"):
+                    probs = estimator.predict_proba(X_input)[0]
+                    if coef.get("target_mode") == "binary":
+                        positive_encoded = 1 if 1 in classes else classes[-1] if classes else predicted_raw
+                        idx = classes.index(positive_encoded) if positive_encoded in classes else int(np.argmax(probs))
+                        prob = float(probs[idx])
+                    else:
+                        idx = classes.index(predicted_raw) if predicted_raw in classes else int(np.argmax(probs))
+                        prob = float(probs[idx])
+                if coef.get("target_mode") == "binary":
+                    predicted_class = positive if str(predicted_raw) in ("1", "1.0", "True", "true") else class_labels[0] if class_labels else str(predicted_raw)
+                else:
+                    try:
+                        predicted_class = class_labels[int(predicted_raw)]
+                    except Exception:
+                        predicted_class = str(predicted_raw)
+                prob = 1.0 if prob is None else prob
+                return jsonify(clean_json({
+                    "prediction": prob,
+                    "kind": "probability",
+                    "risk": "high" if prob > 0.6 else "medium" if prob > 0.35 else "low",
+                    "positive_class": positive if coef.get("target_mode") == "binary" else None,
+                    "predicted_class": predicted_class,
+                    "class_labels": class_labels,
+                    "model_behavior": behavior,
+                    "note": note,
+                    "extrapolation": extrapolation,
+                }))
+
+            y_hat = float(estimator.predict(X_input)[0])
+            warning = None
+            if target_context:
+                lo = target_context.get("min")
+                hi = target_context.get("max")
+                span = (hi - lo) if lo is not None and hi is not None else None
+                pad = max(span * 0.15, 1) if span is not None else 0
+                if lo is not None and hi is not None and (y_hat < lo - pad or y_hat > hi + pad):
+                    warning = "Prediction seems outside the target range seen in the dataset. Check preprocessing, feature values, or model fit."
+            return jsonify(clean_json({
+                "prediction": y_hat,
+                "kind": "value",
+                "target_context": target_context,
+                "warning": warning,
+                "model_behavior": behavior,
+                "note": note,
+                "extrapolation": extrapolation,
+            }))
 
         features = coef["features"]
         weights = coef["coef"]
@@ -2706,9 +3132,20 @@ def whatif_predict(model_id):
             if lo is not None and hi is not None and (z < lo - pad or z > hi + pad):
                 warning = "Prediction seems outside the target range seen in the dataset. Check preprocessing, feature values, or model fit."
         if coef["task"] == "classification":
-            prob = 1 / (1 + np.exp(-z))
+            matrix = coef.get("coef_matrix")
+            intercepts = coef.get("intercepts")
+            labels = coef.get("class_labels") or coef.get("classes") or []
+            positive = coef.get("positive_class")
+            if matrix and len(matrix) > 1:
+                scores = np.asarray(intercepts or [0] * len(matrix), dtype=float) + np.dot(np.asarray(matrix, dtype=float), np.asarray(x, dtype=float))
+                scores = scores - np.max(scores)
+                probs = np.exp(scores) / np.sum(np.exp(scores))
+                idx = labels.index(positive) if positive in labels else int(np.argmax(probs))
+                prob = float(probs[idx])
+            else:
+                prob = float(1 / (1 + np.exp(-z)))
             return jsonify({
-                "prediction": float(prob),
+                "prediction": prob,
                 "kind": "probability",
                 "risk": "high" if prob > 0.6 else "medium" if prob > 0.35 else "low",
                 "positive_class": coef.get("positive_class"),
@@ -2795,6 +3232,7 @@ def get_model(model_id):
             "features": jload(m.features),
             "metrics": jload(m.metrics),
             "feature_importance": jload(m.feature_importance),
+            "feature_influence": jload(m.feature_importance),
             "whatif_features": features_info,
             "positive_class": coef.get("positive_class") if coef else None,
             "class_labels": coef.get("class_labels") if coef else None,
@@ -3073,6 +3511,7 @@ def build_report(ds_id):
                     "algorithm": m.algorithm,
                     "target": m.target,
                     "metrics": jload(m.metrics),
+                    "feature_influence": jload(m.feature_importance),
                 } for m in models],
             })
         if "documentation" in sections:

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 
 export default function WhatIfPage({ dataset, activeModel }) {
+  const [fallbackModel, setFallbackModel] = useState(null)
+  const [availableModels, setAvailableModels] = useState([])
   const [modelFull, setModelFull] = useState(null)
   const [inputs, setInputs] = useState({})
   const [pred, setPred] = useState(null)
@@ -9,13 +11,26 @@ export default function WhatIfPage({ dataset, activeModel }) {
   const [scenarioName, setScenarioName] = useState('')
   const [scenarios, setScenarios] = useState([])
   const [restrictToRange, setRestrictToRange] = useState(false)
+  const selectedModel = activeModel || fallbackModel
 
   useEffect(() => {
-    if (!activeModel) return
-    api.getModel(activeModel.id).then((m) => {
-      setModelFull(m)
+    if (!dataset?.id || activeModel) return
+    api.listModels(dataset.id)
+      .then((models) => {
+        setAvailableModels(models || [])
+        setFallbackModel((models || []).find((m) => m.has_whatif) || null)
+      })
+      .catch(console.error)
+  }, [dataset?.id, activeModel?.id])
+
+  useEffect(() => {
+    if (!selectedModel) return
+    api.getModel(selectedModel.id).then(async (m) => {
+      const currentFeatures = await hydrateCurrentCategoryValues(dataset?.id, m.whatif_features || [])
+      const hydratedModel = { ...m, whatif_features: currentFeatures }
+      setModelFull(hydratedModel)
       const init = {}
-      for (const f of m.whatif_features || []) {
+      for (const f of currentFeatures || []) {
         init[f.name] = f.kind === 'categorical' ? (f.default || f.values?.[0] || '') : f.mean
       }
       setInputs(init)
@@ -23,7 +38,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
       setBaseline(null)
       setScenarios([])
     })
-  }, [activeModel?.id])
+  }, [selectedModel?.id, dataset?.current_stage_id])
 
   useEffect(() => {
     if (!modelFull || !Object.keys(inputs).length) return
@@ -34,11 +49,36 @@ export default function WhatIfPage({ dataset, activeModel }) {
   }, [inputs, modelFull?.id])
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
-  if (!activeModel) {
+  if (!selectedModel) {
     return (
       <>
         <h1 className="ax-page-title">What-if analysis</h1>
-        <p className="ax-page-sub">Train an interpretable linear or logistic model on the Models page to enable what-if.</p>
+        <p className="ax-page-sub">Train or choose a model on the Models page to enable what-if.</p>
+        {availableModels.length > 0 && (
+          <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Choose a model for What-if</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+              All trained models can be prepared for What-if. Tree-based models may change predictions in steps when inputs cross learned thresholds.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+              {availableModels.slice(0, 5).map((model) => (
+                <div key={model.id} className="ax-card" style={{ padding: '8px 10px' }}>
+                  <div className="ax-row">
+                    <span style={{ fontSize: 12 }}>{model.algorithm} - {model.target}</span>
+                    <button className="ax-btn" onClick={async () => {
+                      try {
+                        if (!model.has_whatif) await api.prepareModelForWhatIf(model.id)
+                        setFallbackModel({ ...model, has_whatif: true })
+                      } catch (err) {
+                        alert('Could not prepare model for What-if: ' + err.message)
+                      }
+                    }}>Use in What-if</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </>
     )
   }
@@ -82,7 +122,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
         <div className="ax-row" style={{ marginBottom: 12 }}>
           <div>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-              Predicted {isProb ? `probability${pred?.positive_class ? ` of ${pred.positive_class}` : ''}` : modelFull.target}
+              Predicted {isProb ? `probability${pred?.positive_class ? ` of ${pred.positive_class}` : pred?.predicted_class ? ` of ${pred.predicted_class}` : ''}` : modelFull.target}
             </p>
             <p style={{ fontSize: 32, fontWeight: 500, margin: '2px 0 0', lineHeight: 1 }}>
               {isProb ? `${pct}%` : pred?.prediction?.toFixed(3) ?? '-'}
@@ -121,6 +161,11 @@ export default function WhatIfPage({ dataset, activeModel }) {
         {warning && (
           <div style={{ marginTop: 12, padding: '10px 12px', border: '1px solid #EF9F27', background: '#FFF8EA', borderRadius: 6, fontSize: 12, color: '#7A4B00' }}>
             {warning}
+          </div>
+        )}
+        {pred?.note && (
+          <div style={{ marginTop: 12, padding: '10px 12px', border: '1px solid var(--color-border-tertiary)', background: 'var(--color-background-secondary)', borderRadius: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            {pred.note}
           </div>
         )}
       </div>
@@ -253,6 +298,28 @@ function ScenarioCard({ name, prediction, baseline, extrapolation, active }) {
       )}
     </div>
   )
+}
+
+async function hydrateCurrentCategoryValues(datasetId, features) {
+  if (!datasetId) return features
+  const hydrated = await Promise.all(
+    (features || []).map(async (feature) => {
+      if (feature.kind !== 'categorical') return feature
+      try {
+        const stats = await api.columnStats(datasetId, feature.name)
+        const values = (stats.value_counts || []).map((item) => String(item.value))
+        if (!values.length) return feature
+        return {
+          ...feature,
+          values,
+          default: values.includes(feature.default) ? feature.default : values[0],
+        }
+      } catch (err) {
+        return feature
+      }
+    }),
+  )
+  return hydrated
 }
 
 function computeExtrapolation(inputs, features) {

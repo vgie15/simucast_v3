@@ -64,6 +64,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  deleteActivity: (id, activityId, reverse = false) =>
+    request(`/api/datasets/${id}/activity/${encodeURIComponent(activityId)}?reverse=${reverse ? 'true' : 'false'}`, {
+      method: 'DELETE',
+    }),
   exportCsvUrl: (id, stageId) =>
     `${BASE}/api/datasets/${id}/export.csv` + (stageId ? `?stage_id=${encodeURIComponent(stageId)}` : ''),
   aiRecommend: (id, context) =>
@@ -164,6 +168,10 @@ export const api = {
     }),
   listModels: (id) => request(`/api/datasets/${id}/models`),
   getModel: (mid) => request(`/api/models/${mid}`),
+  prepareModelForWhatIf: (mid) =>
+    request(`/api/models/${mid}/prepare_whatif`, {
+      method: 'POST',
+    }),
   predict: (mid, inputs) =>
     request(`/api/models/${mid}/predict`, {
       method: 'POST',

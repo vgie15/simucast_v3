@@ -18,7 +18,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
       for (const suggestion of r.suggestions || []) {
         nextDrafts[suggestion.column] = (suggestion.groups || []).map((group) => ({
           ...group,
-          selected: Object.fromEntries((group.values || []).map((value) => [value, true])),
+          selected: Object.fromEntries((group.values || []).map((value) => [String(value), true])),
         }))
       }
       setDrafts(nextDrafts)
@@ -36,6 +36,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
 
   const current = suggestions.find((s) => s.column === selectedColumn)
   const groups = drafts[selectedColumn] || []
+  const uniqueValues = current?.unique_values || []
 
   const setGroup = (index, patch) => {
     setDrafts((currentDrafts) => {
@@ -45,13 +46,28 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
     })
   }
 
+  const addGroup = () => {
+    setDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [selectedColumn]: [
+        ...(currentDrafts[selectedColumn] || []),
+        {
+          values: [],
+          suggested_label: '',
+          reason: 'Manual grouping created by the user.',
+          selected: {},
+        },
+      ],
+    }))
+  }
+
   const apply = async () => {
     const mapping = {}
     for (const group of groups) {
       const label = (group.suggested_label || '').trim()
       if (!label) continue
-      for (const value of group.values || []) {
-        if (group.selected?.[value]) mapping[value] = label
+      for (const [value, selected] of Object.entries(group.selected || {})) {
+        if (selected) mapping[value] = label
       }
     }
     if (!Object.keys(mapping).length) return
@@ -95,6 +111,16 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
 
       {current && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="ax-card" style={{ padding: 10, background: 'var(--color-background-primary)' }}>
+            <p style={{ fontSize: 11, fontWeight: 500, margin: '0 0 6px' }}>Unique values detected</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {uniqueValues.map((item) => (
+                <span key={item.value} className="ax-chip">
+                  {item.value} <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 3 }}>({item.count})</span>
+                </span>
+              ))}
+            </div>
+          </div>
           {groups.map((group, index) => (
             <div key={index} className="ax-card" style={{ padding: 10, background: 'var(--color-background-secondary)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 10px', alignItems: 'center' }}>
@@ -108,22 +134,26 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
                 {group.reason}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {(group.values || []).map((value) => (
-                  <label key={value} className="ax-chip" style={{ cursor: 'pointer' }}>
+                {uniqueValues.map((item) => (
+                  <label key={item.value} className="ax-chip" style={{ cursor: 'pointer' }}>
                     <input
                       type="checkbox"
-                      checked={!!group.selected?.[value]}
+                      checked={!!group.selected?.[item.value]}
                       onChange={(e) => {
-                        setGroup(index, { selected: { ...(group.selected || {}), [value]: e.target.checked } })
+                        setGroup(index, { selected: { ...(group.selected || {}), [item.value]: e.target.checked } })
                       }}
                     />
-                    <span style={{ marginLeft: 4 }}>{value}</span>
+                    <span style={{ marginLeft: 4 }}>{item.value}</span>
+                    <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 3 }}>({item.count})</span>
                   </label>
                 ))}
               </div>
             </div>
           ))}
-          <div style={{ textAlign: 'right' }}>
+          <div className="ax-row">
+            <button className="ax-btn" onClick={addGroup} disabled={busy}>
+              Add group
+            </button>
             <button className="ax-btn prim" onClick={apply} disabled={busy || !groups.length}>
               {busy ? 'Applying...' : 'Apply standardization'}
             </button>

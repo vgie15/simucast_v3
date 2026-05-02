@@ -32,6 +32,7 @@ export default function DataGridViewer({
   useEffect(() => {
     if (tab !== 'data') return
     setLoading(true)
+    setRows([])
     api
       .getRows(datasetId, page, pageSize, stageId)
       .then((r) => {

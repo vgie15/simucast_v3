@@ -104,6 +104,24 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
     }
   }
 
+  const deleteEntry = async (item, reverse = false) => {
+    if (busy) return
+    const message = reverse
+      ? 'Undo this step and remove its documentation entry? Data steps restore the dataset; model/analysis steps delete the saved artifact.'
+      : 'Remove this documentation entry? This only hides the entry from the log and report.'
+    if (!window.confirm(message)) return
+    setBusy(true)
+    try {
+      await api.deleteActivity(datasetId, item.id, reverse)
+      await load()
+      onRestored?.()
+    } catch (err) {
+      alert((reverse ? 'Undo failed: ' : 'Delete failed: ') + err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="ax-card ax-activity-panel">
       <div className="ax-row" style={{ marginBottom: 8 }}>
@@ -200,6 +218,15 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                   >
                     {notes.length ? 'Edit note' : 'Add note'}
                   </button>
+                  {(item.related_stage_id && item.related_stage_id !== 'original') || item.related_model_id || item.related_analysis_id || item.kind === 'report' || item.kind === 'whatif' ? (
+                    <button className="ax-btn" onClick={() => deleteEntry(item, true)} disabled={busy}>
+                      Undo step
+                    </button>
+                  ) : (
+                    <button className="ax-btn" onClick={() => deleteEntry(item, false)} disabled={busy}>
+                      Remove log
+                    </button>
+                  )}
                 </div>
                 {detailsOpen && (
                   <div className="ax-activity-details">
