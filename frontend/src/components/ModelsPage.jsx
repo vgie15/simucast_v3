@@ -18,6 +18,9 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [target, setTarget] = useState('')
   const [targetMode, setTargetMode] = useState('auto')
   const [positiveClass, setPositiveClass] = useState('')
+  const [testSize, setTestSize] = useState(0.2)
+  const [stratify, setStratify] = useState(true)
+  const [classWeight, setClassWeight] = useState(false)
   const [features, setFeatures] = useState([])
   const [chosenAlgos, setChosenAlgos] = useState(['logistic', 'rf'])
   const [plan, setPlan] = useState(null)
@@ -53,7 +56,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           target,
           features,
           algorithms: chosenAlgos,
-          target_options: targetOptions(targetMode, positiveClass),
+          target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight),
         })
         if (!cancelled) {
           setPlan(r)
@@ -72,7 +75,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass])
+  }, [dataset?.id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, stratify, classWeight])
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -102,7 +105,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         target,
         features,
         algorithms: chosenAlgos,
-        target_options: targetOptions(targetMode, positiveClass),
+        target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight),
       })
       setResults(r)
       setActiveResultIdx(0)
@@ -218,7 +221,41 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       </Step>
 
       {/* Step 4 — algorithms */}
-      <Step n={4} title="Choose algorithms" disabled={!plan}>
+      <Step n={4} title="Configure validation split" disabled={!plan}>
+        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
+          <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
+          <div>
+            <input
+              type="range"
+              min="0.05"
+              max="0.5"
+              step="0.05"
+              value={testSize}
+              onChange={(e) => setTestSize(Number(e.target.value))}
+              style={{ width: 'min(280px, 100%)' }}
+            />
+            <span style={{ marginLeft: 10, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+              Train {Math.round((1 - testSize) * 100)}% / Test {Math.round(testSize * 100)}%
+            </span>
+          </div>
+          {plan?.task === 'classification' && (
+            <>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Classification split</label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="checkbox" checked={stratify} onChange={(e) => setStratify(e.target.checked)} />
+                Keep class proportions in train and test sets
+              </label>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Imbalance handling</label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="checkbox" checked={classWeight} onChange={(e) => setClassWeight(e.target.checked)} />
+                Use balanced class weights where supported
+              </label>
+            </>
+          )}
+        </div>
+      </Step>
+
+      <Step n={5} title="Choose algorithms" disabled={!plan || (plan.hard_blocks || []).length > 0}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {visibleAlgos.map((a) => (
             <label
@@ -258,7 +295,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       <div className="ax-row" style={{ margin: '8px 0 16px', justifyContent: 'flex-end' }}>
         <button
           className="ax-btn prim"
-          disabled={training || !plan || chosenAlgos.length === 0}
+          disabled={training || !plan || chosenAlgos.length === 0 || (plan.hard_blocks || []).length > 0}
           onClick={train}
           type="button"
         >
@@ -363,6 +400,47 @@ function PreprocessingPlan({ plan }) {
       {plan.missing_report.length > 0 && (
         <PlanLine label="Missing">
           {plan.missing_report.map((m) => `${m.column} (${m.missing})`).join(' · ')}
+        </PlanLine>
+      )}
+      {plan.split && (
+        <PlanLine label="Split">
+          Train {Math.round((plan.split.train_size || 0.8) * 100)}% / test {Math.round((plan.split.test_size || 0.2) * 100)}%
+          {plan.split.stratified ? ' with stratification' : ''}
+        </PlanLine>
+      )}
+      {plan.class_weight && (
+        <PlanLine label="Weights">
+          Balanced class weights for supported classifiers.
+        </PlanLine>
+      )}
+      {(plan.validation_checks || []).length > 0 && (
+        <div style={{ border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, padding: 10 }}>
+          <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 6px' }}>Model readiness checklist</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {plan.validation_checks.map((check, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '18px 180px 1fr', gap: 8, fontSize: 11, alignItems: 'start' }}>
+                <span style={{ color: check.status === 'block' ? 'var(--color-text-danger)' : check.status === 'warning' ? 'var(--color-text-warning)' : 'var(--color-text-success)' }}>
+                  {check.status === 'block' ? '!' : check.status === 'warning' ? '-' : '✓'}
+                </span>
+                <strong>{check.label}</strong>
+                <span style={{ color: 'var(--color-text-secondary)' }}>{check.detail}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {(plan.hard_blocks || []).length > 0 && (
+        <div style={{ background: 'var(--color-background-danger)', color: 'var(--color-text-danger)', padding: '8px 10px', borderRadius: 6, fontSize: 12 }}>
+          <strong>Fix before training:</strong>
+          <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+            {plan.hard_blocks.map((b, i) => <li key={i}>{b.message}</li>)}
+          </ul>
+        </div>
+      )}
+      {(plan.multicollinearity || []).length > 0 && (
+        <PlanLine label="Collinearity">
+          {plan.multicollinearity.slice(0, 4).map((p) => `${p.feature_a} + ${p.feature_b} (${Number(p.correlation).toFixed(2)})`).join(' | ')}
+          {plan.multicollinearity.length > 4 ? ` | +${plan.multicollinearity.length - 4} more` : ''}
         </PlanLine>
       )}
       {plan.warnings.length > 0 && (
@@ -632,9 +710,12 @@ function num(v) {
   return Number(v).toFixed(3)
 }
 
-function targetOptions(mode, positiveClass) {
+function targetOptions(mode, positiveClass, testSize, stratify, classWeight) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
+  options.test_size = testSize
+  options.stratify = stratify
+  if (classWeight) options.class_weight = 'balanced'
   return options
 }

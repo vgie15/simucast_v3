@@ -2091,6 +2091,9 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     dropped = rows_before - rows_after
 
     target_options = target_options or {}
+    test_size = min(max(_parse_num(target_options.get("test_size"), 0.2, float), 0.05), 0.5)
+    stratify_split = bool(target_options.get("stratify", True))
+    class_weight = target_options.get("class_weight") if target_options.get("class_weight") in ("balanced", None) else None
     y = sub_clean[target]
     task = "classification" if _detect_task(y) else "regression"
     target_classes = [str(x) for x in y.dropna().astype(str).value_counts().index.tolist()] if task == "classification" else []
@@ -2139,24 +2142,43 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
 
     # warnings
     warnings = []
+    hard_blocks = []
+    multicollinearity = []
     n_per_class = None
     if task == "classification":
         n_per_class = y.value_counts().to_dict()
         smallest = min(n_per_class.values()) if n_per_class else 0
+        total = sum(n_per_class.values()) if n_per_class else 0
+        largest = max(n_per_class.values()) if n_per_class else 0
+        imbalance_ratio = (largest / total) if total else 0
         if smallest < 10:
             warnings.append(f"Smallest class has only {smallest} examples — model quality will be unreliable.")
+        if imbalance_ratio >= 0.75 and len(n_per_class) > 1:
+            warnings.append(f"Class imbalance detected - largest class is {imbalance_ratio:.0%} of usable rows.")
         if len(n_per_class) > 2 and target_mode == "binary":
             warnings.append(f"Binary mode will reduce {len(n_per_class)} target categories into '{positive_class}' vs all others.")
         elif len(n_per_class) > 2:
             warnings.append("Multiclass target detected. Use binary mode if the analysis needs one selected category versus the rest.")
         if len(n_per_class) > 10:
             warnings.append(f"{len(n_per_class)} distinct target values — high cardinality may hurt accuracy.")
+        if not pd.api.types.is_numeric_dtype(y):
+            target_groups = [g for g in _category_groups(y.dropna().astype(str).unique().tolist(), threshold=0.88) if len(g.get("values", [])) > 1]
+            if target_groups:
+                hard_blocks.append({
+                    "code": "target_categories_dirty",
+                    "message": f"Target '{target}' has similar category labels. Fix categories first in Data standardization before modeling.",
+                    "column": target,
+                    "groups": target_groups[:5],
+                })
     if rows_after < 50:
         warnings.append(f"Only {rows_after} complete rows after dropping missing — consider Expand or imputation.")
 
     # leakage heuristics: features with same uniqueness as rows ≈ id-like
     for c in features:
-        if df[c].nunique(dropna=True) == rows_before:
+        nunique = df[c].nunique(dropna=True)
+        if nunique <= 1:
+            warnings.append(f"'{c}' is constant or nearly empty - it cannot help the model.")
+        if nunique == rows_before:
             warnings.append(f"'{c}' appears to be an ID — every row has a unique value, so it'll memorize the target.")
         # high correlation with target (numeric only)
         if pd.api.types.is_numeric_dtype(sub_clean[c]) and pd.api.types.is_numeric_dtype(y):
@@ -2166,6 +2188,31 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
                     warnings.append(f"'{c}' is almost perfectly correlated with target ({corr:+.2f}) — possible leakage.")
             except Exception:
                 pass
+
+    numeric_features = [c for c in features if pd.api.types.is_numeric_dtype(sub_clean[c])]
+    if len(numeric_features) >= 2:
+        corr = sub_clean[numeric_features].corr(numeric_only=True).abs()
+        for i, a in enumerate(numeric_features):
+            for b in numeric_features[i + 1:]:
+                val = corr.loc[a, b]
+                if pd.notna(val) and val >= 0.85:
+                    multicollinearity.append({
+                        "feature_a": a,
+                        "feature_b": b,
+                        "correlation": float(val),
+                        "severity": "high" if val >= 0.95 else "medium",
+                    })
+        if multicollinearity:
+            warnings.append(f"Multicollinearity detected in {len(multicollinearity)} feature pair(s). Linear models may be unstable.")
+
+    imbalanced = bool(task == "classification" and n_per_class and max(n_per_class.values()) / sum(n_per_class.values()) >= 0.75)
+    validation_checks = [
+        {"label": "Missing values handled", "status": "warning" if missing_report else "ok", "detail": f"{len(missing_report)} column(s) contain missing values; modeling will drop incomplete rows." if missing_report else "No missing values in selected modeling columns."},
+        {"label": "Categories standardized", "status": "block" if hard_blocks else "ok", "detail": "Fix similar target labels before training." if hard_blocks else "No target category conflicts detected."},
+        {"label": "Class balance checked", "status": "warning" if imbalanced else "ok", "detail": "Class imbalance detected; use balanced class weights." if imbalanced else "No severe class imbalance detected."},
+        {"label": "Multicollinearity checked", "status": "warning" if multicollinearity else "ok", "detail": f"{len(multicollinearity)} highly correlated feature pair(s)." if multicollinearity else "No high numeric feature correlations detected."},
+        {"label": "Train/test split configured", "status": "ok", "detail": f"Train {int((1 - test_size) * 100)}% / test {int(test_size * 100)}%" + (" with stratification." if task == "classification" and stratify_split else ".")},
+    ]
 
     return {
         "task": task,
@@ -2181,6 +2228,15 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         "target_mode": target_mode if task == "classification" else None,
         "positive_class": positive_class if task == "classification" else None,
         "target_context": target_context,
+        "split": {
+            "train_size": 1 - test_size,
+            "test_size": test_size,
+            "stratified": bool(task == "classification" and stratify_split),
+        },
+        "class_weight": class_weight if task == "classification" else None,
+        "multicollinearity": multicollinearity,
+        "validation_checks": validation_checks,
+        "hard_blocks": hard_blocks,
         "warnings": warnings,
     }
 
@@ -2218,17 +2274,23 @@ def _train_one(df, target, features, algo, test_size, plan):
     else:
         X_scaled = X
 
+    stratify = None
+    if is_classification and plan.get("split", {}).get("stratified"):
+        counts = pd.Series(y).value_counts()
+        if len(counts) > 1 and int(counts.min()) >= 2:
+            stratify = y
+
     X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, y, test_size=test_size, random_state=42
+        X_scaled, y, test_size=test_size, random_state=42, stratify=stratify
     )
 
     if is_classification:
         if algo == "rf":
-            clf = RandomForestClassifier(n_estimators=100, random_state=42)
+            clf = RandomForestClassifier(n_estimators=100, random_state=42, class_weight=plan.get("class_weight"))
         elif algo == "gbm":
             clf = GradientBoostingClassifier(random_state=42)
         elif algo == "logistic":
-            clf = LogisticRegression(max_iter=1000)
+            clf = LogisticRegression(max_iter=1000, class_weight=plan.get("class_weight"))
         else:
             raise ValueError(f"algorithm '{algo}' not supported for classification")
         clf.fit(X_train, y_train)
@@ -2239,6 +2301,8 @@ def _train_one(df, target, features, algo, test_size, plan):
             "precision": float(precision_score(y_test, y_pred, average="weighted", zero_division=0)),
             "recall": float(recall_score(y_test, y_pred, average="weighted", zero_division=0)),
             "f1": float(f1_score(y_test, y_pred, average="weighted", zero_division=0)),
+            "split": plan.get("split"),
+            "class_weight": plan.get("class_weight"),
         }
         if len(np.unique(y)) == 2 and hasattr(clf, "predict_proba"):
             try:
@@ -2265,6 +2329,7 @@ def _train_one(df, target, features, algo, test_size, plan):
             "r2": float(r2_score(y_test, y_pred)),
             "rmse": float(np.sqrt(mean_squared_error(y_test, y_pred))),
             "mae": float(np.mean(np.abs(y_test - y_pred))),
+            "split": plan.get("split"),
         }
 
     importance = {}
@@ -2367,7 +2432,7 @@ def train_model(ds_id):
     features = body.get("features") or []
     algo = body.get("algorithm", "logistic")
     target_options = body.get("target_options") or {}
-    test_size = min(max(_parse_num(body.get("test_size"), 0.2, float), 0.05), 0.5)
+    test_size = min(max(_parse_num(body.get("test_size", target_options.get("test_size")), 0.2, float), 0.05), 0.5)
 
     s = db()
     try:
@@ -2381,6 +2446,8 @@ def train_model(ds_id):
             plan = _build_preprocessing_plan(df, target, features, [algo], target_options)
         except ValueError as e:
             return {"error": str(e)}, 400
+        if plan.get("hard_blocks"):
+            return {"error": plan["hard_blocks"][0]["message"], "hard_blocks": plan["hard_blocks"], "preprocessing_plan": plan}, 400
         try:
             result = _train_one(df, target, plan["features"], algo, test_size, plan)
         except ValueError as e:
@@ -2435,7 +2502,7 @@ def train_many_models(ds_id):
     features = body.get("features") or []
     algorithms = body.get("algorithms") or ["logistic"]
     target_options = body.get("target_options") or {}
-    test_size = min(max(_parse_num(body.get("test_size"), 0.2, float), 0.05), 0.5)
+    test_size = min(max(_parse_num(body.get("test_size", target_options.get("test_size")), 0.2, float), 0.05), 0.5)
 
     s = db()
     try:
@@ -2447,6 +2514,8 @@ def train_many_models(ds_id):
             plan = _build_preprocessing_plan(df, target, features, algorithms, target_options)
         except ValueError as e:
             return {"error": str(e)}, 400
+        if plan.get("hard_blocks"):
+            return {"error": plan["hard_blocks"][0]["message"], "hard_blocks": plan["hard_blocks"], "preprocessing_plan": plan}, 400
 
         # task→algorithm filter so we don't try regression algos on a classification target
         valid = []
