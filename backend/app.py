@@ -29,6 +29,24 @@ from sklearn.metrics import (
     f1_score, confusion_matrix, mean_squared_error, r2_score
 )
 
+def _load_local_env():
+    """Load simple KEY=VALUE pairs from backend/.env without overriding real env vars."""
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, "r", encoding="utf-8-sig") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+_load_local_env()
+
 # --- app + db setup ---
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload cap
@@ -114,6 +132,17 @@ class Model(Base):
     metrics = _json_col()
     feature_importance = _json_col()
     coefficients = _json_col()    # for what-if predictions
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+    id = Column(String, primary_key=True)
+    dataset_id = Column(String, nullable=True, index=True)
+    kind = Column(String, nullable=False)
+    summary = Column(Text, nullable=False)
+    detail = _json_col()
+    ref_type = Column(String, nullable=True)
+    ref_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # DB initialization is deferred to the first request so gunicorn can bind
@@ -271,6 +300,22 @@ def create_stage(session, ds, df, op_type, op_params, summary):
     ds.current_stage_id = stage.id
     ds.row_count = len(df)
     ds.col_count = len(df.columns)
+    log_activity(
+        session,
+        ds.id,
+        "stage",
+        summary,
+        detail={
+            "category": "data_prep",
+            "action_type": op_type,
+            "op_type": op_type,
+            "row_count": len(df),
+            "col_count": len(df.columns),
+        },
+        ref_type="stage",
+        ref_id=stage.id,
+        commit=False,
+    )
     session.commit()
     return stage
 
@@ -337,6 +382,39 @@ def clean_json(obj):
         return None
     return obj
 
+def log_activity(session, dataset_id, kind, summary, detail=None, ref_type=None, ref_id=None, commit=True):
+    entry = ActivityLog(
+        id=str(uuid.uuid4()),
+        dataset_id=dataset_id,
+        kind=kind,
+        summary=summary,
+        detail=jdump(clean_json(detail or {})),
+        ref_type=ref_type,
+        ref_id=ref_id,
+    )
+    session.add(entry)
+    if commit:
+        session.commit()
+    return entry
+
+def activity_payload(entry):
+    detail = jload(entry.detail) or {}
+    return {
+        "id": entry.id,
+        "dataset_id": entry.dataset_id,
+        "kind": entry.kind,
+        "category": detail.get("category") or entry.kind,
+        "action_type": detail.get("action_type") or entry.kind,
+        "summary": entry.summary,
+        "detail": detail,
+        "ref_type": entry.ref_type,
+        "ref_id": entry.ref_id,
+        "related_stage_id": entry.ref_id if entry.ref_type == "stage" else detail.get("related_stage_id"),
+        "related_analysis_id": entry.ref_id if entry.ref_type == "analysis" else detail.get("related_analysis_id"),
+        "related_model_id": entry.ref_id if entry.ref_type == "model" else detail.get("related_model_id"),
+        "created_at": entry.created_at.isoformat() if entry.created_at else None,
+    }
+
 # ========================================================================
 #  AI assistant (Anthropic)
 # ========================================================================
@@ -345,8 +423,8 @@ def clean_json(obj):
 # read from ANTHROPIC_API_KEY at request time so the server still boots
 # (and serves non-AI endpoints) when the key is unset.
 
-_AI_MODEL_FAST = "claude-sonnet-4-6"
-_AI_MODEL_DEEP = "claude-opus-4-7"
+_AI_MODEL_FAST = "claude-sonnet-4-20250514"
+_AI_MODEL_DEEP = "claude-opus-4-1-20250805"
 
 def _ai_client():
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
@@ -546,6 +624,16 @@ def upload_dataset():
             data=jdump(records),
         )
         s.add(ds)
+        log_activity(
+            s,
+            ds_id,
+            "upload" if not from_id else "clone",
+            f"Created project '{final_name}' with {row_count} rows and {col_count} columns",
+            detail={"category": "data_prep", "action_type": "upload" if not from_id else "clone", "filename": filename, "source_dataset_id": from_id},
+            ref_type="dataset",
+            ref_id=ds_id,
+            commit=False,
+        )
         s.commit()
         return {
             "id": ds_id,
@@ -597,13 +685,164 @@ def get_rows(ds_id):
         rows = _rows_for_stage(ds, stage_id, s)
         start = (page - 1) * page_size
         end = start + page_size
+        page_rows = []
+        for idx, row in enumerate(rows[start:end], start=start):
+            out = dict(row)
+            out["__row_index"] = idx
+            page_rows.append(out)
         return {
-            "rows": rows[start:end],
+            "rows": page_rows,
             "page": page,
             "page_size": page_size,
             "total": len(rows),
             "stage_id": stage_id or ds.current_stage_id or "original",
         }
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/cell", methods=["PATCH"])
+def update_cell(ds_id):
+    body = request.get_json() or {}
+    row_index = body.get("row_index")
+    column = body.get("column")
+    value = body.get("value")
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        rows = _current_rows(ds, s)
+        try:
+            row_index = int(row_index)
+        except (TypeError, ValueError):
+            return {"error": "row_index must be an integer"}, 400
+        if row_index < 0 or row_index >= len(rows):
+            return {"error": "row_index out of range"}, 400
+        if not column or column not in (rows[row_index] or {}):
+            return {"error": "bad column"}, 400
+
+        df = df_from_dataset(ds, s)
+        old_value, new_value, error = _apply_cell_edit(df, row_index, column, value)
+        if error:
+            return {"error": error}, 400
+
+        summary = f"Edited row {row_index + 1}, '{column}' from {old_value!r} to {new_value!r}"
+        stage = create_stage(
+            s,
+            ds,
+            df,
+            op_type="cell_edit",
+            op_params={"row_index": row_index, "column": column, "old_value": clean_json(old_value), "value": clean_json(new_value)},
+            summary=summary,
+        )
+        return jsonify({"ok": True, "stage_id": stage.id, "summary": summary})
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/cells", methods=["PATCH"])
+def update_cells(ds_id):
+    body = request.get_json() or {}
+    edits = body.get("edits") or []
+    if not isinstance(edits, list) or not edits:
+        return {"error": "edits must be a non-empty list"}, 400
+
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        rows = _current_rows(ds, s)
+        df = df_from_dataset(ds, s)
+        applied = []
+
+        for edit in edits:
+            row_index = edit.get("row_index")
+            column = edit.get("column")
+            value = edit.get("value")
+            try:
+                row_index = int(row_index)
+            except (TypeError, ValueError):
+                return {"error": "row_index must be an integer"}, 400
+            if row_index < 0 or row_index >= len(rows):
+                return {"error": "row_index out of range"}, 400
+            if not column or column not in (rows[row_index] or {}):
+                return {"error": "bad column"}, 400
+
+            old_value, new_value, error = _apply_cell_edit(df, row_index, column, value)
+            if error:
+                return {"error": error}, 400
+            if clean_json(old_value) != clean_json(new_value):
+                applied.append({
+                    "row_index": row_index,
+                    "column": column,
+                    "old_value": clean_json(old_value),
+                    "value": clean_json(new_value),
+                })
+
+        if not applied:
+            return jsonify({"ok": True, "stage_id": ds.current_stage_id, "summary": "No cell changes to save"})
+
+        summary = f"Edited {len(applied)} cell{'s' if len(applied) != 1 else ''}"
+        stage = create_stage(
+            s,
+            ds,
+            df,
+            op_type="cell_edit",
+            op_params={"edits": applied},
+            summary=summary,
+        )
+        return jsonify({"ok": True, "stage_id": stage.id, "summary": summary, "edits": applied})
+    finally:
+        s.close()
+
+def _apply_cell_edit(df, row_index, column, value):
+    if column not in df.columns:
+        return None, None, "bad column"
+    old_value = df.at[row_index, column] if row_index in df.index else None
+    new_value = None if value == "" else value
+    if new_value is not None:
+        series = df[column]
+        if pd.api.types.is_numeric_dtype(series):
+            try:
+                number = float(new_value)
+                new_value = int(number) if number.is_integer() else number
+            except (TypeError, ValueError):
+                return old_value, None, f"'{column}' expects a numeric value"
+        elif pd.api.types.is_bool_dtype(series):
+            new_value = str(new_value).strip().lower() in ("1", "true", "yes", "y")
+    df.at[row_index, column] = new_value
+    return old_value, new_value, None
+
+@app.route("/api/datasets/<ds_id>/activity", methods=["GET"])
+def list_activity(ds_id):
+    order = (request.args.get("order") or "desc").lower()
+    s = db()
+    try:
+        q = s.query(ActivityLog).filter_by(dataset_id=ds_id)
+        q = q.order_by(ActivityLog.created_at.asc() if order == "asc" else ActivityLog.created_at.desc())
+        return jsonify({"activity": [activity_payload(a) for a in q.all()]})
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/activity", methods=["POST"])
+def create_activity_note(ds_id):
+    body = request.get_json() or {}
+    summary = (body.get("summary") or "").strip()
+    if not summary:
+        return {"error": "summary is required"}, 400
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        entry = log_activity(
+            s,
+            ds_id,
+            "note",
+            summary,
+            detail={"category": "note", "action_type": "manual_note", "body": body.get("body") or summary},
+        )
+        return jsonify(activity_payload(entry))
     finally:
         s.close()
 
@@ -677,6 +916,16 @@ def restore_stage(ds_id, stage_id):
             ds.current_stage_id = stage.id
             ds.row_count = stage.row_count
             ds.col_count = stage.col_count
+        log_activity(
+            s,
+            ds_id,
+            "restore",
+            f"Restored {'original upload' if stage_id == 'original' else 'stage ' + stage_id[:8]}",
+            detail={"category": "data_prep", "action_type": "restore", "stage_id": stage_id},
+            ref_type="stage",
+            ref_id=stage_id,
+            commit=False,
+        )
         s.commit()
         return {"ok": True, "current_stage_id": ds.current_stage_id or "original"}
     finally:
@@ -883,12 +1132,37 @@ def clean_suggestions(ds_id):
         for col in df.columns:
             miss = int(df[col].isna().sum())
             if miss > 0:
+                is_numeric = pd.api.types.is_numeric_dtype(df[col])
+                options = [
+                    {
+                        "action": "impute_mean",
+                        "label": "Fill with mean",
+                        "description": "Replace blanks with the column average.",
+                    },
+                    {
+                        "action": "impute_median",
+                        "label": "Fill with median",
+                        "description": "Replace blanks with the middle value; more robust to outliers.",
+                    },
+                ] if is_numeric else [
+                    {
+                        "action": "impute_mode",
+                        "label": "Fill with most common",
+                        "description": "Replace blanks with the most frequent value.",
+                    },
+                ]
+                options.append({
+                    "action": "drop_rows",
+                    "label": "Drop missing rows",
+                    "description": "Remove rows where this variable is blank.",
+                })
                 suggestions.append({
                     "id": str(uuid.uuid4()),
                     "kind": "missing",
                     "variable": col,
                     "count": miss,
-                    "action": "impute" if pd.api.types.is_numeric_dtype(df[col]) else "mode",
+                    "action": options[0]["action"],
+                    "options": options,
                     "description": f"{miss} rows blank · impute with {'mean' if pd.api.types.is_numeric_dtype(df[col]) else 'mode'} or drop?",
                 })
 
@@ -908,6 +1182,18 @@ def clean_suggestions(ds_id):
                     "variable": col,
                     "count": outliers,
                     "action": "winsorize",
+                    "options": [
+                        {
+                            "action": "winsorize",
+                            "label": "Cap to IQR bounds",
+                            "description": "Clamp extreme values to the lower/upper IQR thresholds.",
+                        },
+                        {
+                            "action": "drop_outliers",
+                            "label": "Remove outlier rows",
+                            "description": "Drop rows outside the lower/upper IQR thresholds.",
+                        },
+                    ],
                     "description": f"{outliers} rows outside IQR bounds · winsorize?",
                 })
 
@@ -920,6 +1206,13 @@ def clean_suggestions(ds_id):
                     "kind": "type",
                     "variable": col,
                     "action": "convert_date",
+                    "options": [
+                        {
+                            "action": "convert_date",
+                            "label": "Convert to date",
+                            "description": "Parse text values as dates and mark failures as missing.",
+                        },
+                    ],
                     "description": f"Stored as text · convert to date?",
                 })
             except Exception:
@@ -948,7 +1241,7 @@ def clean_apply(ds_id):
         before_rows = len(df)
         summary = ""
 
-        if action == "impute" and variable in df.columns:
+        if action in ("impute", "impute_mean") and variable in df.columns:
             missing_before = int(df[variable].isna().sum())
             if pd.api.types.is_numeric_dtype(df[variable]):
                 fill = df[variable].mean()
@@ -959,7 +1252,14 @@ def clean_apply(ds_id):
                 fill = mode[0] if len(mode) else ""
                 df[variable] = df[variable].fillna(fill)
                 summary = f"Imputed {missing_before} missing values in '{variable}' with mode ({fill!r})"
-        elif action == "mode" and variable in df.columns:
+        elif action == "impute_median" and variable in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[variable]):
+                return {"error": "median imputation requires a numeric variable"}, 400
+            missing_before = int(df[variable].isna().sum())
+            fill = df[variable].median()
+            df[variable] = df[variable].fillna(fill)
+            summary = f"Imputed {missing_before} missing values in '{variable}' with median ({fill:.4g})"
+        elif action in ("mode", "impute_mode") and variable in df.columns:
             missing_before = int(df[variable].isna().sum())
             mode = df[variable].mode()
             fill = mode[0] if len(mode) else ""
@@ -972,6 +1272,16 @@ def clean_apply(ds_id):
             clipped = int(((df[variable] < lo) | (df[variable] > hi)).sum())
             df[variable] = df[variable].clip(lower=lo, upper=hi)
             summary = f"Winsorized '{variable}' to [{lo:.4g}, {hi:.4g}] (clipped {clipped} outlier rows)"
+        elif action == "drop_outliers" and variable in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[variable]):
+                return {"error": "outlier removal requires a numeric variable"}, 400
+            q1, q3 = df[variable].quantile([0.25, 0.75])
+            iqr = q3 - q1
+            lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+            keep = df[variable].isna() | ((df[variable] >= lo) & (df[variable] <= hi))
+            removed = int((~keep).sum())
+            df = df[keep]
+            summary = f"Removed {removed} outlier rows in '{variable}' outside [{lo:.4g}, {hi:.4g}]"
         elif action == "convert_date" and variable in df.columns:
             df[variable] = pd.to_datetime(df[variable], errors="coerce").astype(str)
             summary = f"Converted '{variable}' to datetime"
@@ -1828,6 +2138,16 @@ def train_model(ds_id):
             coefficients=jdump(clean_json(result["coefficients"])) if result["coefficients"] else None,
         )
         s.add(m)
+        log_activity(
+            s,
+            ds_id,
+            "model",
+            f"Trained {algo} model for '{target}'",
+            detail={"category": "model", "action_type": "train_model", "algorithm": algo, "target": target, "features": plan["features"]},
+            ref_type="model",
+            ref_id=model_id,
+            commit=False,
+        )
         s.commit()
 
         return jsonify(clean_json({
@@ -1898,6 +2218,16 @@ def train_many_models(ds_id):
                     coefficients=jdump(clean_json(r["coefficients"])) if r["coefficients"] else None,
                 )
                 s.add(m)
+                log_activity(
+                    s,
+                    ds_id,
+                    "model",
+                    f"Trained {ALGORITHM_CATALOG[algo]['label']} model for '{target}'",
+                    detail={"category": "model", "action_type": "train_model", "algorithm": algo, "target": target, "features": plan["features"]},
+                    ref_type="model",
+                    ref_id=model_id,
+                    commit=False,
+                )
                 s.commit()
                 results.append({
                     "id": model_id,
@@ -2080,11 +2410,25 @@ def ai_recommend(ds_id):
         prompt = prompts.get(context, prompts["data"])
         try:
             payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1500)
+            log_activity(
+                s,
+                ds_id,
+                "ai",
+                f"Generated AI recommendations for {context}",
+                detail={"category": "ai", "action_type": "recommend", "context": context},
+            )
             return jsonify({"context": context, "ai": True, **payload})
         except Exception as e:
             print(f"AI recommend failed: {e}", flush=True)
             fallback = _rule_based_recommend(context, df, variables)
             fallback["error"] = f"AI call failed: {e.__class__.__name__}"
+            log_activity(
+                s,
+                ds_id,
+                "ai",
+                f"Used heuristic recommendations for {context}",
+                detail={"category": "ai", "action_type": "recommend_fallback", "context": context, "error": e.__class__.__name__},
+            )
             return jsonify(fallback)
     finally:
         s.close()
@@ -2131,9 +2475,23 @@ def ai_explain(ds_id):
         )
         try:
             text = ai_call(profile, prompt, system=system, max_tokens=600)
+            log_activity(
+                s,
+                ds_id,
+                "ai",
+                f"Generated AI explanation for {step}",
+                detail={"category": "ai", "action_type": "explain", "step": step, "params": clean_json(params)},
+            )
             return jsonify({"ai": True, "explanation": text})
         except Exception as e:
             print(f"AI explain failed: {e}", flush=True)
+            log_activity(
+                s,
+                ds_id,
+                "ai",
+                f"AI explanation failed for {step}",
+                detail={"category": "ai", "action_type": "explain_failed", "step": step, "error": str(e)},
+            )
             return jsonify({"ai": False, "explanation": f"AI call failed: {e}"})
     finally:
         s.close()
@@ -2247,6 +2605,7 @@ def build_report(ds_id):
             return {"error": "not found"}, 404
         analyses = s.query(Analysis).filter_by(dataset_id=ds_id).order_by(Analysis.created_at).all()
         models = s.query(Model).filter_by(dataset_id=ds_id).order_by(Model.created_at).all()
+        activity = s.query(ActivityLog).filter_by(dataset_id=ds_id).order_by(ActivityLog.created_at).all()
 
         report = {
             "title": ds.name,
@@ -2287,6 +2646,18 @@ def build_report(ds_id):
                     "metrics": jload(m.metrics),
                 } for m in models],
             })
+        if "documentation" in sections:
+            report["sections"].append({
+                "title": "Documentation log",
+                "items": [activity_payload(a) for a in activity],
+            })
+        log_activity(
+            s,
+            ds_id,
+            "report",
+            "Generated report",
+            detail={"category": "report", "action_type": "generate_report", "sections": sections},
+        )
         return jsonify(clean_json(report))
     finally:
         s.close()
@@ -2315,7 +2686,18 @@ def _save_analysis(session, ds_id, kind, config, result):
         result=jdump(clean_json(result)),
     )
     session.add(a)
+    log_activity(
+        session,
+        ds_id,
+        "analysis",
+        f"Ran {kind.replace('_', ' ')}",
+        detail={"category": "analysis", "action_type": kind, "config": clean_json(config)},
+        ref_type="analysis",
+        ref_id=a.id,
+        commit=False,
+    )
     session.commit()
+    return a
 
 
 

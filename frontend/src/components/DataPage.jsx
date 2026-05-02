@@ -1,24 +1,36 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import ColumnValuesModal from './ColumnValuesModal'
-import StageTimeline from './StageTimeline'
 import AIAssistantPanel from './AIAssistantPanel'
 import ManualTransformsCard from './ManualTransformsCard'
 import DataGridViewer from './DataGridViewer'
 
-export default function DataPage({ dataset, setDataset }) {
+export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const [viewStageId, setViewStageId] = useState('current')
   const [viewStageLabel, setViewStageLabel] = useState(null)
   const [activeVar, setActiveVar] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
   const [suggestions, setSuggestions] = useState([])
   const [statuses, setStatuses] = useState({})
+  const [selectedActions, setSelectedActions] = useState({})
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
 
   useEffect(() => {
     if (!dataset) return
     loadSuggestions()
   }, [dataset?.id])
+
+  useEffect(() => {
+    if (!viewStageRequest?.stageId) return
+    const stageId = viewStageRequest.stageId
+    if (stageId === dataset?.current_stage_id) {
+      setViewStageId('current')
+      setViewStageLabel(null)
+      return
+    }
+    setViewStageId(stageId)
+    setViewStageLabel(stageId === 'original' ? 'Original upload' : `Stage ${stageId.slice(0, 8)}`)
+  }, [viewStageRequest?.nonce, dataset?.current_stage_id])
 
   const refreshDataset = async () => {
     try {
@@ -34,8 +46,15 @@ export default function DataPage({ dataset, setDataset }) {
     setSuggestionsLoading(true)
     try {
       const r = await api.cleanSuggestions(dataset.id)
-      setSuggestions(r.suggestions || [])
+      const nextSuggestions = r.suggestions || []
+      setSuggestions(nextSuggestions)
       setStatuses({})
+      setSelectedActions(
+        nextSuggestions.reduce((acc, suggestion) => {
+          acc[suggestion.id] = suggestion.action
+          return acc
+        }, {}),
+      )
     } catch (err) {
       console.error('Failed to load cleaning suggestions', err)
     } finally {
@@ -54,7 +73,8 @@ export default function DataPage({ dataset, setDataset }) {
       return
     }
     try {
-      await api.cleanApply(dataset.id, { action: suggestion.action, variable: suggestion.variable })
+      const action = selectedActions[suggestion.id] || suggestion.action
+      await api.cleanApply(dataset.id, { action, variable: suggestion.variable })
       setStatuses((current) => ({ ...current, [suggestion.id]: 'applied' }))
       await refreshDataset()
       await loadSuggestions()
@@ -111,8 +131,11 @@ export default function DataPage({ dataset, setDataset }) {
           datasetId={dataset.id}
           variables={dataset.variables || []}
           stageId={viewStageId === 'current' ? null : viewStageId}
+          currentStageId={dataset.current_stage_id}
           stageLabel={viewStageLabel}
           refreshKey={historyKey}
+          onVariableClick={setActiveVar}
+          onDataChanged={handleApplied}
         />
       </div>
 
@@ -160,6 +183,41 @@ export default function DataPage({ dataset, setDataset }) {
                     <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
                       {s.description}
                     </p>
+                    {(s.options || []).length > 0 && !st && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                        {(s.options || []).map((option) => (
+                          <label
+                            key={option.action}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 6,
+                              fontSize: 11,
+                              color: 'var(--color-text-secondary)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name={`clean-method-${s.id}`}
+                              checked={(selectedActions[s.id] || s.action) === option.action}
+                              onChange={() => {
+                                setSelectedActions((current) => ({ ...current, [s.id]: option.action }))
+                              }}
+                              style={{ marginTop: 2 }}
+                            />
+                            <span>
+                              <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>
+                                {option.label}
+                              </span>
+                              {option.description && (
+                                <span> - {option.description}</span>
+                              )}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {!st && (
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -173,56 +231,6 @@ export default function DataPage({ dataset, setDataset }) {
           })}
         </div>
       )}
-
-      <p className="ax-lbl">Data history</p>
-      <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '0 0 6px' }}>
-        Every cleaning, merge, or expansion creates a new stage. Original data is always preserved
-        and can be viewed or exported at any time.
-      </p>
-      <div style={{ marginBottom: 16 }}>
-        <StageTimeline
-          datasetId={dataset.id}
-          refreshKey={historyKey}
-          onView={(stageId) => {
-            setViewStageId(stageId)
-            setViewStageLabel(stageId === 'original' ? 'Original upload' : `Stage ${stageId.slice(0, 8)}`)
-          }}
-          onRestored={refreshDataset}
-        />
-      </div>
-
-      <p className="ax-lbl">Variables</p>
-      <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '0 0 6px' }}>
-        Click a row to view all entries for that variable.
-      </p>
-      <div className="ax-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="ax-tbl">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Missing</th>
-              <th>Unique</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(dataset.variables || []).map((v) => (
-              <tr
-                key={v.name}
-                style={{ cursor: 'pointer' }}
-                onClick={() => setActiveVar(v)}
-              >
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{v.name}</td>
-                <td>
-                  <span style={{ color: 'var(--color-text-info)' }}>{v.dtype}</span>
-                </td>
-                <td>{v.missing}</td>
-                <td>{v.unique}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
       {activeVar && (
         <ColumnValuesModal

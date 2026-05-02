@@ -39,9 +39,25 @@ export const api = {
     const qs = `page=${page}&page_size=${pageSize}` + (stageId ? `&stage_id=${encodeURIComponent(stageId)}` : '')
     return request(`/api/datasets/${id}/rows?${qs}`)
   },
+  updateCell: (id, body) =>
+    request(`/api/datasets/${id}/cell`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  updateCells: (id, edits) =>
+    request(`/api/datasets/${id}/cells`, {
+      method: 'PATCH',
+      body: JSON.stringify({ edits }),
+    }),
   listStages: (id) => request(`/api/datasets/${id}/stages`),
   restoreStage: (id, stageId) =>
     request(`/api/datasets/${id}/stages/${encodeURIComponent(stageId)}/restore`, { method: 'POST' }),
+  listActivity: (id, order = 'desc') => request(`/api/datasets/${id}/activity?order=${order}`),
+  createActivityNote: (id, body) =>
+    request(`/api/datasets/${id}/activity`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   exportCsvUrl: (id, stageId) =>
     `${BASE}/api/datasets/${id}/export.csv` + (stageId ? `?stage_id=${encodeURIComponent(stageId)}` : ''),
   aiRecommend: (id, context) =>

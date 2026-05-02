@@ -3,6 +3,7 @@ import { api } from '../api'
 
 const SECTIONS = [
   { key: 'summary', label: 'Executive summary' },
+  { key: 'documentation', label: 'Documentation log' },
   { key: 'descriptives', label: 'Descriptive stats' },
   { key: 'tests', label: 'Hypothesis tests' },
   { key: 'models', label: 'Model performance' },
@@ -107,9 +108,10 @@ export default function ReportPage({ dataset }) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
                       {sec.items.map((it, j) => (
                         <div key={j} style={{ fontSize: 11, color: 'var(--color-text-secondary)', padding: '4px 8px', background: 'var(--color-background-secondary)', borderRadius: 4 }}>
+                          {it.created_at && <span>{new Date(it.created_at).toLocaleString()} - </span>}
                           {it.kind && <strong>{it.kind}: </strong>}
                           {it.name && <strong>{it.name} ({it.algorithm}): </strong>}
-                          {it.result?.interpretation || formatInline(it.metrics) || JSON.stringify(it.result || it.metrics).slice(0, 120)}
+                          {it.summary || it.result?.interpretation || formatInline(it.metrics) || JSON.stringify(it.result || it.metrics).slice(0, 120)}
                         </div>
                       ))}
                     </div>

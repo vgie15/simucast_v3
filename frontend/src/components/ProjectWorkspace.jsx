@@ -9,6 +9,7 @@ import AdvancedPage from './AdvancedPage'
 import ModelsPage from './ModelsPage'
 import WhatIfPage from './WhatIfPage'
 import ReportPage from './ReportPage'
+import ActivityPanel from './ActivityPanel'
 
 const TABS = [
   { key: 'data', label: 'Data' },
@@ -26,6 +27,7 @@ export default function ProjectWorkspace() {
   const navigate = useNavigate()
   const [dataset, setDataset] = useState(null)
   const [activeModel, setActiveModel] = useState(null)
+  const [viewStageRequest, setViewStageRequest] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -40,6 +42,10 @@ export default function ProjectWorkspace() {
   }, [id])
 
   const go = (next) => navigate(`/projects/${id}/${next}`)
+  const refreshDataset = async () => {
+    const fresh = await api.getDataset(id)
+    setDataset(fresh)
+  }
 
   if (loading) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Loading project…</p>
@@ -55,7 +61,7 @@ export default function ProjectWorkspace() {
   }
 
   const activeTab = tab === 'clean' ? 'data' : tab
-  const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go })
+  const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest })
 
   return (
     <>
@@ -80,7 +86,17 @@ export default function ProjectWorkspace() {
         <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{dataset.name}</span>
       </div>
 
-      {page}
+      <div className="ax-workspace-grid">
+        <div style={{ minWidth: 0 }}>{page}</div>
+        <ActivityPanel
+          datasetId={dataset.id}
+          onViewStage={(stageId) => {
+            setViewStageRequest({ stageId, nonce: Date.now() })
+            navigate(`/projects/${id}/data`)
+          }}
+          onRestored={refreshDataset}
+        />
+      </div>
     </>
   )
 }
@@ -88,7 +104,7 @@ export default function ProjectWorkspace() {
 function renderTab(tab, props) {
   switch (tab) {
     case 'data':
-      return <DataPage dataset={props.dataset} setDataset={props.setDataset} />
+      return <DataPage dataset={props.dataset} setDataset={props.setDataset} viewStageRequest={props.viewStageRequest} />
     case 'expand':
       return <ExpandPage dataset={props.dataset} setDataset={props.setDataset} />
     case 'describe':
