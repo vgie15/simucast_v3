@@ -16,6 +16,8 @@ const ALGOS = [
 
 export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [target, setTarget] = useState('')
+  const [targetMode, setTargetMode] = useState('auto')
+  const [positiveClass, setPositiveClass] = useState('')
   const [features, setFeatures] = useState([])
   const [chosenAlgos, setChosenAlgos] = useState(['logistic', 'rf'])
   const [plan, setPlan] = useState(null)
@@ -47,8 +49,16 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     setPlanError(null)
     const t = setTimeout(async () => {
       try {
-        const r = await api.preprocessingPlan(dataset.id, { target, features, algorithms: chosenAlgos })
-        if (!cancelled) setPlan(r)
+        const r = await api.preprocessingPlan(dataset.id, {
+          target,
+          features,
+          algorithms: chosenAlgos,
+          target_options: targetOptions(targetMode, positiveClass),
+        })
+        if (!cancelled) {
+          setPlan(r)
+          if (!positiveClass && r.positive_class) setPositiveClass(r.positive_class)
+        }
       } catch (err) {
         if (!cancelled) {
           setPlanError(err.message || 'Plan failed')
@@ -62,7 +72,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, target, features.join(','), chosenAlgos.join(',')])
+  }, [dataset?.id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass])
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -88,7 +98,12 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     setTraining(true)
     setResults(null)
     try {
-      const r = await api.trainManyModels(dataset.id, { target, features, algorithms: chosenAlgos })
+      const r = await api.trainManyModels(dataset.id, {
+        target,
+        features,
+        algorithms: chosenAlgos,
+        target_options: targetOptions(targetMode, positiveClass),
+      })
       setResults(r)
       setActiveResultIdx(0)
       const list = await api.listModels(dataset.id)
@@ -120,6 +135,8 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           value={target}
           onChange={(e) => {
             setTarget(e.target.value)
+            setTargetMode('auto')
+            setPositiveClass('')
             setFeatures(features.filter((f) => f !== e.target.value))
             setResults(null)
           }}
@@ -133,10 +150,32 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           ))}
         </select>
         {plan && (
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
-            Detected task: <strong>{plan.task}</strong>
-            {plan.class_balance && ` · classes: ${Object.entries(plan.class_balance).map(([k, v]) => `${k} (${v})`).join(', ')}`}
-          </p>
+          <>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
+              Detected task: <strong>{plan.task}</strong>
+              {plan.class_balance && ` - classes: ${Object.entries(plan.class_balance).map(([k, v]) => `${k} (${v})`).join(', ')}`}
+            </p>
+            {plan.task === 'classification' && (
+              <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12 }}>
+                <label style={{ color: 'var(--color-text-secondary)' }}>Target handling</label>
+                <select value={targetMode} onChange={(e) => setTargetMode(e.target.value)}>
+                  <option value="auto">Automatic</option>
+                  <option value="multiclass">Keep categories</option>
+                  <option value="binary">Binary: selected vs others</option>
+                </select>
+                {(targetMode === 'binary' || plan.target_mode === 'binary') && (
+                  <>
+                    <label style={{ color: 'var(--color-text-secondary)' }}>Positive class</label>
+                    <select value={positiveClass || plan.positive_class || ''} onChange={(e) => setPositiveClass(e.target.value)}>
+                      {(plan.target_classes || []).map((cls) => (
+                        <option key={cls} value={cls}>{cls}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
       </Step>
 
@@ -591,4 +630,11 @@ function pct(v) {
 function num(v) {
   if (v == null) return '—'
   return Number(v).toFixed(3)
+}
+
+function targetOptions(mode, positiveClass) {
+  const options = {}
+  if (mode && mode !== 'auto') options.mode = mode
+  if (positiveClass) options.positive_class = positiveClass
+  return options
 }

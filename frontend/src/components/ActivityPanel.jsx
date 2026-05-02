@@ -1,14 +1,25 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
+
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'data_prep', label: 'Data prep' },
+  { key: 'analysis', label: 'Analysis' },
+  { key: 'model', label: 'Model' },
+  { key: 'whatif', label: 'Scenario' },
+  { key: 'report', label: 'Report' },
+]
 
 export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
   const [activity, setActivity] = useState([])
   const [stages, setStages] = useState([])
   const [currentStageId, setCurrentStageId] = useState('original')
   const [loading, setLoading] = useState(false)
-  const [note, setNote] = useState('')
   const [filter, setFilter] = useState('all')
-  const [query, setQuery] = useState('')
+  const [order, setOrder] = useState('desc')
+  const [noteFor, setNoteFor] = useState(null)
+  const [note, setNote] = useState('')
+  const [openDetails, setOpenDetails] = useState({})
   const [busy, setBusy] = useState(false)
 
   const load = async () => {
@@ -35,13 +46,42 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
     return () => clearInterval(id)
   }, [datasetId])
 
-  const addNote = async () => {
+  const timeline = useMemo(() => {
+    const stageById = Object.fromEntries(stages.map((stage) => [stage.id, stage]))
+    return activity
+      .map((item, index) => {
+        const relatedStage = item.related_stage_id ? stageById[item.related_stage_id] : null
+        return {
+          ...item,
+          stepNumber: index + 1,
+          stage: relatedStage,
+          sortDate: item.created_at || relatedStage?.created_at || '',
+        }
+      })
+      .sort((a, b) => {
+        const av = new Date(a.sortDate || 0).getTime()
+        const bv = new Date(b.sortDate || 0).getTime()
+        return order === 'asc' ? av - bv : bv - av
+      })
+  }, [activity, stages, order])
+
+  const filteredTimeline = timeline.filter((item) => {
+    const kind = item.category || item.kind
+    return filter === 'all' || kind === filter || item.kind === filter
+  })
+
+  const addNote = async (item) => {
     const summary = note.trim()
     if (!summary || busy) return
     setBusy(true)
     try {
-      await api.createActivityNote(datasetId, { summary })
+      await api.createActivityNote(datasetId, {
+        activity_id: item.id,
+        summary,
+        replace: (item.detail?.notes || []).length > 0,
+      })
       setNote('')
+      setNoteFor(null)
       await load()
     } catch (err) {
       alert('Could not add note: ' + err.message)
@@ -64,26 +104,6 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
     }
   }
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const showStages = filter === 'all' || filter === 'stages' || filter === 'data_prep'
-  const filteredStages = showStages
-    ? stages.filter((stage) => {
-        if (!normalizedQuery) return true
-        return [stage.summary, stage.op_type, String(stage.step_index)]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(normalizedQuery))
-      })
-    : []
-  const filteredActivity = activity.filter((item) => {
-    const kind = item.category || item.kind
-    if (filter === 'stages') return false
-    if (filter !== 'all' && kind !== filter && item.kind !== filter) return false
-    if (!normalizedQuery) return true
-    return [item.summary, kind, item.action_type, item.kind]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(normalizedQuery))
-  })
-
   return (
     <div className="ax-card ax-activity-panel">
       <div className="ax-row" style={{ marginBottom: 8 }}>
@@ -96,124 +116,136 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
         <button className="ax-btn" onClick={load} disabled={loading}>Refresh</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-        <input
-          type="text"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') addNote()
-          }}
-          placeholder="Add a note..."
-          style={{ flex: 1, minWidth: 0 }}
-        />
-        <button className="ax-btn prim" onClick={addNote} disabled={busy || !note.trim()}>
-          Add
-        </button>
-      </div>
-
       <div className="ax-activity-filters">
         <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">All</option>
-          <option value="stages">Stages</option>
-          <option value="data_prep">Data prep</option>
-          <option value="analysis">Analysis</option>
-          <option value="model">Model</option>
-          <option value="ai">AI</option>
-          <option value="report">Report</option>
-          <option value="note">Notes</option>
+          {FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
         </select>
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search log..."
-        />
+        <select value={order} onChange={(e) => setOrder(e.target.value)}>
+          <option value="desc">Latest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
       </div>
-
-      {filteredStages.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <p className="ax-lbl" style={{ marginBottom: 6 }}>Data stages</p>
-          <div className="ax-activity-list">
-            {filteredStages.map((stage) => {
-              const isActive = (currentStageId || 'original') === stage.id
-              return (
-                <div
-                  key={stage.id}
-                  className="ax-activity-item"
-                  style={{
-                    borderColor: isActive ? 'var(--color-accent)' : undefined,
-                    background: isActive ? 'var(--color-accent-light)' : undefined,
-                    borderRadius: 6,
-                    padding: '8px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--color-text-tertiary)' }}>
-                      #{stage.step_index}
-                    </span>
-                    <span className="ax-chip">{stage.op_type}</span>
-                    {isActive && <span className="ax-chip" style={{ background: 'var(--color-accent)', color: 'white' }}>active</span>}
-                  </div>
-                  <p style={{ fontSize: 12, margin: '4px 0 0' }}>{stage.summary}</p>
-                  <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>
-                    {stage.row_count?.toLocaleString()} rows - {stage.col_count} cols
-                    {stage.created_at && ` - ${new Date(stage.created_at).toLocaleString()}`}
-                  </p>
-                  <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                    <button className="ax-btn" onClick={() => onViewStage?.(stage.id)}>
-                      View
-                    </button>
-                    <a
-                      className="ax-btn"
-                      href={api.exportCsvUrl(datasetId, stage.id)}
-                      download
-                      style={{ textDecoration: 'none' }}
-                    >
-                      Export CSV
-                    </a>
-                    {!isActive && (
-                      <button className="ax-btn" onClick={() => restore(stage.id)} disabled={busy}>
-                        Restore
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       {loading && activity.length === 0 ? (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Loading activity...</p>
-      ) : activity.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>No activity yet.</p>
-      ) : filteredActivity.length === 0 && filteredStages.length === 0 ? (
+      ) : filteredTimeline.length === 0 ? (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>No matching activity.</p>
       ) : (
         <div className="ax-activity-list">
-          {filteredActivity.map((item) => (
-            <div key={item.id} className="ax-activity-item">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span className="ax-chip">{labelFor(item.category || item.kind)}</span>
-                <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
-                  {item.created_at ? new Date(item.created_at).toLocaleString() : ''}
-                </span>
-              </div>
-              <p style={{ fontSize: 12, margin: '4px 0 0' }}>{item.summary}</p>
-              {item.related_stage_id && (
-                <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                  <button className="ax-btn" onClick={() => onViewStage?.(item.related_stage_id)}>
-                    View stage
+          {filteredTimeline.map((item) => {
+            const isActive = item.related_stage_id && (currentStageId || 'original') === item.related_stage_id
+            const notes = item.detail?.notes || []
+            const detailsOpen = !!openDetails[item.id]
+            return (
+              <div
+                key={item.id}
+                className="ax-activity-item"
+                style={{
+                  borderColor: isActive ? 'var(--color-accent)' : undefined,
+                  background: isActive ? 'var(--color-accent-light)' : undefined,
+                  borderRadius: 6,
+                  padding: '8px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--color-text-tertiary)' }}>
+                    #{item.stepNumber}
+                  </span>
+                  <span className="ax-chip">{labelFor(item.action_type || item.category || item.kind)}</span>
+                  {item.stage?.op_type && <span className="ax-chip">{item.stage.op_type}</span>}
+                  {isActive && <span className="ax-chip" style={{ background: 'var(--color-accent)', color: 'white' }}>active</span>}
+                  <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
+                    {item.created_at ? new Date(item.created_at).toLocaleString() : ''}
+                  </span>
+                </div>
+                <p style={{ fontSize: 12, margin: '4px 0 0' }}>{item.summary}</p>
+                {item.stage && (
+                  <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>
+                    Stage {item.stage.step_index} - {item.stage.row_count?.toLocaleString()} rows - {item.stage.col_count} cols
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                  <button
+                    className="ax-btn"
+                    onClick={() => setOpenDetails((current) => ({ ...current, [item.id]: !current[item.id] }))}
+                  >
+                    {detailsOpen ? 'Hide details' : 'Details'}
                   </button>
-                  <button className="ax-btn" onClick={() => restore(item.related_stage_id)} disabled={busy}>
-                    Restore
+                  {item.related_stage_id && (
+                    <>
+                      <button className="ax-btn" onClick={() => onViewStage?.(item.related_stage_id)}>View stage</button>
+                      <a
+                        className="ax-btn"
+                        href={api.exportCsvUrl(datasetId, item.related_stage_id)}
+                        download
+                        style={{ textDecoration: 'none' }}
+                      >
+                        Export CSV
+                      </a>
+                      {!isActive && (
+                        <button className="ax-btn" onClick={() => restore(item.related_stage_id)} disabled={busy}>
+                          Restore
+                        </button>
+                      )}
+                    </>
+                  )}
+                  <button
+                    className="ax-btn"
+                    onClick={() => {
+                      const isOpen = noteFor === item.id
+                      setNoteFor(isOpen ? null : item.id)
+                      setNote(isOpen ? '' : (notes[notes.length - 1]?.text || ''))
+                    }}
+                    disabled={busy}
+                  >
+                    {notes.length ? 'Edit note' : 'Add note'}
                   </button>
                 </div>
-              )}
-            </div>
-          ))}
+                {detailsOpen && (
+                  <div className="ax-activity-details">
+                    {item.detail?.column && <p><strong>Column:</strong> {item.detail.column}</p>}
+                    {item.detail?.mapping && (
+                      <div>
+                        <strong>Mapping:</strong>
+                        <ul>
+                          {Object.entries(item.detail.mapping).slice(0, 20).map(([from, to]) => (
+                            <li key={from}><code>{from}</code> to <code>{String(to)}</code></li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {item.detail?.inputs && <p><strong>Inputs:</strong> {JSON.stringify(item.detail.inputs)}</p>}
+                    {item.detail?.prediction && <p><strong>Prediction:</strong> {JSON.stringify(item.detail.prediction)}</p>}
+                  </div>
+                )}
+                {notes.length > 0 && (
+                  <div className="ax-activity-note">
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 500 }}>Note</p>
+                    {notes.map((n) => (
+                      <p key={n.id} style={{ margin: '2px 0 0', fontSize: 12 }}>{n.text}</p>
+                    ))}
+                  </div>
+                )}
+                {noteFor === item.id && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    <input
+                      type="text"
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') addNote(item)
+                      }}
+                      placeholder="Note for this step..."
+                      style={{ flex: 1, minWidth: 0 }}
+                    />
+                    <button className="ax-btn prim" onClick={() => addNote(item)} disabled={busy || !note.trim()}>
+                      Save
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -222,13 +254,27 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
 
 function labelFor(kind) {
   const labels = {
-    data_prep: 'Data prep',
+    data_prep: 'Data Prep',
+    category_standardization: 'Data Prep',
+    cell_edit: 'Data Prep',
+    impute_mean: 'Data Prep',
+    impute_median: 'Data Prep',
+    impute_mode: 'Data Prep',
+    drop_rows: 'Data Prep',
+    winsorize: 'Data Prep',
     analysis: 'Analysis',
-    model: 'Model',
-    ai: 'AI',
+    test_t: 'Evaluation',
+    test_anova: 'Evaluation',
+    test_chi: 'Evaluation',
+    test_corr: 'Evaluation',
+    cluster: 'Evaluation',
+    pca: 'Evaluation',
+    model: 'Modeling',
+    train_model: 'Modeling',
+    save_whatif_scenario: 'Scenario',
+    whatif: 'Scenario',
     report: 'Report',
-    note: 'Note',
-    stage: 'Data prep',
+    stage: 'Data Prep',
     restore: 'Restore',
     upload: 'Upload',
     clone: 'Clone',

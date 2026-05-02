@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
+import AdvancedPage from './AdvancedPage'
 
 const TESTS = [
   { key: 't', label: 'Independent t-test', needs: ['group', 'measure'] },
@@ -22,7 +23,7 @@ export default function TestsPage({ dataset }) {
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
 
   const variables = dataset.variables || []
-  const numericVars = variables.filter((v) => v.dtype === 'numeric')
+  const numericVars = variables.filter((v) => ['numeric', 'int', 'float', 'binary'].includes(v.dtype))
   const categoricalVars = variables.filter((v) => ['category', 'binary'].includes(v.dtype))
 
   const run = async () => {
@@ -112,6 +113,10 @@ export default function TestsPage({ dataset }) {
       </div>
 
       {result && <TestResult kind={kind} result={result} />}
+
+      <div style={{ marginTop: 24 }}>
+        <AdvancedPage dataset={dataset} embedded />
+      </div>
     </>
   )
 }

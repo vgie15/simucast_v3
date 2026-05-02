@@ -5,7 +5,6 @@ import DataPage from './DataPage'
 import ExpandPage from './ExpandPage'
 import DescribePage from './DescribePage'
 import TestsPage from './TestsPage'
-import AdvancedPage from './AdvancedPage'
 import ModelsPage from './ModelsPage'
 import WhatIfPage from './WhatIfPage'
 import ReportPage from './ReportPage'
@@ -16,7 +15,6 @@ const TABS = [
   { key: 'expand', label: 'Expand' },
   { key: 'describe', label: 'Describe' },
   { key: 'tests', label: 'Tests' },
-  { key: 'advanced', label: 'Advanced' },
   { key: 'models', label: 'Models' },
   { key: 'whatif', label: 'What-if' },
   { key: 'report', label: 'Report' },
@@ -60,7 +58,7 @@ export default function ProjectWorkspace() {
     )
   }
 
-  const activeTab = tab === 'clean' ? 'data' : tab
+  const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
   const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest })
 
   return (
@@ -87,7 +85,10 @@ export default function ProjectWorkspace() {
       </div>
 
       <div className="ax-workspace-grid">
-        <div style={{ minWidth: 0 }}>{page}</div>
+        <div style={{ minWidth: 0 }}>
+          {page}
+          <NextPagePrompt activeTab={activeTab} datasetId={id} />
+        </div>
         <ActivityPanel
           datasetId={dataset.id}
           onViewStage={(stageId) => {
@@ -101,6 +102,31 @@ export default function ProjectWorkspace() {
   )
 }
 
+function NextPagePrompt({ activeTab, datasetId }) {
+  const idx = TABS.findIndex((t) => t.key === activeTab)
+  const next = TABS[idx + 1]
+  if (!next) return null
+  const copy = {
+    data: 'After cleaning and standardizing the dataset, expand rows or engineer more data.',
+    expand: 'Next, summarize the prepared dataset before formal testing.',
+    describe: 'Next, run statistical tests to evaluate relationships and group differences.',
+    tests: 'Next, train models using the strongest candidate targets and features.',
+    models: 'Next, compare saved scenarios using trained interpretable models.',
+    whatif: 'Next, generate a report with documentation, notes, results, and scenarios.',
+  }
+  return (
+    <div className="ax-card ax-next-card">
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Next: {next.label}</p>
+        <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+          {copy[activeTab] || 'Continue the workflow on the next page.'}
+        </p>
+      </div>
+      <Link className="ax-btn prim" to={`/projects/${datasetId}/${next.key}`}>Go to {next.label}</Link>
+    </div>
+  )
+}
+
 function renderTab(tab, props) {
   switch (tab) {
     case 'data':
@@ -111,8 +137,6 @@ function renderTab(tab, props) {
       return <DescribePage dataset={props.dataset} />
     case 'tests':
       return <TestsPage dataset={props.dataset} />
-    case 'advanced':
-      return <AdvancedPage dataset={props.dataset} />
     case 'models':
       return (
         <ModelsPage

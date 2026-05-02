@@ -6,6 +6,8 @@ import os
 import json
 import time
 import uuid
+import re
+from difflib import SequenceMatcher
 from datetime import datetime
 
 import numpy as np
@@ -330,8 +332,11 @@ def infer_variables(df):
         if pd.api.types.is_numeric_dtype(series):
             if unique <= 2:
                 dtype = "binary"
+            elif pd.api.types.is_integer_dtype(series.dropna()):
+                dtype = "int"
             else:
-                dtype = "numeric"
+                non_null = series.dropna()
+                dtype = "int" if len(non_null) and np.all(np.equal(np.mod(non_null, 1), 0)) else "float"
         elif pd.api.types.is_datetime64_any_dtype(series):
             dtype = "datetime"
         else:
@@ -354,6 +359,9 @@ def numeric_df(df, cols=None):
     if cols:
         df = df[cols]
     return df.select_dtypes(include=[np.number])
+
+def is_numeric_meta(v):
+    return v.get("dtype") in ("numeric", "int", "float", "binary")
 
 def _parse_num(value, default, cast):
     """Safely cast a user-supplied value; fall back to default on bad input."""
@@ -382,13 +390,26 @@ def clean_json(obj):
         return None
     return obj
 
-def log_activity(session, dataset_id, kind, summary, detail=None, ref_type=None, ref_id=None, commit=True):
+def log_activity(session, dataset_id, kind, summary, detail=None, ref_type=None, ref_id=None, commit=True, dedupe_key=None):
+    detail = clean_json(detail or {})
+    if dedupe_key:
+        existing = session.query(ActivityLog).filter_by(dataset_id=dataset_id).all()
+        for entry in reversed(existing):
+            entry_detail = jload(entry.detail) or {}
+            if entry_detail.get("dedupe_key") == dedupe_key:
+                entry.summary = summary
+                entry.detail = jdump({**entry_detail, **detail, "dedupe_key": dedupe_key, "repeat_count": int(entry_detail.get("repeat_count", 1)) + 1})
+                entry.created_at = datetime.utcnow()
+                if commit:
+                    session.commit()
+                return entry
+        detail["dedupe_key"] = dedupe_key
     entry = ActivityLog(
         id=str(uuid.uuid4()),
         dataset_id=dataset_id,
         kind=kind,
         summary=summary,
-        detail=jdump(clean_json(detail or {})),
+        detail=jdump(detail),
         ref_type=ref_type,
         ref_id=ref_id,
     )
@@ -459,7 +480,7 @@ def _dataset_profile(ds, df, variables, max_unique=8):
                 col["top_values"] = [
                     {"value": _ai_safe(k), "count": int(c)} for k, c in vc.items()
                 ]
-            elif v.get("dtype") == "numeric" and len(present):
+            elif v.get("dtype") in ("numeric", "int", "float", "binary") and len(present):
                 num = pd.to_numeric(present, errors="coerce").dropna()
                 if len(num):
                     col["min"] = float(num.min())
@@ -654,6 +675,7 @@ def get_dataset(ds_id):
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+        live_vars = infer_variables(pd.DataFrame(_current_rows(ds, s)))
         return {
             "id": ds.id,
             "name": ds.name,
@@ -661,7 +683,7 @@ def get_dataset(ds_id):
             "filename": ds.filename,
             "row_count": ds.row_count,
             "col_count": ds.col_count,
-            "variables": _current_variables(ds, s),
+            "variables": live_vars,
             "current_stage_id": ds.current_stage_id,
             "created_at": ds.created_at.isoformat() if ds.created_at else None,
         }
@@ -813,6 +835,145 @@ def _apply_cell_edit(df, row_index, column, value):
     df.at[row_index, column] = new_value
     return old_value, new_value, None
 
+_CATEGORY_ABBREVIATIONS = {
+    "hs": "high school",
+    "h.s.": "high school",
+    "grad": "graduate",
+    "post grad": "postgrad",
+    "post graduate": "postgrad",
+    "postgraduate": "postgrad",
+    "coll": "college",
+    "uni": "university",
+    "lo": "low",
+    "hi": "high",
+    "y": "yes",
+    "n": "no",
+}
+
+def _normalize_category_value(value):
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip().lower()
+    text = re.sub(r"\s+", " ", text)
+    for old, new in _CATEGORY_ABBREVIATIONS.items():
+        text = re.sub(rf"\b{re.escape(old)}\b", new, text)
+    return re.sub(r"\s+", " ", text).strip()
+
+def _title_category_label(text):
+    if not text:
+        return ""
+    small = {"of", "and", "or", "the"}
+    return " ".join(part if part in small else part[:1].upper() + part[1:] for part in str(text).split())
+
+def _category_groups(values, threshold=0.88):
+    normalized = {}
+    for value in values:
+        norm = _normalize_category_value(value)
+        if not norm:
+            continue
+        normalized.setdefault(norm, set()).add(str(value))
+
+    groups = []
+    used = set()
+    norms = list(normalized.keys())
+    for norm in norms:
+        if norm in used:
+            continue
+        group_norms = [norm]
+        used.add(norm)
+        for other in norms:
+            if other in used:
+                continue
+            if SequenceMatcher(None, norm, other).ratio() >= threshold:
+                group_norms.append(other)
+                used.add(other)
+        originals = sorted({raw for n in group_norms for raw in normalized[n]})
+        if len(originals) > 1 or any(raw != _title_category_label(norm) for raw in originals):
+            label_source = min(group_norms, key=len) if len(group_norms) > 1 else group_norms[0]
+            groups.append({
+                "values": originals,
+                "normalized_values": group_norms,
+                "suggested_label": _title_category_label(label_source),
+                "reason": "Rule-based normalization and fuzzy matching found similar category labels.",
+            })
+    return groups
+
+@app.route("/api/datasets/<ds_id>/categories/suggestions", methods=["GET"])
+def category_suggestions(ds_id):
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        df = df_from_dataset(ds, s)
+        variables = infer_variables(df)
+        suggestions = []
+        for var in variables:
+            if var.get("dtype") not in ("category", "binary"):
+                continue
+            col = var["name"]
+            uniques = [v for v in df[col].dropna().unique().tolist()]
+            if len(uniques) < 2 or len(uniques) > 120:
+                continue
+            groups = _category_groups(uniques)
+            if groups:
+                suggestions.append({
+                    "column": col,
+                    "unique_count": len(uniques),
+                    "groups": groups,
+                })
+        return jsonify({"suggestions": suggestions})
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/categories/apply", methods=["POST"])
+def apply_category_standardization(ds_id):
+    body = request.get_json() or {}
+    column = body.get("column")
+    mapping = body.get("mapping") or {}
+    if not column or not isinstance(mapping, dict) or not mapping:
+        return {"error": "column and mapping are required"}, 400
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        df = df_from_dataset(ds, s)
+        if column not in df.columns:
+            return {"error": "column not found"}, 404
+        before_unique = int(df[column].nunique(dropna=True))
+        df[column] = df[column].map(lambda value: mapping.get(str(value), value) if not pd.isna(value) else value)
+        after_unique = int(df[column].nunique(dropna=True))
+        changed = int(sum(1 for old, new in mapping.items() if str(old) != str(new)))
+        summary = f"Standardized categories in '{column}' ({before_unique} to {after_unique} unique labels)"
+        stage = create_stage(
+            s,
+            ds,
+            df,
+            op_type="category_standardization",
+            op_params={"column": column, "mapping": mapping},
+            summary=summary,
+        )
+        # create_stage already logs the stage; enrich the same entry with report-ready mapping.
+        entry = s.query(ActivityLog).filter_by(ref_type="stage", ref_id=stage.id).first()
+        if entry:
+            detail = jload(entry.detail) or {}
+            detail.update({
+                "category": "data_prep",
+                "action_type": "category_standardization",
+                "step_type": "Data Prep",
+                "column": column,
+                "mapping": mapping,
+                "changed_labels": changed,
+                "before_unique": before_unique,
+                "after_unique": after_unique,
+            })
+            entry.detail = jdump(clean_json(detail))
+            s.commit()
+        return jsonify({"ok": True, "stage_id": stage.id, "summary": summary})
+    finally:
+        s.close()
+
 @app.route("/api/datasets/<ds_id>/activity", methods=["GET"])
 def list_activity(ds_id):
     order = (request.args.get("order") or "desc").lower()
@@ -820,7 +981,8 @@ def list_activity(ds_id):
     try:
         q = s.query(ActivityLog).filter_by(dataset_id=ds_id)
         q = q.order_by(ActivityLog.created_at.asc() if order == "asc" else ActivityLog.created_at.desc())
-        return jsonify({"activity": [activity_payload(a) for a in q.all()]})
+        hidden = {"ai", "note"}
+        return jsonify({"activity": [activity_payload(a) for a in q.all() if a.kind not in hidden and (jload(a.detail) or {}).get("category") != "ai"]})
     finally:
         s.close()
 
@@ -830,17 +992,49 @@ def create_activity_note(ds_id):
     summary = (body.get("summary") or "").strip()
     if not summary:
         return {"error": "summary is required"}, 400
+    activity_id = body.get("activity_id")
+    related_stage_id = body.get("related_stage_id")
+    related_analysis_id = body.get("related_analysis_id")
+    related_model_id = body.get("related_model_id")
+    ref_type = None
+    ref_id = None
+    if related_stage_id:
+        ref_type, ref_id = "stage", related_stage_id
+    elif related_analysis_id:
+        ref_type, ref_id = "analysis", related_analysis_id
+    elif related_model_id:
+        ref_type, ref_id = "model", related_model_id
     s = db()
     try:
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+        if activity_id:
+            entry = s.query(ActivityLog).filter_by(id=activity_id, dataset_id=ds_id).first()
+            if not entry:
+                return {"error": "activity not found"}, 404
+            detail = jload(entry.detail) or {}
+            notes = [] if body.get("replace") else (detail.get("notes") or [])
+            notes.append({"id": str(uuid.uuid4()), "text": summary, "created_at": datetime.utcnow().isoformat()})
+            detail["notes"] = notes
+            entry.detail = jdump(clean_json(detail))
+            s.commit()
+            return jsonify(activity_payload(entry))
         entry = log_activity(
             s,
             ds_id,
             "note",
             summary,
-            detail={"category": "note", "action_type": "manual_note", "body": body.get("body") or summary},
+            detail={
+                "category": "note",
+                "action_type": "manual_note",
+                "body": body.get("body") or summary,
+                "related_stage_id": related_stage_id,
+                "related_analysis_id": related_analysis_id,
+                "related_model_id": related_model_id,
+            },
+            ref_type=ref_type,
+            ref_id=ref_id,
         )
         return jsonify(activity_payload(entry))
     finally:
@@ -1878,7 +2072,7 @@ def _detect_task(y):
     )
 
 
-def _build_preprocessing_plan(df, target, features, algorithms):
+def _build_preprocessing_plan(df, target, features, algorithms, target_options=None):
     """Inspect the data and produce a transparent preprocessing plan.
 
     Returned shape is also stored on each trained model so the user can see
@@ -1896,8 +2090,22 @@ def _build_preprocessing_plan(df, target, features, algorithms):
     rows_after = len(sub_clean)
     dropped = rows_before - rows_after
 
+    target_options = target_options or {}
     y = sub_clean[target]
     task = "classification" if _detect_task(y) else "regression"
+    target_classes = [str(x) for x in y.dropna().astype(str).value_counts().index.tolist()] if task == "classification" else []
+    target_mode = target_options.get("mode") or ("binary" if task == "classification" and len(target_classes) == 2 else "multiclass")
+    positive_class = target_options.get("positive_class") or (target_classes[0] if target_classes else None)
+    target_context = None
+    if task == "regression":
+        y_num = pd.to_numeric(y, errors="coerce").dropna()
+        if len(y_num):
+            target_context = {
+                "min": float(y_num.min()),
+                "max": float(y_num.max()),
+                "mean": float(y_num.mean()),
+                "std": float(y_num.std() or 0),
+            }
 
     # encoding
     encoding = []
@@ -1937,6 +2145,10 @@ def _build_preprocessing_plan(df, target, features, algorithms):
         smallest = min(n_per_class.values()) if n_per_class else 0
         if smallest < 10:
             warnings.append(f"Smallest class has only {smallest} examples — model quality will be unreliable.")
+        if len(n_per_class) > 2 and target_mode == "binary":
+            warnings.append(f"Binary mode will reduce {len(n_per_class)} target categories into '{positive_class}' vs all others.")
+        elif len(n_per_class) > 2:
+            warnings.append("Multiclass target detected. Use binary mode if the analysis needs one selected category versus the rest.")
         if len(n_per_class) > 10:
             warnings.append(f"{len(n_per_class)} distinct target values — high cardinality may hurt accuracy.")
     if rows_after < 50:
@@ -1965,6 +2177,10 @@ def _build_preprocessing_plan(df, target, features, algorithms):
         "scaling": scaling,
         "missing_report": missing_report,
         "class_balance": {str(k): int(v) for k, v in (n_per_class or {}).items()} if task == "classification" else None,
+        "target_classes": target_classes,
+        "target_mode": target_mode if task == "classification" else None,
+        "positive_class": positive_class if task == "classification" else None,
+        "target_context": target_context,
         "warnings": warnings,
     }
 
@@ -1976,14 +2192,23 @@ def _train_one(df, target, features, algo, test_size, plan):
     multi-train run sees an identical pipeline.
     """
     data = df[features + [target]].dropna()
-    X = data[features].copy()
+    X_raw = data[features].copy()
+    X = X_raw.copy()
     y = data[target]
 
-    X = pd.get_dummies(X, drop_first=True)
+    X = pd.get_dummies(X, drop_first=True, prefix_sep="=")
 
     is_classification = plan["task"] == "classification"
-    if is_classification and not pd.api.types.is_numeric_dtype(y):
-        y = LabelEncoder().fit_transform(y.astype(str))
+    class_labels = None
+    if is_classification:
+        if plan.get("target_mode") == "binary":
+            positive = str(plan.get("positive_class"))
+            y = y.astype(str).eq(positive).astype(int)
+            class_labels = [f"not {positive}", positive]
+        elif not pd.api.types.is_numeric_dtype(y):
+            labels = sorted(y.dropna().astype(str).unique().tolist())
+            class_labels = labels
+            y = LabelEncoder().fit_transform(y.astype(str))
 
     needs_scaling = ALGORITHM_CATALOG.get(algo, {}).get("needs_scaling", False)
     scaler = None
@@ -2064,8 +2289,15 @@ def _train_one(df, target, features, algo, test_size, plan):
             "coef": coef,
             "intercept": intercept,
             "task": metrics["task"],
+            "target": target,
+            "target_mode": plan.get("target_mode"),
+            "positive_class": plan.get("positive_class"),
+            "class_labels": class_labels,
+            "target_context": plan.get("target_context"),
             "feature_means": feature_means,
             "feature_stds": feature_stds,
+            "raw_features": _whatif_raw_features(X_raw),
+            "dummy_sep": "=",
             "scaled": scaler is not None,
         }
 
@@ -2076,6 +2308,33 @@ def _train_one(df, target, features, algo, test_size, plan):
         "encoded_features": X.columns.tolist(),
     }
 
+def _whatif_raw_features(X_raw):
+    features = []
+    for col in X_raw.columns:
+        s = X_raw[col]
+        present = s.dropna()
+        if pd.api.types.is_numeric_dtype(s):
+            mean = float(present.mean()) if len(present) else 0.0
+            std = float(present.std() or 1.0) if len(present) else 1.0
+            features.append({
+                "name": col,
+                "kind": "numeric",
+                "mean": mean,
+                "std": std,
+                "min": float(present.min()) if len(present) else mean - 2 * std,
+                "max": float(present.max()) if len(present) else mean + 2 * std,
+            })
+        else:
+            counts = present.astype(str).value_counts()
+            values = counts.index.tolist()
+            features.append({
+                "name": col,
+                "kind": "categorical",
+                "values": values[:100],
+                "default": values[0] if values else "",
+            })
+    return features
+
 
 @app.route("/api/datasets/<ds_id>/models/preprocessing_plan", methods=["POST"])
 def preprocessing_plan(ds_id):
@@ -2084,6 +2343,7 @@ def preprocessing_plan(ds_id):
     target = body.get("target")
     features = body.get("features") or []
     algorithms = body.get("algorithms") or []
+    target_options = body.get("target_options") or {}
     s = db()
     try:
         ds = s.query(Dataset).filter_by(id=ds_id).first()
@@ -2091,7 +2351,7 @@ def preprocessing_plan(ds_id):
             return {"error": "not found"}, 404
         df = df_from_dataset(ds, s)
         try:
-            plan = _build_preprocessing_plan(df, target, features, algorithms)
+            plan = _build_preprocessing_plan(df, target, features, algorithms, target_options)
         except ValueError as e:
             return {"error": str(e)}, 400
         return jsonify(clean_json(plan))
@@ -2106,6 +2366,7 @@ def train_model(ds_id):
     target = body.get("target")
     features = body.get("features") or []
     algo = body.get("algorithm", "logistic")
+    target_options = body.get("target_options") or {}
     test_size = min(max(_parse_num(body.get("test_size"), 0.2, float), 0.05), 0.5)
 
     s = db()
@@ -2117,7 +2378,7 @@ def train_model(ds_id):
         if not features:
             features = [c for c in df.select_dtypes(include=[np.number]).columns if c != target]
         try:
-            plan = _build_preprocessing_plan(df, target, features, [algo])
+            plan = _build_preprocessing_plan(df, target, features, [algo], target_options)
         except ValueError as e:
             return {"error": str(e)}, 400
         try:
@@ -2173,6 +2434,7 @@ def train_many_models(ds_id):
     target = body.get("target")
     features = body.get("features") or []
     algorithms = body.get("algorithms") or ["logistic"]
+    target_options = body.get("target_options") or {}
     test_size = min(max(_parse_num(body.get("test_size"), 0.2, float), 0.05), 0.5)
 
     s = db()
@@ -2182,7 +2444,7 @@ def train_many_models(ds_id):
             return {"error": "not found"}, 404
         df = df_from_dataset(ds, s)
         try:
-            plan = _build_preprocessing_plan(df, target, features, algorithms)
+            plan = _build_preprocessing_plan(df, target, features, algorithms, target_options)
         except ValueError as e:
             return {"error": str(e)}, 400
 
@@ -2268,6 +2530,60 @@ def list_models(ds_id):
 
 # --- What-if ---
 
+def _whatif_extrapolation_risk(inputs, raw_features):
+    levels = {"low": 0, "medium": 1, "high": 2}
+    out_of_range = []
+    overall = "low"
+    for feature in raw_features or []:
+        if feature.get("kind") == "categorical":
+            continue
+        name = feature.get("name")
+        if name not in inputs:
+            continue
+        try:
+            value = float(inputs.get(name))
+            lo = float(feature.get("min"))
+            hi = float(feature.get("max"))
+        except Exception:
+            continue
+        span = hi - lo
+        if span <= 0:
+            span = max(abs(hi), abs(lo), 1.0)
+        distance = 0.0
+        direction = None
+        boundary = None
+        if value < lo:
+            distance = lo - value
+            direction = "below"
+            boundary = lo
+        elif value > hi:
+            distance = value - hi
+            direction = "above"
+            boundary = hi
+        if distance <= 0:
+            continue
+        ratio = distance / span
+        risk = "medium" if ratio <= 0.1 else "high"
+        if levels[risk] > levels[overall]:
+            overall = risk
+        out_of_range.append({
+            "feature": name,
+            "value": value,
+            "min": lo,
+            "max": hi,
+            "distance": distance,
+            "direction": direction,
+            "boundary": boundary,
+            "deviation_ratio": ratio,
+            "risk": risk,
+        })
+    return {
+        "overall_risk": overall,
+        "out_of_range_features": [item["feature"] for item in out_of_range],
+        "details": out_of_range,
+        "message": "Some inputs exceed dataset boundaries. Predictions may be unreliable." if out_of_range else None,
+    }
+
 @app.route("/api/models/<model_id>/predict", methods=["POST"])
 def whatif_predict(model_id):
     """Make a live prediction from a linear/logistic model using user-supplied values."""
@@ -2287,30 +2603,93 @@ def whatif_predict(model_id):
         weights = coef["coef"]
         intercept = coef["intercept"]
         means = coef["feature_means"]
+        stds = coef.get("feature_stds") or {}
+        sep = coef.get("dummy_sep", "=")
+        extrapolation = _whatif_extrapolation_risk(inputs, coef.get("raw_features") or [])
 
         # build vector — use provided values, fallback to means
         x = []
         for f in features:
-            if f in inputs:
+            raw_value = means.get(f, 0)
+            raw_name = f.split(sep, 1)[0] if sep in f else f
+            if sep in f and raw_name in inputs:
+                expected = f.split(sep, 1)[1]
+                raw_value = 1.0 if str(inputs.get(raw_name)) == expected else 0.0
+            elif f in inputs:
                 try:
-                    x.append(float(inputs[f]))
+                    raw_value = float(inputs[f])
                 except Exception:
-                    x.append(means.get(f, 0))
+                    raw_value = means.get(f, 0)
+            if coef.get("scaled"):
+                scale = stds.get(f, 1) or 1
+                x.append((raw_value - means.get(f, 0)) / scale)
             else:
-                x.append(means.get(f, 0))
+                x.append(raw_value)
 
         z = intercept + sum(w * v for w, v in zip(weights, x))
+        target_context = coef.get("target_context")
+        warning = None
+        if target_context and coef["task"] != "classification":
+            lo = target_context.get("min")
+            hi = target_context.get("max")
+            span = (hi - lo) if lo is not None and hi is not None else None
+            pad = max(span * 0.15, 1) if span is not None else 0
+            if lo is not None and hi is not None and (z < lo - pad or z > hi + pad):
+                warning = "Prediction seems outside the target range seen in the dataset. Check preprocessing, feature values, or model fit."
         if coef["task"] == "classification":
             prob = 1 / (1 + np.exp(-z))
             return jsonify({
                 "prediction": float(prob),
                 "kind": "probability",
                 "risk": "high" if prob > 0.6 else "medium" if prob > 0.35 else "low",
+                "positive_class": coef.get("positive_class"),
+                "class_labels": coef.get("class_labels"),
+                "extrapolation": extrapolation,
             })
         return jsonify({
             "prediction": float(z),
             "kind": "value",
+            "target_context": target_context,
+            "warning": warning,
+            "extrapolation": extrapolation,
         })
+    finally:
+        s.close()
+
+@app.route("/api/models/<model_id>/scenarios", methods=["POST"])
+def save_whatif_scenario(model_id):
+    body = request.get_json() or {}
+    name = (body.get("name") or "What-if scenario").strip()
+    inputs = body.get("inputs") or {}
+    prediction = body.get("prediction") or {}
+    extrapolation = body.get("extrapolation") or prediction.get("extrapolation") or {}
+    s = db()
+    try:
+        m = s.query(Model).filter_by(id=model_id).first()
+        if not m:
+            return {"error": "model not found"}, 404
+        entry = log_activity(
+            s,
+            m.dataset_id,
+            "whatif",
+            f"Saved what-if scenario '{name}' for {m.name}",
+            detail={
+                "category": "model",
+                "action_type": "save_whatif_scenario",
+                "scenario_name": name,
+                "model_id": model_id,
+                "target": m.target,
+                "inputs": clean_json(inputs),
+                "prediction": clean_json(prediction),
+                "out_of_range_features": clean_json(extrapolation.get("out_of_range_features") or []),
+                "risk_level": extrapolation.get("overall_risk") or "low",
+                "extrapolation": clean_json(extrapolation),
+                "note": "User explored values outside dataset range" if extrapolation.get("out_of_range_features") else None,
+            },
+            ref_type="model",
+            ref_id=model_id,
+        )
+        return jsonify(activity_payload(entry))
     finally:
         s.close()
 
@@ -2325,17 +2704,20 @@ def get_model(model_id):
         features_info = None
         if coef:
             # give frontend sensible slider ranges: mean ± 2*std
-            features_info = []
-            for f in coef["features"]:
-                mean = coef["feature_means"].get(f, 0)
-                std = coef["feature_stds"].get(f, 1)
-                features_info.append({
-                    "name": f,
-                    "mean": mean,
-                    "std": std,
-                    "min": mean - 2 * std,
-                    "max": mean + 2 * std,
-                })
+            features_info = coef.get("raw_features") or []
+            if not features_info:
+                stds = coef.get("feature_stds") or {}
+                for f in coef["features"]:
+                    mean = coef["feature_means"].get(f, 0)
+                    std = stds.get(f, 1)
+                    features_info.append({
+                        "name": f,
+                        "kind": "numeric",
+                        "mean": mean,
+                        "std": std,
+                        "min": mean - 2 * std,
+                        "max": mean + 2 * std,
+                    })
         return jsonify({
             "id": m.id,
             "name": m.name,
@@ -2345,6 +2727,9 @@ def get_model(model_id):
             "metrics": jload(m.metrics),
             "feature_importance": jload(m.feature_importance),
             "whatif_features": features_info,
+            "positive_class": coef.get("positive_class") if coef else None,
+            "class_labels": coef.get("class_labels") if coef else None,
+            "target_context": coef.get("target_context") if coef else None,
         })
     finally:
         s.close()
@@ -2410,25 +2795,11 @@ def ai_recommend(ds_id):
         prompt = prompts.get(context, prompts["data"])
         try:
             payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1500)
-            log_activity(
-                s,
-                ds_id,
-                "ai",
-                f"Generated AI recommendations for {context}",
-                detail={"category": "ai", "action_type": "recommend", "context": context},
-            )
             return jsonify({"context": context, "ai": True, **payload})
         except Exception as e:
             print(f"AI recommend failed: {e}", flush=True)
             fallback = _rule_based_recommend(context, df, variables)
             fallback["error"] = f"AI call failed: {e.__class__.__name__}"
-            log_activity(
-                s,
-                ds_id,
-                "ai",
-                f"Used heuristic recommendations for {context}",
-                detail={"category": "ai", "action_type": "recommend_fallback", "context": context, "error": e.__class__.__name__},
-            )
             return jsonify(fallback)
     finally:
         s.close()
@@ -2475,23 +2846,9 @@ def ai_explain(ds_id):
         )
         try:
             text = ai_call(profile, prompt, system=system, max_tokens=600)
-            log_activity(
-                s,
-                ds_id,
-                "ai",
-                f"Generated AI explanation for {step}",
-                detail={"category": "ai", "action_type": "explain", "step": step, "params": clean_json(params)},
-            )
             return jsonify({"ai": True, "explanation": text})
         except Exception as e:
             print(f"AI explain failed: {e}", flush=True)
-            log_activity(
-                s,
-                ds_id,
-                "ai",
-                f"AI explanation failed for {step}",
-                detail={"category": "ai", "action_type": "explain_failed", "step": step, "error": str(e)},
-            )
             return jsonify({"ai": False, "explanation": f"AI call failed: {e}"})
     finally:
         s.close()
@@ -2500,7 +2857,7 @@ def ai_explain(ds_id):
 def _rule_based_recommend(context, df, variables):
     """Heuristic fallback when no Anthropic key is configured."""
     var_by_name = {v["name"]: v for v in variables}
-    nums = [v["name"] for v in variables if v.get("dtype") in ("numeric", "binary")]
+    nums = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]
     cats = [v["name"] for v in variables if v.get("dtype") == "category"]
     bins = [v["name"] for v in variables if v.get("dtype") == "binary"]
     missing_cols = [v["name"] for v in variables if v.get("missing", 0) > 0]
@@ -2605,7 +2962,10 @@ def build_report(ds_id):
             return {"error": "not found"}, 404
         analyses = s.query(Analysis).filter_by(dataset_id=ds_id).order_by(Analysis.created_at).all()
         models = s.query(Model).filter_by(dataset_id=ds_id).order_by(Model.created_at).all()
-        activity = s.query(ActivityLog).filter_by(dataset_id=ds_id).order_by(ActivityLog.created_at).all()
+        activity = [
+            a for a in s.query(ActivityLog).filter_by(dataset_id=ds_id).order_by(ActivityLog.created_at).all()
+            if a.kind not in {"ai", "note"} and (jload(a.detail) or {}).get("category") != "ai"
+        ]
 
         report = {
             "title": ds.name,

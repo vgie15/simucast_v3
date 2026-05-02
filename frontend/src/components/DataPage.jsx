@@ -4,6 +4,7 @@ import ColumnValuesModal from './ColumnValuesModal'
 import AIAssistantPanel from './AIAssistantPanel'
 import ManualTransformsCard from './ManualTransformsCard'
 import DataGridViewer from './DataGridViewer'
+import CategoryStandardizationCard from './CategoryStandardizationCard'
 
 export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const [viewStageId, setViewStageId] = useState('current')
@@ -142,6 +143,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       <AIAssistantPanel datasetId={dataset.id} context="data" />
 
       <ManualTransformsCard dataset={dataset} onApplied={handleApplied} />
+
+      <CategoryStandardizationCard dataset={dataset} onApplied={handleApplied} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
         <StatCard label="Missing" value={missing} />

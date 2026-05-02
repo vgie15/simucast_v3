@@ -4,7 +4,7 @@ import { api } from '../api'
 
 const CLUSTER_COLORS = ['#7F77DD', '#1D9E75', '#D85A30', '#D4537E', '#EF9F27', '#378ADD']
 
-export default function AdvancedPage({ dataset }) {
+export default function AdvancedPage({ dataset, embedded = false }) {
   const [method, setMethod] = useState('cluster')
   const [vars, setVars] = useState([])
   const [k, setK] = useState(4)
@@ -13,7 +13,7 @@ export default function AdvancedPage({ dataset }) {
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
 
-  const numericVars = (dataset.variables || []).filter((v) => v.dtype === 'numeric')
+  const numericVars = (dataset.variables || []).filter((v) => ['numeric', 'int', 'float', 'binary'].includes(v.dtype))
 
   const toggleVar = (name) => {
     setVars(vars.includes(name) ? vars.filter((x) => x !== name) : [...vars, name])
@@ -36,8 +36,19 @@ export default function AdvancedPage({ dataset }) {
 
   return (
     <>
-      <h1 className="ax-page-title">Advanced statistics</h1>
-      <p className="ax-page-sub">K-means clustering and principal component analysis.</p>
+      {embedded ? (
+        <>
+          <p className="ax-lbl" style={{ marginTop: 0 }}>Advanced tests</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>
+            K-means clustering and principal component analysis.
+          </p>
+        </>
+      ) : (
+        <>
+          <h1 className="ax-page-title">Advanced statistics</h1>
+          <p className="ax-page-sub">K-means clustering and principal component analysis.</p>
+        </>
+      )}
 
       <p className="ax-lbl">Method</p>
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>

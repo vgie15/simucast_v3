@@ -49,6 +49,12 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ edits }),
     }),
+  categorySuggestions: (id) => request(`/api/datasets/${id}/categories/suggestions`),
+  applyCategoryStandardization: (id, body) =>
+    request(`/api/datasets/${id}/categories/apply`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   listStages: (id) => request(`/api/datasets/${id}/stages`),
   restoreStage: (id, stageId) =>
     request(`/api/datasets/${id}/stages/${encodeURIComponent(stageId)}/restore`, { method: 'POST' }),
@@ -162,6 +168,11 @@ export const api = {
     request(`/api/models/${mid}/predict`, {
       method: 'POST',
       body: JSON.stringify({ inputs }),
+    }),
+  saveScenario: (mid, body) =>
+    request(`/api/models/${mid}/scenarios`, {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
 
   // ai
