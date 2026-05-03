@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
 import AdvancedPage from './AdvancedPage'
+import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
 
 const TESTS = [
@@ -179,15 +180,14 @@ export default function TestsPage({ dataset }) {
         </div>
       </div>
 
-      {result && <TestResult kind={kind} result={result} setup={{ group, measure, varA, varB, corrVars }} />}
-
-      <div className="ax-card" style={{ padding: 14, marginTop: 14 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>AI insights</p>
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
-          Rule-based explanations are shown now. AI can later expand this into deeper, contextual interpretation without replacing the test result.
-        </p>
-        <button className="ax-btn" disabled style={{ marginTop: 10 }}>Generate deeper explanation</button>
-      </div>
+      {result && (
+        <TestResult
+          kind={kind}
+          result={result}
+          setup={{ group, measure, varA, varB, corrVars }}
+          datasetId={dataset.id}
+        />
+      )}
 
       <div style={{ marginTop: 24 }}>
         <AdvancedPage dataset={dataset} embedded />
@@ -213,25 +213,44 @@ function InfoRow({ label, text }) {
   )
 }
 
-function TestResult({ kind, result, setup }) {
+function TestResult({ kind, result, setup, datasetId }) {
   const summary = summarizeResult(kind, result, setup)
+  const stepName = `test-${kind}`
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <AIInsightCard
+        datasetId={datasetId}
+        step={stepName}
+        params={setup}
+        result={result}
+        title={`AI interpretation of this ${kind === 'corr' ? 'correlation' : kind} result`}
+        question="Interpret these test results in plain English: what do the numbers mean here, is the effect practically meaningful, and what should the user do next?"
+        refreshKey={JSON.stringify({ kind, result })}
+      />
       <div className="ax-card" style={{ borderLeft: `3px solid ${summary.significant ? '#1D9E75' : '#888'}` }}>
         <div className="ax-row" style={{ marginBottom: 10, alignItems: 'flex-start' }}>
           <div>
             <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Test result summary</p>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{summary.subtitle}</p>
           </div>
-          <span style={{
-            fontSize: 10,
-            padding: '2px 8px',
-            background: summary.significant ? 'var(--color-background-success)' : 'var(--color-background-secondary)',
-            color: summary.significant ? 'var(--color-text-success)' : 'var(--color-text-secondary)',
-            borderRadius: 4,
-          }}>
-            {summary.significant ? 'Significant' : 'Not significant'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{
+              fontSize: 10,
+              padding: '2px 8px',
+              background: summary.significant ? 'var(--color-background-success)' : 'var(--color-background-secondary)',
+              color: summary.significant ? 'var(--color-text-success)' : 'var(--color-text-secondary)',
+              borderRadius: 4,
+            }}>
+              {summary.significant ? 'Significant' : 'Not significant'}
+            </span>
+            <ExplainButton
+              datasetId={datasetId}
+              step={stepName}
+              params={setup}
+              result={result}
+              question="Explain this specific number — what does it mean for the dataset and how should the user act on it?"
+            />
+          </div>
         </div>
         <Metrics items={summary.metrics} />
         <Decision significant={summary.significant} />

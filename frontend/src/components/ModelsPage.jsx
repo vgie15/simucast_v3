@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
+import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
 import { useAuth } from './AuthProvider'
 
@@ -535,6 +536,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             activeIdx={activeResultIdx}
             setActiveIdx={setActiveResultIdx}
             onUseInWhatIf={useInWhatIf}
+            datasetId={dataset.id}
           />
           {(results.models || []).length > 0 && (
             <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
@@ -952,7 +954,7 @@ function IssueActionMenu({ check, onResolveIssue, onExecuteAction }) {
   )
 }
 
-function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf }) {
+function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, datasetId }) {
   const dialog = useDialog()
   const { models, skipped } = results
   if (!models || models.length === 0) {
@@ -963,8 +965,22 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf }) {
     )
   }
   const active = models[activeIdx] || models[0]
+  const compareSummary = models.map((m) => ({
+    algorithm: m.algorithm,
+    target: m.target,
+    metrics: m.metrics,
+  }))
   return (
     <>
+      <AIInsightCard
+        datasetId={datasetId}
+        step="models-comparison"
+        params={{ task: models[0]?.metrics?.task, target: models[0]?.target }}
+        result={{ models: compareSummary, skipped }}
+        title="AI verdict on these model results"
+        question="Which of these trained models looks most promising and why? Translate the metrics into plain English (good/mediocre/poor) and call out any red flags like overfitting or class imbalance."
+        refreshKey={JSON.stringify(compareSummary)}
+      />
       <p className="ax-lbl">Comparison</p>
       <ComparisonTable models={models} activeIdx={activeIdx} onPick={setActiveIdx} />
       {skipped?.length > 0 && (
@@ -976,24 +992,34 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf }) {
       <div className="ax-card" style={{ padding: 14, marginTop: 8 }}>
         <div className="ax-row" style={{ marginBottom: 10 }}>
           <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{active.label} — details</p>
-          <button
-            className="ax-btn"
-            onClick={async () => {
-              if (active.has_whatif) {
-                onUseInWhatIf(active)
-                return
-              }
-              try {
-                await api.prepareModelForWhatIf(active.id)
-                onUseInWhatIf({ ...active, has_whatif: true })
-              } catch (err) {
-                await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
-              }
-            }}
-            type="button"
-          >
-            Use in What-if
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <ExplainButton
+              datasetId={datasetId}
+              step="model-detail"
+              params={{ algorithm: active.algorithm, target: active.target, model_params: active.metrics?.model_params }}
+              result={active.metrics}
+              question="Explain this specific model's metrics and feature influence in plain English. What are its strengths, weaknesses, and what should the user try next to improve it?"
+              label="Explain metrics"
+            />
+            <button
+              className="ax-btn"
+              onClick={async () => {
+                if (active.has_whatif) {
+                  onUseInWhatIf(active)
+                  return
+                }
+                try {
+                  await api.prepareModelForWhatIf(active.id)
+                  onUseInWhatIf({ ...active, has_whatif: true })
+                } catch (err) {
+                  await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
+                }
+              }}
+              type="button"
+            >
+              Use in What-if
+            </button>
+          </div>
         </div>
         <ModelDetail model={active} />
       </div>

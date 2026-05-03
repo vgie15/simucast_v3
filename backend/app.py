@@ -4222,6 +4222,35 @@ def ai_recommend(ds_id):
                 "trade-offs spelled out. "
                 'Respond as JSON: {"method": "bootstrap|synthetic", "target_rows": int, "rationale": str, "warnings": [str]}'
             ),
+            "describe": (
+                "Write a 2–4 sentence narrative summary of this dataset that a "
+                "non-statistician would understand: what it appears to be about, "
+                "the most notable distributions or skews, and any obvious data "
+                "quality concerns. Then list up to 4 specific findings worth "
+                "highlighting (outliers, skewed columns, suspicious zeros, etc). "
+                'Respond as JSON: {"summary": str, "recommendations": [{"title": str, "rationale": str, "category": "distribution|outlier|quality|relationship"}]}'
+            ),
+            "clean": (
+                "Recommend up to 5 cleaning actions, ordered by impact. For each: "
+                "the action (impute, drop, recode, standardize, clip), the column "
+                "it applies to, and a one-sentence rationale referencing the "
+                "actual numbers (missing %, cardinality, etc). "
+                'Respond as JSON: {"recommendations": [{"title": str, "action": "impute|drop|recode|standardize|clip", "column": str, "rationale": str, "category": "clean"}]}'
+            ),
+            "whatif": (
+                "The user is exploring scenarios on a trained model. Suggest up "
+                "to 4 scenarios worth running given the columns available — each "
+                "should change one or two inputs in a way that would meaningfully "
+                "test the model. "
+                'Respond as JSON: {"recommendations": [{"title": str, "rationale": str, "category": "whatif", "changes": [{"column": str, "direction": "increase|decrease|set", "amount": str}]}]}'
+            ),
+            "report": (
+                "Write an executive summary of the analysis pipeline so far for "
+                "a non-technical stakeholder. Cover: what the data is, what was "
+                "done to it, the headline finding, and the main caveats. Then "
+                "list up to 4 next steps. "
+                'Respond as JSON: {"summary": str, "recommendations": [{"title": str, "rationale": str, "category": "next-step"}]}'
+            ),
         }
         prompt = prompts.get(context, prompts["data"])
         try:
@@ -4240,11 +4269,15 @@ def ai_recommend(ds_id):
 def ai_explain(ds_id):
     """Free-form 'explain this' for a step the UI is showing the user.
 
-    Body: {step: str, params: dict, question: str?}
+    Body: {step: str, params: dict, result: dict?, question: str?}
+    `result` carries the computed payload the UI is displaying (test stats,
+    model metrics, scenario prediction, …) so the model can interpret the
+    actual numbers, not just the inputs.
     """
     body = request.get_json() or {}
     step = body.get("step") or "step"
     params = body.get("params") or {}
+    result = body.get("result")
     question = body.get("question") or "Explain what this step does and what to look out for."
     s = db()
     try:
@@ -4268,13 +4301,16 @@ def ai_explain(ds_id):
         system = (
             "You are SimuCast's data-analysis assistant. Explain steps in plain "
             "English to a non-statistician, in 2–4 short sentences. Reference "
-            "specific columns from the dataset profile when relevant. Be honest "
-            "about caveats but don't hedge excessively."
+            "specific columns from the dataset profile when relevant. When a "
+            "result is provided, interpret the actual numbers — say what the "
+            "values mean and what the user should do next. Be honest about "
+            "caveats but don't hedge excessively."
         )
-        prompt = (
-            f"User is on step '{step}' with params {json.dumps(params, default=str)}.\n"
-            f"Question: {question}"
-        )
+        parts = [f"User is on step '{step}' with params {json.dumps(params, default=str)}."]
+        if result is not None:
+            parts.append(f"Computed result the UI is showing: {json.dumps(result, default=str)}")
+        parts.append(f"Question: {question}")
+        prompt = "\n".join(parts)
         try:
             text = ai_call(profile, prompt, system=system, max_tokens=600)
             return jsonify({"ai": True, "explanation": text})
@@ -4321,6 +4357,42 @@ def _rule_based_recommend(context, df, variables):
         return {"context": "expand", "ai": False, "method": "bootstrap",
                 "target_rows": max(500, 2 * len(df)), "rationale": "Bootstrap is fast and assumption-free.",
                 "warnings": ["Bootstrap rows are duplicates of originals — don't use for held-out evaluation."]}
+    if context == "describe":
+        recs = []
+        for col in nums[:2]:
+            recs.append({"title": f"Inspect distribution of '{col}'",
+                         "rationale": "Numeric column — check for skew or outliers.",
+                         "category": "distribution"})
+        for col in cats[:1]:
+            recs.append({"title": f"Check cardinality of '{col}'",
+                         "rationale": "Categorical column — verify it isn't near-unique.",
+                         "category": "quality"})
+        return {"context": "describe", "ai": False,
+                "summary": f"{len(df)} rows × {len(variables)} columns ({len(nums)} numeric, {len(cats)} categorical).",
+                "recommendations": recs}
+    if context == "clean":
+        recs = []
+        for col in missing_cols[:3]:
+            recs.append({"title": f"Impute or drop missing '{col}'",
+                         "action": "impute", "column": col,
+                         "rationale": f"{var_by_name[col]['missing']} rows are blank.",
+                         "category": "clean"})
+        return {"context": "clean", "ai": False, "recommendations": recs}
+    if context == "whatif":
+        recs = []
+        for col in nums[:3]:
+            recs.append({"title": f"Increase '{col}' by 10%",
+                         "rationale": "Test sensitivity to a moderate positive shift.",
+                         "category": "whatif",
+                         "changes": [{"column": col, "direction": "increase", "amount": "10%"}]})
+        return {"context": "whatif", "ai": False, "recommendations": recs}
+    if context == "report":
+        return {"context": "report", "ai": False,
+                "summary": f"Dataset has {len(df)} rows and {len(variables)} columns. Configure ANTHROPIC_API_KEY for a full narrative summary.",
+                "recommendations": [
+                    {"title": "Review missing-value handling", "rationale": "Confirm imputation choices are documented.", "category": "next-step"},
+                    {"title": "Validate model on held-out data", "rationale": "Bootstrapped/synthetic rows shouldn't be used for evaluation.", "category": "next-step"},
+                ]}
     # default = data
     recs = []
     for col in missing_cols[:3]:
