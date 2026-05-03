@@ -28,7 +28,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, precision_score, recall_score,
     f1_score, confusion_matrix, mean_squared_error, r2_score
@@ -64,9 +64,10 @@ _cors_raw = os.environ.get("CORS_ORIGINS", "*")
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 CORS(app, origins=_cors_origins)
 
+_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "axion.db")
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "sqlite:///axion.db"  # fallback for local dev
+    f"sqlite:///{_DB_PATH}"  # absolute path so db location never depends on cwd
 )
 # Render gives postgres:// but SQLAlchemy needs postgresql://
 if DATABASE_URL.startswith("postgres://"):
@@ -95,6 +96,8 @@ class Dataset(Base):
     variables = _json_col()      # [{name, dtype, missing, unique}] of CURRENT stage
     data = _json_col()           # original (stage-0) rows; never mutated
     current_stage_id = Column(String, nullable=True)  # null = original
+    sheets = _json_col()          # Excel sheet payloads; null for CSV/single-table files
+    active_sheet = Column(String, nullable=True)
 
 class DatasetStage(Base):
     """A versioned snapshot produced by a transformation (clean / merge / expand…).
@@ -177,6 +180,10 @@ def _migrate_add_columns():
             conn.execute(text("ALTER TABLE datasets ADD COLUMN description TEXT"))
         if "current_stage_id" not in cols:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN current_stage_id VARCHAR"))
+        if "sheets" not in cols:
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN sheets TEXT"))
+        if "active_sheet" not in cols:
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN active_sheet VARCHAR"))
 
 def _try_init_at_startup(retries=6, delay=5):
     """Best-effort schema init at boot — swallow failures so we still start."""
@@ -316,6 +323,7 @@ def create_stage(session, ds, df, op_type, op_params, summary):
             "op_type": op_type,
             "row_count": len(df),
             "col_count": len(df.columns),
+            "params": clean_json(op_params),
         },
         ref_type="stage",
         ref_id=stage.id,
@@ -356,6 +364,33 @@ def infer_variables(df):
             "unique": int(unique),
         })
     return out
+
+def _sheet_payload_from_df(df):
+    df = df.copy()
+    variables = infer_variables(df)
+    records = clean_json(df.where(pd.notnull(df), None).to_dict(orient="records"))
+    return {
+        "row_count": int(len(df)),
+        "col_count": int(len(df.columns)),
+        "variables": variables,
+        "data": records,
+        "empty": bool(len(df) == 0 or len(df.columns) == 0),
+    }
+
+def _sheet_list(ds):
+    payload = jload(getattr(ds, "sheets", None)) or {}
+    if not isinstance(payload, dict) or not payload:
+        return []
+    return [
+        {
+            "name": name,
+            "row_count": int((sheet or {}).get("row_count") or 0),
+            "col_count": int((sheet or {}).get("col_count") or 0),
+            "empty": bool((sheet or {}).get("empty")),
+            "active": name == ds.active_sheet,
+        }
+        for name, sheet in payload.items()
+    ]
 
 def numeric_df(df, cols=None):
     """Select numeric columns (optionally filtered), drop non-numeric."""
@@ -586,6 +621,8 @@ def list_datasets():
             "filename": r.filename,
             "row_count": r.row_count,
             "col_count": r.col_count,
+            "sheets": _sheet_list(r),
+            "active_sheet": r.active_sheet,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         } for r in rows])
     finally:
@@ -616,15 +653,28 @@ def upload_dataset():
             col_count = src.col_count
             filename = src.filename
             final_name = name or src.name
+            sheets = jload(getattr(src, "sheets", None))
+            active_sheet = src.active_sheet
         else:
             if "file" not in request.files:
                 return {"error": "no file"}, 400
             f = request.files["file"]
+            sheets = None
+            active_sheet = None
             try:
                 if f.filename.lower().endswith(".csv"):
                     df = pd.read_csv(f)
                 elif f.filename.lower().endswith((".xlsx", ".xls")):
-                    df = pd.read_excel(f)
+                    xls = pd.ExcelFile(f)
+                    sheet_payload = {}
+                    for sheet_name in xls.sheet_names:
+                        sheet_df = pd.read_excel(xls, sheet_name=sheet_name)
+                        sheet_payload[str(sheet_name)] = _sheet_payload_from_df(sheet_df)
+                    if not sheet_payload:
+                        return {"error": "workbook has no sheets"}, 400
+                    active_sheet = str(xls.sheet_names[0])
+                    sheets = sheet_payload
+                    df = pd.DataFrame(sheet_payload[active_sheet]["data"])
                 else:
                     return {"error": "unsupported file type"}, 400
             except Exception as e:
@@ -646,6 +696,8 @@ def upload_dataset():
             col_count=col_count,
             variables=jdump(variables),
             data=jdump(records),
+            sheets=jdump(sheets) if sheets else None,
+            active_sheet=active_sheet,
         )
         s.add(ds)
         log_activity(
@@ -653,11 +705,23 @@ def upload_dataset():
             ds_id,
             "upload" if not from_id else "clone",
             f"Created project '{final_name}' with {row_count} rows and {col_count} columns",
-            detail={"category": "data_prep", "action_type": "upload" if not from_id else "clone", "filename": filename, "source_dataset_id": from_id},
+            detail={"category": "data_prep", "action_type": "upload" if not from_id else "clone", "filename": filename, "source_dataset_id": from_id, "sheet": active_sheet, "sheets": list((sheets or {}).keys())},
             ref_type="dataset",
             ref_id=ds_id,
             commit=False,
         )
+        if active_sheet:
+            log_activity(
+                s,
+                ds_id,
+                "stage",
+                f"Selected sheet '{active_sheet}'",
+                detail={"category": "data_prep", "action_type": "select_sheet", "sheet": active_sheet},
+                ref_type="dataset",
+                ref_id=ds_id,
+                commit=False,
+                dedupe_key=f"sheet:{ds_id}:{active_sheet}",
+            )
         s.commit()
         return {
             "id": ds_id,
@@ -666,6 +730,8 @@ def upload_dataset():
             "row_count": row_count,
             "col_count": col_count,
             "variables": variables,
+            "sheets": _sheet_list(ds),
+            "active_sheet": active_sheet,
         }
     finally:
         s.close()
@@ -688,8 +754,70 @@ def get_dataset(ds_id):
             "col_count": ds.col_count,
             "variables": live_vars,
             "current_stage_id": ds.current_stage_id,
+            "sheets": _sheet_list(ds),
+            "active_sheet": ds.active_sheet,
             "created_at": ds.created_at.isoformat() if ds.created_at else None,
         }
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/sheet", methods=["POST"])
+def select_dataset_sheet(ds_id):
+    body = request.get_json() or {}
+    sheet_name = str(body.get("sheet") or "").strip()
+    if not sheet_name:
+        return {"error": "sheet is required"}, 400
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        sheets = jload(ds.sheets) or {}
+        if not sheets:
+            return {"error": "this dataset has no alternate sheets"}, 400
+        if sheet_name not in sheets:
+            return {"error": f"sheet '{sheet_name}' not found"}, 404
+        payload = sheets[sheet_name] or {}
+        records = payload.get("data") or []
+        variables = payload.get("variables") or infer_variables(pd.DataFrame(records))
+        ds.active_sheet = sheet_name
+        ds.data = jdump(records)
+        ds.variables = jdump(variables)
+        ds.row_count = int(payload.get("row_count") or len(records))
+        ds.col_count = int(payload.get("col_count") or (len(pd.DataFrame(records).columns) if records else 0))
+        ds.current_stage_id = None
+        log_activity(
+            s,
+            ds_id,
+            "stage",
+            f"Selected sheet '{sheet_name}'",
+            detail={
+                "category": "data_prep",
+                "action_type": "select_sheet",
+                "sheet": sheet_name,
+                "row_count": ds.row_count,
+                "col_count": ds.col_count,
+                "empty": bool(payload.get("empty")),
+            },
+            ref_type="dataset",
+            ref_id=ds_id,
+            commit=False,
+            dedupe_key=f"sheet:{ds_id}:{sheet_name}",
+        )
+        s.commit()
+        return jsonify(clean_json({
+            "ok": True,
+            "id": ds.id,
+            "name": ds.name,
+            "description": ds.description,
+            "filename": ds.filename,
+            "row_count": ds.row_count,
+            "col_count": ds.col_count,
+            "variables": variables,
+            "current_stage_id": ds.current_stage_id,
+            "sheets": _sheet_list(ds),
+            "active_sheet": ds.active_sheet,
+        }))
     finally:
         s.close()
 
@@ -1571,7 +1699,215 @@ def clean_suggestions(ds_id):
             except Exception:
                 pass
 
-        return jsonify({"suggestions": clean_json(suggestions)})
+        groups = {
+            "missing": {
+                "kind": "missing",
+                "title": "Missing values",
+                "columns": [x for x in suggestions if x.get("kind") == "missing"],
+                "default_action": "impute_mean",
+            },
+            "outliers": {
+                "kind": "outliers",
+                "title": "Outliers",
+                "columns": [x for x in suggestions if x.get("kind") == "outliers"],
+                "default_action": "winsorize",
+            },
+            "type": {
+                "kind": "type",
+                "title": "Type issues",
+                "columns": [x for x in suggestions if x.get("kind") == "type"],
+                "default_action": "convert_date",
+            },
+        }
+        duplicate_count = int(df.duplicated().sum()) if len(df) else 0
+        groups["duplicates"] = {
+            "kind": "duplicates",
+            "title": "Duplicates",
+            "count": duplicate_count,
+            "columns": list(df.columns),
+            "options": [
+                {"action": "drop_duplicates", "label": "Remove duplicates, keep first occurrence", "keep": "first"},
+                {"action": "drop_duplicates", "label": "Remove duplicates, keep last occurrence", "keep": "last"},
+            ],
+            "default_action": "drop_duplicates",
+            "default_keep": "first",
+        }
+
+        return jsonify({"suggestions": clean_json(suggestions), "groups": clean_json(groups)})
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/clean/apply_group", methods=["POST"])
+def clean_apply_group(ds_id):
+    body = request.get_json() or {}
+    kind = body.get("kind")
+    action = body.get("action")
+    columns = body.get("columns") or []
+    overrides = body.get("overrides") or {}
+    options = body.get("options") or {}
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        df = df_from_dataset(ds, s)
+        before_rows = len(df)
+        before_cols = list(df.columns)
+        details = {
+            "category": "data_prep",
+            "action_type": f"group_{kind}",
+            "kind": kind,
+            "columns": columns,
+            "default_action": action,
+            "overrides": overrides,
+            "before": {"rows": before_rows, "columns": len(before_cols)},
+            "changes": [],
+        }
+
+        if kind == "missing":
+            selected = [c for c in columns if c in df.columns and int(df[c].isna().sum()) > 0]
+            if not selected:
+                return {"error": "no selected columns contain missing values"}, 400
+            drop_cols = [c for c in selected if (overrides.get(c) or action) == "drop_rows"]
+            if drop_cols:
+                before_missing = {c: int(df[c].isna().sum()) for c in drop_cols}
+                df = df.dropna(subset=drop_cols)
+                details["changes"].append({
+                    "action": "drop_rows",
+                    "columns": drop_cols,
+                    "before_missing": before_missing,
+                    "rows_removed": int(before_rows - len(df)),
+                })
+            for col in [c for c in selected if c not in drop_cols]:
+                method = overrides.get(col) or action
+                missing_before = int(df[col].isna().sum())
+                if missing_before <= 0:
+                    continue
+                if method in ("impute", "impute_mean"):
+                    if pd.api.types.is_numeric_dtype(df[col]):
+                        fill = df[col].mean()
+                        label = "mean"
+                    else:
+                        mode = df[col].mode()
+                        fill = mode[0] if len(mode) else ""
+                        label = "mode"
+                elif method == "impute_median":
+                    if not pd.api.types.is_numeric_dtype(df[col]):
+                        mode = df[col].mode()
+                        fill = mode[0] if len(mode) else ""
+                        label = "mode"
+                    else:
+                        fill = df[col].median()
+                        label = "median"
+                elif method in ("mode", "impute_mode"):
+                    mode = df[col].mode()
+                    fill = mode[0] if len(mode) else ""
+                    label = "mode"
+                else:
+                    return {"error": f"unsupported missing-value method '{method}' for {col}"}, 400
+                df[col] = df[col].fillna(fill)
+                details["changes"].append({
+                    "action": method,
+                    "column": col,
+                    "before_missing": missing_before,
+                    "after_missing": int(df[col].isna().sum()),
+                    "fill_value": clean_json(fill),
+                    "method": label,
+                })
+            total_filled = sum(max(0, int(x.get("before_missing", 0)) - int(x.get("after_missing", 0))) for x in details["changes"] if "after_missing" in x)
+            removed = before_rows - len(df)
+            summary_parts = []
+            if total_filled:
+                summary_parts.append(f"filled {total_filled} missing value{'s' if total_filled != 1 else ''}")
+            if removed:
+                summary_parts.append(f"removed {removed} row{'s' if removed != 1 else ''}")
+            summary = f"Handled missing values in {len(selected)} column{'s' if len(selected) != 1 else ''}"
+            if summary_parts:
+                summary += f" ({', '.join(summary_parts)})"
+            op_type = "group_missing"
+
+        elif kind == "outliers":
+            selected = [c for c in columns if c in df.columns and pd.api.types.is_numeric_dtype(df[c])]
+            if not selected:
+                return {"error": "select at least one numeric outlier column"}, 400
+            keep_mask = pd.Series(True, index=df.index)
+            clipped_total = 0
+            for col in selected:
+                method = overrides.get(col) or action or "winsorize"
+                series = df[col].dropna()
+                if len(series) < 4:
+                    continue
+                q1, q3 = series.quantile([0.25, 0.75])
+                iqr = q3 - q1
+                lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+                outlier_mask = df[col].notna() & ((df[col] < lo) | (df[col] > hi))
+                count = int(outlier_mask.sum())
+                if method == "winsorize":
+                    df[col] = df[col].clip(lower=lo, upper=hi)
+                    clipped_total += count
+                    details["changes"].append({"action": method, "column": col, "outliers": count, "lower": float(lo), "upper": float(hi)})
+                elif method == "drop_outliers":
+                    keep_mask &= ~outlier_mask
+                    details["changes"].append({"action": method, "column": col, "outliers": count, "lower": float(lo), "upper": float(hi)})
+                else:
+                    return {"error": f"unsupported outlier method '{method}' for {col}"}, 400
+            if any((x.get("action") == "drop_outliers") for x in details["changes"]):
+                df = df[keep_mask]
+            removed = before_rows - len(df)
+            summary = f"Handled outliers in {len(selected)} numeric column{'s' if len(selected) != 1 else ''}"
+            if clipped_total or removed:
+                summary += f" ({clipped_total} clipped, {removed} rows removed)"
+            op_type = "group_outliers"
+
+        elif kind == "duplicates":
+            keep = options.get("keep") or body.get("keep") or "first"
+            if keep not in ("first", "last"):
+                return {"error": "duplicate removal keep option must be first or last"}, 400
+            duplicate_count = int(df.duplicated().sum())
+            if duplicate_count <= 0:
+                return {"error": "no duplicate rows found"}, 400
+            df = df.drop_duplicates(keep=keep)
+            details["columns"] = list(df.columns)
+            details["changes"].append({
+                "action": "drop_duplicates",
+                "duplicate_rows_before": duplicate_count,
+                "rows_removed": int(before_rows - len(df)),
+                "keep": keep,
+            })
+            summary = f"Removed {before_rows - len(df)} duplicate row{'s' if before_rows - len(df) != 1 else ''} (kept {keep} occurrence)"
+            op_type = "drop_duplicates"
+
+        elif kind == "type":
+            selected = [c for c in columns if c in df.columns]
+            if not selected:
+                return {"error": "select at least one column to convert"}, 400
+            for col in selected:
+                method = overrides.get(col) or action or "convert_date"
+                if method != "convert_date":
+                    return {"error": f"unsupported type method '{method}' for {col}"}, 400
+                before_missing = int(df[col].isna().sum())
+                df[col] = pd.to_datetime(df[col], errors="coerce").astype(str)
+                details["changes"].append({
+                    "action": method,
+                    "column": col,
+                    "before_missing": before_missing,
+                    "after_missing": int(df[col].isna().sum()),
+                })
+            summary = f"Converted {len(selected)} column{'s' if len(selected) != 1 else ''} to date values"
+            op_type = "group_type"
+        else:
+            return {"error": "unknown cleaning group"}, 400
+
+        details["after"] = {"rows": int(len(df)), "columns": int(len(df.columns))}
+        stage = create_stage(s, ds, df, op_type=op_type, op_params=details, summary=summary)
+        return jsonify(clean_json({
+            "ok": True,
+            "row_count": ds.row_count,
+            "col_count": ds.col_count,
+            "stage_id": stage.id,
+            "summary": summary,
+            "details": details,
+        }))
     finally:
         s.close()
 
@@ -2295,6 +2631,24 @@ def _is_identifier_feature(series, row_count):
         return "identifier"
     return None
 
+def _issue_check(label, issue, issue_type, severity, message, causes=None, actions=None):
+    """Structured checklist issue used by the UI's generic fix-action menu.
+
+    Keeps the older label/status/detail fields so existing rendering remains
+    backward-compatible while newer surfaces can use issue/actions directly.
+    """
+    return {
+        "label": label,
+        "status": severity,
+        "detail": message,
+        "issue": issue,
+        "issue_type": issue_type,
+        "severity": severity,
+        "message": message,
+        "causes": causes or [],
+        "actions": actions or [],
+    }
+
 
 def _detect_task(y):
     """Heuristic: small distinct count + non-continuous → classification."""
@@ -2382,6 +2736,39 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
             "applies_to": [a for a in algorithms or [] if ALGORITHM_CATALOG.get(a, {}).get("needs_scaling")],
         }]
 
+    numeric_features_for_plan = [c for c in features if pd.api.types.is_numeric_dtype(sub_clean[c])]
+    numeric_options = target_options.get("numeric_preprocessing") or {}
+    scaling_method = (numeric_options.get("scaling") or "auto").lower()
+    if scaling_method not in ("auto", "none", "standard", "minmax"):
+        scaling_method = "auto"
+    log_columns = [c for c in numeric_options.get("log_columns") or [] if c in numeric_features_for_plan]
+    integer_columns = [c for c in numeric_options.get("integer_columns") or [] if c in numeric_features_for_plan]
+    skewed_columns = []
+    for c in numeric_features_for_plan:
+        try:
+            skew = float(pd.to_numeric(sub_clean[c], errors="coerce").dropna().skew())
+            if abs(skew) >= 1:
+                skewed_columns.append({"column": c, "skew": skew})
+        except Exception:
+            pass
+    effective_scaling = scaling_method
+    if scaling_method == "auto":
+        effective_scaling = "standard" if needs_scaling else "none"
+    if effective_scaling == "minmax" and numeric_features_for_plan:
+        scaling = [{
+            "method": "MinMaxScaler",
+            "columns": "numeric/encoded modeling features",
+            "applies_to": algorithms or [],
+            "selected_by": "user",
+        }]
+    elif effective_scaling == "standard" and numeric_features_for_plan:
+        scaling = [{
+            "method": "StandardScaler",
+            "columns": "numeric/encoded modeling features",
+            "applies_to": [a for a in algorithms or [] if scaling_method != "auto" or ALGORITHM_CATALOG.get(a, {}).get("needs_scaling")],
+            "selected_by": "user" if scaling_method != "auto" else "auto",
+        }]
+
     # missing report
     missing_report = [
         {"column": c, "missing": int(sub[c].isna().sum())}
@@ -2393,6 +2780,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     hard_blocks = []
     multicollinearity = []
     n_per_class = None
+    target_groups_detected = []
     if task == "classification":
         n_per_class = y.value_counts().to_dict()
         smallest = min(n_per_class.values()) if n_per_class else 0
@@ -2424,6 +2812,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
             warnings.append(f"{len(n_per_class)} distinct target values — high cardinality may hurt accuracy.")
         if not pd.api.types.is_numeric_dtype(y):
             target_groups = [g for g in _category_groups(y.dropna().astype(str).unique().tolist(), threshold=0.88) if len(g.get("values", [])) > 1]
+            target_groups_detected = target_groups
             if target_groups:
                 hard_blocks.append({
                     "code": "target_categories_dirty",
@@ -2460,7 +2849,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
             except Exception:
                 pass
 
-    numeric_features = [c for c in features if pd.api.types.is_numeric_dtype(sub_clean[c])]
+    numeric_features = numeric_features_for_plan
     if len(numeric_features) >= 2:
         corr = sub_clean[numeric_features].corr(numeric_only=True).abs()
         for i, a in enumerate(numeric_features):
@@ -2476,14 +2865,112 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         if multicollinearity:
             warnings.append(f"Multicollinearity detected in {len(multicollinearity)} feature pair(s). Linear models may be unstable.")
 
-    imbalanced = bool(task == "classification" and n_per_class and max(n_per_class.values()) / sum(n_per_class.values()) >= 0.75)
-    validation_checks = [
-        {"label": "Missing values handled", "status": "warning" if missing_report else "ok", "detail": f"{len(missing_report)} column(s) contain missing values; modeling will drop incomplete rows." if missing_report else "No missing values in selected modeling columns."},
-        {"label": "Categories standardized", "status": "block" if hard_blocks else "ok", "detail": "Fix similar target labels before training." if hard_blocks else "No target category conflicts detected."},
-        {"label": "Class balance checked", "status": "warning" if imbalanced else "ok", "detail": "Class imbalance detected; use balanced class weights." if imbalanced else "No severe class imbalance detected."},
-        {"label": "Multicollinearity checked", "status": "warning" if multicollinearity else "ok", "detail": f"{len(multicollinearity)} highly correlated feature pair(s)." if multicollinearity else "No high numeric feature correlations detected."},
-        {"label": "Train/test split configured", "status": "ok", "detail": f"Train {int((1 - test_size) * 100)}% / test {int(test_size * 100)}%" + (" with stratification." if task == "classification" and stratify_split else ".")},
-    ]
+    # ---- enriched validation checks ----
+
+    # 1. Missing values
+    vc_missing = {
+        "key": "missing_values",
+        "label": "Missing values",
+        "status": "warning" if missing_report else "ok",
+        "detail": f"{len(missing_report)} column(s) have missing values — incomplete rows will be dropped for modeling." if missing_report else "No missing values in selected modeling columns.",
+        "type": "data",
+        "causes": ["incomplete records", "import errors"] if missing_report else [],
+        "fixes": [
+            {"label": "Impute or drop missing values", "description": "Data → Manual Transforms — fill or drop rows with missing values", "route": "data", "section": "manual_transforms"},
+        ] if missing_report else [],
+    }
+
+    # 2. Category consistency (dirty target labels)
+    cat_dirty_block = next((b for b in hard_blocks if b["code"] == "target_categories_dirty"), None)
+    vc_categories = {
+        "key": "category_consistency",
+        "label": "Category consistency",
+        "status": "block" if cat_dirty_block else "ok",
+        "detail": f"Target '{target}' has similar category labels that must be merged before training." if cat_dirty_block else "No target category conflicts detected.",
+        "type": "data",
+        "causes": ["typos", "inconsistent label formatting"] if cat_dirty_block else [],
+        "fixes": [
+            {"label": "Standardize categories", "description": "Data → Category Standardization — merge similar labels in the target column", "route": "data", "section": "category_standardization"},
+        ] if cat_dirty_block else [],
+    }
+
+    # 3. Class balance
+    cb_status = "ok"
+    cb_detail = "Not applicable for regression." if task != "classification" else "No severe class imbalance detected."
+    cb_causes = []
+    cb_fixes = []
+    if task == "classification" and n_per_class:
+        _smallest = min(n_per_class.values())
+        _total = sum(n_per_class.values())
+        _largest = max(n_per_class.values())
+        _ratio = _largest / _total if _total else 0
+        _is_multi = len(n_per_class) > 2
+        binary_block = next((b for b in hard_blocks if b["code"] == "binary_target_single_class"), None)
+        eff_block = next((b for b in hard_blocks if b["code"] == "target_single_effective_class"), None)
+        if binary_block or eff_block:
+            cb_status = "block"
+            cb_detail = "Target has only one effective class for the current setup — cannot train."
+            cb_causes = ["class count collapsed to one due to binary mode or missing categories"]
+            cb_fixes = [
+                {"label": "Standardize categories", "description": "Data → Category Standardization — merge similar labels to restore valid classes", "route": "data", "section": "category_standardization"},
+                {"label": "Change positive class", "description": "Models → Target handling — select a different positive class", "route": "models", "section": "target_options"},
+            ]
+        elif _smallest < 5:
+            cb_status = "warning"
+            _ex = "example" if _smallest == 1 else "examples"
+            cb_detail = f"Smallest class has only {_smallest} {_ex}."
+            if _is_multi:
+                cb_detail += " Multiclass target detected; use binary mode if the analysis needs one selected category versus the rest."
+            cb_causes = ["messy or split category labels", "real class imbalance", "very small dataset"]
+            cb_fixes = [
+                {"label": "Standardize categories", "description": "Data → Category Standardization — merge similar labels to consolidate small classes", "route": "data", "section": "category_standardization"},
+                {"label": "Use binary mode", "description": "Models → Target handling — treat one class vs. rest", "route": "models", "section": "target_options"},
+                {"label": "Use balanced class weights", "description": "Models → Imbalance handling — compensate for unequal class sizes", "route": "models", "section": "class_weight"},
+            ]
+        elif _ratio >= 0.75:
+            cb_status = "warning"
+            cb_detail = f"Class imbalance detected — largest class is {_ratio:.0%} of usable rows."
+            cb_causes = ["real class imbalance in data"]
+            cb_fixes = [
+                {"label": "Use balanced class weights", "description": "Models → Imbalance handling — compensate for class size differences", "route": "models", "section": "class_weight"},
+                {"label": "Standardize categories", "description": "Data → Category Standardization — check if messy labels are splitting a class", "route": "data", "section": "category_standardization"},
+            ]
+    vc_class_balance = {
+        "key": "class_balance",
+        "label": "Class balance",
+        "status": cb_status,
+        "detail": cb_detail,
+        "type": "modeling",
+        "causes": cb_causes,
+        "fixes": cb_fixes,
+    }
+
+    # 4. Multicollinearity
+    vc_multicollinearity = {
+        "key": "multicollinearity",
+        "label": "Multicollinearity",
+        "status": "warning" if multicollinearity else "ok",
+        "detail": f"{len(multicollinearity)} highly correlated feature pair(s) detected — linear models may be unstable." if multicollinearity else "No high numeric feature correlations detected.",
+        "type": "data",
+        "causes": ["redundant features", "derived columns from same source"] if multicollinearity else [],
+        "fixes": [
+            {"label": "Drop correlated features", "description": "Data → Manual Transforms — remove one column from each correlated pair", "route": "data", "section": "manual_transforms"},
+            {"label": "Use Logistic Regression", "description": "Models → Algorithms — regularized models tolerate collinearity better", "route": "models", "section": "algorithms"},
+        ] if multicollinearity else [],
+    }
+
+    # 5. Train/test split (always ok)
+    vc_split = {
+        "key": "train_test_split",
+        "label": "Train/test split configured",
+        "status": "ok",
+        "detail": f"Train {int((1 - test_size) * 100)}% / test {int(test_size * 100)}%" + (" with stratification." if task == "classification" and stratify_split else "."),
+        "type": "modeling",
+        "causes": [],
+        "fixes": [],
+    }
+
+    validation_checks = [vc_missing, vc_categories, vc_class_balance, vc_multicollinearity, vc_split]
 
     return {
         "task": task,
@@ -2494,6 +2981,14 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         "rows_dropped": dropped,
         "encoding": encoding,
         "scaling": scaling,
+        "numeric_preprocessing": {
+            "scaling": scaling_method,
+            "effective_scaling": effective_scaling,
+            "log_columns": log_columns,
+            "integer_columns": integer_columns,
+            "numeric_features": numeric_features_for_plan,
+            "skewed_columns": skewed_columns,
+        },
         "missing_report": missing_report,
         "class_balance": {str(k): int(v) for k, v in (n_per_class or {}).items()} if task == "classification" else None,
         "target_classes": target_classes,
@@ -2573,6 +3068,27 @@ def _serialize_estimator(model):
 def _deserialize_estimator(payload):
     return pickle.loads(base64.b64decode(payload.encode("ascii")))
 
+def _apply_numeric_preprocessing_frame(X_raw, numeric_config):
+    X = X_raw.copy()
+    numeric_config = numeric_config or {}
+    log_columns = set(numeric_config.get("log_columns") or [])
+    integer_columns = set(numeric_config.get("integer_columns") or [])
+    applied = []
+    for col in X.columns:
+        if col not in log_columns and col not in integer_columns:
+            continue
+        numeric = pd.to_numeric(X[col], errors="coerce")
+        if col in integer_columns:
+            numeric = numeric.round()
+            X[col] = numeric
+            applied.append({"column": col, "transform": "integer_enforcement"})
+        if col in log_columns:
+            min_val = numeric.min(skipna=True)
+            shift = float(abs(min_val) + 1) if pd.notna(min_val) and min_val <= -1 else 0.0
+            X[col] = np.log1p(numeric + shift)
+            applied.append({"column": col, "transform": "log1p", "shift": shift})
+    return X, applied
+
 
 def _whatif_input_matrix(bundle, inputs):
     """Apply the same encoding/scaling contract used when the model was trained."""
@@ -2600,16 +3116,24 @@ def _whatif_input_matrix(bundle, inputs):
                 row[name] = inputs.get(name, "")
 
     X_raw = pd.DataFrame([row], columns=original_features)
+    X_raw, _ = _apply_numeric_preprocessing_frame(X_raw, bundle.get("numeric_preprocessing"))
     X = pd.get_dummies(X_raw, drop_first=True, prefix_sep=sep)
     encoded_features = bundle.get("features") or bundle.get("encoded_features") or X.columns.tolist()
     X = X.reindex(columns=encoded_features, fill_value=0)
 
     if bundle.get("scaled"):
+        scaler_kind = bundle.get("scaler_kind") or "standard"
         means = bundle.get("feature_means") or {}
         stds = bundle.get("feature_stds") or {}
+        mins = bundle.get("feature_mins") or {}
+        ranges = bundle.get("feature_ranges") or {}
         for col in X.columns:
-            scale = stds.get(col, 1) or 1
-            X[col] = (X[col].astype(float) - means.get(col, 0)) / scale
+            if scaler_kind == "minmax":
+                scale = ranges.get(col, 1) or 1
+                X[col] = (X[col].astype(float) - mins.get(col, 0)) / scale
+            else:
+                scale = stds.get(col, 1) or 1
+                X[col] = (X[col].astype(float) - means.get(col, 0)) / scale
     return X
 
 
@@ -2622,10 +3146,10 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
     data = df[features + [target]].dropna()
     params = _sanitize_model_params(algo, model_params)
     X_raw = data[features].copy()
-    X = X_raw.copy()
+    X, numeric_applied = _apply_numeric_preprocessing_frame(X_raw, plan.get("numeric_preprocessing"))
     y = data[target]
 
-    X = pd.get_dummies(X, drop_first=True, prefix_sep="=")
+    X = pd.get_dummies(X, drop_first=True, prefix_sep="=").astype(float)
 
     is_classification = plan["task"] == "classification"
     class_labels = None
@@ -2634,15 +3158,20 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             positive = str(plan.get("positive_class"))
             y = y.astype(str).eq(positive).astype(int)
             class_labels = [f"not {positive}", positive]
+        elif pd.api.types.is_bool_dtype(y):
+            class_labels = ["False", "True"]
+            y = y.astype(int)
         elif not pd.api.types.is_numeric_dtype(y):
             labels = sorted(y.dropna().astype(str).unique().tolist())
             class_labels = labels
             y = LabelEncoder().fit_transform(y.astype(str))
 
+    effective_scaling = (plan.get("numeric_preprocessing") or {}).get("effective_scaling")
     needs_scaling = ALGORITHM_CATALOG.get(algo, {}).get("needs_scaling", False)
+    scaler_kind = effective_scaling if effective_scaling in ("standard", "minmax") else ("standard" if needs_scaling else "none")
     scaler = None
-    if needs_scaling:
-        scaler = StandardScaler()
+    if scaler_kind != "none":
+        scaler = MinMaxScaler() if scaler_kind == "minmax" else StandardScaler()
         X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
     else:
         X_scaled = X
@@ -2707,10 +3236,13 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
 
     influence = _feature_influence_from_model(clf, X.columns.tolist(), features, algo)
 
-    feature_means = {c: float(scaler.mean_[i]) if scaler is not None else float(X[c].mean())
+    numeric_encoded = X.apply(pd.to_numeric, errors="coerce").fillna(0).astype(float)
+    feature_means = {c: float(scaler.mean_[i]) if scaler is not None and hasattr(scaler, "mean_") else float(numeric_encoded[c].mean())
                      for i, c in enumerate(X.columns)}
-    feature_stds = {c: float(scaler.scale_[i]) if scaler is not None else float(X[c].std() or 1)
+    feature_stds = {c: float(scaler.scale_[i]) if scaler is not None and hasattr(scaler, "scale_") else float(numeric_encoded[c].std() or 1)
                     for i, c in enumerate(X.columns)}
+    feature_mins = {c: float(scaler.data_min_[i]) if scaler is not None and hasattr(scaler, "data_min_") else float(numeric_encoded[c].min()) for i, c in enumerate(X.columns)}
+    feature_ranges = {c: float(scaler.data_range_[i]) if scaler is not None and hasattr(scaler, "data_range_") else float((numeric_encoded[c].max() - numeric_encoded[c].min()) or 1) for i, c in enumerate(X.columns)}
     coefficients = {
         "prediction_kind": "fitted_model",
         "estimator_b64": _serialize_estimator(clf),
@@ -2727,13 +3259,19 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
         "target_context": plan.get("target_context"),
         "feature_means": feature_means,
         "feature_stds": feature_stds,
+        "feature_mins": feature_mins,
+        "feature_ranges": feature_ranges,
         "raw_features": _whatif_raw_features(X_raw),
         "dummy_sep": "=",
         "scaled": scaler is not None,
+        "scaler_kind": scaler_kind if scaler is not None else None,
+        "numeric_preprocessing": plan.get("numeric_preprocessing"),
+        "numeric_transforms_applied": numeric_applied,
         "model_behavior": "stepwise" if algo in ("tree", "rf") else "smooth",
         "preprocessing_pipeline": {
             "encoding": plan.get("encoding"),
             "scaling": plan.get("scaling"),
+            "numeric_preprocessing": plan.get("numeric_preprocessing"),
             "features": features,
             "encoded_features": X.columns.tolist(),
         },
@@ -2984,6 +3522,7 @@ def list_models(ds_id):
             "feature_influence": jload(r.feature_importance),
             "features": jload(r.features),
             "has_whatif": r.coefficients is not None,
+            "preprocessing_pipeline": (jload(r.coefficients) or {}).get("preprocessing_pipeline") if r.coefficients else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         } for r in rows])
     finally:

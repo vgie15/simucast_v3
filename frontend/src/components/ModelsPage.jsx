@@ -42,6 +42,11 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [testSize, setTestSize] = useState(0.2)
   const [stratify, setStratify] = useState(true)
   const [classWeight, setClassWeight] = useState(false)
+  const [numericPreprocessing, setNumericPreprocessing] = useState({
+    scaling: 'auto',
+    log_columns: [],
+    integer_columns: [],
+  })
   const [modelParams, setModelParams] = useState(defaultModelParams())
   const [features, setFeatures] = useState([])
   const [chosenAlgos, setChosenAlgos] = useState(['logistic', 'rf'])
@@ -82,6 +87,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       setFeatures(saved.features || [])
       setChosenAlgos(saved.chosenAlgos || ['logistic', 'rf'])
       setModelParams(saved.modelParams || defaultModelParams())
+      setNumericPreprocessing(saved.numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] })
     } catch (err) {
       console.warn('Could not restore model draft', err)
     } finally {
@@ -101,8 +107,23 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       features,
       chosenAlgos,
       modelParams,
+      numericPreprocessing,
     }))
-  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams)])
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing)])
+
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem('simucast.fixTarget')
+    if (!raw) return
+    let fixTarget = null
+    try {
+      fixTarget = JSON.parse(raw)
+    } catch {
+      return
+    }
+    if (fixTarget?.page !== 'models') return
+    window.sessionStorage.removeItem('simucast.fixTarget')
+    setTimeout(() => highlightSection(fixTarget.section), 180)
+  }, [dataset?.id])
 
   // Refresh plan whenever target/features/algos change.
   useEffect(() => {
@@ -120,7 +141,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           target,
           features,
           algorithms: chosenAlgos,
-          target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight),
+          target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight, numericPreprocessing),
         })
         if (!cancelled) {
           setPlan(r)
@@ -141,7 +162,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, stratify, classWeight])
+  }, [dataset?.id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, stratify, classWeight, JSON.stringify(numericPreprocessing)])
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -173,7 +194,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         target,
         features,
         algorithms: selectedAlgos,
-        target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight),
+        target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight, numericPreprocessing),
         model_params: modelParams,
       })
       setResults(r)
@@ -210,6 +231,44 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     }
   }
 
+  const navigateToFix = (page, section) => {
+    window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify({ page, section, ts: Date.now() }))
+    if (page === 'models') {
+      setTimeout(() => highlightSection(section), 80)
+    } else {
+      onGo(page)
+    }
+  }
+
+  const executeFixAction = (action) => {
+    const target = routeToFixTarget(action?.route)
+    if (!target) return
+    navigateToFix(target.page, target.section)
+  }
+
+  const resolveChecklistIssue = (check) => {
+    const firstAction = (check?.actions || [])[0]
+    if (firstAction) {
+      executeFixAction(firstAction)
+      return
+    }
+    const label = String(check?.label || '').toLowerCase()
+    const detail = String(check?.detail || '').toLowerCase()
+    if (label.includes('missing')) {
+      navigateToFix('data', 'fix-cleaning-suggestions')
+    } else if (label.includes('categor')) {
+      navigateToFix('data', 'fix-category-standardization')
+    } else if (label.includes('class balance')) {
+      navigateToFix('models', 'fix-target-handling')
+    } else if (label.includes('multicollinearity')) {
+      navigateToFix('tests', 'fix-correlation-test')
+    } else if (label.includes('split') || detail.includes('split')) {
+      navigateToFix('models', 'fix-model-split')
+    } else {
+      navigateToFix('models', 'fix-numeric-preprocessing')
+    }
+  }
+
   const deleteSavedModel = async (model) => {
     const label = `${algoLabelForTask(model.algorithm, model.metrics?.task)} - ${model.target}`
     const ok = await dialog.confirm({
@@ -239,6 +298,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     setTestSize(metrics.split?.test_size ?? 0.2)
     setStratify(metrics.split?.stratified ?? true)
     setClassWeight(metrics.class_weight === 'balanced')
+    setNumericPreprocessing(model.preprocessing_pipeline?.numeric_preprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] })
     setModelParams({
       ...defaultModelParams(),
       [model.algorithm]: metrics.model_params || defaultModelParams()[model.algorithm] || {},
@@ -259,6 +319,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       {/* Step 1 — target */}
       <Step n={1} title="Pick a target — what to predict">
         <select
+          id="fix-target-handling"
           value={target}
           onChange={(e) => {
             setTarget(e.target.value)
@@ -307,6 +368,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       </Step>
 
       {/* Step 2 — features */}
+      <div id="fix-feature-selection">
       <Step n={2} title="Select features" disabled={!target}>
         <div className="ax-row" style={{ marginBottom: 8 }}>
           <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
@@ -332,19 +394,28 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           ))}
         </div>
       </Step>
+      </div>
 
       {/* Step 3 — preprocessing plan */}
       <Step n={3} title="What will happen — preprocessing plan" disabled={!target || features.length === 0}>
+        <div id="fix-numeric-preprocessing">
+          <NumericPreprocessingPanel
+            variables={variables.filter((v) => features.includes(v.name))}
+            config={numericPreprocessing}
+            setConfig={setNumericPreprocessing}
+          />
+        </div>
         {planLoading && (
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>Computing plan…</p>
         )}
         {planError && (
           <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{planError}</p>
         )}
-        {plan && <PreprocessingPlan plan={plan} />}
+        {plan && <PreprocessingPlan plan={plan} onResolveIssue={resolveChecklistIssue} onExecuteAction={executeFixAction} />}
       </Step>
 
       {/* Step 4 — algorithms */}
+      <div id="fix-model-split">
       <Step n={4} title="Configure validation split" disabled={!plan}>
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
           <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
@@ -378,6 +449,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           )}
         </div>
       </Step>
+      </div>
 
       <Step n={5} title="Choose algorithms" disabled={!plan || (plan.hard_blocks || []).length > 0}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -576,7 +648,75 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
   )
 }
 
-function PreprocessingPlan({ plan }) {
+function NumericPreprocessingPanel({ variables, config, setConfig }) {
+  const numericVars = (variables || []).filter((v) => ['int', 'float', 'numeric', 'binary'].includes(v.dtype))
+  const toggleList = (key, name) => {
+    setConfig((current) => {
+      const values = current[key] || []
+      return {
+        ...current,
+        [key]: values.includes(name) ? values.filter((x) => x !== name) : [...values, name],
+      }
+    })
+  }
+  if (!numericVars.length) {
+    return (
+      <div style={{ border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, padding: 10, marginBottom: 10 }}>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
+          No numeric feature preprocessing is needed for the selected features.
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div style={{ border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, padding: 10, marginBottom: 10 }}>
+      <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 4px' }}>Numeric preprocessing</p>
+      <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+        These operate on numeric distributions and are saved with the model for What-if predictions.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '10px 12px', alignItems: 'start', fontSize: 12 }}>
+        <label style={{ color: 'var(--color-text-secondary)' }}>Scaling</label>
+        <select
+          value={config.scaling || 'auto'}
+          onChange={(e) => setConfig((current) => ({ ...current, scaling: e.target.value }))}
+        >
+          <option value="auto">Auto: scale only models that need it</option>
+          <option value="none">No scaling</option>
+          <option value="standard">Standard scaling</option>
+          <option value="minmax">Min-max scaling</option>
+        </select>
+        <label style={{ color: 'var(--color-text-secondary)' }}>Keep as integers</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {numericVars.filter((v) => v.dtype === 'int' || v.dtype === 'binary').map((v) => (
+            <label key={v.name} className="ax-chip" style={{ cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={(config.integer_columns || []).includes(v.name)}
+                onChange={() => toggleList('integer_columns', v.name)}
+              />
+              {v.name}
+            </label>
+          ))}
+        </div>
+        <label style={{ color: 'var(--color-text-secondary)' }}>Log transform</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {numericVars.map((v) => (
+            <label key={v.name} className="ax-chip" style={{ cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={(config.log_columns || []).includes(v.name)}
+                onChange={() => toggleList('log_columns', v.name)}
+              />
+              {v.name}
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PreprocessingPlan({ plan, onResolveIssue, onExecuteAction }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <PlanLine label="Task">
@@ -596,7 +736,15 @@ function PreprocessingPlan({ plan }) {
       )}
       {plan.scaling.length > 0 && (
         <PlanLine label="Scaling">
-          StandardScaler on numeric features for: {plan.scaling[0].applies_to.join(', ')}
+          {plan.scaling[0].method} on numeric/encoded features
+          {plan.scaling[0].selected_by === 'user' ? ' (user selected)' : ''}
+        </PlanLine>
+      )}
+      {plan.numeric_preprocessing && (
+        <PlanLine label="Numeric">
+          Scaling: {plan.numeric_preprocessing.effective_scaling}
+          {(plan.numeric_preprocessing.integer_columns || []).length > 0 && <> Â· integer enforcement: {plan.numeric_preprocessing.integer_columns.join(', ')}</>}
+          {(plan.numeric_preprocessing.log_columns || []).length > 0 && <> Â· log transform: {plan.numeric_preprocessing.log_columns.join(', ')}</>}
         </PlanLine>
       )}
       {plan.missing_report.length > 0 && (
@@ -620,12 +768,15 @@ function PreprocessingPlan({ plan }) {
           <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 6px' }}>Model readiness checklist</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {plan.validation_checks.map((check, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '18px 180px 1fr', gap: 8, fontSize: 11, alignItems: 'start' }}>
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '18px 170px 1fr auto', gap: 8, fontSize: 11, alignItems: 'start' }}>
                 <span style={{ color: check.status === 'block' ? 'var(--color-text-danger)' : check.status === 'warning' ? 'var(--color-text-warning)' : 'var(--color-text-success)' }}>
                   {check.status === 'block' ? '!' : check.status === 'warning' ? '-' : '✓'}
                 </span>
                 <strong>{check.label}</strong>
                 <span style={{ color: 'var(--color-text-secondary)' }}>{check.detail}</span>
+                {check.status !== 'ok' && (
+                  <IssueActionMenu check={check} onResolveIssue={onResolveIssue} onExecuteAction={onExecuteAction} />
+                )}
               </div>
             ))}
           </div>
@@ -633,7 +784,19 @@ function PreprocessingPlan({ plan }) {
       )}
       {(plan.hard_blocks || []).length > 0 && (
         <div style={{ background: 'var(--color-background-danger)', color: 'var(--color-text-danger)', padding: '8px 10px', borderRadius: 6, fontSize: 12 }}>
-          <strong>Fix before training:</strong>
+          <div className="ax-row" style={{ alignItems: 'flex-start', gap: 10 }}>
+            <strong>Fix before training:</strong>
+            <IssueActionMenu
+              check={{
+                label: 'Category consistency',
+                status: 'block',
+                detail: plan.hard_blocks[0]?.message,
+                actions: [{ label: 'Standardize categories', route: 'data.category_standardization', kind: 'navigate' }],
+              }}
+              onResolveIssue={onResolveIssue}
+              onExecuteAction={onExecuteAction}
+            />
+          </div>
           <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
             {plan.hard_blocks.map((b, i) => <li key={i}>{b.message}</li>)}
           </ul>
@@ -650,7 +813,7 @@ function PreprocessingPlan({ plan }) {
           Identifier/constant columns removed: {plan.excluded_features.map((x) => x.feature).join(', ')}
         </PlanLine>
       )}
-      {plan.warnings.length > 0 && (
+      {false && plan.warnings.length > 0 && (
         <div
           style={{
             background: 'var(--color-background-danger)',
@@ -677,6 +840,42 @@ function PlanLine({ label, children }) {
         {label}
       </span>
       <span style={{ flex: 1 }}>{children}</span>
+    </div>
+  )
+}
+
+function IssueActionMenu({ check, onResolveIssue, onExecuteAction }) {
+  const [open, setOpen] = useState(false)
+  const actions = check.actions || []
+  if (!actions.length) {
+    return (
+      <button className="ax-btn mini" type="button" onClick={() => onResolveIssue?.(check)}>
+        Fix this
+      </button>
+    )
+  }
+  return (
+    <div className="ax-issue-actions">
+      <button className="ax-btn mini" type="button" onClick={() => setOpen((value) => !value)}>
+        Fix options ▾
+      </button>
+      {open && (
+        <div className="ax-issue-menu">
+          {actions.map((action, idx) => (
+            <button
+              key={`${action.route}-${idx}`}
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onExecuteAction?.(action)
+              }}
+            >
+              <span>{action.label}</span>
+              <small>{routeLabel(action.route)}</small>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -989,13 +1188,46 @@ function algoLabelForTask(algo, task) {
   return algoLabel(algo)
 }
 
-function targetOptions(mode, positiveClass, testSize, stratify, classWeight) {
+function targetOptions(mode, positiveClass, testSize, stratify, classWeight, numericPreprocessing) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
   options.test_size = testSize
   options.stratify = stratify
   if (classWeight) options.class_weight = 'balanced'
+  options.numeric_preprocessing = numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] }
   return options
+}
+
+function routeToFixTarget(route) {
+  const map = {
+    'data.missing_values': { page: 'data', section: 'fix-cleaning-suggestions' },
+    'data.cleaning_suggestions': { page: 'data', section: 'fix-cleaning-suggestions' },
+    'data.category_standardization': { page: 'data', section: 'fix-category-standardization' },
+    'data.outliers': { page: 'data', section: 'fix-cleaning-suggestions' },
+    'data.duplicates': { page: 'data', section: 'fix-cleaning-suggestions' },
+    'models.target_handling': { page: 'models', section: 'fix-target-handling' },
+    'models.validation_split': { page: 'models', section: 'fix-model-split' },
+    'models.scaling': { page: 'models', section: 'fix-numeric-preprocessing' },
+    'models.numeric_preprocessing': { page: 'models', section: 'fix-numeric-preprocessing' },
+    'models.features': { page: 'models', section: 'fix-feature-selection' },
+    'tests.correlation': { page: 'tests', section: 'fix-correlation-test' },
+  }
+  return map[route]
+}
+
+function routeLabel(route) {
+  const target = routeToFixTarget(route)
+  if (!target) return route || 'Open'
+  const page = target.page === 'whatif' ? 'What-if' : target.page.charAt(0).toUpperCase() + target.page.slice(1)
+  return `${page} page`
+}
+
+function highlightSection(section) {
+  const el = document.getElementById(section)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('ax-fix-highlight')
+  window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
 

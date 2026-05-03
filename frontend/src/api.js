@@ -35,6 +35,11 @@ export const api = {
   // datasets
   listDatasets: () => request('/api/datasets'),
   getDataset: (id) => request(`/api/datasets/${id}`),
+  selectSheet: (id, sheet) =>
+    request(`/api/datasets/${id}/sheet`, {
+      method: 'POST',
+      body: JSON.stringify({ sheet }),
+    }),
   deleteDataset: (id) =>
     request(`/api/datasets/${id}`, {
       method: 'DELETE',
@@ -114,6 +119,11 @@ export const api = {
   cleanSuggestions: (id) => request(`/api/datasets/${id}/clean/suggestions`),
   cleanApply: (id, body) =>
     request(`/api/datasets/${id}/clean/apply`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  cleanApplyGroup: (id, body) =>
+    request(`/api/datasets/${id}/clean/apply_group`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

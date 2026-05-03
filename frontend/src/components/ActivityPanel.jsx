@@ -240,8 +240,8 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                     {notes.length ? 'Edit note' : 'Add note'}
                   </button>
                   {canUndoDataStep || canUndoNonDataStep ? (
-                    <button className="ax-btn" onClick={() => deleteEntry(item, true)} disabled={busy}>
-                      Undo step
+                    <button className="ax-btn undo" onClick={() => deleteEntry(item, true)} disabled={busy}>
+                      ↩ Undo step
                     </button>
                   ) : (
                     <button className="ax-btn" onClick={() => deleteEntry(item, false)} disabled={busy}>

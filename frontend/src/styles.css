@@ -213,6 +213,12 @@ input[type="range"]::-moz-range-thumb {
   background: #ea580c;
   opacity: 1;
 }
+.ax-btn.mini {
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+}
 .ax-btn.danger {
   color: var(--color-text-danger);
   border-color: rgba(239, 68, 68, 0.35);
@@ -233,7 +239,74 @@ input[type="range"]::-moz-range-thumb {
   background: #b91c1c;
   border-color: #b91c1c;
 }
+.ax-btn.undo {
+  color: #c2410c;
+  border-color: rgba(249, 115, 22, 0.42);
+  background: #fff7ed;
+}
+.ax-btn.undo:hover:not(:disabled) {
+  color: #9a3412;
+  border-color: #f97316;
+  background: #ffedd5;
+}
 .ax-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ax-fix-highlight {
+  animation: axFixPulse 2.6s ease-out;
+  outline: 2px solid rgba(249, 115, 22, 0.85);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.ax-issue-actions {
+  position: relative;
+  justify-self: end;
+}
+
+.ax-issue-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 220px;
+  z-index: 30;
+  padding: 6px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 10px;
+  box-shadow: 0 16px 32px rgba(17, 24, 39, 0.14);
+}
+
+.ax-issue-menu button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.ax-issue-menu button:hover {
+  background: var(--color-accent-light);
+}
+
+.ax-issue-menu small {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+@keyframes axFixPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(249, 115, 22, 0); }
+  12% { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0.18); }
+  45% { box-shadow: 0 0 0 12px rgba(249, 115, 22, 0.08); }
+}
 
 .ax-pill {
   font-size: 12px;
