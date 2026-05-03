@@ -116,13 +116,13 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
         }}
       >
         <p className="ax-lbl" style={{ margin: '0 0 6px' }}>Ask a follow-up</p>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div className="ax-prompt-row">
           <input
             type="text"
             value={followQ}
             onChange={(e) => setFollowQ(e.target.value)}
             placeholder={followupPlaceholder(context)}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 0 }}
             disabled={followLoading}
             onKeyDown={(e) => e.key === 'Enter' && askFollowup()}
           />

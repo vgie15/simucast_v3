@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
 import AdvancedPage from './AdvancedPage'
+import { useDialog } from './DialogProvider'
 
 const TESTS = [
   {
@@ -35,6 +36,7 @@ const TESTS = [
 ]
 
 export default function TestsPage({ dataset }) {
+  const dialog = useDialog()
   const [kind, setKind] = useState('t')
   const [group, setGroup] = useState('')
   const [measure, setMeasure] = useState('')
@@ -64,7 +66,7 @@ export default function TestsPage({ dataset }) {
       const r = await api.runTest(dataset.id, body)
       setResult(r)
     } catch (err) {
-      alert('Test failed: ' + err.message)
+      await dialog.alert({ title: 'Test Failed', message: err.message, variant: 'danger' })
     } finally {
       setLoading(false)
     }

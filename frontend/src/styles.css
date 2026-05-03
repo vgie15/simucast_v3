@@ -722,6 +722,18 @@ input[type="range"]::-moz-range-thumb {
   margin-top: 6px;
 }
 
+.ax-prompt-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+
+.ax-prompt-row input {
+  margin: 0;
+}
+
 /* --- Excel/SPSS data grid --- */
 .ax-grid-wrap {
   overflow: auto;

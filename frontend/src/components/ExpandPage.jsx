@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
+import { useDialog } from './DialogProvider'
 
 /**
  * ExpandPage
@@ -8,6 +9,7 @@ import AIAssistantPanel from './AIAssistantPanel'
  * the resulting sample + per-numeric-column drift; Apply commits a stage.
  */
 export default function ExpandPage({ dataset, setDataset }) {
+  const dialog = useDialog()
   const [method, setMethod] = useState('bootstrap')
   const [targetRows, setTargetRows] = useState(() => Math.max(500, (dataset?.row_count || 100) * 2))
   const [noisePct, setNoisePct] = useState(0)
@@ -15,12 +17,14 @@ export default function ExpandPage({ dataset, setDataset }) {
   const [previewing, setPreviewing] = useState(false)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [expandedApplied, setExpandedApplied] = useState(false)
 
   // re-target when project changes
   useEffect(() => {
     setTargetRows(Math.max(500, (dataset?.row_count || 100) * 2))
     setPreview(null)
     setError(null)
+    setExpandedApplied(false)
   }, [dataset?.id])
 
   // live preview
@@ -62,7 +66,12 @@ export default function ExpandPage({ dataset, setDataset }) {
       await api.expand(dataset.id, body, false)
       const fresh = await api.getDataset(dataset.id)
       setDataset(fresh)
-      alert(`Expanded — dataset now has ${fresh.row_count.toLocaleString()} rows.`)
+      setExpandedApplied(true)
+      await dialog.alert({
+        title: 'Expansion Complete',
+        message: `Dataset now has ${fresh.row_count.toLocaleString()} rows.`,
+        details: 'The expanded dataset is available as the current data stage and can be exported as CSV.',
+      })
     } catch (err) {
       setError(err.message || 'Apply failed')
     } finally {
@@ -236,6 +245,11 @@ export default function ExpandPage({ dataset, setDataset }) {
       )}
 
       <div className="ax-row" style={{ justifyContent: 'flex-end' }}>
+        {expandedApplied && (
+          <a className="ax-btn" href={api.exportCsvUrl(dataset.id)} download style={{ textDecoration: 'none' }}>
+            Export expanded CSV
+          </a>
+        )}
         <button
           className="ax-btn prim"
           disabled={busy || previewing || targetTooLow || !preview}

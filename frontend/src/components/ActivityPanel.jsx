@@ -165,6 +165,9 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
             const isActive = item.related_stage_id && (currentStageId || 'original') === item.related_stage_id
             const notes = item.detail?.notes || []
             const detailsOpen = !!openDetails[item.id]
+            const detailRows = detailsForItem(item)
+            const canUndoDataStep = item.related_stage_id && item.related_stage_id !== 'original' && isActive
+            const canUndoNonDataStep = !item.related_stage_id && (item.related_model_id || item.related_analysis_id || item.kind === 'report' || item.kind === 'whatif')
             return (
               <div
                 key={item.id}
@@ -187,19 +190,26 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                     {item.created_at ? new Date(item.created_at).toLocaleString() : ''}
                   </span>
                 </div>
-                <p style={{ fontSize: 12, margin: '4px 0 0' }}>{item.summary}</p>
+                <p style={{ fontSize: 12, margin: '4px 0 0', fontWeight: 650 }}>{item.summary}</p>
+                {detailRows.slice(0, 2).map((row) => (
+                  <p key={row.label} style={{ fontSize: 10.5, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+                    <strong>{row.label}:</strong> {row.value}
+                  </p>
+                ))}
                 {item.stage && (
                   <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>
                     Stage {item.stage.step_index} - {item.stage.row_count?.toLocaleString()} rows - {item.stage.col_count} cols
                   </p>
                 )}
                 <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                  <button
-                    className="ax-btn"
-                    onClick={() => setOpenDetails((current) => ({ ...current, [item.id]: !current[item.id] }))}
-                  >
-                    {detailsOpen ? 'Hide details' : 'Details'}
-                  </button>
+                  {detailRows.length > 0 && (
+                    <button
+                      className="ax-btn"
+                      onClick={() => setOpenDetails((current) => ({ ...current, [item.id]: !current[item.id] }))}
+                    >
+                      {detailsOpen ? 'Hide details' : 'Details'}
+                    </button>
+                  )}
                   {item.related_stage_id && (
                     <>
                       <button className="ax-btn" onClick={() => onViewStage?.(item.related_stage_id)}>View stage</button>
@@ -229,7 +239,7 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                   >
                     {notes.length ? 'Edit note' : 'Add note'}
                   </button>
-                  {(item.related_stage_id && item.related_stage_id !== 'original') || item.related_model_id || item.related_analysis_id || item.kind === 'report' || item.kind === 'whatif' ? (
+                  {canUndoDataStep || canUndoNonDataStep ? (
                     <button className="ax-btn" onClick={() => deleteEntry(item, true)} disabled={busy}>
                       Undo step
                     </button>
@@ -241,19 +251,8 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                 </div>
                 {detailsOpen && (
                   <div className="ax-activity-details">
-                    {item.detail?.column && <p><strong>Column:</strong> {item.detail.column}</p>}
-                    {item.detail?.mapping && (
-                      <div>
-                        <strong>Mapping:</strong>
-                        <ul>
-                          {Object.entries(item.detail.mapping).slice(0, 20).map(([from, to]) => (
-                            <li key={from}><code>{from}</code> to <code>{String(to)}</code></li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {item.detail?.inputs && <p><strong>Inputs:</strong> {JSON.stringify(item.detail.inputs)}</p>}
-                    {item.detail?.prediction && <p><strong>Prediction:</strong> {JSON.stringify(item.detail.prediction)}</p>}
+                    {detailRows.map((row) => <p key={row.label}><strong>{row.label}:</strong> {row.value}</p>)}
+                    {item.detail?.mapping && <MappingList mapping={item.detail.mapping} />}
                   </div>
                 )}
                 {notes.length > 0 && (
@@ -318,6 +317,58 @@ function labelFor(kind) {
     clone: 'Clone',
   }
   return labels[kind] || kind
+}
+
+function MappingList({ mapping }) {
+  const entries = Object.entries(mapping || {})
+  if (!entries.length) return null
+  return (
+    <div>
+      <strong>Before vs after:</strong>
+      <ul>
+        {entries.slice(0, 20).map(([from, to]) => (
+          <li key={from}><code>{from}</code> to <code>{String(to)}</code></li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function detailsForItem(item) {
+  const detail = item.detail || {}
+  const rows = []
+  const action = detail.action_type || item.action_type || item.kind
+  if (action) rows.push({ label: 'Action', value: humanize(action) })
+  const columns = detail.column ? [detail.column] : detail.features || detail.columns || []
+  if (Array.isArray(columns) && columns.length) rows.push({ label: 'Affected columns', value: columns.join(', ') })
+  if (detail.target) rows.push({ label: 'Target', value: detail.target })
+  if (detail.algorithm) rows.push({ label: 'Model', value: humanize(detail.algorithm) })
+  if (detail.mapping) {
+    const beforeCount = new Set(Object.keys(detail.mapping)).size
+    const afterCount = new Set(Object.values(detail.mapping).map(String)).size
+    rows.push({ label: 'Summary of changes', value: `Merged ${beforeCount} categories into ${afterCount}` })
+  } else if (item.stage) {
+    rows.push({ label: 'Summary of changes', value: `${item.stage.row_count?.toLocaleString?.() || item.stage.row_count} rows, ${item.stage.col_count} columns after this step` })
+  } else if (detail.parameters) {
+    rows.push({ label: 'Parameters', value: compactJson(detail.parameters) })
+  } else if (detail.config) {
+    rows.push({ label: 'Configuration', value: compactJson(detail.config) })
+  }
+  if (detail.inputs) rows.push({ label: 'Scenario inputs', value: compactJson(detail.inputs) })
+  if (detail.prediction) rows.push({ label: 'Prediction', value: compactJson(detail.prediction) })
+  return rows.filter((row) => row.value !== undefined && row.value !== null && String(row.value).trim() !== '')
+}
+
+function humanize(value) {
+  return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function compactJson(value) {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
 }
 
 function badgeClassFor(kind) {

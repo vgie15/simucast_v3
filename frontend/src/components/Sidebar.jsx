@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useTheme } from '../theme'
+import { useDialog } from './DialogProvider'
 
 const NAV = [
   {
@@ -41,6 +42,7 @@ export default function Sidebar() {
   const asideRef = useRef(null)
   const profileRef = useRef(null)
   const { isDark, toggle } = useTheme()
+  const dialog = useDialog()
 
   useEffect(() => {
     if (!dragging) return
@@ -76,13 +78,13 @@ export default function Sidebar() {
 
   const handleSettings = useCallback(() => {
     setMenuOpen(false)
-    alert('Settings — coming soon')
-  }, [])
+    dialog.alert({ title: 'Settings', message: 'Settings are coming soon.' })
+  }, [dialog])
 
   const handleLogout = useCallback(() => {
     setMenuOpen(false)
-    alert('Log out — not implemented yet')
-  }, [])
+    dialog.alert({ title: 'Log Out', message: 'Log out is not implemented yet.' })
+  }, [dialog])
 
   return (
     <aside ref={asideRef} className="ax-sidebar" style={{ width }}>

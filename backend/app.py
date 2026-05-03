@@ -1151,6 +1151,10 @@ def delete_or_undo_activity(ds_id, activity_id):
             stage = s.query(DatasetStage).filter_by(id=stage_id, dataset_id=ds_id).first()
             if not stage:
                 return {"error": "stage not found"}, 404
+            if ds.current_stage_id != stage_id:
+                return {
+                    "error": "Only the current data step can be undone directly. View or restore this stage first if you want to move the dataset to that state.",
+                }, 400
             parent_id = stage.parent_stage_id or "original"
             if parent_id == "original":
                 rows = jload(ds.data) or []

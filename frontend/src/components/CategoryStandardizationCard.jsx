@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
+import { useDialog } from './DialogProvider'
 
 export default function CategoryStandardizationCard({ dataset, onApplied }) {
+  const dialog = useDialog()
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading] = useState(false)
   const [selectedColumn, setSelectedColumn] = useState('')
@@ -50,6 +52,14 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
     })
   }
 
+  const deleteGroup = (index) => {
+    setDrafts((currentDrafts) => {
+      const nextGroups = [...(currentDrafts[selectedColumn] || [])]
+      nextGroups.splice(index, 1)
+      return { ...currentDrafts, [selectedColumn]: nextGroups }
+    })
+  }
+
   const addGroup = () => {
     setDrafts((currentDrafts) => ({
       ...currentDrafts,
@@ -73,7 +83,12 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
       if (!label) continue
       for (const [value, selected] of Object.entries(group.selected || {})) {
         if (selected && assigned[value] && assigned[value] !== label) {
-          alert(`"${value}" is selected in more than one final label. Keep each value in only one group.`)
+          await dialog.alert({
+            title: 'Duplicate Selection',
+            message: `"${value}" is selected in more than one final label.`,
+            details: 'Keep each source value in only one standardized group before applying.',
+            variant: 'danger',
+          })
           return
         }
         if (selected) assigned[value] = label
@@ -92,7 +107,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
       await onApplied?.()
       await load()
     } catch (err) {
-      alert('Category standardization failed: ' + err.message)
+      await dialog.alert({ title: 'Category Standardization Failed', message: err.message, variant: 'danger' })
     } finally {
       setBusy(false)
     }
@@ -161,6 +176,12 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
           </div>
           {groups.map((group, index) => (
             <div key={index} className="ax-card" style={{ padding: 10, background: 'var(--color-background-secondary)' }}>
+              <div className="ax-row" style={{ marginBottom: 8 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>Group {index + 1}</p>
+                <button className="ax-btn danger" onClick={() => deleteGroup(index)} disabled={busy} type="button">
+                  Delete group
+                </button>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 10px', alignItems: 'center' }}>
                 <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Final label</label>
                 <input

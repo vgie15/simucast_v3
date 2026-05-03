@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import { Scatter, Bar } from 'react-chartjs-2'
 import { api } from '../api'
+import { useDialog } from './DialogProvider'
 
 const CLUSTER_COLORS = ['#7F77DD', '#1D9E75', '#D85A30', '#D4537E', '#EF9F27', '#378ADD']
 
 export default function AdvancedPage({ dataset, embedded = false }) {
+  const dialog = useDialog()
   const [method, setMethod] = useState('cluster')
   const [vars, setVars] = useState([])
   const [k, setK] = useState(4)
@@ -28,7 +30,7 @@ export default function AdvancedPage({ dataset, embedded = false }) {
       const r = await fn(dataset.id, body)
       setResult({ method, ...r })
     } catch (err) {
-      alert('Failed: ' + err.message)
+      await dialog.alert({ title: 'Advanced Analysis Failed', message: err.message, variant: 'danger' })
     } finally {
       setLoading(false)
     }

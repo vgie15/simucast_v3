@@ -5,8 +5,10 @@ import AIAssistantPanel from './AIAssistantPanel'
 import ManualTransformsCard from './ManualTransformsCard'
 import DataGridViewer from './DataGridViewer'
 import CategoryStandardizationCard from './CategoryStandardizationCard'
+import { useDialog } from './DialogProvider'
 
 export default function DataPage({ dataset, setDataset, viewStageRequest }) {
+  const dialog = useDialog()
   const [viewStageId, setViewStageId] = useState('current')
   const [viewStageLabel, setViewStageLabel] = useState(null)
   const [activeVar, setActiveVar] = useState(null)
@@ -87,14 +89,22 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       setStatuses((current) => ({ ...current, [suggestion.id]: 'applied' }))
       await handleApplied()
     } catch (err) {
-      alert('Apply failed: ' + err.message)
+      await dialog.alert({ title: 'Apply Failed', message: err.message, variant: 'danger' })
     }
   }
 
   const applyAllSuggestions = async () => {
     const todo = suggestions.filter((s) => !statuses[s.id])
     if (!todo.length || applyingAll) return
-    if (!window.confirm(`Apply ${todo.length} suggested fix${todo.length === 1 ? '' : 'es'} using the selected methods?`)) return
+    const ok = await dialog.confirm({
+      title: 'Apply Suggested Fixes',
+      message: `Apply ${todo.length} suggested fix${todo.length === 1 ? '' : 'es'} using the selected methods?`,
+      details: 'Each applied fix creates a documented data stage so it can be reviewed in the documentation panel.',
+      affectedItems: todo.map((s) => `${s.variable}: ${cleanActionLabel(selectedActions[s.id] || s.action)}`).slice(0, 8),
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Apply Fixes',
+    })
+    if (!ok) return
     setApplyingAll(true)
     try {
       const applied = {}
@@ -109,7 +119,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       setStatuses((current) => ({ ...current, ...applied }))
       await handleApplied()
     } catch (err) {
-      alert('Apply all failed: ' + err.message)
+      await dialog.alert({ title: 'Apply All Failed', message: err.message, variant: 'danger' })
       await refreshDataset()
       await loadSuggestions()
     } finally {
@@ -143,7 +153,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
               download
               style={{ textDecoration: 'none' }}
             >
-              Download CSV
+              Export cleaned CSV
             </a>
             {viewStageId !== 'current' && (
               <button

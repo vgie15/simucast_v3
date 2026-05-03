@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
+import { useDialog } from './DialogProvider'
 
 /**
  * StageTimeline
@@ -11,6 +12,7 @@ import { api } from '../api'
  * The active stage is highlighted.
  */
 export default function StageTimeline({ datasetId, onView, onRestored, refreshKey }) {
+  const dialog = useDialog()
   const [data, setData] = useState({ stages: [], current_stage_id: 'original' })
   const [loading, setLoading] = useState(false)
   const [busyId, setBusyId] = useState(null)
@@ -39,7 +41,7 @@ export default function StageTimeline({ datasetId, onView, onRestored, refreshKe
       await load()
       onRestored?.(stageId)
     } catch (err) {
-      alert('Restore failed: ' + err.message)
+      await dialog.alert({ title: 'Restore Failed', message: err.message, variant: 'danger' })
     } finally {
       setBusyId(null)
     }

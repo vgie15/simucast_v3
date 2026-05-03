@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import ManualTransformsCard from './ManualTransformsCard'
+import { useDialog } from './DialogProvider'
 
 export default function CleanPage({ dataset, setDataset }) {
+  const dialog = useDialog()
   const [suggestions, setSuggestions] = useState([])
   const [statuses, setStatuses] = useState({}) // id -> 'applied' | 'skipped'
   const [loading, setLoading] = useState(false)
@@ -35,7 +37,7 @@ export default function CleanPage({ dataset, setDataset }) {
       const full = await api.getDataset(dataset.id)
       setDataset(full)
     } catch (err) {
-      alert('Apply failed: ' + err.message)
+      await dialog.alert({ title: 'Apply Failed', message: err.message, variant: 'danger' })
     }
   }
 

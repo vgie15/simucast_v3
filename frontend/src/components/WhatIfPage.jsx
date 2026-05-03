@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
+import { useDialog } from './DialogProvider'
 
 export default function WhatIfPage({ dataset, activeModel }) {
+  const dialog = useDialog()
   const [fallbackModel, setFallbackModel] = useState(null)
   const [availableModels, setAvailableModels] = useState([])
   const [modelFull, setModelFull] = useState(null)
@@ -70,7 +72,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
                         if (!model.has_whatif) await api.prepareModelForWhatIf(model.id)
                         setFallbackModel({ ...model, has_whatif: true })
                       } catch (err) {
-                        alert('Could not prepare model for What-if: ' + err.message)
+                        await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
                       }
                     }}>Use in What-if</button>
                   </div>
@@ -109,7 +111,12 @@ export default function WhatIfPage({ dataset, activeModel }) {
     try {
       await api.saveScenario(modelFull.id, scenario)
     } catch (err) {
-      alert('Scenario saved locally, but documentation logging failed: ' + err.message)
+      await dialog.alert({
+        title: 'Scenario Saved Locally',
+        message: 'The scenario was saved in this page, but documentation logging failed.',
+        details: err.message,
+        variant: 'danger',
+      })
     }
   }
 

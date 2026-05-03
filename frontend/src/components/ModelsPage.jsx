@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
+import { useDialog } from './DialogProvider'
 
 const ALGOS = [
   { key: 'logistic', label: 'Logistic Regression', task: 'classification', interpretable: true,
@@ -34,6 +35,7 @@ const PARAM_DEFS = {
 }
 
 export default function ModelsPage({ dataset, setActiveModel, onGo }) {
+  const dialog = useDialog()
   const [target, setTarget] = useState('')
   const [targetMode, setTargetMode] = useState('auto')
   const [positiveClass, setPositiveClass] = useState('')
@@ -179,7 +181,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       const list = await api.listModels(dataset.id)
       setModels(list)
     } catch (err) {
-      alert('Training failed: ' + err.message)
+      await dialog.alert({ title: 'Training Failed', message: err.message, variant: 'danger' })
     } finally {
       setTraining(false)
     }
@@ -204,19 +206,28 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       setModels(list)
       onGo('whatif')
     } catch (err) {
-      alert('Could not prepare model for What-if: ' + err.message)
+      await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
     }
   }
 
   const deleteSavedModel = async (model) => {
     const label = `${algoLabelForTask(model.algorithm, model.metrics?.task)} - ${model.target}`
-    if (!window.confirm(`Delete saved model "${label}"? This removes it from Previous models and documentation logs.`)) return
+    const ok = await dialog.confirm({
+      title: 'Delete Model',
+      message: `Delete saved model "${label}"?`,
+      details: 'This removes it from Previous models and removes linked documentation logs.',
+      affectedItems: ['Saved model', 'Model settings snapshot', 'Linked documentation entries'],
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Delete Model',
+      variant: 'danger',
+    })
+    if (!ok) return
     try {
       await api.deleteModel(model.id)
       const list = await api.listModels(dataset.id)
       setModels(list)
     } catch (err) {
-      alert('Could not delete model: ' + err.message)
+      await dialog.alert({ title: 'Could Not Delete Model', message: err.message, variant: 'danger' })
     }
   }
 
@@ -671,6 +682,7 @@ function PlanLine({ label, children }) {
 }
 
 function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf }) {
+  const dialog = useDialog()
   const { models, skipped } = results
   if (!models || models.length === 0) {
     return (
@@ -693,7 +705,22 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf }) {
       <div className="ax-card" style={{ padding: 14, marginTop: 8 }}>
         <div className="ax-row" style={{ marginBottom: 10 }}>
           <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{active.label} — details</p>
-          <button className="ax-btn" onClick={() => active.has_whatif ? onUseInWhatIf(active) : api.prepareModelForWhatIf(active.id).then(() => onUseInWhatIf({ ...active, has_whatif: true })).catch((err) => alert('Could not prepare model for What-if: ' + err.message))} type="button">
+          <button
+            className="ax-btn"
+            onClick={async () => {
+              if (active.has_whatif) {
+                onUseInWhatIf(active)
+                return
+              }
+              try {
+                await api.prepareModelForWhatIf(active.id)
+                onUseInWhatIf({ ...active, has_whatif: true })
+              } catch (err) {
+                await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
+              }
+            }}
+            type="button"
+          >
             Use in What-if
           </button>
         </div>
