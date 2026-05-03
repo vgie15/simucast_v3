@@ -89,7 +89,7 @@ _cors_raw = os.environ.get("CORS_ORIGINS", "*")
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 CORS(app, origins=_cors_origins)
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "axion.db")
+_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simucast.db")
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     f"sqlite:///{_DB_PATH}"  # absolute path so db location never depends on cwd
