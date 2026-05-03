@@ -1,4 +1,4 @@
-# Axion — AI-powered data analysis
+# SimuCast — AI-powered data analysis
 
 SPSS-style analysis tool with AI assistance, modeling, and what-if simulation.
 
