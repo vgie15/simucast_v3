@@ -77,6 +77,7 @@ export const api = {
     request(`/api/datasets/${id}/activity/${encodeURIComponent(activityId)}?reverse=${reverse ? 'true' : 'false'}`, {
       method: 'DELETE',
     }),
+  resetProject: (id) => request(`/api/datasets/${id}/reset`, { method: 'POST' }),
   exportCsvUrl: (id, stageId) =>
     `${BASE}/api/datasets/${id}/export.csv` + (stageId ? `?stage_id=${encodeURIComponent(stageId)}` : ''),
   aiRecommend: (id, context) =>

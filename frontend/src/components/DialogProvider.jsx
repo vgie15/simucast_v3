@@ -70,11 +70,13 @@ function AppDialog({ dialog, onClose }) {
         aria-labelledby="ax-dialog-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className={`ax-dialog-icon ${isDanger ? 'danger' : ''}`} aria-hidden>
-          {isDanger ? '!' : 'i'}
-        </div>
-        <div style={{ minWidth: 0 }}>
+        <div className="ax-dialog-header">
+          <div className={`ax-dialog-icon ${isDanger ? 'danger' : ''}`} aria-hidden>
+            {isDanger ? '!' : 'i'}
+          </div>
           <h2 id="ax-dialog-title" className="ax-dialog-title">{dialog.title}</h2>
+        </div>
+        <div className="ax-dialog-body">
           {dialog.message && <p className="ax-dialog-message">{dialog.message}</p>}
           {dialog.details && <p className="ax-dialog-details">{dialog.details}</p>}
           {dialog.affectedItems?.length > 0 && (

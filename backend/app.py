@@ -1412,6 +1412,44 @@ def restore_stage(ds_id, stage_id):
     finally:
         s.close()
 
+@app.route("/api/datasets/<ds_id>/reset", methods=["POST"])
+def reset_project(ds_id):
+    """Reset a project to its original uploaded state, removing all derived data."""
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+
+        # Delete all stages
+        s.query(DatasetStage).filter_by(dataset_id=ds_id).delete()
+        # Delete all models
+        s.query(Model).filter_by(dataset_id=ds_id).delete()
+        # Delete all analyses
+        s.query(Analysis).filter_by(dataset_id=ds_id).delete()
+        # Delete all activity logs
+        s.query(ActivityLog).filter_by(dataset_id=ds_id).delete()
+
+        # Revert dataset to original upload state
+        ds.current_stage_id = None
+        rows = jload(ds.data) or []
+        ds.row_count = len(rows)
+        ds.col_count = len(rows[0]) if rows else 0
+
+        # Single log entry recording the reset
+        log_activity(
+            s,
+            ds_id,
+            "restore",
+            "Project reset to initial state",
+            detail={"category": "data_prep", "action_type": "reset"},
+            commit=False,
+        )
+        s.commit()
+        return {"ok": True}
+    finally:
+        s.close()
+
 @app.route("/api/datasets/<ds_id>/export.csv", methods=["GET"])
 def export_csv(ds_id):
     """Stream the active stage (or any stage selected via ?stage_id=) as CSV."""

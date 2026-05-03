@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(python -c \"import flask; print\\(flask.__file__\\)\")",
+      "Bash(python3 -c \"import flask; print\\(flask.__file__\\)\")",
+      "Bash(where python *)",
+      "Bash(\"C:/Users/vangi/AppData/Local/Programs/Python/Python311/python.exe\" -c \"import flask; print\\('flask ok', flask.__version__\\)\")",
+      "Bash(py -c \"import flask; print\\('py flask ok', flask.__version__\\)\")",
+      "Bash(npm install *)",
+      "Bash(py -c \"import pandas as pd, numpy as np; print\\('pandas', pd.__version__\\); print\\('numpy', np.__version__\\); df = pd.DataFrame\\({'a': [True, False, True], 'b': ['x','y','x']}\\); d = pd.get_dummies\\(df, drop_first=True, prefix_sep='='\\); print\\(d.dtypes\\)\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 31192 //F)",
+      "Bash(python -c ' *)",
+      "Bash(py -c ' *)",
+      "Read(//c/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/backend/**)",
+      "Read(//c/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src//**)",
+      "Bash(cp /c/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/api.js /c/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/.claude/worktrees/jovial-mestorf-fb972b/frontend/src/api.js)",
+      "Bash(cp /c/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/styles.css /c/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/.claude/worktrees/jovial-mestorf-fb972b/frontend/src/styles.css)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__list_connected_browsers"
+    ]
+  }
+}

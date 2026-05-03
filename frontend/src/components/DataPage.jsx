@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import ColumnValuesModal from './ColumnValuesModal'
 import AIAssistantPanel from './AIAssistantPanel'
@@ -9,6 +10,9 @@ import { useDialog } from './DialogProvider'
 
 export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const dialog = useDialog()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const openSection = location.state?.openSection
   const [viewStageId, setViewStageId] = useState('current')
   const [viewStageLabel, setViewStageLabel] = useState(null)
   const [activeVar, setActiveVar] = useState(null)
@@ -21,6 +25,21 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const [applyingAll, setApplyingAll] = useState(false)
   const [applyingGroup, setApplyingGroup] = useState(null)
   const [appliedFixSummary, setAppliedFixSummary] = useState([])
+
+  useEffect(() => {
+    if (!openSection) return
+    navigate('.', { replace: true, state: {} })
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`data-section-${openSection}`)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      el.style.outline = '2px solid var(--color-accent)'
+      el.style.outlineOffset = '3px'
+      el.style.borderRadius = '8px'
+      setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; el.style.borderRadius = '' }, 2000)
+    }, 120)
+    return () => clearTimeout(timer)
+  }, [openSection])
 
   useEffect(() => {
     if (!dataset) return
@@ -266,12 +285,14 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         />
       </div>
 
-      <AIAssistantPanel datasetId={dataset.id} context="data" />
+      <AIAssistantPanel key={historyKey} datasetId={dataset.id} context="data" />
 
-      <ManualTransformsCard dataset={dataset} onApplied={handleApplied} />
+      <div id="data-section-manual_transforms">
+        <ManualTransformsCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
+      </div>
 
-      <div id="fix-category-standardization">
-        <CategoryStandardizationCard dataset={dataset} onApplied={handleApplied} />
+      <div id="data-section-category_standardization">
+        <CategoryStandardizationCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
