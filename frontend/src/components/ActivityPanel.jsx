@@ -92,42 +92,79 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
     }
   }
 
-  const restore = async (stageId) => {
+  const revertToStep = async (stageId) => {
     if (!stageId || busy) return
+    const ok = await dialog.confirm({
+      title: 'Revert to This Step',
+      message: 'Revert the dataset to this step?',
+      details: 'The dataset will be set back to the state at this step. You can revert forward again at any time.',
+      affectedItems: ['Dataset state'],
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Revert',
+      variant: 'danger',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       await api.restoreStage(datasetId, stageId)
       await load()
       onRestored?.(stageId)
     } catch (err) {
-      await dialog.alert({ title: 'Restore Failed', message: err.message, variant: 'danger' })
+      await dialog.alert({ title: 'Revert Failed', message: err.message, variant: 'danger' })
     } finally {
       setBusy(false)
     }
   }
 
-  const deleteEntry = async (item, reverse = false) => {
+  const resetProject = async () => {
     if (busy) return
-    const message = reverse
-      ? 'Undo this step and remove its documentation entry? Data steps restore the dataset; model/analysis steps delete the saved artifact.'
-      : 'Remove this documentation entry? This only hides the entry from the log and report.'
     const ok = await dialog.confirm({
-      title: reverse ? 'Undo Step' : 'Remove Log',
-      message,
-      details: reverse ? 'This may change the saved project state or remove the saved artifact linked to this documentation entry.' : 'This only removes the documentation entry from the log and report.',
-      affectedItems: reverse ? ['Linked data stage, model, analysis, report, or scenario', 'Documentation entry'] : ['Documentation entry'],
+      title: 'Reset Project',
+      message: 'This will permanently remove all data transformations, trained models, what-if scenarios, and documentation steps.',
+      details: 'The dataset will revert to the original uploaded state. A single log entry will be kept to record the reset.',
+      affectedItems: [
+        'All data cleaning and transformations',
+        'All trained models',
+        'All what-if scenarios',
+        'All documentation steps',
+      ],
+      requireText: 'RESET',
+      confirmLabel: 'Reset Project',
       cancelLabel: 'Cancel',
-      confirmLabel: reverse ? 'Undo Step' : 'Remove Log',
-      variant: reverse ? 'danger' : 'default',
+      variant: 'danger',
     })
     if (!ok) return
     setBusy(true)
     try {
-      await api.deleteActivity(datasetId, item.id, reverse)
+      await api.resetProject(datasetId)
       await load()
       onRestored?.()
     } catch (err) {
-      await dialog.alert({ title: reverse ? 'Undo Failed' : 'Delete Failed', message: err.message, variant: 'danger' })
+      await dialog.alert({ title: 'Reset Failed', message: err.message, variant: 'danger' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const undoStep = async (item) => {
+    if (busy) return
+    const ok = await dialog.confirm({
+      title: 'Undo Step',
+      message: 'Undo this step and remove its documentation entry?',
+      details: 'Data steps will revert the dataset. Model and analysis steps will delete the saved artifact.',
+      affectedItems: ['Linked data stage, model, analysis, report, or scenario', 'Documentation entry'],
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Undo Step',
+      variant: 'danger',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await api.deleteActivity(datasetId, item.id, true)
+      await load()
+      onRestored?.()
+    } catch (err) {
+      await dialog.alert({ title: 'Undo Failed', message: err.message, variant: 'danger' })
     } finally {
       setBusy(false)
     }
@@ -142,7 +179,17 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
             Project actions for methods, audit trail, and reports.
           </p>
         </div>
-        <button className="ax-btn" onClick={load} disabled={loading}>Refresh</button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="ax-btn" onClick={load} disabled={loading}>Refresh</button>
+          <button
+            className="ax-btn"
+            style={{ background: 'rgba(220, 38, 38, 0.08)', borderColor: 'rgba(220, 38, 38, 0.35)', color: '#DC2626' }}
+            onClick={resetProject}
+            disabled={busy}
+          >
+            Reset project
+          </button>
+        </div>
       </div>
 
       <div className="ax-activity-filters">
@@ -161,13 +208,19 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>No matching activity.</p>
       ) : (
         <div className="ax-activity-list">
-          {filteredTimeline.map((item) => {
+          {(() => {
+            const latestStepNumber = timeline.length > 0 ? Math.max(...timeline.map((t) => t.stepNumber)) : 0
+            return filteredTimeline.map((item) => {
             const isActive = item.related_stage_id && (currentStageId || 'original') === item.related_stage_id
+            const isLatestStep = item.stepNumber === latestStepNumber
             const notes = item.detail?.notes || []
             const detailsOpen = !!openDetails[item.id]
             const detailRows = detailsForItem(item)
-            const canUndoDataStep = item.related_stage_id && item.related_stage_id !== 'original' && isActive
-            const canUndoNonDataStep = !item.related_stage_id && (item.related_model_id || item.related_analysis_id || item.kind === 'report' || item.kind === 'whatif')
+            const canUndo = isLatestStep && (
+              (item.related_stage_id && item.related_stage_id !== 'original' && isActive) ||
+              (!item.related_stage_id && (item.related_model_id || item.related_analysis_id || item.kind === 'report' || item.kind === 'whatif'))
+            )
+            const canRevert = !isLatestStep && item.related_stage_id && !isActive
             return (
               <div
                 key={item.id}
@@ -211,22 +264,7 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                     </button>
                   )}
                   {item.related_stage_id && (
-                    <>
-                      <button className="ax-btn" onClick={() => onViewStage?.(item.related_stage_id)}>View stage</button>
-                      <a
-                        className="ax-btn"
-                        href={api.exportCsvUrl(datasetId, item.related_stage_id)}
-                        download
-                        style={{ textDecoration: 'none' }}
-                      >
-                        Export CSV
-                      </a>
-                      {!isActive && (
-                        <button className="ax-btn" onClick={() => restore(item.related_stage_id)} disabled={busy}>
-                          Restore
-                        </button>
-                      )}
-                    </>
+                    <button className="ax-btn" onClick={() => onViewStage?.(item.related_stage_id)}>View stage</button>
                   )}
                   <button
                     className="ax-btn"
@@ -239,13 +277,22 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                   >
                     {notes.length ? 'Edit note' : 'Add note'}
                   </button>
-                  {canUndoDataStep || canUndoNonDataStep ? (
-                    <button className="ax-btn" onClick={() => deleteEntry(item, true)} disabled={busy}>
-                      Undo step
+                  {canUndo && (
+                    <button
+                      className="ax-btn"
+                      style={{
+                        background: 'rgba(251, 146, 60, 0.12)',
+                        borderColor: 'rgba(251, 146, 60, 0.45)',
+                      }}
+                      onClick={() => undoStep(item)}
+                      disabled={busy}
+                    >
+                      ↩ Undo step
                     </button>
-                  ) : (
-                    <button className="ax-btn" onClick={() => deleteEntry(item, false)} disabled={busy}>
-                      Remove log
+                  )}
+                  {canRevert && (
+                    <button className="ax-btn" onClick={() => revertToStep(item.related_stage_id)} disabled={busy}>
+                      ↺ Revert to this step
                     </button>
                   )}
                 </div>
@@ -282,7 +329,8 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                 )}
               </div>
             )
-          })}
+            })
+          })()}
         </div>
       )}
     </div>

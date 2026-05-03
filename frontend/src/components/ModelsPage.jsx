@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
@@ -36,6 +37,7 @@ const PARAM_DEFS = {
 
 export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const dialog = useDialog()
+  const navigate = useNavigate()
   const [target, setTarget] = useState('')
   const [targetMode, setTargetMode] = useState('auto')
   const [positiveClass, setPositiveClass] = useState('')
@@ -53,6 +55,22 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [activeResultIdx, setActiveResultIdx] = useState(0)
   const [models, setModels] = useState([])
   const [draftReady, setDraftReady] = useState(false)
+  const [dismissedChecks, setDismissedChecks] = useState([])
+
+  const handleFixAction = (fix) => {
+    if (fix.route === 'models') {
+      const sectionIdMap = { target_options: 'models-step-1', class_weight: 'models-step-4', algorithms: 'models-step-5' }
+      const el = document.getElementById(sectionIdMap[fix.section])
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        el.style.outline = '2px solid var(--color-accent)'
+        el.style.outlineOffset = '2px'
+        setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = '' }, 1600)
+      }
+    } else if (dataset?.id) {
+      navigate(`/projects/${dataset.id}/${fix.route}`, { state: { openSection: fix.section } })
+    }
+  }
 
   const variables = dataset?.variables || []
   const candidateFeatures = variables.filter((v) => v.name !== target)
@@ -141,7 +159,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, stratify, classWeight])
+  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, stratify, classWeight])
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -257,7 +275,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       <AIAssistantPanel datasetId={dataset.id} context="models" />
 
       {/* Step 1 — target */}
-      <Step n={1} title="Pick a target — what to predict">
+      <Step n={1} id="models-step-1" title="Pick a target — what to predict">
         <select
           value={target}
           onChange={(e) => {
@@ -334,18 +352,25 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       </Step>
 
       {/* Step 3 — preprocessing plan */}
-      <Step n={3} title="What will happen — preprocessing plan" disabled={!target || features.length === 0}>
+      <Step n={3} title="Preprocessing plan &amp; readiness" disabled={!target || features.length === 0}>
         {planLoading && (
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>Computing plan…</p>
         )}
         {planError && (
           <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{planError}</p>
         )}
-        {plan && <PreprocessingPlan plan={plan} />}
+        {plan && (
+          <PreprocessingPlan
+            plan={plan}
+            onFixAction={handleFixAction}
+            dismissedChecks={dismissedChecks}
+            onDismissCheck={(key) => setDismissedChecks((d) => [...d, key])}
+          />
+        )}
       </Step>
 
       {/* Step 4 — algorithms */}
-      <Step n={4} title="Configure validation split" disabled={!plan}>
+      <Step n={4} id="models-step-4" title="Configure validation split" disabled={!plan}>
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
           <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
           <div>
@@ -379,7 +404,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         </div>
       </Step>
 
-      <Step n={5} title="Choose algorithms" disabled={!plan || (plan.hard_blocks || []).length > 0}>
+      <Step n={5} id="models-step-5" title="Choose algorithms" disabled={!plan || (plan.validation_checks || []).some((c) => c.status === 'block')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {visibleAlgos.map((a) => (
             <label
@@ -419,7 +444,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       <div className="ax-row" style={{ margin: '8px 0 16px', justifyContent: 'flex-end' }}>
         <button
           className="ax-btn prim"
-          disabled={training || !plan || selectedAlgos.length === 0 || (plan.hard_blocks || []).length > 0}
+          disabled={training || !plan || selectedAlgos.length === 0 || (plan.validation_checks || []).some((c) => c.status === 'block')}
           onClick={train}
           type="button"
         >
@@ -494,9 +519,10 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   )
 }
 
-function Step({ n, title, disabled, children }) {
+function Step({ n, title, disabled, children, id }) {
   return (
     <div
+      id={id}
       className="ax-card"
       style={{ marginBottom: 12, opacity: disabled ? 0.55 : 1, padding: 14 }}
     >
@@ -520,6 +546,78 @@ function Step({ n, title, disabled, children }) {
         <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{title}</p>
       </div>
       <div style={{ pointerEvents: disabled ? 'none' : 'auto' }}>{children}</div>
+    </div>
+  )
+}
+
+function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  const allOptions = [...(fixes || [])]
+  if (!allOptions.length) return null
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        className="ax-btn"
+        style={{ fontSize: 11, padding: '2px 8px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        Fix options <span style={{ fontSize: 8 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'fixed',
+          background: '#fff',
+          border: '1px solid #d1d5db',
+          borderRadius: 8,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+          zIndex: 9999,
+          minWidth: 280,
+          maxWidth: 360,
+          overflow: 'hidden',
+          right: 'auto',
+          top: 'auto',
+        }} ref={(el) => {
+          if (!el) return
+          const btn = ref.current?.querySelector('button')
+          if (!btn) return
+          const r = btn.getBoundingClientRect()
+          el.style.top = `${r.bottom + 4}px`
+          el.style.left = `${Math.max(8, r.right - 280)}px`
+        }}>
+          {allOptions.map((fix, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => { setOpen(false); fix.action === 'dismiss' ? onDismiss?.() : onAction(fix) }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                padding: '9px 14px', fontSize: 12, background: 'none', border: 'none',
+                borderBottom: i < allOptions.length - 1 ? '1px solid #e5e7eb' : 'none',
+                cursor: 'pointer',
+                color: fix.action === 'dismiss' ? '#9ca3af' : '#111827',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#f9fafb' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+            >
+              <div style={{ fontWeight: fix.action === 'dismiss' ? 400 : 500 }}>{fix.label}</div>
+              {fix.description && (
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3, lineHeight: 1.4 }}>{fix.description}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -576,94 +674,156 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
   )
 }
 
-function PreprocessingPlan({ plan }) {
+function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck }) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
+
+  const checks = plan.validation_checks || []
+  const issueCount = checks.filter((c) => {
+    const dismissed = (dismissedChecks || []).includes(c.key)
+    const effective = dismissed && c.status === 'warning' ? 'ok' : c.status
+    return effective === 'block' || effective === 'warning'
+  }).length
+
+  const summaryRows = [
+    { label: 'Task', value: `${plan.task.charAt(0).toUpperCase() + plan.task.slice(1)} · ${plan.target}` },
+    {
+      label: 'Rows',
+      value: plan.rows_dropped > 0
+        ? `${plan.rows_used.toLocaleString()} used · ${plan.rows_dropped} dropped`
+        : `${plan.rows_used.toLocaleString()} rows`,
+      danger: plan.rows_dropped > 0,
+    },
+    plan.encoding.length > 0 && {
+      label: 'Encoding',
+      value: `${plan.encoding.length} categorical column${plan.encoding.length !== 1 ? 's' : ''} one-hot encoded`,
+    },
+    plan.scaling.length > 0 && { label: 'Scaling', value: 'StandardScaler on numeric features' },
+    plan.split && {
+      label: 'Split',
+      value: `${Math.round((plan.split.train_size || 0.8) * 100)}% train / ${Math.round((plan.split.test_size || 0.2) * 100)}% test${plan.split.stratified ? ' (stratified)' : ''}`,
+    },
+  ].filter(Boolean)
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <PlanLine label="Task">
-        <strong>{plan.task}</strong> · target: {plan.target}
-      </PlanLine>
-      <PlanLine label="Rows">
-        Using <strong>{plan.rows_used.toLocaleString()}</strong>
-        {plan.rows_dropped > 0 && (
-          <> · dropping <span style={{ color: 'var(--color-text-danger)' }}>{plan.rows_dropped.toLocaleString()}</span> rows with missing values</>
-        )}
-      </PlanLine>
-      {plan.encoding.length > 0 && (
-        <PlanLine label="Encoding">
-          One-hot encode {plan.encoding.length} categorical column{plan.encoding.length !== 1 ? 's' : ''}:{' '}
-          {plan.encoding.map((e) => `${e.column} (${e.n_categories})`).join(', ')}
-        </PlanLine>
-      )}
-      {plan.scaling.length > 0 && (
-        <PlanLine label="Scaling">
-          StandardScaler on numeric features for: {plan.scaling[0].applies_to.join(', ')}
-        </PlanLine>
-      )}
-      {plan.missing_report.length > 0 && (
-        <PlanLine label="Missing">
-          {plan.missing_report.map((m) => `${m.column} (${m.missing})`).join(' · ')}
-        </PlanLine>
-      )}
-      {plan.split && (
-        <PlanLine label="Split">
-          Train {Math.round((plan.split.train_size || 0.8) * 100)}% / test {Math.round((plan.split.test_size || 0.2) * 100)}%
-          {plan.split.stratified ? ' with stratification' : ''}
-        </PlanLine>
-      )}
-      {plan.class_weight && (
-        <PlanLine label="Weights">
-          Balanced class weights for supported classifiers.
-        </PlanLine>
-      )}
-      {(plan.validation_checks || []).length > 0 && (
-        <div style={{ border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, padding: 10 }}>
-          <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 6px' }}>Model readiness checklist</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {plan.validation_checks.map((check, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '18px 180px 1fr', gap: 8, fontSize: 11, alignItems: 'start' }}>
-                <span style={{ color: check.status === 'block' ? 'var(--color-text-danger)' : check.status === 'warning' ? 'var(--color-text-warning)' : 'var(--color-text-success)' }}>
-                  {check.status === 'block' ? '!' : check.status === 'warning' ? '-' : '✓'}
-                </span>
-                <strong>{check.label}</strong>
-                <span style={{ color: 'var(--color-text-secondary)' }}>{check.detail}</span>
-              </div>
-            ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Preprocessing summary */}
+      <div style={{ border: '0.5px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, margin: 0, color: 'var(--color-text-primary)' }}>Preprocessing summary</p>
+          <button
+            className="ax-btn"
+            style={{ fontSize: 11, padding: '2px 8px' }}
+            onClick={() => setDetailsOpen((v) => !v)}
+            type="button"
+          >
+            {detailsOpen ? 'Hide details' : 'View details ▾'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {summaryRows.map((row, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, fontSize: 12 }}>
+              <span style={{ width: 68, flexShrink: 0, fontSize: 10, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', paddingTop: 2 }}>
+                {row.label}
+              </span>
+              <span style={{ color: row.danger ? 'var(--color-text-danger)' : undefined }}>{row.value}</span>
+            </div>
+          ))}
+        </div>
+        {detailsOpen && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--color-border-tertiary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {plan.encoding.length > 0 && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                <strong>Encoded columns:</strong> {plan.encoding.map((e) => `${e.column} (${e.n_categories})`).join(', ')}
+              </p>
+            )}
+            {plan.scaling.length > 0 && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                <strong>Scaling applies to:</strong> {plan.scaling[0].applies_to.join(', ')}
+              </p>
+            )}
+            {plan.missing_report.length > 0 && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                <strong>Missing values:</strong> {plan.missing_report.map((m) => `${m.column} (${m.missing})`).join(' · ')}
+              </p>
+            )}
+            {(plan.multicollinearity || []).length > 0 && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                <strong>Collinearity:</strong> {plan.multicollinearity.slice(0, 4).map((p) => `${p.feature_a} + ${p.feature_b} (r=${Number(p.correlation).toFixed(2)})`).join(' · ')}
+                {plan.multicollinearity.length > 4 ? ` · +${plan.multicollinearity.length - 4} more` : ''}
+              </p>
+            )}
+            {(plan.excluded_features || []).length > 0 && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                <strong>Excluded:</strong> {plan.excluded_features.map((x) => x.feature).join(', ')}
+              </p>
+            )}
+            {plan.class_weight && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                <strong>Class weights:</strong> Balanced for supported classifiers
+              </p>
+            )}
           </div>
-        </div>
-      )}
-      {(plan.hard_blocks || []).length > 0 && (
-        <div style={{ background: 'var(--color-background-danger)', color: 'var(--color-text-danger)', padding: '8px 10px', borderRadius: 6, fontSize: 12 }}>
-          <strong>Fix before training:</strong>
-          <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
-            {plan.hard_blocks.map((b, i) => <li key={i}>{b.message}</li>)}
-          </ul>
-        </div>
-      )}
-      {(plan.multicollinearity || []).length > 0 && (
-        <PlanLine label="Collinearity">
-          {plan.multicollinearity.slice(0, 4).map((p) => `${p.feature_a} + ${p.feature_b} (${Number(p.correlation).toFixed(2)})`).join(' | ')}
-          {plan.multicollinearity.length > 4 ? ` | +${plan.multicollinearity.length - 4} more` : ''}
-        </PlanLine>
-      )}
-      {(plan.excluded_features || []).length > 0 && (
-        <PlanLine label="Excluded">
-          Identifier/constant columns removed: {plan.excluded_features.map((x) => x.feature).join(', ')}
-        </PlanLine>
-      )}
-      {plan.warnings.length > 0 && (
-        <div
-          style={{
-            background: 'var(--color-background-danger)',
-            color: 'var(--color-text-danger)',
-            padding: '8px 10px',
-            borderRadius: 6,
-            fontSize: 12,
-          }}
-        >
-          <strong>Warnings:</strong>
-          <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
-            {plan.warnings.map((w, i) => <li key={i}>{w}</li>)}
-          </ul>
+        )}
+      </div>
+
+      {/* Issues */}
+      {checks.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <p style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>Issues detected before training</p>
+            {issueCount > 0 ? (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', background: '#FEF3C7', color: '#D97706', borderRadius: 4 }}>
+                {issueCount} need{issueCount === 1 ? 's' : ''} attention
+              </span>
+            ) : (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', background: '#DCFCE7', color: '#16A34A', borderRadius: 4 }}>
+                Ready to train
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {checks.map((check, i) => {
+              const dismissed = (dismissedChecks || []).includes(check.key)
+              const effectiveStatus = dismissed && check.status === 'warning' ? 'ok' : check.status
+              const isBlock = effectiveStatus === 'block'
+              const isWarning = effectiveStatus === 'warning'
+              const isOk = effectiveStatus === 'ok'
+              const bg = isBlock ? '#FEF2F2' : isWarning ? '#FFFBEB' : '#F0FDF4'
+              const border = isBlock ? '#FECACA' : isWarning ? '#FDE68A' : '#BBF7D0'
+              const badgeBg = isBlock ? '#FEE2E2' : isWarning ? '#FEF3C7' : '#DCFCE7'
+              const badgeColor = isBlock ? '#DC2626' : isWarning ? '#D97706' : '#16A34A'
+              const textColor = isBlock ? '#7F1D1D' : isWarning ? '#78350F' : 'var(--color-text-secondary)'
+              return (
+                <div
+                  key={check.key ?? i}
+                  style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: '11px 14px', display: 'flex', alignItems: isOk ? 'center' : 'flex-start', gap: 10 }}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', background: badgeBg, color: badgeColor, borderRadius: 4, flexShrink: 0, letterSpacing: '0.05em', marginTop: isOk ? 0 : 1 }}>
+                    {isBlock ? 'BLOCK' : isWarning ? 'WARNING' : 'OK'}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, margin: 0, color: isOk ? 'var(--color-text-primary)' : (isBlock ? '#991B1B' : '#92400E') }}>
+                      {check.label}
+                    </p>
+                    {!isOk && (
+                      <p style={{ fontSize: 11, color: textColor, margin: '3px 0 0', lineHeight: 1.5 }}>
+                        {dismissed ? 'Warning ignored.' : check.detail}
+                      </p>
+                    )}
+                  </div>
+                  {!isOk && (check.fixes || []).length > 0 && (
+                    <FixOptionsDropdown
+                      fixes={check.fixes}
+                      onAction={onFixAction}
+                      canDismiss={isWarning}
+                      onDismiss={() => onDismissCheck?.(check.key)}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

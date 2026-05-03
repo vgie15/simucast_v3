@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
 import AdvancedPage from './AdvancedPage'
@@ -46,13 +46,31 @@ export default function TestsPage({ dataset }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
-
-  const variables = dataset.variables || []
+  const variables = dataset?.variables || []
   const numericVars = variables.filter((v) => ['numeric', 'int', 'float', 'binary'].includes(v.dtype))
   const categoricalVars = variables.filter((v) => ['category', 'binary'].includes(v.dtype))
   const selectedTest = TESTS.find((t) => t.key === kind) || TESTS[0]
   const canRun = kind === 'corr' ? corrVars.length >= 2 : kind === 'chi' ? varA && varB : group && measure
+
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem('simucast.fixTarget')
+    if (!raw) return
+    let target = null
+    try {
+      target = JSON.parse(raw)
+    } catch {
+      return
+    }
+    if (target?.page !== 'tests') return
+    window.sessionStorage.removeItem('simucast.fixTarget')
+    if (target.section === 'fix-correlation-test') {
+      setKind('corr')
+      setCorrVars((current) => current.length >= 2 ? current : numericVars.slice(0, 4).map((v) => v.name))
+    }
+    setTimeout(() => highlightSection(target.section), 180)
+  }, [dataset?.id])
+
+  if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
 
   const run = async () => {
     if (!canRun) return
@@ -99,7 +117,7 @@ export default function TestsPage({ dataset }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(280px, 0.85fr)', gap: 12, marginBottom: 12 }}>
-        <div className="ax-card">
+        <div id="fix-correlation-test" className="ax-card">
           <p className="ax-lbl" style={{ marginTop: 0 }}>Setup</p>
           {(kind === 't' || kind === 'anova') && (
             <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
@@ -176,6 +194,14 @@ export default function TestsPage({ dataset }) {
       </div>
     </>
   )
+}
+
+function highlightSection(section) {
+  const el = document.getElementById(section)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('ax-fix-highlight')
+  window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
 
 function InfoRow({ label, text }) {

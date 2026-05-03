@@ -28,6 +28,7 @@ export default function ProjectWorkspace() {
   const [viewStageRequest, setViewStageRequest] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     setLoading(true)
@@ -43,6 +44,7 @@ export default function ProjectWorkspace() {
   const refreshDataset = async () => {
     const fresh = await api.getDataset(id)
     setDataset(fresh)
+    setRefreshKey((k) => k + 1)
   }
 
   if (loading) {
@@ -60,7 +62,7 @@ export default function ProjectWorkspace() {
 
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
   const activeTabMeta = TABS.find((t) => t.key === activeTab) || TABS[0]
-  const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest })
+  const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey })
 
   return (
     <>
@@ -133,18 +135,20 @@ function NextPagePrompt({ activeTab, datasetId }) {
 }
 
 function renderTab(tab, props) {
+  const k = props.refreshKey
   switch (tab) {
     case 'data':
-      return <DataPage dataset={props.dataset} setDataset={props.setDataset} viewStageRequest={props.viewStageRequest} />
+      return <DataPage key={k} dataset={props.dataset} setDataset={props.setDataset} viewStageRequest={props.viewStageRequest} />
     case 'expand':
-      return <ExpandPage dataset={props.dataset} setDataset={props.setDataset} />
+      return <ExpandPage key={k} dataset={props.dataset} setDataset={props.setDataset} />
     case 'describe':
-      return <DescribePage dataset={props.dataset} />
+      return <DescribePage key={k} dataset={props.dataset} />
     case 'tests':
-      return <TestsPage dataset={props.dataset} />
+      return <TestsPage key={k} dataset={props.dataset} />
     case 'models':
       return (
         <ModelsPage
+          key={k}
           dataset={props.dataset}
           setActiveModel={props.setActiveModel}
           onGo={props.go}
@@ -153,13 +157,14 @@ function renderTab(tab, props) {
     case 'whatif':
       return (
         <WhatIfPage
+          key={k}
           dataset={props.dataset}
           activeModel={props.activeModel}
           setActiveModel={props.setActiveModel}
         />
       )
     case 'report':
-      return <ReportPage dataset={props.dataset} />
+      return <ReportPage key={k} dataset={props.dataset} />
     default:
       return <p>Unknown tab.</p>
   }

@@ -35,6 +35,11 @@ export const api = {
   // datasets
   listDatasets: () => request('/api/datasets'),
   getDataset: (id) => request(`/api/datasets/${id}`),
+  selectSheet: (id, sheet) =>
+    request(`/api/datasets/${id}/sheet`, {
+      method: 'POST',
+      body: JSON.stringify({ sheet }),
+    }),
   deleteDataset: (id) =>
     request(`/api/datasets/${id}`, {
       method: 'DELETE',
@@ -72,6 +77,7 @@ export const api = {
     request(`/api/datasets/${id}/activity/${encodeURIComponent(activityId)}?reverse=${reverse ? 'true' : 'false'}`, {
       method: 'DELETE',
     }),
+  resetProject: (id) => request(`/api/datasets/${id}/reset`, { method: 'POST' }),
   exportCsvUrl: (id, stageId) =>
     `${BASE}/api/datasets/${id}/export.csv` + (stageId ? `?stage_id=${encodeURIComponent(stageId)}` : ''),
   aiRecommend: (id, context) =>
@@ -114,6 +120,11 @@ export const api = {
   cleanSuggestions: (id) => request(`/api/datasets/${id}/clean/suggestions`),
   cleanApply: (id, body) =>
     request(`/api/datasets/${id}/clean/apply`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  cleanApplyGroup: (id, body) =>
+    request(`/api/datasets/${id}/clean/apply_group`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
