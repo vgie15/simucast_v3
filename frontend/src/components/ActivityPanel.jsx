@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
+import { useDialog } from './DialogProvider'
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -11,6 +12,7 @@ const FILTERS = [
 ]
 
 export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
+  const dialog = useDialog()
   const [activity, setActivity] = useState([])
   const [stages, setStages] = useState([])
   const [currentStageId, setCurrentStageId] = useState('original')
@@ -84,7 +86,7 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
       setNoteFor(null)
       await load()
     } catch (err) {
-      alert('Could not add note: ' + err.message)
+      await dialog.alert({ title: 'Could Not Add Note', message: err.message, variant: 'danger' })
     } finally {
       setBusy(false)
     }
@@ -98,7 +100,7 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
       await load()
       onRestored?.(stageId)
     } catch (err) {
-      alert('Restore failed: ' + err.message)
+      await dialog.alert({ title: 'Restore Failed', message: err.message, variant: 'danger' })
     } finally {
       setBusy(false)
     }
@@ -109,14 +111,23 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
     const message = reverse
       ? 'Undo this step and remove its documentation entry? Data steps restore the dataset; model/analysis steps delete the saved artifact.'
       : 'Remove this documentation entry? This only hides the entry from the log and report.'
-    if (!window.confirm(message)) return
+    const ok = await dialog.confirm({
+      title: reverse ? 'Undo Step' : 'Remove Log',
+      message,
+      details: reverse ? 'This may change the saved project state or remove the saved artifact linked to this documentation entry.' : 'This only removes the documentation entry from the log and report.',
+      affectedItems: reverse ? ['Linked data stage, model, analysis, report, or scenario', 'Documentation entry'] : ['Documentation entry'],
+      cancelLabel: 'Cancel',
+      confirmLabel: reverse ? 'Undo Step' : 'Remove Log',
+      variant: reverse ? 'danger' : 'default',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       await api.deleteActivity(datasetId, item.id, reverse)
       await load()
       onRestored?.()
     } catch (err) {
-      alert((reverse ? 'Undo failed: ' : 'Delete failed: ') + err.message)
+      await dialog.alert({ title: reverse ? 'Undo Failed' : 'Delete Failed', message: err.message, variant: 'danger' })
     } finally {
       setBusy(false)
     }
@@ -157,21 +168,21 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
             return (
               <div
                 key={item.id}
-                className="ax-activity-item"
+                className={`ax-activity-item ${isActive ? 'active' : ''}`}
                 style={{
                   borderColor: isActive ? 'var(--color-accent)' : undefined,
                   background: isActive ? 'var(--color-accent-light)' : undefined,
-                  borderRadius: 6,
-                  padding: '8px',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--color-text-tertiary)' }}>
                     #{item.stepNumber}
                   </span>
-                  <span className="ax-chip">{labelFor(item.action_type || item.category || item.kind)}</span>
-                  {item.stage?.op_type && <span className="ax-chip">{item.stage.op_type}</span>}
-                  {isActive && <span className="ax-chip" style={{ background: 'var(--color-accent)', color: 'white' }}>active</span>}
+                  <span className={`ax-chip ${badgeClassFor(item.action_type || item.category || item.kind)}`}>
+                    {labelFor(item.action_type || item.category || item.kind)}
+                  </span>
+                  {item.stage?.op_type && <span className="ax-chip ax-badge-data">{item.stage.op_type}</span>}
+                  {isActive && <span className="ax-chip ax-badge-active">active</span>}
                   <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
                     {item.created_at ? new Date(item.created_at).toLocaleString() : ''}
                   </span>
@@ -307,4 +318,17 @@ function labelFor(kind) {
     clone: 'Clone',
   }
   return labels[kind] || kind
+}
+
+function badgeClassFor(kind) {
+  const label = labelFor(kind).toLowerCase()
+  if (label.includes('data') || label.includes('restore')) return 'ax-badge-data'
+  if (label.includes('evaluation')) return 'ax-badge-evaluation'
+  if (label.includes('analysis')) return 'ax-badge-analysis'
+  if (label.includes('model')) return 'ax-badge-model'
+  if (label.includes('scenario')) return 'ax-badge-scenario'
+  if (label.includes('report')) return 'ax-badge-report'
+  if (label.includes('upload')) return 'ax-badge-upload'
+  if (label.includes('note')) return 'ax-badge-note'
+  return 'ax-badge-default'
 }

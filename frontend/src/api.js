@@ -35,6 +35,10 @@ export const api = {
   // datasets
   listDatasets: () => request('/api/datasets'),
   getDataset: (id) => request(`/api/datasets/${id}`),
+  deleteDataset: (id) =>
+    request(`/api/datasets/${id}`, {
+      method: 'DELETE',
+    }),
   getRows: (id, page = 1, pageSize = 100, stageId) => {
     const qs = `page=${page}&page_size=${pageSize}` + (stageId ? `&stage_id=${encodeURIComponent(stageId)}` : '')
     return request(`/api/datasets/${id}/rows?${qs}`)

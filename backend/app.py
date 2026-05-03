@@ -693,6 +693,27 @@ def get_dataset(ds_id):
     finally:
         s.close()
 
+@app.route("/api/datasets/<ds_id>", methods=["DELETE"])
+def delete_dataset(ds_id):
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        deleted = {
+            "stages": s.query(DatasetStage).filter_by(dataset_id=ds_id).delete(synchronize_session=False),
+            "analyses": s.query(Analysis).filter_by(dataset_id=ds_id).delete(synchronize_session=False),
+            "models": s.query(Model).filter_by(dataset_id=ds_id).delete(synchronize_session=False),
+            "activity": s.query(ActivityLog).filter_by(dataset_id=ds_id).delete(synchronize_session=False),
+        }
+        name = ds.name
+        filename = ds.filename
+        s.delete(ds)
+        s.commit()
+        return jsonify({"ok": True, "id": ds_id, "name": name, "filename": filename, "deleted": deleted})
+    finally:
+        s.close()
+
 @app.route("/api/datasets/<ds_id>/rows", methods=["GET"])
 def get_rows(ds_id):
     """Paginated row data for the Excel-like grid.

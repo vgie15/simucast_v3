@@ -1,16 +1,40 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
+import { useDialog } from './DialogProvider'
 
 export default function FilesPage() {
   const [datasets, setDatasets] = useState([])
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef(null)
   const navigate = useNavigate()
+  const dialog = useDialog()
 
   useEffect(() => {
     api.listDatasets().then(setDatasets).catch(console.error)
   }, [])
+
+  const deleteFile = async (file, event) => {
+    event.stopPropagation()
+    const label = file.filename || file.name
+    const ok = await dialog.confirm({
+      title: 'Delete Project',
+      message: `Delete "${label}" and its project "${file.name}"? This action is irreversible.`,
+      details: 'Uploaded files are project-bound in SimuCast, so deleting this file also deletes the project it powers.',
+      affectedItems: ['Source file reference', 'Dataset rows', 'Data stages and cleaning history', 'Analysis results', 'Trained models', 'What-if scenarios', 'Documentation log and notes'],
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Delete Project',
+      variant: 'danger',
+      requireText: 'DELETE',
+    })
+    if (!ok) return
+    try {
+      await api.deleteDataset(file.id)
+      setDatasets((current) => current.filter((d) => d.id !== file.id))
+    } catch (err) {
+      await dialog.alert({ title: 'Delete Failed', message: err.message, variant: 'danger' })
+    }
+  }
 
   const handleUpload = async (e) => {
     const f = e.target.files?.[0]
@@ -20,7 +44,7 @@ export default function FilesPage() {
       const result = await api.uploadDataset(f)
       navigate(`/projects/${result.id}`)
     } catch (err) {
-      alert('Upload failed: ' + err.message)
+      await dialog.alert({ title: 'Upload Failed', message: err.message, variant: 'danger' })
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -66,6 +90,7 @@ export default function FilesPage() {
                 <th>Rows</th>
                 <th>Columns</th>
                 <th>Uploaded</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -80,6 +105,11 @@ export default function FilesPage() {
                   <td>{d.row_count?.toLocaleString()}</td>
                   <td>{d.col_count}</td>
                   <td>{d.created_at ? new Date(d.created_at).toLocaleDateString() : '—'}</td>
+                  <td>
+                    <button className="ax-btn danger" onClick={(event) => deleteFile(d, event)}>
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

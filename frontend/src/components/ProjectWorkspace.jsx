@@ -11,13 +11,13 @@ import ReportPage from './ReportPage'
 import ActivityPanel from './ActivityPanel'
 
 const TABS = [
-  { key: 'data', label: 'Data' },
-  { key: 'expand', label: 'Expand' },
-  { key: 'describe', label: 'Describe' },
-  { key: 'tests', label: 'Tests' },
-  { key: 'models', label: 'Models' },
-  { key: 'whatif', label: 'What-if' },
-  { key: 'report', label: 'Report' },
+  { key: 'data', label: 'Data', subtitle: 'Preparing your dataset' },
+  { key: 'expand', label: 'Expand', subtitle: 'Expanding and engineering rows' },
+  { key: 'describe', label: 'Describe', subtitle: 'Summarizing patterns and distributions' },
+  { key: 'tests', label: 'Tests', subtitle: 'Running statistical tests' },
+  { key: 'models', label: 'Models', subtitle: 'Building predictive models' },
+  { key: 'whatif', label: 'What-if', subtitle: 'Testing saved scenarios' },
+  { key: 'report', label: 'Report', subtitle: 'Creating insights and documentation' },
 ]
 
 export default function ProjectWorkspace() {
@@ -59,22 +59,27 @@ export default function ProjectWorkspace() {
   }
 
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
+  const activeTabMeta = TABS.find((t) => t.key === activeTab) || TABS[0]
   const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest })
 
   return (
     <>
       <div className="ax-subnav">
-        {TABS.map((t) => (
+        {TABS.map((t, index) => {
+          const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
+          const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
+          return (
           <NavLink
             key={t.key}
             to={`/projects/${id}/${t.key}`}
-            className={() => `ax-subnav-item ${t.key === activeTab ? 'active' : ''}`}
+            className={() => `ax-subnav-item ${state}`}
             end
           >
             {t.label}
           </NavLink>
-        ))}
+        )})}
       </div>
+      <p className="ax-flow-context">{activeTabMeta.subtitle}</p>
 
       <div style={{ marginBottom: 12 }}>
         <Link to="/projects" style={{ fontSize: 11, color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
@@ -117,12 +122,12 @@ function NextPagePrompt({ activeTab, datasetId }) {
   return (
     <div className="ax-card ax-next-card">
       <div>
-        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Next: {next.label}</p>
-        <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+        <p style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Ready for the next step?</p>
+        <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
           {copy[activeTab] || 'Continue the workflow on the next page.'}
         </p>
       </div>
-      <Link className="ax-btn prim" to={`/projects/${datasetId}/${next.key}`}>Go to {next.label}</Link>
+      <Link className="ax-btn prim" to={`/projects/${datasetId}/${next.key}`}>Go to {next.label} {'>'}</Link>
     </div>
   )
 }

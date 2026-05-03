@@ -1,16 +1,39 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
+import { useDialog } from './DialogProvider'
 import NewProjectModal from './NewProjectModal'
 
 export default function ProjectsPage() {
   const [datasets, setDatasets] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const navigate = useNavigate()
+  const dialog = useDialog()
 
   useEffect(() => {
     api.listDatasets().then(setDatasets).catch(console.error)
   }, [])
+
+  const deleteProject = async (project, event) => {
+    event.stopPropagation()
+    const ok = await dialog.confirm({
+      title: 'Delete Project',
+      message: `Delete "${project.name}"? This action is irreversible.`,
+      details: 'The project and all of its generated work will be permanently removed from SimuCast.',
+      affectedItems: ['Dataset rows and source file reference', 'Data stages and cleaning history', 'Analysis results', 'Trained models', 'What-if scenarios', 'Documentation log and notes'],
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Delete Project',
+      variant: 'danger',
+      requireText: 'DELETE',
+    })
+    if (!ok) return
+    try {
+      await api.deleteDataset(project.id)
+      setDatasets((current) => current.filter((d) => d.id !== project.id))
+    } catch (err) {
+      await dialog.alert({ title: 'Delete Failed', message: err.message, variant: 'danger' })
+    }
+  }
 
   return (
     <>
@@ -53,7 +76,20 @@ export default function ProjectsPage() {
                     {d.created_at && ` · ${new Date(d.created_at).toLocaleDateString()}`}
                   </p>
                 </div>
-                <button className="ax-btn">Open →</button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <button
+                    className="ax-btn"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      navigate(`/projects/${d.id}`)
+                    }}
+                  >
+                    Open -&gt;
+                  </button>
+                  <button className="ax-btn danger" onClick={(event) => deleteProject(d, event)}>
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))}

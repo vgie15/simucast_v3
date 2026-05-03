@@ -87,29 +87,17 @@ export default function Sidebar() {
   return (
     <aside ref={asideRef} className="ax-sidebar" style={{ width }}>
       <div className="ax-sidebar-body">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px 16px' }}>
-          <div
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 5,
-              background: 'var(--color-text-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path
-                d="M2 9.5L6 2.5L10 9.5M3.8 7H8.2"
-                stroke="var(--color-background-primary)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+        <div className="ax-brand">
+          <div className="ax-brand-mark">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M5 19V7M10 19V4M15 19v-8M20 19v-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              <path d="M4 19h17" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
             </svg>
           </div>
-          <span style={{ fontWeight: 500, fontSize: 15 }}>SimuCast</span>
+          <div>
+            <p style={{ fontWeight: 800, fontSize: 20, margin: 0, lineHeight: 1.1 }}>SimuCast</p>
+            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>Predictive Analytics</p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
