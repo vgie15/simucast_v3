@@ -466,7 +466,6 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           )}
         </div>
       </Step>
-      </div>
 
       <Step n={5} id="models-step-5" title="Choose algorithms" disabled={!plan || (plan.validation_checks || []).some((c) => c.status === 'block')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
