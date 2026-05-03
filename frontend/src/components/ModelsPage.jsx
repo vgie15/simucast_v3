@@ -4,6 +4,7 @@ import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
 import { useDialog } from './DialogProvider'
+import { useAuth } from './AuthProvider'
 
 const ALGOS = [
   { key: 'logistic', label: 'Logistic Regression', task: 'classification', interpretable: true,
@@ -37,6 +38,7 @@ const PARAM_DEFS = {
 
 export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const dialog = useDialog()
+  const auth = useAuth()
   const navigate = useNavigate()
   const [target, setTarget] = useState('')
   const [targetMode, setTargetMode] = useState('auto')
@@ -215,11 +217,21 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight, numericPreprocessing),
         model_params: modelParams,
       })
+      if (r.session) auth.updateSession(r.session)
       setResults(r)
       setActiveResultIdx(0)
       const list = await api.listModels(dataset.id)
       setModels(list)
     } catch (err) {
+      if (err.auth_required || err.guest_limit) {
+        auth.showAuthModal('signup')
+        await dialog.alert({
+          title: 'Guest Limit Reached',
+          message: err.message || 'Create an account or log in to continue training models.',
+          variant: 'danger',
+        })
+        return
+      }
       await dialog.alert({ title: 'Training Failed', message: err.message, variant: 'danger' })
     } finally {
       setTraining(false)

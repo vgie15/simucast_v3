@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useTheme } from '../theme'
 import { useDialog } from './DialogProvider'
+import { useAuth } from './AuthProvider'
 
 const NAV = [
   {
-    to: '/',
+    to: '/dashboard',
     label: 'Dashboard',
     icon: (
       <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" stroke="currentColor" strokeWidth="1.5" fill="none" />
@@ -43,6 +44,7 @@ export default function Sidebar() {
   const profileRef = useRef(null)
   const { isDark, toggle } = useTheme()
   const dialog = useDialog()
+  const auth = useAuth()
 
   useEffect(() => {
     if (!dragging) return
@@ -81,15 +83,31 @@ export default function Sidebar() {
     dialog.alert({ title: 'Settings', message: 'Settings are coming soon.' })
   }, [dialog])
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     setMenuOpen(false)
-    dialog.alert({ title: 'Log Out', message: 'Log out is not implemented yet.' })
-  }, [dialog])
+    await auth.logout()
+    await dialog.alert({ title: 'Logged Out', message: 'You are now using a fresh guest session.' })
+  }, [auth, dialog])
+
+  const handleLogin = useCallback(() => {
+    setMenuOpen(false)
+    auth.showAuthModal('login')
+  }, [auth])
+
+  const handleSignup = useCallback(() => {
+    setMenuOpen(false)
+    auth.showAuthModal('signup')
+  }, [auth])
+
+  const profileName = auth.isAuthenticated ? auth.session?.email : 'Guest Session'
+  const avatarText = auth.isAuthenticated
+    ? (auth.session?.email || 'U').slice(0, 2).toUpperCase()
+    : 'G'
 
   return (
     <aside ref={asideRef} className="ax-sidebar" style={{ width }}>
       <div className="ax-sidebar-body">
-        <div className="ax-brand">
+        <Link className="ax-brand ax-brand-link" to="/">
           <div className="ax-brand-mark">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M5 19V7M10 19V4M15 19v-8M20 19v-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
@@ -100,7 +118,7 @@ export default function Sidebar() {
             <p style={{ fontWeight: 800, fontSize: 20, margin: 0, lineHeight: 1.1 }}>SimuCast</p>
             <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>Predictive Analytics</p>
           </div>
-        </div>
+        </Link>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {NAV.map((item) => (
@@ -129,20 +147,27 @@ export default function Sidebar() {
             <button className="ax-popover-item" onClick={handleSettings} role="menuitem">
               Settings
             </button>
-            <button
-              className="ax-popover-item"
-              onClick={handleLogout}
-              role="menuitem"
-              style={{ color: 'var(--color-text-danger)' }}
-            >
-              Log out
-            </button>
+            {auth.isGuest ? (
+              <>
+                <button className="ax-popover-item" onClick={handleLogin} role="menuitem">Log in</button>
+                <button className="ax-popover-item" onClick={handleSignup} role="menuitem">Create account</button>
+              </>
+            ) : (
+              <button
+                className="ax-popover-item"
+                onClick={handleLogout}
+                role="menuitem"
+                style={{ color: 'var(--color-text-danger)' }}
+              >
+                Log out
+              </button>
+            )}
           </div>
         )}
         <button className="ax-profile-btn" onClick={() => setMenuOpen((o) => !o)} aria-haspopup="menu" aria-expanded={menuOpen}>
-          <span className="ax-avatar">JM</span>
+          <span className="ax-avatar">{avatarText}</span>
           <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            Jerome
+            {profileName}
           </span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--color-text-tertiary)' }}>
             <path d="M8 10l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

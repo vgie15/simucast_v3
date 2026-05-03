@@ -1,27 +1,52 @@
 // Centralized API client — swap VITE_API_URL via .env for prod
 const BASE = import.meta.env.VITE_API_URL || ''
+const TOKEN_KEY = 'simucast.sessionToken'
+
+function getSessionToken() {
+  return window.localStorage.getItem(TOKEN_KEY) || ''
+}
+
+function setSessionToken(token) {
+  if (token) window.localStorage.setItem(TOKEN_KEY, token)
+  else window.localStorage.removeItem(TOKEN_KEY)
+}
+
+function authHeaders(extra = {}) {
+  const token = getSessionToken()
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  }
+}
+
+async function throwApiError(res) {
+  const ct = res.headers.get('content-type') || ''
+  if (ct.includes('application/json')) {
+    const body = await res.json().catch(() => null)
+    const err = new Error(body?.error || `${res.status} ${res.statusText}`)
+    if (body && typeof body === 'object') Object.assign(err, body)
+    throw err
+  }
+  const msg = await res.text()
+  throw new Error(msg || `${res.status} ${res.statusText}`)
+}
 
 async function request(path, opts = {}) {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(opts.headers || {}) },
     ...opts,
   })
   if (!res.ok) {
-    const msg = await res.text()
-    throw new Error(msg || `${res.status} ${res.statusText}`)
+    await throwApiError(res)
   }
   return res.json()
 }
 
 async function _submitDataset(fd) {
-  const r = await fetch(`${BASE}/api/datasets/upload`, { method: 'POST', body: fd })
+  const r = await fetch(`${BASE}/api/datasets/upload`, { method: 'POST', body: fd, headers: authHeaders() })
   const ct = r.headers.get('content-type') || ''
   if (!r.ok) {
-    if (ct.includes('application/json')) {
-      const j = await r.json().catch(() => null)
-      throw new Error(j?.error || `Request failed (${r.status})`)
-    }
-    throw new Error(`Request failed (${r.status})`)
+    await throwApiError(r)
   }
   if (!ct.includes('application/json')) {
     throw new Error(
@@ -32,6 +57,22 @@ async function _submitDataset(fd) {
 }
 
 export const api = {
+  getSessionToken,
+  setSessionToken,
+  authGuest: () => request('/api/auth/guest', { method: 'POST' }),
+  authSignup: (email, password) =>
+    request('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  authLogin: (email, password) =>
+    request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  authMe: () => request('/api/auth/me'),
+  authLogout: () => request('/api/auth/logout', { method: 'POST' }),
+
   // datasets
   listDatasets: () => request('/api/datasets'),
   getDataset: (id) => request(`/api/datasets/${id}`),

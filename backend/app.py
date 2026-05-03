@@ -9,8 +9,9 @@ import uuid
 import re
 import base64
 import pickle
+import secrets
 from difflib import SequenceMatcher
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -20,6 +21,7 @@ from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.dialects.postgresql import JSONB
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from scipy import stats
 from sklearn.cluster import KMeans
@@ -98,6 +100,25 @@ class Dataset(Base):
     current_stage_id = Column(String, nullable=True)  # null = original
     sheets = _json_col()          # Excel sheet payloads; null for CSV/single-table files
     active_sheet = Column(String, nullable=True)
+    user_id = Column(String, nullable=True, index=True)
+    session_id = Column(String, nullable=True, index=True)
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(String, primary_key=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class UserSession(Base):
+    __tablename__ = "sessions"
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=True, index=True)
+    token = Column(String, unique=True, nullable=False, index=True)
+    is_guest = Column(Integer, default=1)
+    guest_usage_count = Column(Integer, default=0)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class DatasetStage(Base):
     """A versioned snapshot produced by a transformation (clean / merge / expand…).
@@ -184,6 +205,10 @@ def _migrate_add_columns():
             conn.execute(text("ALTER TABLE datasets ADD COLUMN sheets TEXT"))
         if "active_sheet" not in cols:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN active_sheet VARCHAR"))
+        if "user_id" not in cols:
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN user_id VARCHAR"))
+        if "session_id" not in cols:
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN session_id VARCHAR"))
 
 def _try_init_at_startup(retries=6, delay=5):
     """Best-effort schema init at boot — swallow failures so we still start."""
@@ -201,6 +226,70 @@ _try_init_at_startup()
 # --- helpers ---
 def db():
     return SessionLocal()
+
+def _new_token():
+    return secrets.token_urlsafe(32)
+
+def _session_payload(sess, user=None):
+    return {
+        "token": sess.token,
+        "user_id": sess.user_id,
+        "email": user.email if user else None,
+        "is_guest": bool(sess.is_guest),
+        "usage_count": int(sess.guest_usage_count or 0),
+        "limit": 1 if sess.is_guest else None,
+        "expires_at": sess.expires_at.isoformat() if sess.expires_at else None,
+    }
+
+def _auth_from_request(session):
+    auth = request.headers.get("Authorization") or ""
+    token = None
+    if auth.lower().startswith("bearer "):
+        token = auth.split(" ", 1)[1].strip()
+    token = token or request.headers.get("X-SimuCast-Session")
+    if not token:
+        return None, None
+    sess = session.query(UserSession).filter_by(token=token).first()
+    if not sess:
+        return None, None
+    if sess.expires_at and sess.expires_at < datetime.utcnow():
+        return None, None
+    user = session.query(User).filter_by(id=sess.user_id).first() if sess.user_id else None
+    return sess, user
+
+def _dataset_scope(query, session):
+    sess, user = _auth_from_request(session)
+    if not sess:
+        return query
+    # Keep legacy/orphan projects visible during the auth migration so local
+    # development data does not disappear.
+    if user:
+        return query.filter((Dataset.user_id == user.id) | (Dataset.user_id.is_(None) & Dataset.session_id.is_(None)))
+    return query.filter((Dataset.session_id == sess.id) | (Dataset.user_id.is_(None) & Dataset.session_id.is_(None)))
+
+def _attach_owner(ds, session):
+    sess, user = _auth_from_request(session)
+    if not sess:
+        return
+    ds.session_id = sess.id
+    ds.user_id = user.id if user else None
+
+def _claim_guest_projects(session, guest_session, user_id):
+    if not guest_session:
+        return
+    for ds in session.query(Dataset).filter_by(session_id=guest_session.id).all():
+        ds.user_id = user_id
+        ds.session_id = None
+
+def _guest_limit_response(sess):
+    if sess and sess.is_guest and int(sess.guest_usage_count or 0) >= 1:
+        return {
+            "error": "Guest limit reached. Sign up or log in to continue training models and saving work.",
+            "auth_required": True,
+            "guest_limit": True,
+            "session": _session_payload(sess),
+        }, 403
+    return None
 
 def jload(v):
     """Safely load a JSON column value (dict, list, str, or None)."""
@@ -607,13 +696,116 @@ def _schema_guard():
         return {"error": "database warming up, retry in a moment"}, 503
     return None
 
+# --- Auth / sessions ---
+
+@app.route("/api/auth/guest", methods=["POST"])
+def create_guest_session():
+    s = db()
+    try:
+        sess, user = _auth_from_request(s)
+        if sess:
+            return jsonify({"session": _session_payload(sess, user)})
+        sess = UserSession(
+            id=str(uuid.uuid4()),
+            token=_new_token(),
+            is_guest=1,
+            guest_usage_count=0,
+            expires_at=datetime.utcnow() + timedelta(days=14),
+        )
+        s.add(sess)
+        s.commit()
+        return jsonify({"session": _session_payload(sess)})
+    finally:
+        s.close()
+
+@app.route("/api/auth/signup", methods=["POST"])
+def signup():
+    body = request.get_json() or {}
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return {"error": "enter a valid email address"}, 400
+    if len(password) < 8:
+        return {"error": "password must be at least 8 characters"}, 400
+    s = db()
+    try:
+        existing = s.query(User).filter_by(email=email).first()
+        if existing:
+            return {"error": "email already registered"}, 409
+        old_sess, _ = _auth_from_request(s)
+        user = User(id=str(uuid.uuid4()), email=email, password_hash=generate_password_hash(password))
+        sess = UserSession(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            token=_new_token(),
+            is_guest=0,
+            guest_usage_count=0,
+            expires_at=datetime.utcnow() + timedelta(days=30),
+        )
+        s.add(user)
+        s.add(sess)
+        _claim_guest_projects(s, old_sess, user.id)
+        s.commit()
+        return jsonify({"session": _session_payload(sess, user)})
+    finally:
+        s.close()
+
+@app.route("/api/auth/login", methods=["POST"])
+def login():
+    body = request.get_json() or {}
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+    s = db()
+    try:
+        user = s.query(User).filter_by(email=email).first()
+        if not user or not check_password_hash(user.password_hash, password):
+            return {"error": "invalid email or password"}, 401
+        old_sess, _ = _auth_from_request(s)
+        sess = UserSession(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            token=_new_token(),
+            is_guest=0,
+            guest_usage_count=0,
+            expires_at=datetime.utcnow() + timedelta(days=30),
+        )
+        s.add(sess)
+        _claim_guest_projects(s, old_sess, user.id)
+        s.commit()
+        return jsonify({"session": _session_payload(sess, user)})
+    finally:
+        s.close()
+
+@app.route("/api/auth/me", methods=["GET"])
+def auth_me():
+    s = db()
+    try:
+        sess, user = _auth_from_request(s)
+        if not sess:
+            return {"session": None}, 401
+        return jsonify({"session": _session_payload(sess, user)})
+    finally:
+        s.close()
+
+@app.route("/api/auth/logout", methods=["POST"])
+def logout():
+    s = db()
+    try:
+        sess, _ = _auth_from_request(s)
+        if sess:
+            s.delete(sess)
+            s.commit()
+        return {"ok": True}
+    finally:
+        s.close()
+
 # --- Datasets ---
 
 @app.route("/api/datasets", methods=["GET"])
 def list_datasets():
     s = db()
     try:
-        rows = s.query(Dataset).order_by(Dataset.created_at.desc()).all()
+        rows = _dataset_scope(s.query(Dataset), s).order_by(Dataset.created_at.desc()).all()
         return jsonify([{
             "id": r.id,
             "name": r.name,
@@ -644,7 +836,7 @@ def upload_dataset():
     s = db()
     try:
         if from_id:
-            src = s.query(Dataset).filter_by(id=from_id).first()
+            src = _dataset_scope(s.query(Dataset), s).filter_by(id=from_id).first()
             if not src:
                 return {"error": "source dataset not found"}, 404
             variables = jload(src.variables) or []
@@ -699,6 +891,7 @@ def upload_dataset():
             sheets=jdump(sheets) if sheets else None,
             active_sheet=active_sheet,
         )
+        _attach_owner(ds, s)
         s.add(ds)
         log_activity(
             s,
@@ -741,7 +934,7 @@ def get_dataset(ds_id):
     """Returns dataset metadata + variables for the active stage."""
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         live_vars = infer_variables(pd.DataFrame(_current_rows(ds, s)))
@@ -769,7 +962,7 @@ def select_dataset_sheet(ds_id):
         return {"error": "sheet is required"}, 400
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         sheets = jload(ds.sheets) or {}
@@ -825,7 +1018,7 @@ def select_dataset_sheet(ds_id):
 def delete_dataset(ds_id):
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         deleted = {
@@ -853,7 +1046,7 @@ def get_rows(ds_id):
     stage_id = request.args.get("stage_id")
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         rows = _rows_for_stage(ds, stage_id, s)
@@ -882,7 +1075,7 @@ def update_cell(ds_id):
     value = body.get("value")
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         rows = _current_rows(ds, s)
@@ -922,7 +1115,7 @@ def update_cells(ds_id):
 
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         rows = _current_rows(ds, s)
@@ -1382,14 +1575,18 @@ def restore_stage(ds_id, stage_id):
     """Set a previous stage as the current one (revert)."""
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+        removed_stage_ids = []
         if stage_id == "original":
             ds.current_stage_id = None
             rows = jload(ds.data) or []
             ds.row_count = len(rows)
             ds.col_count = len(rows[0]) if rows else 0
+            removed_stage_ids = [
+                st.id for st in s.query(DatasetStage).filter_by(dataset_id=ds_id).all()
+            ]
         else:
             stage = s.query(DatasetStage).filter_by(id=stage_id, dataset_id=ds_id).first()
             if not stage:
@@ -1397,12 +1594,29 @@ def restore_stage(ds_id, stage_id):
             ds.current_stage_id = stage.id
             ds.row_count = stage.row_count
             ds.col_count = stage.col_count
+            removed_stage_ids = [
+                st.id for st in s.query(DatasetStage)
+                .filter(DatasetStage.dataset_id == ds_id, DatasetStage.step_index > stage.step_index)
+                .all()
+            ]
+        if removed_stage_ids:
+            s.query(DatasetStage).filter(DatasetStage.id.in_(removed_stage_ids)).delete(synchronize_session=False)
+            s.query(ActivityLog).filter(
+                ActivityLog.dataset_id == ds_id,
+                ActivityLog.ref_type == "stage",
+                ActivityLog.ref_id.in_(removed_stage_ids),
+            ).delete(synchronize_session=False)
         log_activity(
             s,
             ds_id,
             "restore",
             f"Restored {'original upload' if stage_id == 'original' else 'stage ' + stage_id[:8]}",
-            detail={"category": "data_prep", "action_type": "restore", "stage_id": stage_id},
+            detail={
+                "category": "data_prep",
+                "action_type": "restore",
+                "stage_id": stage_id,
+                "removed_future_steps": len(removed_stage_ids),
+            },
             ref_type="stage",
             ref_id=stage_id,
             commit=False,
@@ -1785,7 +1999,7 @@ def clean_apply_group(ds_id):
     options = body.get("options") or {}
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         df = df_from_dataset(ds, s)
@@ -1937,6 +2151,30 @@ def clean_apply_group(ds_id):
             return {"error": "unknown cleaning group"}, 400
 
         details["after"] = {"rows": int(len(df)), "columns": int(len(df.columns))}
+        validation = {}
+        if kind == "missing":
+            validation["remaining_missing"] = {c: int(df[c].isna().sum()) for c in columns if c in df.columns}
+            validation["missing_resolved"] = all(v == 0 for v in validation["remaining_missing"].values())
+        elif kind == "duplicates":
+            validation["duplicate_rows_after"] = int(df.duplicated().sum()) if len(df) else 0
+            validation["duplicates_resolved"] = validation["duplicate_rows_after"] == 0
+        elif kind == "outliers":
+            remaining = {}
+            for col in columns:
+                if col not in df.columns or not pd.api.types.is_numeric_dtype(df[col]):
+                    continue
+                series = df[col].dropna()
+                if len(series) < 4:
+                    remaining[col] = 0
+                    continue
+                q1, q3 = series.quantile([0.25, 0.75])
+                iqr = q3 - q1
+                lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+                remaining[col] = int((df[col].notna() & ((df[col] < lo) | (df[col] > hi))).sum())
+            validation["remaining_outliers"] = remaining
+        elif kind == "type":
+            validation["inferred_types"] = {v["name"]: v["dtype"] for v in infer_variables(df) if v["name"] in columns}
+        details["validation"] = validation
         stage = create_stage(s, ds, df, op_type=op_type, op_params=details, summary=summary)
         return jsonify(clean_json({
             "ok": True,
@@ -3371,7 +3609,7 @@ def preprocessing_plan(ds_id):
     target_options = body.get("target_options") or {}
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         df = df_from_dataset(ds, s)
@@ -3397,7 +3635,11 @@ def train_model(ds_id):
 
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        sess, _ = _auth_from_request(s)
+        limited = _guest_limit_response(sess)
+        if limited:
+            return limited
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         df = df_from_dataset(ds, s)
@@ -3437,6 +3679,8 @@ def train_model(ds_id):
             ref_id=model_id,
             commit=False,
         )
+        if sess and sess.is_guest:
+            sess.guest_usage_count = int(sess.guest_usage_count or 0) + 1
         s.commit()
 
         return jsonify(clean_json({
@@ -3450,6 +3694,7 @@ def train_model(ds_id):
             "preprocessing_plan": plan,
             "model_params": result["model_params"],
             "has_whatif": result["coefficients"] is not None,
+            "session": _session_payload(sess) if sess else None,
         }))
     finally:
         s.close()
@@ -3470,7 +3715,11 @@ def train_many_models(ds_id):
 
     s = db()
     try:
-        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        sess, _ = _auth_from_request(s)
+        limited = _guest_limit_response(sess)
+        if limited:
+            return limited
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
         df = df_from_dataset(ds, s)
@@ -3539,10 +3788,15 @@ def train_many_models(ds_id):
             except Exception as e:
                 skipped.append({"algorithm": algo, "reason": str(e)})
 
+        if results and sess and sess.is_guest:
+            sess.guest_usage_count = int(sess.guest_usage_count or 0) + 1
+            s.commit()
+
         return jsonify(clean_json({
             "preprocessing_plan": plan,
             "models": results,
             "skipped": skipped,
+            "session": _session_payload(sess) if sess else None,
         }))
     finally:
         s.close()
