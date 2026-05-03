@@ -16,6 +16,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const [selectedActions, setSelectedActions] = useState({})
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [applyingAll, setApplyingAll] = useState(false)
+  const [appliedFixSummary, setAppliedFixSummary] = useState([])
 
   useEffect(() => {
     if (!dataset) return
@@ -79,6 +80,10 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     try {
       const action = selectedActions[suggestion.id] || suggestion.action
       await api.cleanApply(dataset.id, { action, variable: suggestion.variable })
+      setAppliedFixSummary((current) => [
+        { variable: suggestion.variable, kind: suggestion.kind, action, description: suggestion.description },
+        ...current,
+      ].slice(0, 8))
       setStatuses((current) => ({ ...current, [suggestion.id]: 'applied' }))
       await handleApplied()
     } catch (err) {
@@ -93,11 +98,14 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     setApplyingAll(true)
     try {
       const applied = {}
+      const appliedList = []
       for (const suggestion of todo) {
         const action = selectedActions[suggestion.id] || suggestion.action
         await api.cleanApply(dataset.id, { action, variable: suggestion.variable })
+        appliedList.push({ variable: suggestion.variable, kind: suggestion.kind, action, description: suggestion.description })
         applied[suggestion.id] = 'applied'
       }
+      setAppliedFixSummary((current) => [...appliedList.reverse(), ...current].slice(0, 8))
       setStatuses((current) => ({ ...current, ...applied }))
       await handleApplied()
     } catch (err) {
@@ -189,7 +197,22 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       {suggestionsLoading ? (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>Analyzing...</p>
       ) : suggestions.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>No issues found. Your data looks clean.</p>
+        <div className="ax-card" style={{ padding: '10px 12px', marginBottom: 16 }}>
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>No suggested fixes are pending. Your data looks clean.</p>
+          {appliedFixSummary.length > 0 && (
+            <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: 10, paddingTop: 10 }}>
+              <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 6px' }}>Recently applied fixes</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {appliedFixSummary.map((item, idx) => (
+                  <div key={`${item.variable}-${item.action}-${idx}`} style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                    <KindBadge kind={item.kind} /> <strong style={{ color: 'var(--color-text-primary)', marginLeft: 4 }}>{item.variable}</strong>
+                    <span> - {cleanActionLabel(item.action)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
           {suggestions.map((s) => {
@@ -301,4 +324,8 @@ function KindBadge({ kind }) {
       {c.label}
     </span>
   )
+}
+
+function cleanActionLabel(action) {
+  return String(action || 'applied').replace(/_/g, ' ')
 }

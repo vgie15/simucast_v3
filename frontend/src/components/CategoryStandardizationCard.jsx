@@ -7,6 +7,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   const [selectedColumn, setSelectedColumn] = useState('')
   const [drafts, setDrafts] = useState({})
   const [busy, setBusy] = useState(false)
+  const [appliedSummary, setAppliedSummary] = useState(null)
 
   const load = async () => {
     if (!dataset?.id) return
@@ -22,7 +23,10 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
         }))
       }
       setDrafts(nextDrafts)
-      setSelectedColumn((current) => current || r.suggestions?.[0]?.column || '')
+      setSelectedColumn((current) => {
+        const columns = (r.suggestions || []).map((s) => s.column)
+        return columns.includes(current) ? current : columns[0] || ''
+      })
     } catch (err) {
       console.error('Failed to load category suggestions', err)
     } finally {
@@ -63,17 +67,28 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
 
   const apply = async () => {
     const mapping = {}
+    const assigned = {}
     for (const group of groups) {
       const label = (group.suggested_label || '').trim()
       if (!label) continue
       for (const [value, selected] of Object.entries(group.selected || {})) {
+        if (selected && assigned[value] && assigned[value] !== label) {
+          alert(`"${value}" is selected in more than one final label. Keep each value in only one group.`)
+          return
+        }
+        if (selected) assigned[value] = label
         if (selected) mapping[value] = label
       }
     }
     if (!Object.keys(mapping).length) return
     setBusy(true)
     try {
-      await api.applyCategoryStandardization(dataset.id, { column: selectedColumn, mapping })
+      const result = await api.applyCategoryStandardization(dataset.id, { column: selectedColumn, mapping })
+      setAppliedSummary({
+        column: selectedColumn,
+        summary: result.summary || `Standardized categories in ${selectedColumn}`,
+        mapping,
+      })
       await onApplied?.()
       await load()
     } catch (err) {
@@ -86,7 +101,30 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   if (loading && suggestions.length === 0) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Checking category labels...</p>
   }
-  if (!suggestions.length) return null
+  if (!suggestions.length) {
+    return (
+      <div className="ax-card" style={{ marginBottom: 16 }}>
+        <div className="ax-row" style={{ marginBottom: appliedSummary ? 10 : 0 }}>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Category standardization</p>
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+              No category standardization suggestions are pending.
+            </p>
+          </div>
+          <button className="ax-btn" onClick={load} disabled={loading}>Refresh</button>
+        </div>
+        {appliedSummary && (
+          <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 10 }}>
+            <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 4px' }}>Last applied</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{appliedSummary.summary}</p>
+            <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '6px 0 0' }}>
+              {Object.entries(appliedSummary.mapping).map(([from, to]) => `${from} -> ${to}`).join(' · ')}
+            </p>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="ax-card" style={{ marginBottom: 16 }}>

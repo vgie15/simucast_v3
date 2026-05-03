@@ -168,6 +168,10 @@ export const api = {
     }),
   listModels: (id) => request(`/api/datasets/${id}/models`),
   getModel: (mid) => request(`/api/models/${mid}`),
+  deleteModel: (mid) =>
+    request(`/api/models/${mid}`, {
+      method: 'DELETE',
+    }),
   prepareModelForWhatIf: (mid) =>
     request(`/api/models/${mid}/prepare_whatif`, {
       method: 'POST',

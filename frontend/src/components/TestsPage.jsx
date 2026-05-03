@@ -4,10 +4,34 @@ import AIAssistantPanel from './AIAssistantPanel'
 import AdvancedPage from './AdvancedPage'
 
 const TESTS = [
-  { key: 't', label: 'Independent t-test', needs: ['group', 'measure'] },
-  { key: 'anova', label: 'ANOVA', needs: ['group', 'measure'] },
-  { key: 'chi', label: 'Chi-square', needs: ['var_a', 'var_b'] },
-  { key: 'corr', label: 'Correlation', needs: ['variables'] },
+  {
+    key: 't',
+    label: 'Independent t-test',
+    summary: 'Compare the average of one numeric measure across exactly two groups.',
+    use: 'Use when the group variable has two categories and the measure is numeric.',
+    avoid: 'Avoid when there are more than two groups; use ANOVA instead.',
+  },
+  {
+    key: 'anova',
+    label: 'ANOVA',
+    summary: 'Compare the average of one numeric measure across three or more groups.',
+    use: 'Use when the group variable has multiple categories and the measure is numeric.',
+    avoid: 'Avoid when you only have two groups; a t-test is simpler.',
+  },
+  {
+    key: 'chi',
+    label: 'Chi-square',
+    summary: 'Test whether two categorical variables are associated.',
+    use: 'Use when both variables are categorical.',
+    avoid: 'Avoid when expected table counts are very low.',
+  },
+  {
+    key: 'corr',
+    label: 'Correlation',
+    summary: 'Measure direction and strength of numeric relationships.',
+    use: 'Use when selected variables are numeric.',
+    avoid: 'Avoid interpreting correlation as causation.',
+  },
 ]
 
 export default function TestsPage({ dataset }) {
@@ -25,8 +49,11 @@ export default function TestsPage({ dataset }) {
   const variables = dataset.variables || []
   const numericVars = variables.filter((v) => ['numeric', 'int', 'float', 'binary'].includes(v.dtype))
   const categoricalVars = variables.filter((v) => ['category', 'binary'].includes(v.dtype))
+  const selectedTest = TESTS.find((t) => t.key === kind) || TESTS[0]
+  const canRun = kind === 'corr' ? corrVars.length >= 2 : kind === 'chi' ? varA && varB : group && measure
 
   const run = async () => {
+    if (!canRun) return
     setLoading(true)
     setResult(null)
     try {
@@ -46,73 +73,101 @@ export default function TestsPage({ dataset }) {
   return (
     <>
       <h1 className="ax-page-title">Hypothesis testing</h1>
-      <p className="ax-page-sub">Pick a test type, set the variables, and the backend runs scipy.</p>
+      <p className="ax-page-sub">Evaluate relationships, compare groups, and turn statistical results into decisions.</p>
 
       <AIAssistantPanel datasetId={dataset.id} context="tests" />
 
       <p className="ax-lbl">Test type</p>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8, marginBottom: 14 }}>
         {TESTS.map((t) => (
-          <button key={t.key} className={`ax-pill ${kind === t.key ? 'active' : ''}`} onClick={() => { setKind(t.key); setResult(null) }}>
-            {t.label}
+          <button
+            key={t.key}
+            className={`ax-card ${kind === t.key ? 'active' : ''}`}
+            onClick={() => { setKind(t.key); setResult(null) }}
+            style={{
+              textAlign: 'left',
+              border: kind === t.key ? '1px solid var(--color-accent)' : '0.5px solid var(--color-border-tertiary)',
+              background: kind === t.key ? 'var(--color-accent-light)' : undefined,
+            }}
+          >
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 500 }}>{t.label}</span>
+            <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 3 }}>{t.summary}</span>
           </button>
         ))}
       </div>
 
-      <div className="ax-card" style={{ marginBottom: 12 }}>
-        <p className="ax-lbl" style={{ marginTop: 0 }}>Setup</p>
-        {(kind === 't' || kind === 'anova') && (
-          <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
-            <label style={{ color: 'var(--color-text-secondary)' }}>Group by</label>
-            <select value={group} onChange={(e) => setGroup(e.target.value)}>
-              <option value="">— select —</option>
-              {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
-            </select>
-            <label style={{ color: 'var(--color-text-secondary)' }}>Measure</label>
-            <select value={measure} onChange={(e) => setMeasure(e.target.value)}>
-              <option value="">— select —</option>
-              {numericVars.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
-            </select>
-          </div>
-        )}
-        {kind === 'chi' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
-            <label style={{ color: 'var(--color-text-secondary)' }}>Variable A</label>
-            <select value={varA} onChange={(e) => setVarA(e.target.value)}>
-              <option value="">— select —</option>
-              {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
-            </select>
-            <label style={{ color: 'var(--color-text-secondary)' }}>Variable B</label>
-            <select value={varB} onChange={(e) => setVarB(e.target.value)}>
-              <option value="">— select —</option>
-              {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
-            </select>
-          </div>
-        )}
-        {kind === 'corr' && (
-          <>
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>Pick numeric variables</p>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {numericVars.map((v) => (
-                <span
-                  key={v.name}
-                  className={`ax-chip ${corrVars.includes(v.name) ? 'active' : ''}`}
-                  onClick={() => setCorrVars(corrVars.includes(v.name) ? corrVars.filter((x) => x !== v.name) : [...corrVars, v.name])}
-                >
-                  {v.name}
-                </span>
-              ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(280px, 0.85fr)', gap: 12, marginBottom: 12 }}>
+        <div className="ax-card">
+          <p className="ax-lbl" style={{ marginTop: 0 }}>Setup</p>
+          {(kind === 't' || kind === 'anova') && (
+            <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Group variable (categorical)</label>
+              <select value={group} onChange={(e) => setGroup(e.target.value)}>
+                <option value="">- select -</option>
+                {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
+              </select>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Measure variable (numeric)</label>
+              <select value={measure} onChange={(e) => setMeasure(e.target.value)}>
+                <option value="">- select -</option>
+                {numericVars.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
+              </select>
             </div>
-          </>
-        )}
-        <div style={{ marginTop: 12 }}>
-          <button className="ax-btn prim" disabled={loading} onClick={run}>
-            {loading ? 'Running…' : 'Run test'}
-          </button>
+          )}
+          {kind === 'chi' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Category variable A</label>
+              <select value={varA} onChange={(e) => setVarA(e.target.value)}>
+                <option value="">- select -</option>
+                {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
+              </select>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Category variable B</label>
+              <select value={varB} onChange={(e) => setVarB(e.target.value)}>
+                <option value="">- select -</option>
+                {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
+              </select>
+            </div>
+          )}
+          {kind === 'corr' && (
+            <>
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>Pick at least two numeric variables</p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {numericVars.map((v) => (
+                  <span
+                    key={v.name}
+                    className={`ax-chip ${corrVars.includes(v.name) ? 'active' : ''}`}
+                    onClick={() => setCorrVars(corrVars.includes(v.name) ? corrVars.filter((x) => x !== v.name) : [...corrVars, v.name])}
+                  >
+                    {v.name}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <button className="ax-btn prim" disabled={loading || !canRun} onClick={run}>
+              {loading ? 'Running...' : 'Run test'}
+            </button>
+          </div>
+        </div>
+
+        <div className="ax-card">
+          <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px' }}>Recommended use</p>
+          <InfoRow label="Why this test" text={selectedTest.summary} />
+          <InfoRow label="Use when" text={selectedTest.use} />
+          <InfoRow label="Avoid when" text={selectedTest.avoid} />
+          <InfoRow label="What it tells you" text={recommendationMeaning(kind, group, measure, varA, varB, corrVars)} />
         </div>
       </div>
 
-      {result && <TestResult kind={kind} result={result} />}
+      {result && <TestResult kind={kind} result={result} setup={{ group, measure, varA, varB, corrVars }} />}
+
+      <div className="ax-card" style={{ padding: 14, marginTop: 14 }}>
+        <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>AI insights</p>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
+          Rule-based explanations are shown now. AI can later expand this into deeper, contextual interpretation without replacing the test result.
+        </p>
+        <button className="ax-btn" disabled style={{ marginTop: 10 }}>Generate deeper explanation</button>
+      </div>
 
       <div style={{ marginTop: 24 }}>
         <AdvancedPage dataset={dataset} embedded />
@@ -121,110 +176,64 @@ export default function TestsPage({ dataset }) {
   )
 }
 
-function TestResult({ kind, result }) {
-  if (kind === 't') {
-    const sig = result.significant
-    return (
-      <div className="ax-card" style={{ borderLeft: `3px solid ${sig ? '#1D9E75' : '#888'}` }}>
-        <div className="ax-row" style={{ marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>t-test result</span>
+function InfoRow({ label, text }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{text}</p>
+    </div>
+  )
+}
+
+function TestResult({ kind, result, setup }) {
+  const summary = summarizeResult(kind, result, setup)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="ax-card" style={{ borderLeft: `3px solid ${summary.significant ? '#1D9E75' : '#888'}` }}>
+        <div className="ax-row" style={{ marginBottom: 10, alignItems: 'flex-start' }}>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Test result summary</p>
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{summary.subtitle}</p>
+          </div>
           <span style={{
             fontSize: 10,
             padding: '2px 8px',
-            background: sig ? 'var(--color-background-success)' : 'var(--color-background-secondary)',
-            color: sig ? 'var(--color-text-success)' : 'var(--color-text-secondary)',
+            background: summary.significant ? 'var(--color-background-success)' : 'var(--color-background-secondary)',
+            color: summary.significant ? 'var(--color-text-success)' : 'var(--color-text-secondary)',
             borderRadius: 4,
           }}>
-            {sig ? 'Significant' : 'Not significant'}
+            {summary.significant ? 'Significant' : 'Not significant'}
           </span>
         </div>
-        <Metrics items={[
-          { label: 't statistic', value: fmt(result.t) },
-          { label: 'p value', value: fmt(result.p) },
-          { label: "Cohen's d", value: fmt(result.cohens_d) },
-          { label: 'df', value: result.df },
-        ]} />
-        <Interpretation text={result.interpretation} />
+        <Metrics items={summary.metrics} />
+        <Decision significant={summary.significant} />
+        <Interpretation title="Conclusion" text={summary.conclusion} />
       </div>
-    )
-  }
-  if (kind === 'anova') {
-    return (
+
       <div className="ax-card">
-        <div className="ax-row" style={{ marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>ANOVA result</span>
-          <span style={{
-            fontSize: 10, padding: '2px 8px',
-            background: result.significant ? 'var(--color-background-success)' : 'var(--color-background-secondary)',
-            color: result.significant ? 'var(--color-text-success)' : 'var(--color-text-secondary)',
-            borderRadius: 4,
-          }}>
-            {result.significant ? 'Significant' : 'Not significant'}
-          </span>
-        </div>
-        <Metrics items={[
-          { label: 'F statistic', value: fmt(result.f) },
-          { label: 'p value', value: fmt(result.p) },
-          { label: 'groups', value: result.groups },
-        ]} />
-        <Interpretation text={result.interpretation} />
+        <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px' }}>Simple predictive insight</p>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{summary.predictive}</p>
       </div>
-    )
-  }
-  if (kind === 'chi') {
-    return (
-      <div className="ax-card">
-        <div className="ax-row" style={{ marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>Chi-square result</span>
-          <span style={{
-            fontSize: 10, padding: '2px 8px',
-            background: result.significant ? 'var(--color-background-success)' : 'var(--color-background-secondary)',
-            color: result.significant ? 'var(--color-text-success)' : 'var(--color-text-secondary)',
-            borderRadius: 4,
-          }}>
-            {result.significant ? 'Significant' : 'Not significant'}
-          </span>
-        </div>
-        <Metrics items={[
-          { label: 'χ² statistic', value: fmt(result.chi2) },
-          { label: 'p value', value: fmt(result.p) },
-          { label: 'df', value: result.df },
-        ]} />
-        <Interpretation text={result.interpretation} />
+
+      {kind === 't' && <GroupMeanBars means={[
+        { label: result.group_labels?.[0] || 'Group 1', value: result.mean_group_1 },
+        { label: result.group_labels?.[1] || 'Group 2', value: result.mean_group_2 },
+      ]} measure={setup.measure} />}
+      {kind === 'anova' && <GroupMeanBars means={Object.entries(result.group_means || {}).map(([label, value]) => ({ label, value }))} measure={setup.measure} />}
+      {kind === 'chi' && <ContingencyTable result={result} />}
+      {kind === 'corr' && <CorrelationMatrix result={result} />}
+
+      <div className="ax-card" style={{ padding: 14 }}>
+        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Next step guidance</p>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>{summary.next}</p>
       </div>
-    )
-  }
-  if (kind === 'corr') {
-    const vars = result.variables
-    return (
-      <div className="ax-card" style={{ padding: 0, overflow: 'auto' }}>
-        <table className="ax-tbl">
-          <thead>
-            <tr><th></th>{vars.map((v) => <th key={v}>{v}</th>)}</tr>
-          </thead>
-          <tbody>
-            {vars.map((r) => (
-              <tr key={r}>
-                <td style={{ fontWeight: 500 }}>{r}</td>
-                {vars.map((c) => {
-                  const v = result.matrix[r]?.[c]
-                  const abs = Math.abs(v ?? 0)
-                  const bg = abs > 0.7 ? '#EEEDFE' : abs > 0.4 ? '#F5F2FB' : 'transparent'
-                  return <td key={c} style={{ background: bg, textAlign: 'center' }}>{fmt(v)}</td>
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-  return null
+    </div>
+  )
 }
 
 function Metrics({ items }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: 6, marginBottom: 10 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, minmax(100px, 1fr))`, gap: 6, marginBottom: 10 }}>
       {items.map((m) => (
         <div key={m.label} style={{ background: 'var(--color-background-secondary)', borderRadius: 6, padding: '8px 10px' }}>
           <p style={{ fontSize: 10, color: 'var(--color-text-secondary)', margin: 0 }}>{m.label}</p>
@@ -235,20 +244,204 @@ function Metrics({ items }) {
   )
 }
 
-function Interpretation({ text }) {
+function Decision({ significant }) {
   return (
-    <div style={{ background: 'var(--color-accent-light)', borderRadius: 6, padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-      <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-        <path d="M7 1L8.3 5.1L12.5 6L8.3 8.2L7 13L5.7 8.2L1.5 6L5.7 5.1L7 1Z" fill="var(--color-accent-dark)" />
-      </svg>
+    <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 6, background: significant ? '#F0FAF6' : 'var(--color-background-secondary)', color: significant ? '#18765B' : 'var(--color-text-secondary)', fontSize: 12 }}>
+      <strong>Decision:</strong> {significant ? 'Reject the null hypothesis' : 'Fail to reject the null hypothesis'}
+    </div>
+  )
+}
+
+function Interpretation({ title, text }) {
+  return (
+    <div style={{ background: 'var(--color-accent-light)', borderRadius: 6, padding: '8px 10px' }}>
+      <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-accent-dark)', margin: '0 0 3px' }}>{title}</p>
       <p style={{ fontSize: 11, color: 'var(--color-accent-dark)', margin: 0, lineHeight: 1.5 }}>{text}</p>
     </div>
   )
 }
 
+function GroupMeanBars({ means, measure }) {
+  const max = Math.max(...means.map((m) => Math.abs(Number(m.value) || 0)), 1)
+  return (
+    <div className="ax-card">
+      <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px' }}>Group mean comparison</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {means.map((m) => (
+          <div key={m.label} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 70px', gap: 8, alignItems: 'center', fontSize: 12 }}>
+            <span title={m.label} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
+            <span style={{ height: 8, background: 'var(--color-background-secondary)', borderRadius: 4, overflow: 'hidden' }}>
+              <span style={{ display: 'block', height: '100%', width: `${Math.min(100, Math.abs(Number(m.value) || 0) / max * 100)}%`, background: '#7F77DD' }} />
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }}>{fmt(m.value)}</span>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>Higher bars indicate higher average {measure} for that group.</p>
+    </div>
+  )
+}
+
+function ContingencyTable({ result }) {
+  const rows = Object.keys(result.contingency || {})
+  const cols = rows.length ? Object.keys(result.contingency[rows[0]] || {}) : []
+  return (
+    <div className="ax-card" style={{ padding: 0, overflow: 'auto' }}>
+      <table className="ax-tbl">
+        <thead>
+          <tr><th></th>{cols.map((c) => <th key={c}>{c}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r}>
+              <td style={{ fontWeight: 500 }}>{r}</td>
+              {cols.map((c) => (
+                <td key={c}>
+                  {result.contingency[r]?.[c] ?? 0}
+                  <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 4 }}>
+                    ({fmt(result.row_percentages?.[r]?.[c])}%)
+                  </span>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function CorrelationMatrix({ result }) {
+  const vars = result.variables || []
+  return (
+    <div className="ax-card" style={{ padding: 0, overflow: 'auto' }}>
+      <table className="ax-tbl">
+        <thead>
+          <tr><th></th>{vars.map((v) => <th key={v}>{v}</th>)}</tr>
+        </thead>
+        <tbody>
+          {vars.map((r) => (
+            <tr key={r}>
+              <td style={{ fontWeight: 500 }}>{r}</td>
+              {vars.map((c) => {
+                const v = result.matrix?.[r]?.[c]
+                const abs = Math.abs(v ?? 0)
+                const bg = abs > 0.7 ? '#EEEDFE' : abs > 0.4 ? '#F5F2FB' : 'transparent'
+                return <td key={c} style={{ background: bg, textAlign: 'center' }}>{fmt(v)}</td>
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function summarizeResult(kind, result, setup) {
+  if (kind === 't') {
+    const diff = Number(result.mean_group_1) - Number(result.mean_group_2)
+    const effect = effectLabel(Math.abs(result.cohens_d), [0.2, 0.5, 0.8])
+    const higher = diff >= 0 ? result.group_labels?.[0] : result.group_labels?.[1]
+    return {
+      significant: !!result.significant,
+      subtitle: `${setup.measure} compared across ${setup.group}`,
+      metrics: [
+        { label: 't statistic', value: fmt(result.t) },
+        { label: 'p value', value: fmt(result.p) },
+        { label: "Cohen's d", value: `${fmt(result.cohens_d)} (${effect})` },
+        { label: 'mean difference', value: fmt(diff) },
+      ],
+      conclusion: result.significant
+        ? `There is evidence that average ${setup.measure} differs by ${setup.group}. ${higher} has the higher observed mean.`
+        : `The observed mean difference in ${setup.measure} by ${setup.group} was not statistically strong enough at p < 0.05.`,
+      predictive: `${setup.group} can be used as a simple, non-model indicator of expected ${setup.measure}: the observed group mean difference is ${fmt(diff)}.`,
+      next: 'If this difference is meaningful, use Models to test whether the group variable still matters alongside other features.',
+    }
+  }
+  if (kind === 'anova') {
+    const means = Object.entries(result.group_means || {}).sort((a, b) => Number(b[1]) - Number(a[1]))
+    const effect = effectLabel(Number(result.eta_squared), [0.01, 0.06, 0.14])
+    return {
+      significant: !!result.significant,
+      subtitle: `${setup.measure} compared across groups of ${setup.group}`,
+      metrics: [
+        { label: 'F statistic', value: fmt(result.f) },
+        { label: 'p value', value: fmt(result.p) },
+        { label: 'eta squared', value: `${fmt(result.eta_squared)} (${effect})` },
+        { label: 'groups', value: result.groups },
+      ],
+      conclusion: result.significant
+        ? `At least one ${setup.group} category has a different average ${setup.measure}. The highest observed mean is ${means[0]?.[0] || 'the leading group'}.`
+        : `The average ${setup.measure} does not show a statistically significant difference across ${setup.group} groups.`,
+      predictive: `${setup.group} gives a simple expectation signal for ${setup.measure}; compare group means to see which categories tend to be higher or lower.`,
+      next: 'Use post-hoc comparisons or modeling if you need to identify which variables explain the group differences together.',
+    }
+  }
+  if (kind === 'chi') {
+    const effect = effectLabel(Number(result.cramers_v), [0.1, 0.3, 0.5])
+    return {
+      significant: !!result.significant,
+      subtitle: `${setup.varA} tested against ${setup.varB}`,
+      metrics: [
+        { label: 'chi-square', value: fmt(result.chi2) },
+        { label: 'p value', value: fmt(result.p) },
+        { label: "Cramer's V", value: `${fmt(result.cramers_v)} (${effect})` },
+        { label: 'df', value: result.df },
+      ],
+      conclusion: result.significant
+        ? `There is evidence that ${setup.varA} and ${setup.varB} are associated. Category percentages differ more than expected by chance.`
+        : `There is not enough evidence to say ${setup.varA} and ${setup.varB} are associated at p < 0.05.`,
+      predictive: `Use the contingency percentages as a simple probability-style guide: each row shows how ${setup.varB} tends to distribute within ${setup.varA}.`,
+      next: 'If this association matters, use classification models to predict the outcome while controlling for other features.',
+    }
+  }
+  const pair = result.strongest_pair
+  const r = pair?.r ?? 0
+  const strength = corrStrength(Math.abs(r))
+  return {
+    significant: pair ? pair.p < 0.05 : false,
+    subtitle: 'Numeric relationship scan',
+    metrics: [
+      { label: 'strongest pair', value: pair ? `${pair.var_a} / ${pair.var_b}` : '-' },
+      { label: 'r', value: fmt(r) },
+      { label: 'p value', value: pair ? fmt(pair.p) : '-' },
+      { label: 'strength', value: strength },
+    ],
+    conclusion: pair
+      ? `${pair.var_a} and ${pair.var_b} show the strongest relationship among selected variables. The direction is ${r >= 0 ? 'positive' : 'negative'} and the strength is ${strength}.`
+      : 'No pairwise correlation could be computed.',
+    predictive: pair ? `As ${pair.var_a} ${r >= 0 ? 'increases' : 'increases'}, ${pair.var_b} tends to ${r >= 0 ? 'increase' : 'decrease'} in the observed data. This is association, not a full model prediction.` : 'Select at least two numeric variables to produce trend-style insight.',
+    next: 'Use Models if you want to test whether this relationship remains useful when multiple features are considered together.',
+  }
+}
+
+function recommendationMeaning(kind, group, measure, varA, varB, corrVars) {
+  if (kind === 't' || kind === 'anova') {
+    return group && measure ? `Whether ${measure} differs across ${group}.` : 'Whether a numeric measure differs across categories.'
+  }
+  if (kind === 'chi') {
+    return varA && varB ? `Whether ${varA} is associated with ${varB}.` : 'Whether two categorical variables are related.'
+  }
+  return corrVars.length >= 2 ? `How strongly ${corrVars.join(', ')} move together.` : 'Which numeric variables move together and in what direction.'
+}
+
+function effectLabel(value, cutoffs) {
+  if (value >= cutoffs[2]) return 'large'
+  if (value >= cutoffs[1]) return 'moderate'
+  if (value >= cutoffs[0]) return 'small'
+  return 'very small'
+}
+
+function corrStrength(value) {
+  if (value >= 0.7) return 'strong'
+  if (value >= 0.4) return 'moderate'
+  if (value >= 0.2) return 'weak'
+  return 'very weak'
+}
+
 function fmt(v) {
-  if (v === null || v === undefined) return '—'
+  if (v === null || v === undefined || Number.isNaN(v)) return '-'
   if (typeof v !== 'number') return v
-  if (Math.abs(v) < 0.001) return v.toExponential(2)
+  if (Math.abs(v) < 0.001 && v !== 0) return v.toExponential(2)
   return v.toFixed(3)
 }

@@ -855,7 +855,7 @@ _CATEGORY_ABBREVIATIONS = {
     "n": "no",
 }
 
-_YES_VALUES = {"1", "1.0", "yes", "y", "true", "t"}
+_YES_VALUES = {"1", "1.0", "yes", "y", "true", "t", "graduated", "passed", "pass"}
 _NO_VALUES = {"0", "0.0", "no", "n", "false", "f"}
 
 def _normalize_category_value(value):
@@ -2076,11 +2076,18 @@ def run_test(ds_id):
         elif kind == "anova":
             group = body["group"]
             measure = body["measure"]
-            samples = [df[df[group] == g][measure].dropna() for g in df[group].dropna().unique()]
+            labels = df[group].dropna().unique()
+            samples = [df[df[group] == g][measure].dropna() for g in labels]
             f, p = stats.f_oneway(*samples)
+            grand = df[[group, measure]].dropna()[measure]
+            ss_between = sum(len(sample) * (sample.mean() - grand.mean()) ** 2 for sample in samples if len(sample))
+            ss_total = sum((grand - grand.mean()) ** 2) if len(grand) else 0
+            eta_sq = float(ss_between / ss_total) if ss_total else 0.0
             result = {
                 "f": float(f), "p": float(p),
                 "groups": len(samples),
+                "eta_squared": eta_sq,
+                "group_means": {str(label): float(sample.mean()) for label, sample in zip(labels, samples) if len(sample)},
                 "significant": bool(p < 0.05),
                 "interpretation": _anova_interpret(f, p, len(samples), measure, group),
             }
@@ -2089,18 +2096,41 @@ def run_test(ds_id):
             var_b = body["var_b"]
             ct = pd.crosstab(df[var_a], df[var_b])
             chi2, p, dof, _ = stats.chi2_contingency(ct)
+            n = int(ct.to_numpy().sum())
+            min_dim = max(min(ct.shape) - 1, 1)
+            cramer_v = float(np.sqrt(chi2 / (n * min_dim))) if n and min_dim else 0.0
+            row_pct = ct.div(ct.sum(axis=1).replace(0, np.nan), axis=0).fillna(0) * 100
             result = {
                 "chi2": float(chi2), "p": float(p), "df": int(dof),
                 "contingency": {str(i): {str(c): int(ct.loc[i, c]) for c in ct.columns} for i in ct.index},
+                "row_percentages": {str(i): {str(c): round(float(row_pct.loc[i, c]), 1) for c in row_pct.columns} for i in row_pct.index},
+                "cramers_v": cramer_v,
                 "significant": bool(p < 0.05),
                 "interpretation": _chi_interpret(chi2, p, var_a, var_b),
             }
         elif kind == "corr":
             cols = body.get("variables") or df.select_dtypes(include=[np.number]).columns.tolist()
             corr = df[cols].corr().round(3)
+            pairs = []
+            for i, a in enumerate(cols):
+                for b in cols[i + 1:]:
+                    data = df[[a, b]].dropna()
+                    if len(data) < 3:
+                        continue
+                    r_val, p_val = stats.pearsonr(data[a], data[b])
+                    pairs.append({
+                        "var_a": a,
+                        "var_b": b,
+                        "r": float(r_val),
+                        "p": float(p_val),
+                        "n": int(len(data)),
+                    })
+            pairs.sort(key=lambda row: abs(row["r"]), reverse=True)
             result = {
                 "variables": cols,
                 "matrix": corr.where(pd.notnull(corr), None).to_dict(),
+                "pairs": pairs[:10],
+                "strongest_pair": pairs[0] if pairs else None,
             }
         else:
             return {"error": "unknown test kind"}, 400
@@ -2344,6 +2374,19 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         total = sum(n_per_class.values()) if n_per_class else 0
         largest = max(n_per_class.values()) if n_per_class else 0
         imbalance_ratio = (largest / total) if total else 0
+        effective_classes = n_per_class
+        if target_mode == "binary":
+            positive_count = int(y.astype(str).eq(str(positive_class)).sum()) if positive_class is not None else 0
+            negative_count = int(len(y) - positive_count)
+            effective_classes = {str(positive_class): positive_count, f"not {positive_class}": negative_count}
+            if positive_count == 0 or negative_count == 0:
+                hard_blocks.append({
+                    "code": "binary_target_single_class",
+                    "message": f"Binary target setup creates only one class. Choose a positive class that exists in '{target}', or standardize the target categories first.",
+                    "column": target,
+                    "positive_class": positive_class,
+                    "class_counts": clean_json(n_per_class),
+                })
         if smallest < 10:
             warnings.append(f"Smallest class has only {smallest} examples — model quality will be unreliable.")
         if imbalance_ratio >= 0.75 and len(n_per_class) > 1:
@@ -2363,6 +2406,13 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
                     "column": target,
                     "groups": target_groups[:5],
                 })
+        if len([count for count in effective_classes.values() if count > 0]) < 2:
+            hard_blocks.append({
+                "code": "target_single_effective_class",
+                "message": f"Target '{target}' has fewer than two usable classes for the selected setup.",
+                "column": target,
+                "class_counts": clean_json(effective_classes),
+            })
     if rows_after < 50:
         warnings.append(f"Only {rows_after} complete rows after dropping missing — consider Expand or imputation.")
 
@@ -2911,6 +2961,24 @@ def list_models(ds_id):
             "has_whatif": r.coefficients is not None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         } for r in rows])
+    finally:
+        s.close()
+
+@app.route("/api/models/<model_id>", methods=["DELETE"])
+def delete_model(model_id):
+    s = db()
+    try:
+        m = s.query(Model).filter_by(id=model_id).first()
+        if not m:
+            return {"error": "model not found"}, 404
+        dataset_id = m.dataset_id
+        linked_logs = s.query(ActivityLog).filter_by(ref_type="model", ref_id=model_id).all()
+        deleted_logs = len(linked_logs)
+        for entry in linked_logs:
+            s.delete(entry)
+        s.delete(m)
+        s.commit()
+        return jsonify({"ok": True, "id": model_id, "dataset_id": dataset_id, "deleted_logs": deleted_logs})
     finally:
         s.close()
 
@@ -3484,39 +3552,59 @@ def build_report(ds_id):
             },
             "sections": [],
         }
+        latest_describe = next((a for a in reversed(analyses) if a.kind == "describe"), None)
+        tests_ = [a for a in analyses if a.kind.startswith("test_")]
+
         if "summary" in sections:
             report["sections"].append({
                 "title": "Executive summary",
                 "body": _auto_summary(ds, analyses, models),
             })
         if "descriptives" in sections:
-            des = [a for a in analyses if a.kind == "describe"]
-            if des:
+            if latest_describe:
+                descriptive_result = jload(latest_describe.result)
                 report["sections"].append({
-                    "title": "Descriptive statistics",
-                    "data": jload(des[-1].result),
+                    "title": "Descriptive insights",
+                    "body": _describe_report_text(descriptive_result),
+                    "data": descriptive_result,
                 })
         if "tests" in sections:
-            tests_ = [a for a in analyses if a.kind.startswith("test_")]
             if tests_:
                 report["sections"].append({
-                    "title": "Hypothesis tests",
-                    "items": [{"kind": a.kind, "result": jload(a.result)} for a in tests_],
+                    "title": "Hypothesis test interpretation",
+                    "body": _tests_report_text(tests_),
+                    "items": [{"kind": a.kind, "config": jload(a.config), "result": jload(a.result), "summary": _test_report_line(a)} for a in tests_],
+                })
+                report["sections"].append({
+                    "title": "Simple predictive insights",
+                    "body": _predictive_insights_text(tests_),
                 })
         if "models" in sections and models:
             report["sections"].append({
-                "title": "Predictive models",
+                "title": "Model performance",
+                "body": _models_report_text(models),
                 "items": [{
                     "name": m.name,
                     "algorithm": m.algorithm,
                     "target": m.target,
                     "metrics": jload(m.metrics),
                     "feature_influence": jload(m.feature_importance),
+                    "summary": _model_report_line(m),
                 } for m in models],
+            })
+            report["sections"].append({
+                "title": "Key influencing factors",
+                "body": _feature_influence_report_text(models),
+            })
+        if "ai_interpretation" in sections:
+            report["sections"].append({
+                "title": "AI interpretation",
+                "body": "AI interpretation is not available yet. The report currently uses rule-based explanations so it remains understandable without an AI connection.",
             })
         if "documentation" in sections:
             report["sections"].append({
-                "title": "Documentation log",
+                "title": "Appendix: Project actions",
+                "body": _documentation_summary_text(activity),
                 "items": [activity_payload(a) for a in activity],
             })
         log_activity(
@@ -3530,7 +3618,203 @@ def build_report(ds_id):
     finally:
         s.close()
 
+
 def _auto_summary(ds, analyses, models):
+    bits = [f"This report summarizes the analysis of {ds.name}, a dataset with {ds.row_count} rows and {ds.col_count} variables."]
+    des = next((a for a in reversed(analyses) if a.kind == "describe"), None)
+    if des:
+        stats_rows = (jload(des.result) or {}).get("stats") or []
+        nums = [r for r in stats_rows if r.get("kind") == "numeric"]
+        cats = [r for r in stats_rows if r.get("kind") == "categorical"]
+        if nums or cats:
+            bits.append(f"The descriptive review includes {len(nums)} numeric and {len(cats)} categorical variable summaries.")
+    if models:
+        best = _best_model(models)
+        metrics = jload(best.metrics) or {}
+        if metrics.get("auc") is not None:
+            bits.append(f"The strongest saved model is {best.algorithm} for {best.target}, with AUC={metrics['auc']:.3f}.")
+        elif metrics.get("accuracy") is not None:
+            bits.append(f"The strongest saved model is {best.algorithm} for {best.target}, with accuracy={metrics['accuracy']:.1%}.")
+        elif metrics.get("r2") is not None:
+            bits.append(f"The strongest saved model is {best.algorithm} for {best.target}, explaining about {metrics['r2']:.1%} of observed variation.")
+    sig_tests = [a for a in analyses if a.kind.startswith("test_") and (jload(a.result) or {}).get("significant")]
+    if sig_tests:
+        bits.append(f"{len(sig_tests)} hypothesis test(s) found statistically significant evidence at p < 0.05.")
+    elif any(a.kind.startswith("test_") for a in analyses):
+        bits.append("The recorded hypothesis tests did not find strong statistical evidence at p < 0.05.")
+    bits.append("Detailed project actions are placed in the appendix so the main report stays focused on findings and interpretation.")
+    return " ".join(bits)
+
+
+def _describe_report_text(result):
+    rows = (result or {}).get("stats") or []
+    nums = [r for r in rows if r.get("kind") == "numeric"]
+    cats = [r for r in rows if r.get("kind") == "categorical"]
+    lines = []
+    if nums:
+        skewed = sorted(nums, key=lambda r: abs(float(r.get("skew") or 0)), reverse=True)
+        variable = sorted(nums, key=lambda r: _spread_score(r), reverse=True)
+        symmetric = [r for r in nums if abs(float(r.get("skew") or 0)) < 0.5]
+        lines.append(f"Numeric variables summarized: {', '.join(str(r.get('variable')) for r in nums[:6])}.")
+        if symmetric:
+            lines.append(f"{symmetric[0]['variable']} is approximately symmetric (skew={_fmt(symmetric[0].get('skew'))}).")
+        if skewed and abs(float(skewed[0].get("skew") or 0)) >= 1:
+            lines.append(f"{skewed[0]['variable']} is the most skewed numeric variable, so median and quartiles should be considered alongside the mean.")
+        if variable:
+            lines.append(f"{variable[0]['variable']} shows the highest relative variability among the summarized numeric variables.")
+    if cats:
+        dominant = sorted(cats, key=lambda r: (r.get("freq") or 0) / max(r.get("n") or 1, 1), reverse=True)
+        top = dominant[0]
+        lines.append(f"{top['variable']} is led by {top.get('top')} ({_pct(top.get('freq'), top.get('n'))} of valid rows).")
+    if not lines:
+        lines.append("No descriptive analysis has enough result detail for interpretation yet.")
+    return "\n".join(f"- {line}" for line in lines)
+
+
+def _tests_report_text(tests):
+    lines = [_test_report_line(a) for a in tests[-5:]]
+    lines = [line for line in lines if line]
+    return "\n".join(f"- {line}" for line in lines) if lines else "No hypothesis tests have been recorded yet."
+
+
+def _test_report_line(analysis):
+    kind = analysis.kind.replace("test_", "")
+    cfg = jload(analysis.config) or {}
+    r = jload(analysis.result) or {}
+    sig = r.get("significant")
+    decision = "reject the null hypothesis" if sig else "fail to reject the null hypothesis" if sig is not None else "review the relationship"
+    if kind == "corr":
+        pair = r.get("strongest_pair") or {}
+        if pair:
+            direction = "positive" if pair.get("r", 0) >= 0 else "negative"
+            return f"Correlation: {pair.get('var_a')} and {pair.get('var_b')} show the strongest {direction} relationship (r={_fmt(pair.get('r'))}, p={_fmt(pair.get('p'))})."
+        return "Correlation: no pairwise relationship could be summarized."
+    if kind == "chi":
+        return f"Chi-square: {cfg.get('var_a')} and {cfg.get('var_b')} lead to the decision to {decision} (p={_fmt(r.get('p'))}, Cramer's V={_fmt(r.get('cramers_v'))})."
+    if kind == "t":
+        return f"t-test: {cfg.get('measure')} differs by {cfg.get('group')} with decision to {decision} (p={_fmt(r.get('p'))}, Cohen's d={_fmt(r.get('cohens_d'))})."
+    if kind == "anova":
+        return f"ANOVA: {cfg.get('measure')} across {cfg.get('group')} groups leads to the decision to {decision} (p={_fmt(r.get('p'))}, eta squared={_fmt(r.get('eta_squared'))})."
+    return r.get("interpretation") or f"{analysis.kind} was run."
+
+
+def _predictive_insights_text(tests):
+    lines = []
+    for a in tests[-6:]:
+        kind = a.kind.replace("test_", "")
+        cfg = jload(a.config) or {}
+        r = jload(a.result) or {}
+        if kind == "corr":
+            pair = r.get("strongest_pair") or {}
+            if pair:
+                tendency = "increase" if pair.get("r", 0) >= 0 else "decrease"
+                lines.append(f"As {pair.get('var_a')} increases, {pair.get('var_b')} tends to {tendency} in the observed data.")
+        elif kind == "t":
+            labels = r.get("group_labels") or ["Group 1", "Group 2"]
+            higher = labels[0] if (r.get("mean_group_1") or 0) >= (r.get("mean_group_2") or 0) else labels[1]
+            lines.append(f"{higher} has the higher observed average {cfg.get('measure')}; this is a group-based pattern, not a full predictive model.")
+        elif kind == "anova":
+            means = r.get("group_means") or {}
+            if means:
+                higher = max(means, key=means.get)
+                lines.append(f"{higher} has the highest observed average {cfg.get('measure')} among {cfg.get('group')} categories.")
+        elif kind == "chi":
+            lines.append(f"The contingency table for {cfg.get('var_a')} and {cfg.get('var_b')} supports probability-style comparisons by category.")
+    if not lines:
+        lines.append("Run correlation, group-comparison, or chi-square tests to generate non-model predictive insights.")
+    return "\n".join(f"- {line}" for line in lines[:5])
+
+
+def _models_report_text(models):
+    best = _best_model(models)
+    metrics = jload(best.metrics) or {}
+    lines = [f"{len(models)} model run(s) are included in this report."]
+    if metrics.get("task") == "classification":
+        auc = f" and AUC={_fmt(metrics.get('auc'))}" if metrics.get("auc") is not None else ""
+        lines.append(f"Best recorded model: {best.algorithm} predicting {best.target}, with accuracy={_pct_float(metrics.get('accuracy'))}{auc}.")
+    elif metrics.get("task") == "regression":
+        lines.append(f"Best recorded model: {best.algorithm} predicting {best.target}, with R2={_fmt(metrics.get('r2'))} and RMSE={_fmt(metrics.get('rmse'))}.")
+    lines.append("Model metrics should be interpreted together with data preparation, target cleanliness, and test-set size.")
+    return "\n".join(f"- {line}" for line in lines)
+
+
+def _model_report_line(model):
+    metrics = jload(model.metrics) or {}
+    if metrics.get("task") == "classification":
+        auc = f" and AUC={_fmt(metrics.get('auc'))}" if metrics.get("auc") is not None else ""
+        return f"{model.algorithm} predicted {model.target} with accuracy={_pct_float(metrics.get('accuracy'))}{auc}."
+    if metrics.get("task") == "regression":
+        return f"{model.algorithm} predicted {model.target} with R2={_fmt(metrics.get('r2'))} and RMSE={_fmt(metrics.get('rmse'))}."
+    return f"{model.algorithm} model for {model.target}."
+
+
+def _feature_influence_report_text(models):
+    best = _best_model(models)
+    influence = jload(best.feature_importance) or []
+    if isinstance(influence, dict):
+        influence = [{"feature": k, "strength": v} for k, v in influence.items()]
+    influence = sorted(influence, key=lambda x: float(x.get("strength") or x.get("relative_strength") or 0), reverse=True)
+    if not influence:
+        return "Feature influence is not available for the saved models."
+    top = [item for item in influence[:5] if item.get("feature")]
+    if not top:
+        return "Feature influence is not available for the saved models."
+    lines = [f"For the strongest saved model ({best.algorithm}), the leading influencing factor is {top[0].get('feature')}."]
+    lines.append("Top factors: " + ", ".join(item.get("feature") for item in top) + ".")
+    lines.append("These values are model-derived influence summaries, not proof of causation.")
+    return "\n".join(f"- {line}" for line in lines)
+
+
+def _documentation_summary_text(activity):
+    if not activity:
+        return "No project actions were recorded."
+    counts = {}
+    for entry in activity:
+        detail = jload(entry.detail) or {}
+        key = detail.get("step_type") or detail.get("category") or entry.kind
+        counts[key] = counts.get(key, 0) + 1
+    summary = ", ".join(f"{k}: {v}" for k, v in counts.items())
+    return f"The appendix contains the project action trail for reproducibility. Summary by type: {summary}."
+
+
+def _best_model(models):
+    def score(model):
+        m = jload(model.metrics) or {}
+        if m.get("task") == "classification":
+            return m.get("auc") if m.get("auc") is not None else m.get("accuracy") or 0
+        if m.get("task") == "regression":
+            return m.get("r2") if m.get("r2") is not None else -1e9
+        return -1e9
+    return max(models, key=score)
+
+
+def _spread_score(row):
+    span = abs(float(row.get("max") or 0) - float(row.get("min") or 0)) or 1
+    return abs(float(row.get("std") or 0)) / span
+
+
+def _fmt(value):
+    if value is None:
+        return "n/a"
+    try:
+        return f"{float(value):.3f}"
+    except Exception:
+        return str(value)
+
+
+def _pct(count, total):
+    if not total:
+        return "0.0%"
+    return f"{float(count or 0) / float(total) * 100:.1f}%"
+
+
+def _pct_float(value):
+    if value is None:
+        return "n/a"
+    return f"{float(value):.1%}"
+
+
+def _old_auto_summary(ds, analyses, models):
     bits = [f"Analysis of {ds.name} ({ds.row_count} rows, {ds.col_count} variables)."]
     if models:
         latest = models[-1]

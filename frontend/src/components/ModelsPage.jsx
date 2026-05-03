@@ -122,7 +122,9 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         })
         if (!cancelled) {
           setPlan(r)
-          if (!positiveClass && r.positive_class) setPositiveClass(r.positive_class)
+          if ((!positiveClass || !(r.target_classes || []).includes(positiveClass)) && r.positive_class) {
+            setPositiveClass(r.positive_class)
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -203,6 +205,18 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       onGo('whatif')
     } catch (err) {
       alert('Could not prepare model for What-if: ' + err.message)
+    }
+  }
+
+  const deleteSavedModel = async (model) => {
+    const label = `${algoLabelForTask(model.algorithm, model.metrics?.task)} - ${model.target}`
+    if (!window.confirm(`Delete saved model "${label}"? This removes it from Previous models and documentation logs.`)) return
+    try {
+      await api.deleteModel(model.id)
+      const list = await api.listModels(dataset.id)
+      setModels(list)
+    } catch (err) {
+      alert('Could not delete model: ' + err.message)
     }
   }
 
@@ -411,22 +425,24 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             setActiveIdx={setActiveResultIdx}
             onUseInWhatIf={useInWhatIf}
           />
-          <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Tune parameters</p>
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
-              Defaults were used for the first training run. Adjust settings here, then train again to compare a tuned run.
-            </p>
-            <ParameterSettings
-              selectedAlgos={selectedAlgos}
-              modelParams={modelParams}
-              setModelParams={setModelParams}
-            />
-            <div style={{ textAlign: 'right', marginTop: 10 }}>
-              <button className="ax-btn prim" disabled={training || selectedAlgos.length === 0} onClick={train}>
-                Train again with tuned settings
-              </button>
+          {(results.models || []).length > 0 && (
+            <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
+              <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Tune parameters</p>
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
+                Defaults were used for the first training run. Adjust settings here, then train again to compare a tuned run.
+              </p>
+              <ParameterSettings
+                selectedAlgos={selectedAlgos}
+                modelParams={modelParams}
+                setModelParams={setModelParams}
+              />
+              <div style={{ textAlign: 'right', marginTop: 10 }}>
+                <button className="ax-btn prim" disabled={training || selectedAlgos.length === 0} onClick={train}>
+                  Train again with tuned settings
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
@@ -452,6 +468,9 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                     </button>
                     <button className="ax-btn" onClick={() => prepareAndUseInWhatIf(m)} type="button">
                       Use in What-if
+                    </button>
+                    <button className="ax-btn" onClick={() => deleteSavedModel(m)} type="button">
+                      Delete
                     </button>
                   </div>
                 </div>
