@@ -126,10 +126,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ context }),
     }),
-  aiExplain: (id, step, params, question) =>
+  aiExplain: (id, step, params, question, result) =>
     request(`/api/datasets/${id}/ai/explain`, {
       method: 'POST',
-      body: JSON.stringify({ step, params, question }),
+      body: JSON.stringify({ step, params, question, result }),
     }),
   uploadDataset: async (file, name, description) => {
     const fd = new FormData()
