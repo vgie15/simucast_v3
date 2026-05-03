@@ -10,6 +10,7 @@ import re
 import base64
 import pickle
 import secrets
+import hashlib
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 
@@ -56,7 +57,29 @@ _load_local_env()
 
 # --- app + db setup ---
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload cap
+
+# --- Upload limits -----------------------------------------------------------
+# We enforce three different limits at upload time:
+#   1. MAX_UPLOAD_BYTES: total file size (Flask checks this first and rejects
+#      with 413 before we even see the request body).
+#   2. _CSV_MAGIC_*: the actual file bytes must match the extension. A user
+#      can rename "report.exe" to "report.csv" and we'd otherwise try to
+#      parse it.
+#   3. MAX_UPLOAD_ROWS: after parsing, refuse very large datasets. Pandas
+#      will happily eat a 10M-row CSV and exhaust server RAM.
+# These are deliberately tight defaults for the capstone — bump if needed.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024   # 10 MB
+MAX_UPLOAD_ROWS = 100_000             # 100k rows
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+
+
+# Flask aborts with a 413 *before* our route runs when MAX_CONTENT_LENGTH is
+# exceeded. Without this handler the client gets a generic HTML page; we
+# return JSON so the frontend can show a friendly message.
+@app.errorhandler(413)
+def _too_large(_e):
+    mb_limit = MAX_UPLOAD_BYTES // (1024 * 1024)
+    return jsonify({"error": f"File is too large. Maximum allowed is {mb_limit} MB."}), 413
 
 @app.route("/")
 def home():
@@ -308,16 +331,85 @@ def jdump(v):
         return v  # JSONB handles dicts/lists natively
     return json.dumps(v, default=str)
 
+
+# --- Simple in-memory caches -------------------------------------------------
+# We keep two caches:
+#   _DF_CACHE   : parsed DataFrames keyed by (dataset_id, stage_id)
+#   _AI_CACHE   : AI responses keyed by a hash of the prompt inputs
+#
+# Why a plain dict and not Redis/Memcached?
+# - This is a single-process Flask app on Render. A dict is enough.
+# - One less moving part to deploy and explain.
+#
+# Why cap the size?
+# - A long-running server would otherwise hold every dataset ever uploaded
+#   in memory. We cap each cache at _CACHE_MAX entries and drop the oldest
+#   one (FIFO) when full. Python 3.7+ dicts keep insertion order, so
+#   `next(iter(cache))` gives us the oldest key in O(1).
+_CACHE_MAX = 32
+_DF_CACHE = {}     # {(ds_id, stage_id_or_None): pandas.DataFrame}
+_AI_CACHE = {}     # {sha1_hex: response_payload}
+
+def _cache_put(cache, key, value):
+    if key in cache:
+        # Refresh insertion order so it isn't evicted as "oldest" yet.
+        cache.pop(key)
+    cache[key] = value
+    while len(cache) > _CACHE_MAX:
+        cache.pop(next(iter(cache)))
+
+def _df_cache_key(ds):
+    """Cache key for a dataset's currently active stage."""
+    return (ds.id, ds.current_stage_id)
+
+def _df_cache_invalidate(ds_id):
+    """Drop every cached DataFrame *and* AI response for this dataset.
+
+    Called on any change that affects what we'd send to the AI:
+    stage transforms, sheet swaps, restores, resets, deletes.
+
+    Both caches use (ds_id, ...) as the key so we can drop only this
+    dataset's entries without disturbing anyone else's cache.
+    """
+    for key in [k for k in _DF_CACHE if k[0] == ds_id]:
+        _DF_CACHE.pop(key, None)
+    for key in [k for k in _AI_CACHE if k[0] == ds_id]:
+        _AI_CACHE.pop(key, None)
+
+def _ai_cache_key(ds_id, stage_id, kind, payload):
+    """Build a stable cache key for an AI request.
+
+    Returns a (ds_id, sha1_hex) tuple. Why both?
+    - The hash captures stage_id + kind + payload in a fixed-length string,
+      so we don't store the raw payload (which can be large) as the key.
+    - Keeping ds_id as a separate tuple element lets us filter the cache
+      by dataset for invalidation.
+    """
+    raw = json.dumps(
+        {"stage": stage_id, "kind": kind, "payload": payload},
+        sort_keys=True,
+        default=str,
+    )
+    return (ds_id, hashlib.sha1(raw.encode("utf-8")).hexdigest())
+
 def df_from_dataset(ds, session=None):
     """Rehydrate a pandas DataFrame from the dataset's *current* stage.
 
     Falls back to the original data when no stage is active. Pass a session
     when caller already has one to avoid opening a second connection.
+
+    Cached by (dataset_id, current_stage_id) — when the stage changes
+    (e.g. user cleans data) the key changes and we naturally re-parse.
     """
+    key = _df_cache_key(ds)
+    cached = _DF_CACHE.get(key)
+    if cached is not None:
+        # Return a copy so callers can mutate without poisoning the cache.
+        return cached.copy()
     rows = _current_rows(ds, session)
-    if not rows:
-        return pd.DataFrame()
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows) if rows else pd.DataFrame()
+    _cache_put(_DF_CACHE, key, df)
+    return df.copy()
 
 def _current_rows(ds, session=None):
     """Return the row list for the active stage (or the original)."""
@@ -401,6 +493,7 @@ def create_stage(session, ds, df, op_type, op_params, summary):
     ds.current_stage_id = stage.id
     ds.row_count = len(df)
     ds.col_count = len(df.columns)
+    _df_cache_invalidate(ds.id)  # stage changed — drop cached DataFrames
     log_activity(
         session,
         ds.id,
@@ -820,6 +913,61 @@ def list_datasets():
     finally:
         s.close()
 
+
+def _validate_upload_file(f):
+    """Run safety checks on an uploaded file before pandas parses it.
+
+    Returns (ok: bool, error_message: str|None, kind: str|None) where kind is
+    "csv" or "excel". Centralising these checks keeps upload_dataset readable.
+
+    Checks performed:
+      1. Filename has an allowed extension.
+      2. Size is under MAX_UPLOAD_BYTES (this is also enforced by Flask via
+         MAX_CONTENT_LENGTH, but we re-check here so we can return a clear
+         JSON error instead of Flask's default HTML 413 page).
+      3. Magic bytes match the extension. Catches the "renamed .exe to .csv"
+         case where the extension lies about the contents.
+    """
+    name = (f.filename or "").lower()
+    if name.endswith(".csv"):
+        kind = "csv"
+    elif name.endswith((".xlsx", ".xls")):
+        kind = "excel"
+    else:
+        return False, "Unsupported file type. Please upload a .csv, .xlsx, or .xls file.", None
+
+    # Measure size by seeking the underlying stream. We rewind so the parser
+    # downstream still sees the file from byte 0.
+    f.stream.seek(0, 2)             # 2 = seek from end
+    size = f.stream.tell()
+    f.stream.seek(0)
+    if size > MAX_UPLOAD_BYTES:
+        mb_limit = MAX_UPLOAD_BYTES // (1024 * 1024)
+        mb_actual = round(size / (1024 * 1024), 1)
+        return False, f"File is too large ({mb_actual} MB). Maximum allowed is {mb_limit} MB.", None
+    if size == 0:
+        return False, "File is empty.", None
+
+    # Magic-byte sniff — read a few bytes, then rewind.
+    head = f.stream.read(8)
+    f.stream.seek(0)
+    if kind == "excel":
+        # XLSX is a zip archive — starts with PK\x03\x04. XLS is an OLE
+        # compound document — starts with D0 CF 11 E0 A1 B1 1A E1.
+        is_xlsx = head[:4] == b"PK\x03\x04"
+        is_xls = head[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+        if not (is_xlsx or is_xls):
+            return False, "File looks like it was renamed — the contents don't match an Excel file.", None
+    else:
+        # CSV has no magic number, but it should be valid UTF-8/ASCII text.
+        # Reject anything with a NUL byte in the first chunk — clear sign of
+        # a binary file pretending to be CSV.
+        if b"\x00" in head:
+            return False, "File looks like it was renamed — CSV files should be plain text.", None
+
+    return True, None, kind
+
+
 @app.route("/api/datasets/upload", methods=["POST"])
 def upload_dataset():
     """Create a Dataset from either an uploaded file or an existing Dataset.
@@ -851,12 +999,18 @@ def upload_dataset():
             if "file" not in request.files:
                 return {"error": "no file"}, 400
             f = request.files["file"]
+
+            # Pre-parse safety checks (size, type, magic bytes).
+            ok, err, kind = _validate_upload_file(f)
+            if not ok:
+                return {"error": err}, 400
+
             sheets = None
             active_sheet = None
             try:
-                if f.filename.lower().endswith(".csv"):
+                if kind == "csv":
                     df = pd.read_csv(f)
-                elif f.filename.lower().endswith((".xlsx", ".xls")):
+                else:  # kind == "excel"
                     xls = pd.ExcelFile(f)
                     sheet_payload = {}
                     for sheet_name in xls.sheet_names:
@@ -867,10 +1021,18 @@ def upload_dataset():
                     active_sheet = str(xls.sheet_names[0])
                     sheets = sheet_payload
                     df = pd.DataFrame(sheet_payload[active_sheet]["data"])
-                else:
-                    return {"error": "unsupported file type"}, 400
             except Exception as e:
-                return {"error": f"failed to parse: {e}"}, 400
+                # Don't leak the raw pandas exception to the client — it's noisy
+                # and can expose internals. Log it and return a friendly message.
+                print(f"upload parse failed: {e}", flush=True)
+                return {"error": "Could not read the file. Please check it isn't corrupted."}, 400
+
+            # Post-parse safety check: refuse pathologically large datasets.
+            if len(df) > MAX_UPLOAD_ROWS:
+                return {
+                    "error": f"Dataset has {len(df):,} rows — maximum is {MAX_UPLOAD_ROWS:,}.",
+                }, 400
+
             variables = infer_variables(df)
             records = clean_json(df.where(pd.notnull(df), None).to_dict(orient="records"))
             row_count = len(df)
@@ -979,6 +1141,7 @@ def select_dataset_sheet(ds_id):
         ds.row_count = int(payload.get("row_count") or len(records))
         ds.col_count = int(payload.get("col_count") or (len(pd.DataFrame(records).columns) if records else 0))
         ds.current_stage_id = None
+        _df_cache_invalidate(ds_id)  # data swapped — invalidate cache
         log_activity(
             s,
             ds_id,
@@ -1031,6 +1194,7 @@ def delete_dataset(ds_id):
         filename = ds.filename
         s.delete(ds)
         s.commit()
+        _df_cache_invalidate(ds_id)  # dataset gone — free cached DataFrames
         return jsonify({"ok": True, "id": ds_id, "name": name, "filename": filename, "deleted": deleted})
     finally:
         s.close()
@@ -1491,6 +1655,7 @@ def delete_or_undo_activity(ds_id, activity_id):
                 ds.variables = parent.variables
                 ds.row_count = parent.row_count
                 ds.col_count = parent.col_count
+            _df_cache_invalidate(ds_id)  # restored to a different stage
             restored_to = parent_id
             log_activity(
                 s,
@@ -1599,6 +1764,7 @@ def restore_stage(ds_id, stage_id):
                 .filter(DatasetStage.dataset_id == ds_id, DatasetStage.step_index > stage.step_index)
                 .all()
             ]
+        _df_cache_invalidate(ds_id)  # stage reverted — drop cached DataFrames
         if removed_stage_ids:
             s.query(DatasetStage).filter(DatasetStage.id.in_(removed_stage_ids)).delete(synchronize_session=False)
             s.query(ActivityLog).filter(
@@ -1649,6 +1815,7 @@ def reset_project(ds_id):
         rows = jload(ds.data) or []
         ds.row_count = len(rows)
         ds.col_count = len(rows[0]) if rows else 0
+        _df_cache_invalidate(ds_id)  # project reset — drop cached DataFrames
 
         # Single log entry recording the reset
         log_activity(
@@ -4182,6 +4349,14 @@ def ai_recommend(ds_id):
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+
+        # Cache lookup: same dataset stage + same context = same answer.
+        # Skips a paid AI call when the user revisits the same page.
+        cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "recommend", {"context": context})
+        cached = _AI_CACHE.get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
         df = df_from_dataset(ds, s)
         variables = _current_variables(ds, s)
         profile = _dataset_profile(ds, df, variables)
@@ -4255,7 +4430,9 @@ def ai_recommend(ds_id):
         prompt = prompts.get(context, prompts["data"])
         try:
             payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1500)
-            return jsonify({"context": context, "ai": True, **payload})
+            response = {"context": context, "ai": True, **payload}
+            _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
+            return jsonify(response)
         except Exception as e:
             print(f"AI recommend failed: {e}", flush=True)
             fallback = _rule_based_recommend(context, df, variables)
@@ -4284,6 +4461,18 @@ def ai_explain(ds_id):
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+
+        # Cache lookup: same dataset stage + same step + same inputs = same answer.
+        # The step (e.g. "test-t"), params (which columns), and result (the actual
+        # numbers) all matter — change any one of them and we re-ask the API.
+        cache_key = _ai_cache_key(
+            ds_id, ds.current_stage_id, "explain",
+            {"step": step, "params": params, "result": result, "question": question},
+        )
+        cached = _AI_CACHE.get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
         df = df_from_dataset(ds, s)
         variables = _current_variables(ds, s)
         profile = _dataset_profile(ds, df, variables)
@@ -4313,7 +4502,9 @@ def ai_explain(ds_id):
         prompt = "\n".join(parts)
         try:
             text = ai_call(profile, prompt, system=system, max_tokens=600)
-            return jsonify({"ai": True, "explanation": text})
+            response = {"ai": True, "explanation": text}
+            _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
+            return jsonify(response)
         except Exception as e:
             print(f"AI explain failed: {e}", flush=True)
             return jsonify({"ai": False, "explanation": f"AI call failed: {e}"})
