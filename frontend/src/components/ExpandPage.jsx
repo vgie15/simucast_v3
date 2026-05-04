@@ -112,7 +112,7 @@ export default function ExpandPage({ dataset, setDataset }) {
 
       <AIAssistantPanel datasetId={dataset.id} context="expand" />
 
-      <div className="ax-card" style={{ marginBottom: 16 }}>
+      <div id="expand-section-controls" className="ax-card" style={{ marginBottom: 16 }}>
         <p className="ax-lbl" style={{ margin: '0 0 6px' }}>Method</p>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <MethodCard

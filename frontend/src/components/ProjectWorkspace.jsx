@@ -9,6 +9,7 @@ import ModelsPage from './ModelsPage'
 import WhatIfPage from './WhatIfPage'
 import ReportPage from './ReportPage'
 import ActivityPanel from './ActivityPanel'
+import AIProjectPlanPanel from './AIProjectPlanPanel'
 
 const TABS = [
   { key: 'data', label: 'Data', subtitle: 'Preparing your dataset' },
@@ -29,6 +30,7 @@ export default function ProjectWorkspace() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
 
   useEffect(() => {
     setLoading(true)
@@ -47,6 +49,22 @@ export default function ProjectWorkspace() {
     setRefreshKey((k) => k + 1)
   }
 
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem('simucast.fixTarget')
+    if (!raw) return
+    let target = null
+    try {
+      target = JSON.parse(raw)
+    } catch {
+      return
+    }
+    if (target?.page !== activeTab || !target?.section) return
+    window.setTimeout(() => highlightSection(target.section), 180)
+    if (!['data', 'tests', 'models'].includes(activeTab)) {
+      window.sessionStorage.removeItem('simucast.fixTarget')
+    }
+  }, [activeTab, dataset?.id])
+
   if (loading) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Loading project…</p>
   }
@@ -60,7 +78,6 @@ export default function ProjectWorkspace() {
     )
   }
 
-  const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
   const activeTabMeta = TABS.find((t) => t.key === activeTab) || TABS[0]
   const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey })
 
@@ -96,17 +113,28 @@ export default function ProjectWorkspace() {
           {page}
           <NextPagePrompt activeTab={activeTab} datasetId={id} />
         </div>
-        <ActivityPanel
-          datasetId={dataset.id}
-          onViewStage={(stageId) => {
-            setViewStageRequest({ stageId, nonce: Date.now() })
-            navigate(`/projects/${id}/data`)
-          }}
-          onRestored={refreshDataset}
-        />
+        <div className="ax-right-rail">
+          <AIProjectPlanPanel dataset={dataset} activeTab={activeTab} />
+          <ActivityPanel
+            datasetId={dataset.id}
+            onViewStage={(stageId) => {
+              setViewStageRequest({ stageId, nonce: Date.now() })
+              navigate(`/projects/${id}/data`)
+            }}
+            onRestored={refreshDataset}
+          />
+        </div>
       </div>
     </>
   )
+}
+
+function highlightSection(section) {
+  const el = document.getElementById(section)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('ax-fix-highlight')
+  window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
 
 function NextPagePrompt({ activeTab, datasetId }) {

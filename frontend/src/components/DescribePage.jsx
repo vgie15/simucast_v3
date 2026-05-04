@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
+import { AIInsightCard } from './AIExplainers'
 
 export default function DescribePage({ dataset }) {
   const [selected, setSelected] = useState([])
@@ -36,7 +37,7 @@ export default function DescribePage({ dataset }) {
       <h1 className="ax-page-title">Descriptive statistics</h1>
       <p className="ax-page-sub">Summarize variables, interpret distributions, and identify patterns worth testing next.</p>
 
-      <p className="ax-lbl">Variables - tap to toggle</p>
+      <p id="describe-section-variables" className="ax-lbl">Variables - tap to toggle</p>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
         {(dataset.variables || []).map((v) => (
           <span
@@ -70,15 +71,15 @@ export default function DescribePage({ dataset }) {
               )}
             </div>
 
-            <div className="ax-card" style={{ padding: 14 }}>
-              <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>AI insights</p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
-                The system is currently showing rule-based insights. AI-generated narrative can be connected here later without replacing the statistical output.
-              </p>
-              <button className="ax-btn" disabled style={{ marginTop: 10 }}>
-                Generate deeper insights
-              </button>
-            </div>
+            <AIInsightCard
+              datasetId={dataset.id}
+              step="describe-summary"
+              params={{ variables: selected.length ? selected : 'all' }}
+              result={{ numeric: numericStats, categorical: categoricalStats, histogram: result?.histogram }}
+              title="AI narrative"
+              question="Write a short narrative summary of these descriptive statistics for a non-statistician: what the data looks like, the most notable distributions or skews, and any data-quality concerns worth following up on."
+              refreshKey={result?.run_id || JSON.stringify(numericStats.map((s) => s.variable))}
+            />
           </div>
 
           {(numericStats.length > 0 || categoricalStats.length > 0) && (

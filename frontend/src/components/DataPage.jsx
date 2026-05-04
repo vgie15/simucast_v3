@@ -301,71 +301,73 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         <StatCard label="Duplicates" value={suggestionGroups.duplicates?.count || 0} />
       </div>
 
-      <div id="fix-cleaning-suggestions" className="ax-row" style={{ marginBottom: 8 }}>
-        <p className="ax-lbl" style={{ margin: 0 }}>Suggested fixes by issue type</p>
-        {suggestions.length > 0 && (
-          <button className="ax-btn prim" onClick={applyAllSuggestions} disabled={applyingAll || suggestionsLoading}>
-            {applyingAll ? 'Applying...' : 'Apply all'}
-          </button>
-        )}
-      </div>
-      {suggestionsLoading ? (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>Analyzing...</p>
-      ) : suggestions.length === 0 && !(suggestionGroups.duplicates?.count > 0) ? (
-        <div className="ax-card" style={{ padding: '10px 12px', marginBottom: 16 }}>
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>No suggested fixes are pending. Your data looks clean.</p>
-          {appliedFixSummary.length > 0 && (
-            <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: 10, paddingTop: 10 }}>
-              <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 6px' }}>Recently applied fixes</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {appliedFixSummary.map((item, idx) => (
-                  <div key={`${item.variable}-${item.action}-${idx}`} style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                    <KindBadge kind={item.kind} /> <strong style={{ color: 'var(--color-text-primary)', marginLeft: 4 }}>{item.variable}</strong>
-                    <span> - {cleanActionLabel(item.action)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+      <div id="fix-cleaning-suggestions" className="ax-section-anchor">
+        <div className="ax-row" style={{ marginBottom: 8 }}>
+          <p className="ax-lbl" style={{ margin: 0 }}>Suggested fixes by issue type</p>
+          {suggestions.length > 0 && (
+            <button className="ax-btn prim" onClick={applyAllSuggestions} disabled={applyingAll || suggestionsLoading}>
+              {applyingAll ? 'Applying...' : 'Apply all'}
+            </button>
           )}
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          <CleanGroupCard
-            group={suggestionGroups.missing}
-            kind="missing"
-            title="Missing values"
-            description="Fill or drop blank values across selected columns in one documented step."
-            applying={applyingGroup === 'missing'}
-            onApply={applyGroupFix}
-          />
-          <CleanGroupCard
-            group={suggestionGroups.outliers}
-            kind="outliers"
-            title="Outliers"
-            description="Cap or remove extreme numeric values across selected columns."
-            applying={applyingGroup === 'outliers'}
-            onApply={applyGroupFix}
-          />
-          <CleanGroupCard
-            group={suggestionGroups.duplicates}
-            kind="duplicates"
-            title="Duplicates"
-            description="Detect exact duplicate rows and remove them as one cleanup step."
-            applying={applyingGroup === 'duplicates'}
-            onApply={applyGroupFix}
-          />
-          {types > 0 && (
+        {suggestionsLoading ? (
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>Analyzing...</p>
+        ) : suggestions.length === 0 && !(suggestionGroups.duplicates?.count > 0) ? (
+          <div className="ax-card" style={{ padding: '10px 12px', marginBottom: 16 }}>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>No suggested fixes are pending. Your data looks clean.</p>
+            {appliedFixSummary.length > 0 && (
+              <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: 10, paddingTop: 10 }}>
+                <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 6px' }}>Recently applied fixes</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {appliedFixSummary.map((item, idx) => (
+                    <div key={`${item.variable}-${item.action}-${idx}`} style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                      <KindBadge kind={item.kind} /> <strong style={{ color: 'var(--color-text-primary)', marginLeft: 4 }}>{item.variable}</strong>
+                      <span> - {cleanActionLabel(item.action)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             <CleanGroupCard
-              group={suggestionGroups.type}
-              kind="type"
-              title="Type issues"
-              description="Convert text-like dates together when the detected fix is safe."
-              applying={applyingGroup === 'type'}
+              group={suggestionGroups.missing}
+              kind="missing"
+              title="Missing values"
+              description="Fill or drop blank values across selected columns in one documented step."
+              applying={applyingGroup === 'missing'}
               onApply={applyGroupFix}
             />
-          )}
-        </div>
-      )}
+            <CleanGroupCard
+              group={suggestionGroups.outliers}
+              kind="outliers"
+              title="Outliers"
+              description="Cap or remove extreme numeric values across selected columns."
+              applying={applyingGroup === 'outliers'}
+              onApply={applyGroupFix}
+            />
+            <CleanGroupCard
+              group={suggestionGroups.duplicates}
+              kind="duplicates"
+              title="Duplicates"
+              description="Detect exact duplicate rows and remove them as one cleanup step."
+              applying={applyingGroup === 'duplicates'}
+              onApply={applyGroupFix}
+            />
+            {types > 0 && (
+              <CleanGroupCard
+                group={suggestionGroups.type}
+                kind="type"
+                title="Type issues"
+                description="Convert text-like dates together when the detected fix is safe."
+                applying={applyingGroup === 'type'}
+                onApply={applyGroupFix}
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       {activeVar && (
         <ColumnValuesModal

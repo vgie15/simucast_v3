@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 
 const AuthContext = createContext(null)
@@ -51,8 +52,8 @@ export function AuthProvider({ children }) {
     return r.session
   }, [saveSession])
 
-  const signup = useCallback(async (email, password) => {
-    const r = await api.authSignup(email, password)
+  const signup = useCallback(async (email, password, fullName = '') => {
+    const r = await api.authSignup(email, password, fullName)
     saveSession(r)
     setModalMode(null)
     return r.session
@@ -97,9 +98,12 @@ export function useAuth() {
 
 function AuthModal({ initialMode, onClose }) {
   const auth = useAuth()
+  const navigate = useNavigate()
   const [mode, setMode] = useState(initialMode === 'signup' ? 'signup' : 'login')
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -108,7 +112,10 @@ function AuthModal({ initialMode, onClose }) {
     setBusy(true)
     setError('')
     try {
-      if (mode === 'signup') await auth.signup(email, password)
+      if (mode === 'signup') {
+        if (password !== confirmPassword) throw new Error('passwords do not match')
+        await auth.signup(email, password, fullName)
+      }
       else await auth.login(email, password)
     } catch (err) {
       setError(err.message || 'Could not continue')
@@ -117,57 +124,120 @@ function AuthModal({ initialMode, onClose }) {
     }
   }
 
+  const switchMode = (nextMode) => {
+    setMode(nextMode)
+    setError('')
+  }
+
+  const continueGuest = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      if (!auth.isGuest) await auth.ensureGuest()
+      onClose()
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err.message || 'Could not continue as guest')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="ax-dialog-backdrop" role="presentation" onMouseDown={onClose}>
-      <form className="ax-dialog ax-auth-modal" onSubmit={submit} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="ax-dialog-header">
-          <div className="ax-dialog-icon" aria-hidden>{mode === 'signup' ? '+' : 'i'}</div>
-          <div>
-            <h2 className="ax-dialog-title">{mode === 'signup' ? 'Create Account' : 'Log In'}</h2>
-            <p className="ax-dialog-details">
-              {mode === 'signup'
-                ? 'Save projects permanently and continue beyond guest mode.'
-                : 'Log in to restore saved projects and continue working.'}
-            </p>
-          </div>
+      <form className="ax-auth-modal" onSubmit={submit} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="ax-auth-tabs">
+          <button className={mode === 'login' ? 'active' : ''} type="button" onClick={() => switchMode('login')}>
+            Login
+          </button>
+          <button className={mode === 'signup' ? 'active' : ''} type="button" onClick={() => switchMode('signup')}>
+            Sign Up
+          </button>
+          <button className="ax-auth-close" type="button" onClick={onClose} aria-label="Close login modal">
+            <span />
+            <span />
+          </button>
         </div>
         <div className="ax-dialog-body">
-          {auth.isGuest && (
-            <div className="ax-dialog-list">
-              <p>Guest mode</p>
-              <ul>
-                <li>{auth.session?.usage_count || 0} of {auth.session?.limit || 1} free model-training run used</li>
-                <li>Sign up to keep projects and continue without the guest limit</li>
-              </ul>
-            </div>
+          <h2 className="ax-auth-title">{mode === 'signup' ? 'Create Account' : 'Welcome Back'}</h2>
+          <p className="ax-auth-subtitle">
+            {mode === 'signup'
+              ? 'Sign up to save your projects, scenarios, and documentation.'
+              : 'Sign in to access your saved scenarios and analysis.'}
+          </p>
+          {mode === 'signup' && (
+            <label className="ax-field ax-auth-field">
+              <span>Full Name</span>
+              <input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="John Doe"
+                autoFocus
+                required
+              />
+            </label>
           )}
-          <label className="ax-field">
+          <label className="ax-field ax-auth-field">
             <span>Email</span>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoFocus required />
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              placeholder="you@example.com"
+              autoFocus={mode === 'login'}
+              required
+            />
           </label>
-          <label className="ax-field">
+          <label className="ax-field ax-auth-field">
             <span>Password</span>
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" minLength={8} required />
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              placeholder="At least 8 characters"
+              minLength={8}
+              required
+            />
           </label>
-          {error && <p className="ax-dialog-details" style={{ color: 'var(--color-text-danger)' }}>{error}</p>}
+          {mode === 'signup' && (
+            <label className="ax-field ax-auth-field">
+              <span>Confirm Password</span>
+              <input
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                type="password"
+                placeholder="Re-enter password"
+                minLength={8}
+                required
+              />
+            </label>
+          )}
+          {mode === 'login' && (
+            <label className="ax-auth-remember">
+              <input type="checkbox" />
+              <span>Remember me</span>
+            </label>
+          )}
+          {error && <p className="ax-auth-error">{error}</p>}
         </div>
-        <div className="ax-dialog-actions" style={{ justifyContent: 'space-between' }}>
-          <button
-            className="ax-btn"
-            type="button"
-            onClick={() => {
-              setMode(mode === 'signup' ? 'login' : 'signup')
-              setError('')
-            }}
-          >
-            {mode === 'signup' ? 'Use login instead' : 'Create account instead'}
+        <div className="ax-auth-actions">
+          <button className="ax-btn prim ax-auth-submit" type="submit" disabled={busy}>
+            {busy ? 'Working...' : mode === 'signup' ? 'Create Account' : 'Sign In'}
           </button>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="ax-btn" type="button" onClick={onClose}>Cancel</button>
-            <button className="ax-btn prim" type="submit" disabled={busy}>
-              {busy ? 'Working...' : mode === 'signup' ? 'Create Account' : 'Log In'}
+          {mode === 'login' && (
+            <>
+              <div className="ax-auth-divider"><span>OR</span></div>
+              <button className="ax-btn ax-auth-guest" type="button" onClick={continueGuest} disabled={busy}>
+                Continue as Guest
+              </button>
+            </>
+          )}
+          <p>
+            {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
+            <button type="button" onClick={() => switchMode(mode === 'signup' ? 'login' : 'signup')}>
+              {mode === 'signup' ? 'Login' : 'Sign up'}
             </button>
-          </div>
+          </p>
         </div>
       </form>
     </div>

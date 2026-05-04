@@ -1,5 +1,9 @@
 // Centralized API client — swap VITE_API_URL via .env for prod
 const BASE = import.meta.env.VITE_API_URL || ''
+const LOCAL_API_BASE =
+  !BASE && typeof window !== 'undefined' && /^(127\.0\.0\.1|localhost):51/.test(window.location.host)
+    ? 'http://127.0.0.1:5001'
+    : ''
 const TOKEN_KEY = 'simucast.sessionToken'
 
 function getSessionToken() {
@@ -31,18 +35,52 @@ async function throwApiError(res) {
   throw new Error(msg || `${res.status} ${res.statusText}`)
 }
 
+function apiBases() {
+  return LOCAL_API_BASE ? [BASE, LOCAL_API_BASE] : [BASE]
+}
+
 async function request(path, opts = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...authHeaders(opts.headers || {}) },
-    ...opts,
-  })
-  if (!res.ok) {
-    await throwApiError(res)
+  let lastError = null
+  for (const base of apiBases()) {
+    try {
+      const res = await fetch(`${base}${path}`, {
+        headers: { 'Content-Type': 'application/json', ...authHeaders(opts.headers || {}) },
+        ...opts,
+      })
+      if (!res.ok) {
+        await throwApiError(res)
+      }
+      return res.json()
+    } catch (err) {
+      lastError = err
+      if (base || !LOCAL_API_BASE) throw err
+    }
   }
-  return res.json()
+  throw lastError || new Error('Request failed')
 }
 
 async function _submitDataset(fd) {
+  let lastError = null
+  for (const base of apiBases()) {
+    try {
+      const r = await fetch(`${base}/api/datasets/upload`, { method: 'POST', body: fd, headers: authHeaders() })
+      const ct = r.headers.get('content-type') || ''
+      if (!r.ok) {
+        await throwApiError(r)
+      }
+      if (!ct.includes('application/json')) {
+        throw new Error(
+          'Server returned a non-JSON response. The frontend may be pointing at the wrong API URL - check VITE_API_URL.',
+        )
+      }
+      return r.json()
+    } catch (err) {
+      lastError = err
+      if (base || !LOCAL_API_BASE) throw err
+    }
+  }
+  throw lastError || new Error('Upload failed')
+
   const r = await fetch(`${BASE}/api/datasets/upload`, { method: 'POST', body: fd, headers: authHeaders() })
   const ct = r.headers.get('content-type') || ''
   if (!r.ok) {
@@ -60,10 +98,10 @@ export const api = {
   getSessionToken,
   setSessionToken,
   authGuest: () => request('/api/auth/guest', { method: 'POST' }),
-  authSignup: (email, password) =>
+  authSignup: (email, password, fullName = '') =>
     request('/api/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, full_name: fullName }),
     }),
   authLogin: (email, password) =>
     request('/api/auth/login', {
@@ -126,10 +164,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ context }),
     }),
-  aiExplain: (id, step, params, question) =>
+  aiProjectPlan: (id, mode = 'auto') =>
+    request(`/api/datasets/${id}/ai/project_plan`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    }),
+  aiExplain: (id, step, params, question, result) =>
     request(`/api/datasets/${id}/ai/explain`, {
       method: 'POST',
-      body: JSON.stringify({ step, params, question }),
+      body: JSON.stringify({ step, params, question, result }),
     }),
   uploadDataset: async (file, name, description) => {
     const fd = new FormData()

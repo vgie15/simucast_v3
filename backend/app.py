@@ -10,6 +10,7 @@ import re
 import base64
 import pickle
 import secrets
+import hashlib
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 
@@ -56,7 +57,29 @@ _load_local_env()
 
 # --- app + db setup ---
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload cap
+
+# --- Upload limits -----------------------------------------------------------
+# We enforce three different limits at upload time:
+#   1. MAX_UPLOAD_BYTES: total file size (Flask checks this first and rejects
+#      with 413 before we even see the request body).
+#   2. _CSV_MAGIC_*: the actual file bytes must match the extension. A user
+#      can rename "report.exe" to "report.csv" and we'd otherwise try to
+#      parse it.
+#   3. MAX_UPLOAD_ROWS: after parsing, refuse very large datasets. Pandas
+#      will happily eat a 10M-row CSV and exhaust server RAM.
+# These are deliberately tight defaults for the capstone — bump if needed.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024   # 10 MB
+MAX_UPLOAD_ROWS = 100_000             # 100k rows
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+
+
+# Flask aborts with a 413 *before* our route runs when MAX_CONTENT_LENGTH is
+# exceeded. Without this handler the client gets a generic HTML page; we
+# return JSON so the frontend can show a friendly message.
+@app.errorhandler(413)
+def _too_large(_e):
+    mb_limit = MAX_UPLOAD_BYTES // (1024 * 1024)
+    return jsonify({"error": f"File is too large. Maximum allowed is {mb_limit} MB."}), 413
 
 @app.route("/")
 def home():
@@ -66,7 +89,7 @@ _cors_raw = os.environ.get("CORS_ORIGINS", "*")
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 CORS(app, origins=_cors_origins)
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "axion.db")
+_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simucast.db")
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     f"sqlite:///{_DB_PATH}"  # absolute path so db location never depends on cwd
@@ -107,6 +130,7 @@ class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True)
     email = Column(String, unique=True, nullable=False, index=True)
+    full_name = Column(String, nullable=True)
     password_hash = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -193,7 +217,13 @@ def _migrate_add_columns():
     created. SQLAlchemy's create_all only creates tables, not new columns."""
     from sqlalchemy import inspect, text
     insp = inspect(engine)
-    if "datasets" not in insp.get_table_names():
+    tables = insp.get_table_names()
+    if "users" in tables:
+        user_cols = {c["name"] for c in insp.get_columns("users")}
+        with engine.begin() as conn:
+            if "full_name" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN full_name VARCHAR"))
+    if "datasets" not in tables:
         return
     cols = {c["name"] for c in insp.get_columns("datasets")}
     with engine.begin() as conn:
@@ -235,6 +265,7 @@ def _session_payload(sess, user=None):
         "token": sess.token,
         "user_id": sess.user_id,
         "email": user.email if user else None,
+        "full_name": user.full_name if user else None,
         "is_guest": bool(sess.is_guest),
         "usage_count": int(sess.guest_usage_count or 0),
         "limit": 1 if sess.is_guest else None,
@@ -308,16 +339,85 @@ def jdump(v):
         return v  # JSONB handles dicts/lists natively
     return json.dumps(v, default=str)
 
+
+# --- Simple in-memory caches -------------------------------------------------
+# We keep two caches:
+#   _DF_CACHE   : parsed DataFrames keyed by (dataset_id, stage_id)
+#   _AI_CACHE   : AI responses keyed by a hash of the prompt inputs
+#
+# Why a plain dict and not Redis/Memcached?
+# - This is a single-process Flask app on Render. A dict is enough.
+# - One less moving part to deploy and explain.
+#
+# Why cap the size?
+# - A long-running server would otherwise hold every dataset ever uploaded
+#   in memory. We cap each cache at _CACHE_MAX entries and drop the oldest
+#   one (FIFO) when full. Python 3.7+ dicts keep insertion order, so
+#   `next(iter(cache))` gives us the oldest key in O(1).
+_CACHE_MAX = 32
+_DF_CACHE = {}     # {(ds_id, stage_id_or_None): pandas.DataFrame}
+_AI_CACHE = {}     # {sha1_hex: response_payload}
+
+def _cache_put(cache, key, value):
+    if key in cache:
+        # Refresh insertion order so it isn't evicted as "oldest" yet.
+        cache.pop(key)
+    cache[key] = value
+    while len(cache) > _CACHE_MAX:
+        cache.pop(next(iter(cache)))
+
+def _df_cache_key(ds):
+    """Cache key for a dataset's currently active stage."""
+    return (ds.id, ds.current_stage_id)
+
+def _df_cache_invalidate(ds_id):
+    """Drop every cached DataFrame *and* AI response for this dataset.
+
+    Called on any change that affects what we'd send to the AI:
+    stage transforms, sheet swaps, restores, resets, deletes.
+
+    Both caches use (ds_id, ...) as the key so we can drop only this
+    dataset's entries without disturbing anyone else's cache.
+    """
+    for key in [k for k in _DF_CACHE if k[0] == ds_id]:
+        _DF_CACHE.pop(key, None)
+    for key in [k for k in _AI_CACHE if k[0] == ds_id]:
+        _AI_CACHE.pop(key, None)
+
+def _ai_cache_key(ds_id, stage_id, kind, payload):
+    """Build a stable cache key for an AI request.
+
+    Returns a (ds_id, sha1_hex) tuple. Why both?
+    - The hash captures stage_id + kind + payload in a fixed-length string,
+      so we don't store the raw payload (which can be large) as the key.
+    - Keeping ds_id as a separate tuple element lets us filter the cache
+      by dataset for invalidation.
+    """
+    raw = json.dumps(
+        {"stage": stage_id, "kind": kind, "payload": payload},
+        sort_keys=True,
+        default=str,
+    )
+    return (ds_id, hashlib.sha1(raw.encode("utf-8")).hexdigest())
+
 def df_from_dataset(ds, session=None):
     """Rehydrate a pandas DataFrame from the dataset's *current* stage.
 
     Falls back to the original data when no stage is active. Pass a session
     when caller already has one to avoid opening a second connection.
+
+    Cached by (dataset_id, current_stage_id) — when the stage changes
+    (e.g. user cleans data) the key changes and we naturally re-parse.
     """
+    key = _df_cache_key(ds)
+    cached = _DF_CACHE.get(key)
+    if cached is not None:
+        # Return a copy so callers can mutate without poisoning the cache.
+        return cached.copy()
     rows = _current_rows(ds, session)
-    if not rows:
-        return pd.DataFrame()
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows) if rows else pd.DataFrame()
+    _cache_put(_DF_CACHE, key, df)
+    return df.copy()
 
 def _current_rows(ds, session=None):
     """Return the row list for the active stage (or the original)."""
@@ -401,6 +501,7 @@ def create_stage(session, ds, df, op_type, op_params, summary):
     ds.current_stage_id = stage.id
     ds.row_count = len(df)
     ds.col_count = len(df.columns)
+    _df_cache_invalidate(ds.id)  # stage changed — drop cached DataFrames
     log_activity(
         session,
         ds.id,
@@ -721,6 +822,7 @@ def create_guest_session():
 @app.route("/api/auth/signup", methods=["POST"])
 def signup():
     body = request.get_json() or {}
+    full_name = (body.get("full_name") or "").strip()
     email = (body.get("email") or "").strip().lower()
     password = body.get("password") or ""
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
@@ -733,7 +835,12 @@ def signup():
         if existing:
             return {"error": "email already registered"}, 409
         old_sess, _ = _auth_from_request(s)
-        user = User(id=str(uuid.uuid4()), email=email, password_hash=generate_password_hash(password))
+        user = User(
+            id=str(uuid.uuid4()),
+            email=email,
+            full_name=full_name or None,
+            password_hash=generate_password_hash(password),
+        )
         sess = UserSession(
             id=str(uuid.uuid4()),
             user_id=user.id,
@@ -820,6 +927,61 @@ def list_datasets():
     finally:
         s.close()
 
+
+def _validate_upload_file(f):
+    """Run safety checks on an uploaded file before pandas parses it.
+
+    Returns (ok: bool, error_message: str|None, kind: str|None) where kind is
+    "csv" or "excel". Centralising these checks keeps upload_dataset readable.
+
+    Checks performed:
+      1. Filename has an allowed extension.
+      2. Size is under MAX_UPLOAD_BYTES (this is also enforced by Flask via
+         MAX_CONTENT_LENGTH, but we re-check here so we can return a clear
+         JSON error instead of Flask's default HTML 413 page).
+      3. Magic bytes match the extension. Catches the "renamed .exe to .csv"
+         case where the extension lies about the contents.
+    """
+    name = (f.filename or "").lower()
+    if name.endswith(".csv"):
+        kind = "csv"
+    elif name.endswith((".xlsx", ".xls")):
+        kind = "excel"
+    else:
+        return False, "Unsupported file type. Please upload a .csv, .xlsx, or .xls file.", None
+
+    # Measure size by seeking the underlying stream. We rewind so the parser
+    # downstream still sees the file from byte 0.
+    f.stream.seek(0, 2)             # 2 = seek from end
+    size = f.stream.tell()
+    f.stream.seek(0)
+    if size > MAX_UPLOAD_BYTES:
+        mb_limit = MAX_UPLOAD_BYTES // (1024 * 1024)
+        mb_actual = round(size / (1024 * 1024), 1)
+        return False, f"File is too large ({mb_actual} MB). Maximum allowed is {mb_limit} MB.", None
+    if size == 0:
+        return False, "File is empty.", None
+
+    # Magic-byte sniff — read a few bytes, then rewind.
+    head = f.stream.read(8)
+    f.stream.seek(0)
+    if kind == "excel":
+        # XLSX is a zip archive — starts with PK\x03\x04. XLS is an OLE
+        # compound document — starts with D0 CF 11 E0 A1 B1 1A E1.
+        is_xlsx = head[:4] == b"PK\x03\x04"
+        is_xls = head[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+        if not (is_xlsx or is_xls):
+            return False, "File looks like it was renamed — the contents don't match an Excel file.", None
+    else:
+        # CSV has no magic number, but it should be valid UTF-8/ASCII text.
+        # Reject anything with a NUL byte in the first chunk — clear sign of
+        # a binary file pretending to be CSV.
+        if b"\x00" in head:
+            return False, "File looks like it was renamed — CSV files should be plain text.", None
+
+    return True, None, kind
+
+
 @app.route("/api/datasets/upload", methods=["POST"])
 def upload_dataset():
     """Create a Dataset from either an uploaded file or an existing Dataset.
@@ -851,12 +1013,18 @@ def upload_dataset():
             if "file" not in request.files:
                 return {"error": "no file"}, 400
             f = request.files["file"]
+
+            # Pre-parse safety checks (size, type, magic bytes).
+            ok, err, kind = _validate_upload_file(f)
+            if not ok:
+                return {"error": err}, 400
+
             sheets = None
             active_sheet = None
             try:
-                if f.filename.lower().endswith(".csv"):
+                if kind == "csv":
                     df = pd.read_csv(f)
-                elif f.filename.lower().endswith((".xlsx", ".xls")):
+                else:  # kind == "excel"
                     xls = pd.ExcelFile(f)
                     sheet_payload = {}
                     for sheet_name in xls.sheet_names:
@@ -867,10 +1035,18 @@ def upload_dataset():
                     active_sheet = str(xls.sheet_names[0])
                     sheets = sheet_payload
                     df = pd.DataFrame(sheet_payload[active_sheet]["data"])
-                else:
-                    return {"error": "unsupported file type"}, 400
             except Exception as e:
-                return {"error": f"failed to parse: {e}"}, 400
+                # Don't leak the raw pandas exception to the client — it's noisy
+                # and can expose internals. Log it and return a friendly message.
+                print(f"upload parse failed: {e}", flush=True)
+                return {"error": "Could not read the file. Please check it isn't corrupted."}, 400
+
+            # Post-parse safety check: refuse pathologically large datasets.
+            if len(df) > MAX_UPLOAD_ROWS:
+                return {
+                    "error": f"Dataset has {len(df):,} rows — maximum is {MAX_UPLOAD_ROWS:,}.",
+                }, 400
+
             variables = infer_variables(df)
             records = clean_json(df.where(pd.notnull(df), None).to_dict(orient="records"))
             row_count = len(df)
@@ -979,6 +1155,7 @@ def select_dataset_sheet(ds_id):
         ds.row_count = int(payload.get("row_count") or len(records))
         ds.col_count = int(payload.get("col_count") or (len(pd.DataFrame(records).columns) if records else 0))
         ds.current_stage_id = None
+        _df_cache_invalidate(ds_id)  # data swapped — invalidate cache
         log_activity(
             s,
             ds_id,
@@ -1031,6 +1208,7 @@ def delete_dataset(ds_id):
         filename = ds.filename
         s.delete(ds)
         s.commit()
+        _df_cache_invalidate(ds_id)  # dataset gone — free cached DataFrames
         return jsonify({"ok": True, "id": ds_id, "name": name, "filename": filename, "deleted": deleted})
     finally:
         s.close()
@@ -1491,6 +1669,7 @@ def delete_or_undo_activity(ds_id, activity_id):
                 ds.variables = parent.variables
                 ds.row_count = parent.row_count
                 ds.col_count = parent.col_count
+            _df_cache_invalidate(ds_id)  # restored to a different stage
             restored_to = parent_id
             log_activity(
                 s,
@@ -1599,6 +1778,7 @@ def restore_stage(ds_id, stage_id):
                 .filter(DatasetStage.dataset_id == ds_id, DatasetStage.step_index > stage.step_index)
                 .all()
             ]
+        _df_cache_invalidate(ds_id)  # stage reverted — drop cached DataFrames
         if removed_stage_ids:
             s.query(DatasetStage).filter(DatasetStage.id.in_(removed_stage_ids)).delete(synchronize_session=False)
             s.query(ActivityLog).filter(
@@ -1649,6 +1829,7 @@ def reset_project(ds_id):
         rows = jload(ds.data) or []
         ds.row_count = len(rows)
         ds.col_count = len(rows[0]) if rows else 0
+        _df_cache_invalidate(ds_id)  # project reset — drop cached DataFrames
 
         # Single log entry recording the reset
         log_activity(
@@ -4167,6 +4348,63 @@ def get_model(model_id):
 
 # --- AI assistant (simple rule-based; swap for Claude API later) ---
 
+@app.route("/api/datasets/<ds_id>/ai/project_plan", methods=["POST"])
+def ai_project_plan(ds_id):
+    """Generate an end-to-end guided workflow plan for the current dataset stage."""
+    body = request.get_json() or {}
+    mode = (body.get("mode") or "auto").lower()
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        df = df_from_dataset(ds, s)
+        variables = _current_variables(ds, s)
+        profile = _dataset_profile(ds, df, variables)
+        if mode == "system":
+            return jsonify(_rule_based_project_plan(df, variables))
+
+        cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "project_plan", {"mode": mode})
+        cached = _AI_CACHE.get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
+        client = _ai_client()
+        if client is None:
+            return jsonify(_rule_based_project_plan(df, variables))
+
+        system = (
+            "You are SimuCast's project guide. Create an ordered analytics plan "
+            "for a non-expert user. The plan must be actionable inside SimuCast, "
+            "use exact column names, and avoid vague steps. Keep each action short."
+        )
+        prompt = (
+            "Analyze the dataset profile and create a guided project plan across "
+            "the SimuCast workflow: data cleaning, description, statistical tests, "
+            "modeling, what-if analysis, and report. Include only steps that make "
+            "sense for this dataset. Each step must include: id, page "
+            "(data|expand|describe|tests|models|whatif|report), title, rationale, "
+            "priority (high|medium|low), and optional columns. "
+            'Respond as JSON: {"summary": str, "steps": [{"id": str, "page": str, "title": str, "rationale": str, "priority": "high|medium|low", "columns": [str]}]}'
+        )
+        try:
+            payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1800)
+            steps = payload.get("steps") or []
+            response = {
+                "ai": True,
+                "summary": payload.get("summary") or "AI generated a guided workflow for this dataset.",
+                "steps": _normalize_project_steps(steps),
+            }
+            _cache_put(_AI_CACHE, cache_key, response)
+            return jsonify(clean_json(response))
+        except Exception as e:
+            print(f"AI project plan failed: {e}", flush=True)
+            fallback = _rule_based_project_plan(df, variables)
+            fallback["error"] = f"AI call failed: {e.__class__.__name__}"
+            return jsonify(fallback)
+    finally:
+        s.close()
+
 @app.route("/api/datasets/<ds_id>/ai/recommend", methods=["POST"])
 def ai_recommend(ds_id):
     """Context-aware AI recommendations for a page (data / tests / models / expand).
@@ -4182,6 +4420,14 @@ def ai_recommend(ds_id):
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+
+        # Cache lookup: same dataset stage + same context = same answer.
+        # Skips a paid AI call when the user revisits the same page.
+        cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "recommend", {"context": context})
+        cached = _AI_CACHE.get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
         df = df_from_dataset(ds, s)
         variables = _current_variables(ds, s)
         profile = _dataset_profile(ds, df, variables)
@@ -4222,11 +4468,42 @@ def ai_recommend(ds_id):
                 "trade-offs spelled out. "
                 'Respond as JSON: {"method": "bootstrap|synthetic", "target_rows": int, "rationale": str, "warnings": [str]}'
             ),
+            "describe": (
+                "Write a 2–4 sentence narrative summary of this dataset that a "
+                "non-statistician would understand: what it appears to be about, "
+                "the most notable distributions or skews, and any obvious data "
+                "quality concerns. Then list up to 4 specific findings worth "
+                "highlighting (outliers, skewed columns, suspicious zeros, etc). "
+                'Respond as JSON: {"summary": str, "recommendations": [{"title": str, "rationale": str, "category": "distribution|outlier|quality|relationship"}]}'
+            ),
+            "clean": (
+                "Recommend up to 5 cleaning actions, ordered by impact. For each: "
+                "the action (impute, drop, recode, standardize, clip), the column "
+                "it applies to, and a one-sentence rationale referencing the "
+                "actual numbers (missing %, cardinality, etc). "
+                'Respond as JSON: {"recommendations": [{"title": str, "action": "impute|drop|recode|standardize|clip", "column": str, "rationale": str, "category": "clean"}]}'
+            ),
+            "whatif": (
+                "The user is exploring scenarios on a trained model. Suggest up "
+                "to 4 scenarios worth running given the columns available — each "
+                "should change one or two inputs in a way that would meaningfully "
+                "test the model. "
+                'Respond as JSON: {"recommendations": [{"title": str, "rationale": str, "category": "whatif", "changes": [{"column": str, "direction": "increase|decrease|set", "amount": str}]}]}'
+            ),
+            "report": (
+                "Write an executive summary of the analysis pipeline so far for "
+                "a non-technical stakeholder. Cover: what the data is, what was "
+                "done to it, the headline finding, and the main caveats. Then "
+                "list up to 4 next steps. "
+                'Respond as JSON: {"summary": str, "recommendations": [{"title": str, "rationale": str, "category": "next-step"}]}'
+            ),
         }
         prompt = prompts.get(context, prompts["data"])
         try:
             payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1500)
-            return jsonify({"context": context, "ai": True, **payload})
+            response = {"context": context, "ai": True, **payload}
+            _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
+            return jsonify(response)
         except Exception as e:
             print(f"AI recommend failed: {e}", flush=True)
             fallback = _rule_based_recommend(context, df, variables)
@@ -4240,17 +4517,33 @@ def ai_recommend(ds_id):
 def ai_explain(ds_id):
     """Free-form 'explain this' for a step the UI is showing the user.
 
-    Body: {step: str, params: dict, question: str?}
+    Body: {step: str, params: dict, result: dict?, question: str?}
+    `result` carries the computed payload the UI is displaying (test stats,
+    model metrics, scenario prediction, …) so the model can interpret the
+    actual numbers, not just the inputs.
     """
     body = request.get_json() or {}
     step = body.get("step") or "step"
     params = body.get("params") or {}
+    result = body.get("result")
     question = body.get("question") or "Explain what this step does and what to look out for."
     s = db()
     try:
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+
+        # Cache lookup: same dataset stage + same step + same inputs = same answer.
+        # The step (e.g. "test-t"), params (which columns), and result (the actual
+        # numbers) all matter — change any one of them and we re-ask the API.
+        cache_key = _ai_cache_key(
+            ds_id, ds.current_stage_id, "explain",
+            {"step": step, "params": params, "result": result, "question": question},
+        )
+        cached = _AI_CACHE.get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
         df = df_from_dataset(ds, s)
         variables = _current_variables(ds, s)
         profile = _dataset_profile(ds, df, variables)
@@ -4268,16 +4561,21 @@ def ai_explain(ds_id):
         system = (
             "You are SimuCast's data-analysis assistant. Explain steps in plain "
             "English to a non-statistician, in 2–4 short sentences. Reference "
-            "specific columns from the dataset profile when relevant. Be honest "
-            "about caveats but don't hedge excessively."
+            "specific columns from the dataset profile when relevant. When a "
+            "result is provided, interpret the actual numbers — say what the "
+            "values mean and what the user should do next. Be honest about "
+            "caveats but don't hedge excessively."
         )
-        prompt = (
-            f"User is on step '{step}' with params {json.dumps(params, default=str)}.\n"
-            f"Question: {question}"
-        )
+        parts = [f"User is on step '{step}' with params {json.dumps(params, default=str)}."]
+        if result is not None:
+            parts.append(f"Computed result the UI is showing: {json.dumps(result, default=str)}")
+        parts.append(f"Question: {question}")
+        prompt = "\n".join(parts)
         try:
             text = ai_call(profile, prompt, system=system, max_tokens=600)
-            return jsonify({"ai": True, "explanation": text})
+            response = {"ai": True, "explanation": text}
+            _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
+            return jsonify(response)
         except Exception as e:
             print(f"AI explain failed: {e}", flush=True)
             return jsonify({"ai": False, "explanation": f"AI call failed: {e}"})
@@ -4321,6 +4619,42 @@ def _rule_based_recommend(context, df, variables):
         return {"context": "expand", "ai": False, "method": "bootstrap",
                 "target_rows": max(500, 2 * len(df)), "rationale": "Bootstrap is fast and assumption-free.",
                 "warnings": ["Bootstrap rows are duplicates of originals — don't use for held-out evaluation."]}
+    if context == "describe":
+        recs = []
+        for col in nums[:2]:
+            recs.append({"title": f"Inspect distribution of '{col}'",
+                         "rationale": "Numeric column — check for skew or outliers.",
+                         "category": "distribution"})
+        for col in cats[:1]:
+            recs.append({"title": f"Check cardinality of '{col}'",
+                         "rationale": "Categorical column — verify it isn't near-unique.",
+                         "category": "quality"})
+        return {"context": "describe", "ai": False,
+                "summary": f"{len(df)} rows × {len(variables)} columns ({len(nums)} numeric, {len(cats)} categorical).",
+                "recommendations": recs}
+    if context == "clean":
+        recs = []
+        for col in missing_cols[:3]:
+            recs.append({"title": f"Impute or drop missing '{col}'",
+                         "action": "impute", "column": col,
+                         "rationale": f"{var_by_name[col]['missing']} rows are blank.",
+                         "category": "clean"})
+        return {"context": "clean", "ai": False, "recommendations": recs}
+    if context == "whatif":
+        recs = []
+        for col in nums[:3]:
+            recs.append({"title": f"Increase '{col}' by 10%",
+                         "rationale": "Test sensitivity to a moderate positive shift.",
+                         "category": "whatif",
+                         "changes": [{"column": col, "direction": "increase", "amount": "10%"}]})
+        return {"context": "whatif", "ai": False, "recommendations": recs}
+    if context == "report":
+        return {"context": "report", "ai": False,
+                "summary": f"Dataset has {len(df)} rows and {len(variables)} columns. Configure ANTHROPIC_API_KEY for a full narrative summary.",
+                "recommendations": [
+                    {"title": "Review missing-value handling", "rationale": "Confirm imputation choices are documented.", "category": "next-step"},
+                    {"title": "Validate model on held-out data", "rationale": "Bootstrapped/synthetic rows shouldn't be used for evaluation.", "category": "next-step"},
+                ]}
     # default = data
     recs = []
     for col in missing_cols[:3]:
@@ -4336,6 +4670,104 @@ def _rule_based_recommend(context, df, variables):
     return {"context": "data", "ai": False,
             "summary": "Heuristic recommendations (no AI key configured).",
             "recommendations": recs}
+
+def _normalize_project_steps(steps):
+    valid_pages = {"data", "expand", "describe", "tests", "models", "whatif", "report"}
+    out = []
+    for idx, raw in enumerate(steps or [], start=1):
+        if not isinstance(raw, dict):
+            continue
+        page = str(raw.get("page") or "data").lower()
+        if page not in valid_pages:
+            page = "data"
+        title = str(raw.get("title") or raw.get("action") or f"Step {idx}").strip()
+        if not title:
+            continue
+        priority = str(raw.get("priority") or "medium").lower()
+        if priority not in {"high", "medium", "low"}:
+            priority = "medium"
+        out.append({
+            "id": str(raw.get("id") or f"{page}-{idx}"),
+            "page": page,
+            "title": title,
+            "rationale": str(raw.get("rationale") or raw.get("summary") or "").strip(),
+            "priority": priority,
+            "columns": [str(c) for c in (raw.get("columns") or []) if c is not None],
+        })
+    return out[:10]
+
+def _rule_based_project_plan(df, variables):
+    nums = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]
+    cats = [v["name"] for v in variables if v.get("dtype") == "category"]
+    bins = [v["name"] for v in variables if v.get("dtype") == "binary"]
+    missing_cols = [v["name"] for v in variables if int(v.get("missing", 0) or 0) > 0]
+    steps = []
+    if missing_cols:
+        steps.append({
+            "id": "data-missing-values",
+            "page": "data",
+            "title": f"Fix missing values in {', '.join(missing_cols[:3])}",
+            "rationale": "Missing values can distort summaries, tests, and model training.",
+            "priority": "high",
+            "columns": missing_cols[:5],
+        })
+    if cats:
+        steps.append({
+            "id": "data-category-standardization",
+            "page": "data",
+            "title": "Review categorical labels for standardization",
+            "rationale": "Consistent labels keep categories from being split incorrectly during tests and modeling.",
+            "priority": "high" if len(cats) else "medium",
+            "columns": cats[:5],
+        })
+    steps.append({
+        "id": "describe-overview",
+        "page": "describe",
+        "title": "Run descriptive statistics for key variables",
+        "rationale": "Start with distributions, averages, and category balance before formal testing.",
+        "priority": "medium",
+        "columns": (nums[:3] + cats[:2])[:5],
+    })
+    if len(nums) >= 2:
+        steps.append({
+            "id": "tests-correlation",
+            "page": "tests",
+            "title": f"Check relationships between {nums[0]} and {nums[1]}",
+            "rationale": "Correlation or relationship tests help identify promising predictors.",
+            "priority": "medium",
+            "columns": nums[:2],
+        })
+    if bins or nums:
+        target = (bins[0] if bins else nums[-1])
+        steps.append({
+            "id": "models-train",
+            "page": "models",
+            "title": f"Train candidate models for {target}",
+            "rationale": "Compare strict task-appropriate models before using what-if analysis.",
+            "priority": "high",
+            "columns": [target],
+        })
+        steps.append({
+            "id": "whatif-scenario",
+            "page": "whatif",
+            "title": "Run a what-if scenario with the best saved model",
+            "rationale": "Scenario testing turns model output into a decision-oriented explanation.",
+            "priority": "medium",
+            "columns": nums[:3],
+        })
+    steps.append({
+        "id": "report-final",
+        "page": "report",
+        "title": "Generate a report with documentation and insights",
+        "rationale": "The report should summarize data prep, tests, models, scenarios, and notes.",
+        "priority": "medium",
+        "columns": [],
+    })
+    return {
+        "ai": False,
+        "summary": f"Suggested workflow for {len(df)} rows and {len(variables)} variables.",
+        "steps": _normalize_project_steps(steps),
+    }
 
 
 @app.route("/api/datasets/<ds_id>/ai/suggest", methods=["POST"])

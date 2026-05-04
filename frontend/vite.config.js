@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       // proxy api to local flask during dev
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:5001',
         changeOrigin: true,
       },
     },

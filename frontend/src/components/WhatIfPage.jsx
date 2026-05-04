@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'
+import { AIInsightCard, ExplainButton } from './AIExplainers'
 
 export default function WhatIfPage({ dataset, activeModel }) {
   const dialog = useDialog()
@@ -125,8 +126,8 @@ export default function WhatIfPage({ dataset, activeModel }) {
       <h1 className="ax-page-title">What-if analysis</h1>
       <p className="ax-page-sub">Using <code>{modelFull.name}</code>. Adjust feature values and see how changes affect the prediction.</p>
 
-      <div className="ax-card" style={{ marginBottom: 14, padding: 16 }}>
-        <div className="ax-row" style={{ marginBottom: 12 }}>
+      <div id="whatif-section-controls" className="ax-card" style={{ marginBottom: 14, padding: 16 }}>
+        <div className="ax-row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
           <div>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
               Predicted {isProb ? `probability${pred?.positive_class ? ` of ${pred.positive_class}` : pred?.predicted_class ? ` of ${pred.predicted_class}` : ''}` : modelFull.target}
@@ -145,6 +146,16 @@ export default function WhatIfPage({ dataset, activeModel }) {
               </p>
             )}
           </div>
+          {pred && (
+            <ExplainButton
+              datasetId={dataset.id}
+              step="whatif-prediction"
+              params={{ target: modelFull.target, inputs, baseline_inputs: undefined }}
+              result={{ prediction: pred, baseline, delta, extrapolation }}
+              question="Explain this scenario prediction in plain English: what changed from the baseline, why the prediction shifted in that direction, and how confident the user should be given the extrapolation risk."
+              label="Explain"
+            />
+          )}
         </div>
         {isProb && (
           <div style={{ height: 8, background: 'var(--color-background-secondary)', borderRadius: 4, overflow: 'hidden' }}>

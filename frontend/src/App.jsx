@@ -14,11 +14,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <DialogProvider>
-        <AuthProvider>
-          <BrowserRouter>
+        <BrowserRouter>
+          <AuthProvider>
             <AppRoutes />
-          </BrowserRouter>
-        </AuthProvider>
+          </AuthProvider>
+        </BrowserRouter>
       </DialogProvider>
     </ThemeProvider>
   )
