@@ -196,6 +196,7 @@ input[type="range"]::-moz-range-thumb {
   border: 0.5px solid var(--color-border-secondary);
   background: var(--color-background-primary);
   color: var(--color-text-primary);
+  text-decoration: none;
   transition: background 0.12s, transform 0.12s, border-color 0.12s, opacity 0.12s;
 }
 .ax-btn:hover:not(:disabled) {
@@ -779,6 +780,19 @@ input[type="range"]::-moz-range-thumb {
   margin: 8px 0 0;
   color: #6b7280;
   line-height: 1.45;
+}
+
+.ax-demo-sample {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.ax-demo-sample p {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
 }
 
 .ax-workflow-band {
@@ -1941,11 +1955,11 @@ input[type="range"]::-moz-range-thumb {
 .ax-right-rail {
   position: sticky;
   top: 16px;
-  max-height: calc(100vh - 120px);
-  overflow: auto;
+  height: calc(100vh - 120px);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
 }
 .ax-plan-panel {
   padding: 14px;
@@ -2010,7 +2024,27 @@ input[type="range"]::-moz-range-thumb {
   background: var(--color-background-warning);
 }
 .ax-plan-step.done {
-  opacity: 0.72;
+  opacity: 0.6;
+}
+.ax-plan-done-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+}
+.ax-plan-done-divider::before,
+.ax-plan-done-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border-tertiary);
+}
+.ax-plan-done-divider span {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .ax-plan-check {
   width: 28px;
@@ -2059,9 +2093,15 @@ input[type="range"]::-moz-range-thumb {
   color: var(--color-text-secondary);
   line-height: 1.35;
 }
+.ax-plan-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
 .ax-activity-panel {
-  max-height: none;
-  overflow: visible;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 .ax-activity-list {
   display: flex;
@@ -2126,10 +2166,14 @@ input[type="range"]::-moz-range-thumb {
   }
   .ax-right-rail {
     position: static;
-    max-height: none;
+    height: auto;
+    overflow: hidden;
   }
+  .ax-plan-panel,
   .ax-activity-panel {
-    overflow: visible;
+    flex: none;
+    overflow-y: visible;
+    min-height: 0;
   }
 }
 

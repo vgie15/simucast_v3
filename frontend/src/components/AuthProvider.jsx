@@ -69,6 +69,13 @@ export function AuthProvider({ children }) {
     }
   }, [saveSession])
 
+  const resetGuestSession = useCallback(async () => {
+    api.setSessionToken('')
+    const r = await api.authGuest()
+    saveSession(r)
+    return r.session
+  }, [saveSession])
+
   const value = useMemo(() => ({
     session,
     loading,
@@ -78,9 +85,10 @@ export function AuthProvider({ children }) {
     signup,
     logout,
     ensureGuest,
+    resetGuestSession,
     updateSession: saveSession,
     showAuthModal: (mode = 'login') => setModalMode(mode),
-  }), [session, loading, login, signup, logout, ensureGuest, saveSession])
+  }), [session, loading, login, signup, logout, ensureGuest, resetGuestSession, saveSession])
 
   return (
     <AuthContext.Provider value={value}>
@@ -224,14 +232,10 @@ function AuthModal({ initialMode, onClose }) {
           <button className="ax-btn prim ax-auth-submit" type="submit" disabled={busy}>
             {busy ? 'Working...' : mode === 'signup' ? 'Create Account' : 'Sign In'}
           </button>
-          {mode === 'login' && (
-            <>
-              <div className="ax-auth-divider"><span>OR</span></div>
-              <button className="ax-btn ax-auth-guest" type="button" onClick={continueGuest} disabled={busy}>
-                Continue as Guest
-              </button>
-            </>
-          )}
+          <div className="ax-auth-divider"><span>OR</span></div>
+          <button className="ax-btn ax-auth-guest" type="button" onClick={continueGuest} disabled={busy}>
+            Continue as Guest
+          </button>
           <p>
             {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button type="button" onClick={() => switchMode(mode === 'signup' ? 'login' : 'signup')}>

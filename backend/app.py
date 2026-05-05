@@ -1008,6 +1008,16 @@ def upload_dataset():
 
     s = db()
     try:
+        sess, _ = _auth_from_request(s)
+        if sess and sess.is_guest:
+            existing_count = _dataset_scope(s.query(Dataset), s).count()
+            if existing_count >= 1:
+                return {
+                    "error": "Guest accounts can only upload 1 dataset. Sign up or log in to upload more.",
+                    "auth_required": True,
+                    "guest_limit": True,
+                }, 403
+
         if from_id:
             src = _dataset_scope(s.query(Dataset), s).filter_by(id=from_id).first()
             if not src:

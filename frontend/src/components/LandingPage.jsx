@@ -1,10 +1,16 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthProvider'
 
 export default function LandingPage() {
   const navigate = useNavigate()
   const auth = useAuth()
+
+  useEffect(() => {
+    // Clear frontend navigation caches when landing — keep the backend session intact
+    // so that the 1-project guest limit stays enforced.
+    window.sessionStorage.removeItem('simucast.fixTarget')
+  }, [])
 
   const launch = () => {
     if (auth.isAuthenticated) navigate('/dashboard')
@@ -68,8 +74,8 @@ export default function LandingPage() {
             <button className="ax-btn prim" onClick={openSignup} type="button">
               Get Started Free -&gt;
             </button>
-            <a className="ax-btn" href="#demo">
-              Watch Demo
+            <a className="ax-btn" href="/sample-dataset.csv" download="students-performance.csv">
+              ↓ Sample Dataset
             </a>
           </div>
           <div className="ax-landing-stats">

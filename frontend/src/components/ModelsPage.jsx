@@ -66,17 +66,27 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [dismissedChecks, setDismissedChecks] = useState([])
 
   const handleFixAction = (fix) => {
+    if (!fix?.route) return
+    const sectionMap = {
+      manual_transforms: 'data-section-manual_transforms',
+      category_standardization: 'data-section-category_standardization',
+      target_options: 'models-step-1',
+      class_weight: 'models-step-4',
+      algorithms: 'models-step-5',
+    }
+    const sectionId = sectionMap[fix.section] || ''
     if (fix.route === 'models') {
-      const sectionIdMap = { target_options: 'models-step-1', class_weight: 'models-step-4', algorithms: 'models-step-5' }
-      const el = document.getElementById(sectionIdMap[fix.section])
+      const el = document.getElementById(sectionId)
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        el.style.outline = '2px solid var(--color-accent)'
-        el.style.outlineOffset = '2px'
-        setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = '' }, 1600)
+        el.classList.add('ax-fix-highlight')
+        setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
       }
     } else if (dataset?.id) {
-      navigate(`/projects/${dataset.id}/${fix.route}`, { state: { openSection: fix.section } })
+      if (sectionId) {
+        window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify({ page: fix.route, section: sectionId, ts: Date.now() }))
+      }
+      navigate(`/projects/${dataset.id}/${fix.route}`)
     }
   }
 

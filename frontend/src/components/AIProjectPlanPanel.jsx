@@ -60,9 +60,16 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId, stageKey])
 
+  const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
+  const currentPageOrder = PAGE_ORDER[activeTab] ?? -1
+
   const steps = plan?.steps || []
   const doneSet = useMemo(() => new Set(done), [done])
-  const nextStep = steps.find((step) => !doneSet.has(step.id))
+
+  const isEffectiveDone = (step) =>
+    doneSet.has(step.id) || (PAGE_ORDER[step.page] ?? 99) < currentPageOrder
+
+  const nextStep = steps.find((step) => !isEffectiveDone(step))
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {
@@ -139,52 +146,64 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
 
       {!collapsed && plan && (
         <div className="ax-plan-list">
-          {steps.map((step, index) => {
-            const isDone = doneSet.has(step.id)
-            const isNext = nextStep?.id === step.id
-            const isHere = step.page === activeTab
-            const target = targetForStep(step)
-            return (
-              <article
-                key={`${step.id}-${index}`}
-                className={`ax-plan-step ${isDone ? 'done' : ''} ${isNext ? 'next' : ''}`}
-              >
-                <button
-                  className="ax-plan-check"
-                  onClick={() => toggleDone(step.id)}
-                  type="button"
-                  aria-label={isDone ? 'Mark step incomplete' : 'Mark step complete'}
-                >
-                  {isDone ? '✓' : index + 1}
-                </button>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <p style={{ fontSize: 13, fontWeight: 750, margin: 0 }}>{step.title}</p>
-                    {isNext && <span className="ax-chip ax-plan-chip">next</span>}
-                    {isHere && <span className="ax-chip">here</span>}
-                  </div>
-                  {step.rationale && (
-                    <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>
-                      {step.rationale}
-                    </p>
+          {steps
+            .map((step, index) => ({ step, index }))
+            .sort((a, b) => {
+              const aDone = isEffectiveDone(a.step) ? 1 : 0
+              const bDone = isEffectiveDone(b.step) ? 1 : 0
+              return aDone - bDone || a.index - b.index
+            })
+            .map(({ step, index }, position) => {
+              const isDone = isEffectiveDone(step)
+              const isNext = nextStep?.id === step.id
+              const target = targetForStep(step)
+              const pendingCount = steps.filter((s) => !isEffectiveDone(s)).length
+              const showDoneDivider = isDone && position === pendingCount && pendingCount < steps.length
+              return (
+                <React.Fragment key={`${step.id}-${index}`}>
+                  {showDoneDivider && (
+                    <div className="ax-plan-done-divider">
+                      <span>Completed</span>
+                    </div>
                   )}
-                  {step.columns?.length > 0 && (
-                    <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>
-                      {step.columns.slice(0, 4).join(', ')}
-                    </p>
-                  )}
-                  <div className="ax-plan-target">
-                    <span>Use</span>
-                    <strong>{target.label}</strong>
-                    <small>{target.hint}</small>
-                  </div>
-                  <button className="ax-btn mini" onClick={() => goToStep(step)} type="button" style={{ marginTop: 6 }}>
-                    Open {target.shortLabel}
-                  </button>
-                </div>
-              </article>
-            )
-          })}
+                  <article className={`ax-plan-step ${isDone ? 'done' : ''} ${isNext ? 'next' : ''}`}>
+                    <button
+                      className="ax-plan-check"
+                      onClick={() => toggleDone(step.id)}
+                      type="button"
+                      aria-label={isDone ? 'Mark step incomplete' : 'Mark step complete'}
+                    >
+                      {isDone ? '✓' : index + 1}
+                    </button>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 750, margin: 0 }}>{step.title}</p>
+                      {!isDone && step.rationale && (
+                        <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>
+                          {step.rationale}
+                        </p>
+                      )}
+                      {!isDone && step.columns?.length > 0 && (
+                        <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>
+                          {step.columns.slice(0, 4).join(', ')}
+                        </p>
+                      )}
+                      {!isDone && (
+                        <>
+                          <div className="ax-plan-target">
+                            <span>Use</span>
+                            <strong>{target.label}</strong>
+                            <small>{target.hint}</small>
+                          </div>
+                          <button className="ax-btn mini" onClick={() => goToStep(step)} type="button" style={{ marginTop: 6 }}>
+                            Open {target.shortLabel}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </article>
+                </React.Fragment>
+              )
+            })}
         </div>
       )}
     </section>

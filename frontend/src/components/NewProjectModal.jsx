@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { useAuth } from './AuthProvider'
 
 export default function NewProjectModal({ open, onClose, onCreated }) {
+  const auth = useAuth()
   const [mode, setMode] = useState('upload') // 'upload' | 'existing'
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -70,6 +72,14 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
       setError('Pick a file from the list.')
       return
     }
+    if (auth.isGuest) {
+      const current = await api.listDatasets().catch(() => [])
+      if (current.length >= 1) {
+        setError('Guest accounts are limited to 1 project. Sign up or log in to create more.')
+        auth.showAuthModal('signup')
+        return
+      }
+    }
     setBusy(true)
     setError(null)
     try {
@@ -80,6 +90,9 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
       reset()
       onCreated(result)
     } catch (err) {
+      if (err.guest_limit || err.auth_required) {
+        auth.showAuthModal('signup')
+      }
       setError(err.message || 'Failed to create project')
       setBusy(false)
     }

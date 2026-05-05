@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'
+import { useAuth } from './AuthProvider'
 import NewProjectModal from './NewProjectModal'
 
 export default function ProjectsPage() {
@@ -9,6 +10,9 @@ export default function ProjectsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const navigate = useNavigate()
   const dialog = useDialog()
+  const auth = useAuth()
+
+  const guestAtLimit = auth.isGuest && datasets.length >= 1
 
   useEffect(() => {
     api.listDatasets().then(setDatasets).catch(console.error)
@@ -42,10 +46,29 @@ export default function ProjectsPage() {
           <h1 className="ax-page-title" style={{ marginBottom: 0 }}>Projects</h1>
           <p className="ax-page-sub">Each project is a dataset you can clean, describe, test, and model.</p>
         </div>
-        <button className="ax-btn prim" onClick={() => setModalOpen(true)}>
-          + New project
-        </button>
+        {guestAtLimit ? (
+          <button className="ax-btn" onClick={() => auth.showAuthModal('signup')} type="button">
+            Sign up to add more
+          </button>
+        ) : (
+          <button className="ax-btn prim" onClick={() => setModalOpen(true)} type="button">
+            + New project
+          </button>
+        )}
       </div>
+      {guestAtLimit && (
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
+          Guest accounts are limited to 1 project.{' '}
+          <button
+            type="button"
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-accent)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+            onClick={() => auth.showAuthModal('signup')}
+          >
+            Sign up free
+          </button>{' '}
+          to keep your work and create more projects.
+        </p>
+      )}
 
       <p className="ax-lbl" style={{ marginTop: 16 }}>All projects</p>
       {datasets.length === 0 ? (
