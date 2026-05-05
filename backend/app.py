@@ -767,15 +767,26 @@ def ai_call(profile, user_prompt, system=None, model=_AI_MODEL_FAST, max_tokens=
     )
     text = "".join(block.text for block in msg.content if getattr(block, "type", None) == "text")
     if json_mode:
-        try:
-            return json.loads(text)
-        except Exception:
-            # tolerate stray fences
-            cleaned = text.strip().strip("`")
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:].strip()
-            return json.loads(cleaned)
+        return _parse_ai_json(text)
     return text
+
+
+def _parse_ai_json(text):
+    """Extract a JSON object from a model response that may include code fences or prose."""
+    s = (text or "").strip()
+    # Strip ```json ... ``` or ``` ... ``` fences if the whole reply is fenced.
+    if s.startswith("```"):
+        s = re.sub(r"^```(?:json|JSON)?\s*\n?", "", s)
+        s = re.sub(r"\n?```\s*$", "", s).strip()
+    try:
+        return json.loads(s)
+    except Exception:
+        # Fall back to the largest {...} substring — handles leading/trailing prose.
+        start = s.find("{")
+        end = s.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(s[start : end + 1])
+        raise
 
 
 # ========================================================================
