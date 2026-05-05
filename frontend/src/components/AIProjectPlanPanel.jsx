@@ -8,6 +8,8 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   const stageKey = dataset?.current_stage_id || 'original'
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
+  const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
+  const [mode, setMode] = useState(() => (modeKey ? window.localStorage.getItem(modeKey) || 'auto' : 'auto'))
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -15,8 +17,8 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   const [collapsed, setCollapsed] = useState(false)
 
   const load = async (force = false) => {
-    if (!datasetId) return
-    const cacheKey = `simucast.aiPlan.${datasetId}.${stageKey}.auto`
+    if (!datasetId || mode === 'off') return
+    const cacheKey = `simucast.aiPlan.${datasetId}.${stageKey}.${mode}`
     if (!force) {
       const cached = window.localStorage.getItem(cacheKey)
       if (cached) {
@@ -31,7 +33,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
     setLoading(true)
     setError('')
     try {
-      const r = await api.aiProjectPlan(datasetId, 'auto')
+      const r = await api.aiProjectPlan(datasetId, mode)
       setPlan(r)
       window.localStorage.setItem(cacheKey, JSON.stringify(r))
     } catch (err) {
@@ -40,6 +42,12 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!modeKey) return
+    const saved = window.localStorage.getItem(modeKey) || 'auto'
+    setMode(saved)
+  }, [modeKey])
 
   useEffect(() => {
     if (!doneKey) return
@@ -58,7 +66,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   useEffect(() => {
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, stageKey])
+  }, [datasetId, stageKey, mode])
 
   const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
   const currentPageOrder = PAGE_ORDER[activeTab] ?? -1
@@ -70,6 +78,8 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
     doneSet.has(step.id) || (PAGE_ORDER[step.page] ?? 99) < currentPageOrder
 
   const nextStep = steps.find((step) => !isEffectiveDone(step))
+  const isAI = plan?.ai === true
+  const isAutoFallback = mode === 'auto' && plan && plan.ai !== true
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {
@@ -121,93 +131,150 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
           }}
         >
           <Chevron open={!collapsed} />
-          <span style={{ fontSize: 16, fontWeight: 800 }}>AI Guided Plan</span>
+          <span style={{ fontSize: 16, fontWeight: 800 }}>
+            {isAI ? 'AI Guided Plan' : 'System Guided Plan'}
+          </span>
         </button>
       </div>
 
-      {!collapsed && plan?.error && (
-        <div className="ax-plan-fallback">
-          <strong>AI call failed</strong>
-          <span>{plan.error}</span>
-        </div>
-      )}
+      {!collapsed && (
+        <>
+          <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 10 }}>
+            <button
+              type="button"
+              className={mode === 'auto' ? 'active' : ''}
+              onClick={() => setGuidanceMode('auto', modeKey, setMode, setPlan)}
+            >
+              AI guided
+            </button>
+            <button
+              type="button"
+              className={mode === 'system' ? 'active' : ''}
+              onClick={() => setGuidanceMode('system', modeKey, setMode, setPlan)}
+            >
+              System only
+            </button>
+            <button
+              type="button"
+              className={mode === 'off' ? 'active' : ''}
+              onClick={() => setGuidanceMode('off', modeKey, setMode, setPlan)}
+            >
+              Hide
+            </button>
+          </div>
 
-      {!collapsed && loading && !plan && (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
-          Planning the workflow...
-        </p>
-      )}
-      {!collapsed && error && <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>}
-      {!collapsed && plan?.summary && (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
-          {plan.summary}
-        </p>
-      )}
+          {mode === 'off' && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+              Guided planning is off for this project.
+            </p>
+          )}
 
-      {!collapsed && plan && (
-        <div className="ax-plan-list">
-          {steps
-            .map((step, index) => ({ step, index }))
-            .sort((a, b) => {
-              const aDone = isEffectiveDone(a.step) ? 1 : 0
-              const bDone = isEffectiveDone(b.step) ? 1 : 0
-              return aDone - bDone || a.index - b.index
-            })
-            .map(({ step, index }, position) => {
-              const isDone = isEffectiveDone(step)
-              const isNext = nextStep?.id === step.id
-              const target = targetForStep(step)
-              const pendingCount = steps.filter((s) => !isEffectiveDone(s)).length
-              const showDoneDivider = isDone && position === pendingCount && pendingCount < steps.length
-              return (
-                <React.Fragment key={`${step.id}-${index}`}>
-                  {showDoneDivider && (
-                    <div className="ax-plan-done-divider">
-                      <span>Completed</span>
-                    </div>
-                  )}
-                  <article className={`ax-plan-step ${isDone ? 'done' : ''} ${isNext ? 'next' : ''}`}>
-                    <button
-                      className="ax-plan-check"
-                      onClick={() => toggleDone(step.id)}
-                      type="button"
-                      aria-label={isDone ? 'Mark step incomplete' : 'Mark step complete'}
-                    >
-                      {isDone ? '✓' : index + 1}
-                    </button>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 750, margin: 0 }}>{step.title}</p>
-                      {!isDone && step.rationale && (
-                        <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>
-                          {step.rationale}
-                        </p>
+          {mode !== 'off' && plan?.error && (
+            <div className="ax-plan-fallback">
+              <strong>AI call failed</strong>
+              <span>{plan.error}</span>
+            </div>
+          )}
+
+          {mode !== 'off' && loading && !plan && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
+              Planning the workflow...
+            </p>
+          )}
+          {mode !== 'off' && error && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>
+          )}
+          {mode !== 'off' && isAutoFallback && (
+            <div className="ax-plan-fallback">
+              <strong>AI unavailable</strong>
+              <span>
+                Could not generate an AI plan. Switch to <strong>System only</strong> to use the built-in workflow guide.
+              </span>
+            </div>
+          )}
+          {mode !== 'off' && !isAutoFallback && plan?.summary && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+              {plan.summary}
+            </p>
+          )}
+
+          {mode !== 'off' && !isAutoFallback && plan && (
+            <div className="ax-plan-list">
+              {steps
+                .map((step, index) => ({ step, index }))
+                .sort((a, b) => {
+                  const aDone = isEffectiveDone(a.step) ? 1 : 0
+                  const bDone = isEffectiveDone(b.step) ? 1 : 0
+                  return aDone - bDone || a.index - b.index
+                })
+                .map(({ step, index }, position) => {
+                  const isDone = isEffectiveDone(step)
+                  const isNext = nextStep?.id === step.id
+                  const target = targetForStep(step)
+                  const pendingCount = steps.filter((s) => !isEffectiveDone(s)).length
+                  const showDoneDivider = isDone && position === pendingCount && pendingCount < steps.length
+                  return (
+                    <React.Fragment key={`${step.id}-${index}`}>
+                      {showDoneDivider && (
+                        <div className="ax-plan-done-divider">
+                          <span>Completed</span>
+                        </div>
                       )}
-                      {!isDone && step.columns?.length > 0 && (
-                        <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>
-                          {step.columns.slice(0, 4).join(', ')}
-                        </p>
-                      )}
-                      {!isDone && (
-                        <>
-                          <div className="ax-plan-target">
-                            <span>Use</span>
-                            <strong>{target.label}</strong>
-                            <small>{target.hint}</small>
-                          </div>
-                          <button className="ax-btn mini" onClick={() => goToStep(step)} type="button" style={{ marginTop: 6 }}>
-                            Open {target.shortLabel}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </article>
-                </React.Fragment>
-              )
-            })}
-        </div>
+                      <article className={`ax-plan-step ${isDone ? 'done' : ''} ${isNext ? 'next' : ''}`}>
+                        <button
+                          className="ax-plan-check"
+                          onClick={() => toggleDone(step.id)}
+                          type="button"
+                          aria-label={isDone ? 'Mark step incomplete' : 'Mark step complete'}
+                        >
+                          {isDone ? '✓' : index + 1}
+                        </button>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 750, margin: 0 }}>{step.title}</p>
+                          {!isDone && step.rationale && (
+                            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>
+                              {step.rationale}
+                            </p>
+                          )}
+                          {!isDone && step.columns?.length > 0 && (
+                            <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>
+                              {step.columns.slice(0, 4).join(', ')}
+                            </p>
+                          )}
+                          {!isDone && (
+                            <>
+                              <div className="ax-plan-target">
+                                <span>Use</span>
+                                <strong>{target.label}</strong>
+                                <small>{target.hint}</small>
+                              </div>
+                              <button
+                                className="ax-btn mini"
+                                onClick={() => goToStep(step)}
+                                type="button"
+                                style={{ marginTop: 6 }}
+                              >
+                                Open {target.shortLabel}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </article>
+                    </React.Fragment>
+                  )
+                })}
+            </div>
+          )}
+        </>
       )}
     </section>
   )
+}
+
+function setGuidanceMode(nextMode, modeKey, setMode, setPlan) {
+  if (modeKey) window.localStorage.setItem(modeKey, nextMode)
+  setMode(nextMode)
+  setPlan(null)
 }
 
 function Chevron({ open }) {
