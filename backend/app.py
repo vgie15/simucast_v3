@@ -672,8 +672,8 @@ def activity_payload(entry):
 # read from ANTHROPIC_API_KEY at request time so the server still boots
 # (and serves non-AI endpoints) when the key is unset.
 
-_AI_MODEL_FAST = "claude-sonnet-4-20250514"
-_AI_MODEL_DEEP = "claude-opus-4-1-20250805"
+_AI_MODEL_FAST = "claude-sonnet-4-6"
+_AI_MODEL_DEEP = "claude-opus-4-7"
 
 def _ai_client():
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
