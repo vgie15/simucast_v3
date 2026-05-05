@@ -4387,7 +4387,9 @@ def ai_project_plan(ds_id):
         system = (
             "You are SimuCast's project guide. Create an ordered analytics plan "
             "for a non-expert user. The plan must be actionable inside SimuCast, "
-            "use exact column names, and avoid vague steps. Keep each action short."
+            "use exact column names, and avoid vague steps. Keep each action "
+            "short. All string fields must be plain text — no markdown "
+            "headings, tables, code fences, or bold/italic."
         )
         prompt = (
             "Analyze the dataset profile and create a guided project plan across "
@@ -4451,7 +4453,9 @@ def ai_recommend(ds_id):
             "You are SimuCast's data-analysis assistant. You help non-experts "
             "understand their dataset and decide the next step. Be concise, "
             "concrete, and reference column names exactly as given. When you "
-            "recommend an action, explain WHY in one short sentence."
+            "recommend an action, explain WHY in one short sentence. All "
+            "string fields must be plain text — no markdown headings, tables, "
+            "code fences, or bold/italic."
         )
         prompts = {
             "data": (
@@ -4570,12 +4574,11 @@ def ai_explain(ds_id):
             })
 
         system = (
-            "You are SimuCast's data-analysis assistant. Explain steps in plain "
-            "English to a non-statistician, in 2–4 short sentences. Reference "
-            "specific columns from the dataset profile when relevant. When a "
-            "result is provided, interpret the actual numbers — say what the "
-            "values mean and what the user should do next. Be honest about "
-            "caveats but don't hedge excessively."
+            "You are SimuCast's data-analysis assistant. Reply in plain text "
+            "only — no markdown headings, tables, code fences, or bold/italic. "
+            "Be concise. Reference exact column names from the dataset profile. "
+            "When a result is provided, interpret the actual numbers — say what "
+            "the values mean and what the user should do next."
         )
         parts = [f"User is on step '{step}' with params {json.dumps(params, default=str)}."]
         if result is not None:
@@ -4583,7 +4586,7 @@ def ai_explain(ds_id):
         parts.append(f"Question: {question}")
         prompt = "\n".join(parts)
         try:
-            text = ai_call(profile, prompt, system=system, max_tokens=600)
+            text = ai_call(profile, prompt, system=system, max_tokens=300)
             response = {"ai": True, "explanation": text}
             _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
             return jsonify(response)

@@ -17,6 +17,7 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [collapsed, setCollapsed] = useState(false)
 
   const [followQ, setFollowQ] = useState('')
   const [followAnswer, setFollowAnswer] = useState(null)
@@ -54,22 +55,41 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
     }
   }
 
-  const isAI = data?.ai === true
   const recommendations = data?.recommendations || []
   const sectionTitle = title || titleForContext(context)
 
   return (
     <div className="ax-card" style={{ marginBottom: 16 }}>
-      <div className="ax-row" style={{ marginBottom: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8 }}>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            font: 'inherit',
+            color: 'inherit',
+            textAlign: 'left',
+          }}
+        >
+          <Chevron open={!collapsed} />
           <SparkleIcon />
           <span style={{ fontSize: 13, fontWeight: 500 }}>{sectionTitle}</span>
-          <ModeBadge isAI={isAI} hasError={!!data?.error} />
-        </div>
-        <button className="ax-btn" onClick={load} disabled={loading} type="button">
-          {loading ? 'Thinking…' : 'Re-analyze'}
         </button>
+        {!collapsed && (
+          <button className="ax-btn" onClick={load} disabled={loading} type="button">
+            {loading ? 'Thinking…' : 'Re-analyze'}
+          </button>
+        )}
       </div>
+
+      {collapsed ? null : <>
 
       {loading && !data && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
@@ -150,6 +170,7 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
           </div>
         )}
       </div>
+      </>}
     </div>
   )
 }
@@ -169,7 +190,7 @@ function RecommendationCard({ rec, datasetId, context }) {
           datasetId,
           'recommendation',
           { context, recommendation: rec },
-          'Explain this recommendation in more depth — why it matters here, what to look out for, and how to act on it.',
+          'Explain this recommendation in 2 short sentences (why it matters here, what to watch out for), then a plain numbered list of 2–4 short steps to act on it.',
         )
         setExplanation(r)
       } catch (err) {
@@ -269,28 +290,17 @@ function RecommendationCard({ rec, datasetId, context }) {
   )
 }
 
-function ModeBadge({ isAI, hasError }) {
-  if (hasError) {
-    return (
-      <span
-        className="ax-chip"
-        style={{ background: 'var(--color-background-danger)', color: 'var(--color-text-danger)' }}
-      >
-        fallback
-      </span>
-    )
-  }
+function Chevron({ open }) {
   return (
-    <span
-      className="ax-chip"
-      style={
-        isAI
-          ? { background: 'var(--color-accent-light)', color: 'var(--color-accent)' }
-          : { background: 'var(--color-background-secondary)', color: 'var(--color-text-tertiary)' }
-      }
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
     >
-      {isAI ? 'Claude' : 'heuristic'}
-    </span>
+      <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    </svg>
   )
 }
 
