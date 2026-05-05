@@ -7,16 +7,16 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   const datasetId = dataset?.id
   const stageKey = dataset?.current_stage_id || 'original'
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
-  const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
-  const [mode, setMode] = useState(() => (modeKey ? window.localStorage.getItem(modeKey) || 'auto' : 'auto'))
+  const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState([])
+  const [collapsed, setCollapsed] = useState(false)
 
   const load = async (force = false) => {
     if (!datasetId) return
-    const cacheKey = `simucast.aiPlan.${datasetId}.${stageKey}.${mode}`
+    const cacheKey = `simucast.aiPlan.${datasetId}.${stageKey}.auto`
     if (!force) {
       const cached = window.localStorage.getItem(cacheKey)
       if (cached) {
@@ -31,7 +31,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
     setLoading(true)
     setError('')
     try {
-      const r = await api.aiProjectPlan(datasetId, mode)
+      const r = await api.aiProjectPlan(datasetId, 'auto')
       setPlan(r)
       window.localStorage.setItem(cacheKey, JSON.stringify(r))
     } catch (err) {
@@ -40,12 +40,6 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    if (!modeKey) return
-    const saved = window.localStorage.getItem(modeKey) || 'auto'
-    setMode(saved)
-  }, [modeKey])
 
   useEffect(() => {
     if (!doneKey) return
@@ -57,15 +51,26 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   }, [doneKey])
 
   useEffect(() => {
+    if (!collapseKey) return
+    setCollapsed(window.localStorage.getItem(collapseKey) === '1')
+  }, [collapseKey])
+
+  useEffect(() => {
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, stageKey, mode])
+  }, [datasetId, stageKey])
 
   const steps = plan?.steps || []
   const doneSet = useMemo(() => new Set(done), [done])
   const nextStep = steps.find((step) => !doneSet.has(step.id))
-  const isAI = plan?.ai === true
-  const isAutoFallback = mode === 'auto' && plan && plan.ai !== true
+
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      const next = !c
+      if (collapseKey) window.localStorage.setItem(collapseKey, next ? '1' : '0')
+      return next
+    })
+  }
 
   const toggleDone = (stepId) => {
     const next = doneSet.has(stepId) ? done.filter((id) => id !== stepId) : [...done, stepId]
@@ -90,73 +95,49 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
 
   return (
     <section className="ax-card ax-plan-panel">
-      <div className="ax-row" style={{ marginBottom: 8, alignItems: 'flex-start' }}>
-        <div>
-          <p style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>
-            {isAI ? 'AI guided plan' : 'System guided plan'}
-          </p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-            {isAutoFallback
-              ? 'AI was requested, but SimuCast is showing the system fallback.'
-              : isAI
-              ? 'Claude-generated dataset steps before the documentation log.'
-              : 'Rule-based dataset steps before the documentation log.'}
-          </p>
+      <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            font: 'inherit',
+            color: 'inherit',
+            textAlign: 'left',
+          }}
+        >
+          <Chevron open={!collapsed} />
+          <span style={{ fontSize: 16, fontWeight: 800 }}>AI Guided Plan</span>
+        </button>
+      </div>
+
+      {!collapsed && plan?.error && (
+        <div className="ax-plan-fallback">
+          <strong>AI call failed</strong>
+          <span>{plan.error}</span>
         </div>
-        <button className="ax-btn mini" onClick={() => load(true)} disabled={loading} type="button">
-          {loading ? '...' : 'Refresh'}
-        </button>
-      </div>
-
-      <div className="ax-plan-mode" aria-label="Guidance mode">
-        <button
-          type="button"
-          className={mode === 'auto' ? 'active' : ''}
-          onClick={() => setGuidanceMode('auto', modeKey, setMode)}
-        >
-          AI if available
-        </button>
-        <button
-          type="button"
-          className={mode === 'system' ? 'active' : ''}
-          onClick={() => setGuidanceMode('system', modeKey, setMode)}
-        >
-          System only
-        </button>
-        <button
-          type="button"
-          className={mode === 'off' ? 'active' : ''}
-          onClick={() => setGuidanceMode('off', modeKey, setMode)}
-        >
-          Hide
-        </button>
-      </div>
-
-      {mode === 'off' && (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
-          Guided planning is off for this project.
-        </p>
       )}
 
-      {mode !== 'off' && loading && !plan && (
+      {!collapsed && loading && !plan && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
           Planning the workflow...
         </p>
       )}
-      {mode !== 'off' && error && <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>}
-      {mode !== 'off' && isAutoFallback && (
-        <div className="ax-plan-fallback">
-          <strong>Using system fallback</strong>
-          <span>{plan.error || 'AI is unavailable for this request, so this plan matches System only.'}</span>
-        </div>
-      )}
-      {mode !== 'off' && plan?.summary && (
+      {!collapsed && error && <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>}
+      {!collapsed && plan?.summary && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
           {plan.summary}
         </p>
       )}
 
-      {mode !== 'off' && plan && (
+      {!collapsed && plan && (
         <div className="ax-plan-list">
           {steps.map((step, index) => {
             const isDone = doneSet.has(step.id)
@@ -210,9 +191,18 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   )
 }
 
-function setGuidanceMode(nextMode, modeKey, setMode) {
-  if (modeKey) window.localStorage.setItem(modeKey, nextMode)
-  setMode(nextMode)
+function Chevron({ open }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+    >
+      <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    </svg>
+  )
 }
 
 function labelForPage(page) {
