@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import DataPage from './DataPage'
@@ -113,17 +113,15 @@ export default function ProjectWorkspace() {
           {page}
           <NextPagePrompt activeTab={activeTab} datasetId={id} />
         </div>
-        <div className="ax-right-rail">
-          <AIProjectPlanPanel dataset={dataset} activeTab={activeTab} />
-          <ActivityPanel
-            datasetId={dataset.id}
-            onViewStage={(stageId) => {
-              setViewStageRequest({ stageId, nonce: Date.now() })
-              navigate(`/projects/${id}/data`)
-            }}
-            onRestored={refreshDataset}
-          />
-        </div>
+        <RightRail
+          dataset={dataset}
+          activeTab={activeTab}
+          onViewStage={(stageId) => {
+            setViewStageRequest({ stageId, nonce: Date.now() })
+            navigate(`/projects/${id}/data`)
+          }}
+          onRestored={refreshDataset}
+        />
       </div>
     </>
   )
@@ -135,6 +133,70 @@ function highlightSection(section) {
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   el.classList.add('ax-fix-highlight')
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
+}
+
+const PLAN_H_KEY = 'simucast.railPlanHeight'
+const PLAN_H_MIN = 100
+const PLAN_H_MAX_RATIO = 0.78
+const PLAN_H_DEFAULT = 300
+
+function RightRail({ dataset, activeTab, onViewStage, onRestored }) {
+  const railRef = useRef(null)
+  const [planH, setPlanH] = useState(() => {
+    const v = Number(localStorage.getItem(PLAN_H_KEY))
+    return Number.isFinite(v) && v >= PLAN_H_MIN ? v : PLAN_H_DEFAULT
+  })
+  const [planCollapsed, setPlanCollapsed] = useState(false)
+  const [dragging, setDragging] = useState(false)
+
+  useEffect(() => {
+    if (!dragging) return
+    const onMove = (e) => {
+      if (!railRef.current) return
+      const rect = railRef.current.getBoundingClientRect()
+      const maxH = rect.height * PLAN_H_MAX_RATIO
+      const next = Math.min(maxH, Math.max(PLAN_H_MIN, e.clientY - rect.top - 6))
+      setPlanH(next)
+    }
+    const onUp = () => setDragging(false)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'row-resize'
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+  }, [dragging])
+
+  useEffect(() => {
+    localStorage.setItem(PLAN_H_KEY, String(Math.round(planH)))
+  }, [planH])
+
+  return (
+    <div className="ax-right-rail" ref={railRef}>
+      <AIProjectPlanPanel
+        dataset={dataset}
+        activeTab={activeTab}
+        planH={planCollapsed ? undefined : planH}
+        onCollapsedChange={setPlanCollapsed}
+      />
+      {!planCollapsed && (
+        <div
+          className={`ax-rail-resize ${dragging ? 'dragging' : ''}`}
+          onMouseDown={(e) => { e.preventDefault(); setDragging(true) }}
+          title="Drag to resize"
+        />
+      )}
+      <ActivityPanel
+        datasetId={dataset.id}
+        onViewStage={onViewStage}
+        onRestored={onRestored}
+      />
+    </div>
+  )
 }
 
 function NextPagePrompt({ activeTab, datasetId }) {

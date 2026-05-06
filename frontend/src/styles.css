@@ -2150,18 +2150,29 @@ input[type="range"]::-moz-range-thumb {
   line-height: 1.35;
 }
 .ax-plan-panel {
-  /* shrinks to header when collapsed; caps at 45% of rail so docs always has room */
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  max-height: 45%;
   overflow-y: auto;
   padding: 0;
-  transition: max-height 0.25s ease;
 }
 .ax-plan-panel.ax-plan-collapsed {
-  /* when collapsed, only show the sticky header — no scroll, no cap */
-  max-height: none;
+  flex: 0 0 auto;
   overflow: visible;
+  height: auto !important;
+}
+.ax-rail-resize {
+  flex: 0 0 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-border-tertiary);
+  cursor: row-resize;
+  transition: background 0.15s;
+  margin: -3px 4px;
+}
+.ax-rail-resize:hover,
+.ax-rail-resize.dragging {
+  background: var(--color-accent);
+  opacity: 0.6;
 }
 .ax-activity-panel {
   flex: 1 1 0;

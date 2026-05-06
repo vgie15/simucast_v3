@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 
-export default function AIProjectPlanPanel({ dataset, activeTab }) {
+export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollapsedChange }) {
   const navigate = useNavigate()
   const datasetId = dataset?.id
   const stageKey = dataset?.current_stage_id || 'original'
@@ -90,9 +90,18 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
     setCollapsed((c) => {
       const next = !c
       if (collapseKey) window.localStorage.setItem(collapseKey, next ? '1' : '0')
+      onCollapsedChange?.(next)
       return next
     })
   }
+
+  // notify parent of initial collapsed state on mount
+  useEffect(() => {
+    if (!collapseKey) return
+    const initial = window.localStorage.getItem(collapseKey) === '1'
+    onCollapsedChange?.(initial)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapseKey])
 
   const toggleDone = (stepId) => {
     const next = doneSet.has(stepId) ? done.filter((id) => id !== stepId) : [...done, stepId]
@@ -116,7 +125,10 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   }
 
   return (
-    <section className={`ax-card ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}>
+    <section
+      className={`ax-card ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}
+      style={!collapsed && planH ? { height: planH, maxHeight: 'none' } : undefined}
+    >
       <div className="ax-panel-sticky-header">
         <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
           <button
