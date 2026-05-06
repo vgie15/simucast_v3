@@ -3,6 +3,7 @@ import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
+import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 
 const TESTS = [
   {
@@ -117,7 +118,12 @@ export default function TestsPage({ dataset }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(280px, 0.85fr)', gap: 12, marginBottom: 12 }}>
-        <div id="fix-correlation-test" className="ax-card">
+        <div id="fix-correlation-test" className={`ax-card ax-busy-host ${loading ? 'is-busy' : ''}`}>
+          <BusyOverlay
+            active={loading}
+            title="Running statistical test..."
+            detail="Preparing variables, computing the result, and building interpretation-ready output."
+          />
           <p className="ax-lbl" style={{ marginTop: 0 }}>Setup</p>
           {(kind === 't' || kind === 'anova') && (
             <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
@@ -165,7 +171,7 @@ export default function TestsPage({ dataset }) {
           )}
           <div style={{ marginTop: 12 }}>
             <button className="ax-btn prim" disabled={loading || !canRun} onClick={run}>
-              {loading ? 'Running...' : 'Run test'}
+              {loading ? <InlineSpinner label="Running test..." /> : 'Run test'}
             </button>
           </div>
         </div>
@@ -178,6 +184,8 @@ export default function TestsPage({ dataset }) {
           <InfoRow label="What it tells you" text={recommendationMeaning(kind, group, measure, varA, varB, corrVars)} />
         </div>
       </div>
+
+      {loading && !result && <SkeletonCards count={2} />}
 
       {result && (
         <TestResult

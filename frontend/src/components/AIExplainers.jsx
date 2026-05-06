@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { InlineSpinner, SkeletonCards } from './LoadingStates'
 
 // Lightweight in-memory cache so navigating back to a page that already
 // rendered an explanation doesn't re-bill. Keyed by datasetId+step+payload-hash.
@@ -81,7 +82,7 @@ export function ExplainButton({
       cacheSet(k, explanation)
       setText(explanation)
     } catch (err) {
-      setText('Failed: ' + (err.message || 'unknown error'))
+      setText('The explanation could not be generated right now. You can continue using the built-in system guidance.')
     } finally {
       setLoading(false)
     }
@@ -118,7 +119,7 @@ export function ExplainButton({
             color: 'var(--color-text-primary)',
           }}
         >
-          {loading ? 'Thinking…' : text}
+          {loading ? <InlineSpinner label="Generating explanation..." /> : text}
         </div>
       )}
     </span>
@@ -220,14 +221,10 @@ export function AIInsightCard({
           onClick={load}
           disabled={loading}
         >
-          {loading ? '…' : text ? 'Refresh' : 'Generate'}
+          {loading ? <InlineSpinner label="Generating..." /> : text ? 'Refresh' : 'Generate'}
         </button>
       </div>
-      {loading && !text && (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
-          Thinking…
-        </p>
-      )}
+      {loading && !text && <SkeletonCards count={1} />}
       {error && (
         <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>
           {error}

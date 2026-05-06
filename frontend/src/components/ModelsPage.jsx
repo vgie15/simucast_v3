@@ -6,6 +6,7 @@ import AIAssistantPanel from './AIAssistantPanel'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
 import { useAuth } from './AuthProvider'
+import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 
 const ALGOS = [
   { key: 'logistic', label: 'Logistic Regression', task: 'classification', interpretable: true,
@@ -349,7 +350,13 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   }
 
   return (
-    <>
+    <div className={`ax-busy-host ax-operation-busy ${training ? 'is-busy' : ''}`}>
+      <BusyOverlay
+        active={training}
+        title={`Training ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}...`}
+        detail="Applying preprocessing, splitting the data, fitting models, and calculating evaluation metrics."
+        steps={['Preparing model inputs', 'Training selected algorithms', 'Saving results for What-if and reports']}
+      />
       <h1 className="ax-page-title">Build a model</h1>
       <p className="ax-page-sub">
         Pick a target, select features, choose algorithms, and train them all in one click.
@@ -440,7 +447,11 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       {/* Step 3 — preprocessing plan */}
       <Step n={3} title="Preprocessing plan &amp; readiness" disabled={!target || features.length === 0}>
         {planLoading && (
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>Computing plan…</p>
+          plan ? (
+            <InlineSpinner label="Refreshing readiness checks..." />
+          ) : (
+            <SkeletonCards count={2} />
+          )
         )}
         {planError && (
           <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{planError}</p>
@@ -536,7 +547,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           onClick={train}
           type="button"
         >
-          {training ? `Training ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}...` : `Train ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}`}
+          {training ? <InlineSpinner label={`Training ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}...`} /> : `Train ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}`}
         </button>
       </div>
 
@@ -563,7 +574,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
               />
               <div style={{ textAlign: 'right', marginTop: 10 }}>
                 <button className="ax-btn prim" disabled={training || selectedAlgos.length === 0} onClick={train}>
-                  Train again with tuned settings
+                  {training ? <InlineSpinner label="Training tuned model..." /> : 'Train again with tuned settings'}
                 </button>
               </div>
             </div>
@@ -604,7 +615,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           </div>
         </>
       )}
-    </>
+    </div>
   )
 }
 
@@ -1340,4 +1351,3 @@ function highlightSection(section) {
   el.classList.add('ax-fix-highlight')
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
-

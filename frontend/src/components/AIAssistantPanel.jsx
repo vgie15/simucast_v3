@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
+import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 
 /**
  * AIAssistantPanel
@@ -49,7 +50,7 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
       const r = await api.aiExplain(datasetId, `${context}-followup`, { context }, q)
       setFollowAnswer(r)
     } catch (err) {
-      setFollowAnswer({ ai: false, explanation: 'Failed: ' + (err.message || 'unknown error') })
+      setFollowAnswer({ ai: false, explanation: 'The assistant could not answer right now. You can continue with the built-in recommendations and try again later.' })
     } finally {
       setFollowLoading(false)
     }
@@ -59,7 +60,13 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
   const sectionTitle = title || titleForContext(context)
 
   return (
-    <div className="ax-card" style={{ marginBottom: 16 }}>
+    <div className={`ax-card ax-busy-host ${loading && data ? 'is-busy' : ''}`} style={{ marginBottom: 16 }}>
+      <BusyOverlay
+        active={loading && !!data}
+        title="Refreshing recommendations..."
+        detail="Reading the latest dataset state and preparing updated guidance."
+        steps={['Building context', 'Checking recommended actions', 'Refreshing the panel']}
+      />
       <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8 }}>
         <button
           type="button"
@@ -84,18 +91,14 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
         </button>
         {!collapsed && (
           <button className="ax-btn" onClick={load} disabled={loading} type="button">
-            {loading ? 'Thinking…' : 'Re-analyze'}
+            {loading ? <InlineSpinner label="Thinking..." /> : 'Re-analyze'}
           </button>
         )}
       </div>
 
       {collapsed ? null : <>
 
-      {loading && !data && (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
-          Reading your dataset…
-        </p>
-      )}
+      {loading && !data && <SkeletonCards count={2} />}
       {error && (
         <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>
       )}
@@ -152,7 +155,7 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
             disabled={followLoading || !followQ.trim()}
             type="button"
           >
-            {followLoading ? '…' : 'Ask'}
+            {followLoading ? <InlineSpinner label="Asking..." /> : 'Ask'}
           </button>
         </div>
         {followAnswer && (
@@ -194,7 +197,7 @@ function RecommendationCard({ rec, datasetId, context }) {
         )
         setExplanation(r)
       } catch (err) {
-        setExplanation({ ai: false, explanation: 'Failed: ' + (err.message || 'unknown error') })
+        setExplanation({ ai: false, explanation: 'The assistant could not generate details right now. You can continue with the built-in recommendation.' })
       } finally {
         setLoading(false)
       }
@@ -268,7 +271,7 @@ function RecommendationCard({ rec, datasetId, context }) {
             whiteSpace: 'pre-wrap',
           }}
         >
-          {loading ? 'Thinking…' : explanation?.explanation || 'No detail available.'}
+          {loading ? <InlineSpinner label="Generating explanation..." /> : explanation?.explanation || 'No detail available.'}
         </div>
       )}
 

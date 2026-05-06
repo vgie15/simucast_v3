@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import { AIInsightCard } from './AIExplainers'
+import { InlineSpinner, SkeletonCards } from './LoadingStates'
 
 export default function DescribePage({ dataset }) {
   const [selected, setSelected] = useState([])
@@ -71,8 +72,10 @@ export default function DescribePage({ dataset }) {
       </div>
 
       <button className="ax-btn prim" disabled={loading || selected.length === 0} onClick={run} style={{ marginBottom: 16 }}>
-        {loading ? 'Running...' : `Run descriptives for ${selected.length} variable${selected.length === 1 ? '' : 's'}`}
+        {loading ? <InlineSpinner label="Running descriptives..." /> : `Run descriptives for ${selected.length} variable${selected.length === 1 ? '' : 's'}`}
       </button>
+
+      {loading && !result && <SkeletonCards count={3} />}
 
       {result && (
         <>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
+import { BusyOverlay, SkeletonTable } from './LoadingStates'
 
 export default function DataGridViewer({
   datasetId,
@@ -134,7 +135,12 @@ export default function DataGridViewer({
   }
 
   return (
-    <div className="ax-card ax-data-grid-panel">
+    <div className={`ax-card ax-data-grid-panel ax-busy-host ${savingEdits ? 'is-busy' : ''}`}>
+      <BusyOverlay
+        active={savingEdits}
+        title="Saving data edits..."
+        detail="Creating a reversible dataset stage and refreshing the grid."
+      />
       <div className="ax-modal-header">
         <div>
           <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>
@@ -181,7 +187,7 @@ export default function DataGridViewer({
           <>
             <div className="ax-grid-wrap ax-grid-wrap-inline">
               {loading ? (
-                <p style={{ padding: 20, color: 'var(--color-text-secondary)' }}>Loading rows...</p>
+                <SkeletonTable rows={8} columns={Math.min(Math.max(headerVars.length + 1, 4), 8)} />
               ) : (
                 <table className="ax-grid">
                   <thead>

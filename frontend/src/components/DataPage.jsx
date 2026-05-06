@@ -7,6 +7,7 @@ import ManualTransformsCard from './ManualTransformsCard'
 import DataGridViewer from './DataGridViewer'
 import CategoryStandardizationCard from './CategoryStandardizationCard'
 import { useDialog } from './DialogProvider'
+import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 
 export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const dialog = useDialog()
@@ -303,17 +304,23 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         <StatCard label="Duplicates" value={suggestionGroups.duplicates?.count || 0} />
       </div>
 
-      <div id="fix-cleaning-suggestions" className="ax-section-anchor">
+      <div id="fix-cleaning-suggestions" className={`ax-section-anchor ax-busy-host ${applyingAll ? 'is-busy' : ''}`}>
+        <BusyOverlay
+          active={applyingAll}
+          title="Applying all suggested fixes..."
+          detail="Processing each issue group, creating dataset stages, and refreshing the data workspace."
+          steps={['Applying grouped fixes', 'Refreshing dataset preview', 'Updating documentation']}
+        />
         <div className="ax-row" style={{ marginBottom: 8 }}>
           <p className="ax-lbl" style={{ margin: 0 }}>Suggested fixes by issue type</p>
           {suggestions.length > 0 && (
             <button className="ax-btn prim" onClick={applyAllSuggestions} disabled={applyingAll || suggestionsLoading}>
-              {applyingAll ? 'Applying...' : 'Apply all'}
+              {applyingAll ? <InlineSpinner label="Applying..." /> : 'Apply all'}
             </button>
           )}
         </div>
         {suggestionsLoading ? (
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>Analyzing...</p>
+          <SkeletonCards count={3} />
         ) : suggestions.length === 0 && !(suggestionGroups.duplicates?.count > 0) ? (
           <div className="ax-card" style={{ padding: '10px 12px', marginBottom: 16 }}>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>No suggested fixes are pending. Your data looks clean.</p>
@@ -420,7 +427,12 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
   const columns = kind === 'duplicates' ? (group?.columns || []) : selected
 
   return (
-    <div className="ax-card" style={{ padding: 14 }}>
+    <div className={`ax-card ax-busy-host ${applying ? 'is-busy' : ''}`} style={{ padding: 14 }}>
+      <BusyOverlay
+        active={applying}
+        title={`Applying ${title.toLowerCase()} fix...`}
+        detail="Updating the active dataset, creating a stage, and logging the step."
+      />
       <div className="ax-row" style={{ alignItems: 'flex-start', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -438,7 +450,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
           onClick={() => onApply({ kind, action, columns, overrides, options: { keep } })}
           type="button"
         >
-          {applying ? 'Applying...' : kind === 'duplicates' ? 'Remove duplicates' : 'Apply group'}
+          {applying ? <InlineSpinner label="Applying..." /> : kind === 'duplicates' ? 'Remove duplicates' : 'Apply group'}
         </button>
       </div>
 
@@ -606,7 +618,12 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
   }
 
   return (
-    <div className="ax-card" style={{ marginBottom: 16 }}>
+    <div className={`ax-card ax-busy-host ${busy ? 'is-busy' : ''}`} style={{ marginBottom: 16 }}>
+      <BusyOverlay
+        active={busy}
+        title="Applying feature engineering..."
+        detail="Creating a new dataset stage and refreshing the data preparation workspace."
+      />
       <button
         type="button"
         style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit', width: '100%', textAlign: 'left' }}
@@ -711,7 +728,7 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
           )}
           <div style={{ marginTop: 12 }}>
             <button className="ax-btn prim" onClick={applyFeat} disabled={busy} type="button">
-              {busy ? 'Applying…' : 'Apply'}
+              {busy ? <InlineSpinner label="Applying..." /> : 'Apply'}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { api } from '../api'
 import { AIInsightCard } from './AIExplainers'
+import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 
 const SECTIONS = [
   { key: 'summary', label: 'Executive summary' },
@@ -203,7 +204,7 @@ export default function ReportPage({ dataset }) {
           </div>
           <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button className="ax-btn prim" disabled={loading} onClick={build}>
-              {loading ? 'Generating…' : 'Generate report'}
+              {loading ? <InlineSpinner label="Generating report..." /> : 'Generate report'}
             </button>
             <button className="ax-btn" disabled={!report} onClick={printReport}>Print report</button>
             <button className="ax-btn" disabled={!report} onClick={exportHtml}>Export HTML</button>
@@ -211,8 +212,15 @@ export default function ReportPage({ dataset }) {
           </div>
         </div>
 
-        <div className="ax-card" style={{ padding: 18, minHeight: 400 }} id="ax-report-preview">
-          {!report ? (
+        <div className={`ax-card ax-busy-host ${loading ? 'is-busy' : ''}`} style={{ padding: 18, minHeight: 400 }} id="ax-report-preview">
+          <BusyOverlay
+            active={loading}
+            title="Generating report..."
+            detail="Collecting analyses, models, scenarios, and documentation into a structured report."
+          />
+          {loading && !report ? (
+            <SkeletonCards count={4} />
+          ) : !report ? (
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
               Press "Generate report" to build a document from your current analyses.
             </p>

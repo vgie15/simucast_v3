@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
+import { BusyOverlay, SkeletonCards } from './LoadingStates'
 
 export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollapsedChange }) {
   const navigate = useNavigate()
@@ -126,9 +127,19 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
   return (
     <section
-      className={`ax-card ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}
+      className={`ax-card ax-plan-panel ax-busy-host${collapsed ? ' ax-plan-collapsed' : ''} ${loading ? 'is-busy' : ''}`}
       style={!collapsed && planH ? { height: planH, maxHeight: 'none' } : undefined}
     >
+      <BusyOverlay
+        active={loading && !!plan}
+        title={mode === 'auto' ? 'Generating guided plan...' : 'Preparing system workflow...'}
+        detail={mode === 'auto'
+          ? 'Building a dataset profile and preparing workflow recommendations.'
+          : 'Reviewing dataset issues and ordering the recommended steps.'}
+        steps={mode === 'auto'
+          ? ['Building dataset profile', 'Generating recommendations', 'Preparing guided plan']
+          : ['Checking data quality', 'Mapping fixes to pages', 'Preparing guided plan']}
+      />
       <div className="ax-panel-sticky-header">
         <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
           <button
@@ -185,9 +196,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           )}
 
           {loading && !plan && (
-            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
-              Planning the workflow...
-            </p>
+            <SkeletonCards count={3} />
           )}
           {error && (
             <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>
