@@ -287,6 +287,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 
       <AIAssistantPanel key={historyKey} datasetId={dataset.id} context="data" />
 
+      <FeatureEngineeringCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
+
       <div id="data-section-manual_transforms">
         <ManualTransformsCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
       </div>
@@ -537,6 +539,185 @@ function defaultGroupAction(kind) {
   if (kind === 'type') return 'convert_date'
   if (kind === 'duplicates') return 'drop_duplicates'
   return 'impute_mean'
+}
+
+function FeatureEngineeringCard({ dataset, onApplied }) {
+  const [open, setOpen] = useState(false)
+  const [tool, setTool] = useState('bins') // 'bins' | 'average' | 'ratio' | 'format'
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  const variables = dataset?.variables || []
+  const numVars = variables.filter((v) => ['numeric','int','float'].includes(v.dtype)).map((v) => v.name)
+
+  // Bins state
+  const [binCol, setBinCol] = useState('')
+  const [binCount, setBinCount] = useState(3)
+  const [binLabels, setBinLabels] = useState('')
+  const [binNewName, setBinNewName] = useState('')
+
+  // Average state
+  const [avgCols, setAvgCols] = useState([])
+  const [avgNewName, setAvgNewName] = useState('')
+
+  // Ratio state
+  const [ratioNum, setRatioNum] = useState('')
+  const [ratioDen, setRatioDen] = useState('')
+  const [ratioNewName, setRatioNewName] = useState('')
+
+  // Format state
+  const [fmtCol, setFmtCol] = useState('')
+  const [fmtOp, setFmtOp] = useState('round')
+  const [fmtParam, setFmtParam] = useState('2')
+  const [fmtNewName, setFmtNewName] = useState('')
+
+  const applyFeat = async () => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      let body = {}
+      if (tool === 'bins') {
+        if (!binCol) { setMsg('Select a column to bin.'); setBusy(false); return }
+        body = { operation: 'bin', column: binCol, bins: Number(binCount), labels: binLabels ? binLabels.split(',').map((s) => s.trim()) : null, new_name: binNewName || `${binCol}_bin` }
+      } else if (tool === 'average') {
+        if (avgCols.length < 2) { setMsg('Select at least 2 columns.'); setBusy(false); return }
+        body = { operation: 'average', columns: avgCols, new_name: avgNewName || avgCols.join('_') + '_avg' }
+      } else if (tool === 'ratio') {
+        if (!ratioNum || !ratioDen) { setMsg('Select numerator and denominator.'); setBusy(false); return }
+        body = { operation: 'ratio', numerator: ratioNum, denominator: ratioDen, new_name: ratioNewName || `${ratioNum}_per_${ratioDen}` }
+      } else if (tool === 'format') {
+        if (!fmtCol) { setMsg('Select a column.'); setBusy(false); return }
+        const defaultName = {
+          log1p: `${fmtCol}_log`,
+          zscore: `${fmtCol}_z`,
+          minmax: `${fmtCol}_scaled`,
+          pct_of_max: `${fmtCol}_pct`,
+        }[fmtOp] || fmtCol
+        body = { operation: fmtOp, column: fmtCol, param: fmtParam, new_name: fmtNewName || defaultName }
+      }
+      await api.featureEngineer(dataset.id, body)
+      setMsg('Applied! Dataset updated.')
+      await onApplied?.()
+    } catch (err) {
+      setMsg(err.message || 'Failed to apply.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="ax-card" style={{ marginBottom: 16 }}>
+      <button
+        type="button"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit', width: '100%', textAlign: 'left' }}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+          <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+        </svg>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>Feature engineering</span>
+        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>Create bins, averages, ratios, or format columns</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {[['bins','Create bins'],['average','Create average'],['ratio','Create ratio'],['format','Numeric formatting']].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`ax-tab ${tool === key ? 'active' : ''}`}
+                onClick={() => { setTool(key); setMsg(null) }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {tool === 'bins' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12 }}>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Column to bin</label>
+              <select value={binCol} onChange={(e) => setBinCol(e.target.value)}>
+                <option value="">— select —</option>
+                {numVars.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Number of bins</label>
+              <input type="number" min={2} max={20} value={binCount} onChange={(e) => setBinCount(e.target.value)} style={{ width: 80 }} />
+              <label style={{ color: 'var(--color-text-secondary)' }}>Labels (optional)</label>
+              <input type="text" placeholder="low, medium, high" value={binLabels} onChange={(e) => setBinLabels(e.target.value)} />
+              <label style={{ color: 'var(--color-text-secondary)' }}>New column name</label>
+              <input type="text" placeholder={binCol ? `${binCol}_bin` : 'auto'} value={binNewName} onChange={(e) => setBinNewName(e.target.value)} />
+            </div>
+          )}
+
+          {tool === 'average' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'start', fontSize: 12 }}>
+              <label style={{ color: 'var(--color-text-secondary)', paddingTop: 4 }}>Columns to average</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {numVars.map((n) => (
+                  <label key={n} className="ax-chip" style={{ cursor: 'pointer' }}>
+                    <input type="checkbox" checked={avgCols.includes(n)} onChange={(e) => setAvgCols(e.target.checked ? [...avgCols, n] : avgCols.filter((x) => x !== n))} />
+                    <span style={{ marginLeft: 4 }}>{n}</span>
+                  </label>
+                ))}
+              </div>
+              <label style={{ color: 'var(--color-text-secondary)', paddingTop: 4 }}>New column name</label>
+              <input type="text" placeholder="score_avg" value={avgNewName} onChange={(e) => setAvgNewName(e.target.value)} />
+            </div>
+          )}
+
+          {tool === 'ratio' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12 }}>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Numerator</label>
+              <select value={ratioNum} onChange={(e) => setRatioNum(e.target.value)}>
+                <option value="">— select —</option>
+                {numVars.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Denominator</label>
+              <select value={ratioDen} onChange={(e) => setRatioDen(e.target.value)}>
+                <option value="">— select —</option>
+                {numVars.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <label style={{ color: 'var(--color-text-secondary)' }}>New column name</label>
+              <input type="text" placeholder={ratioNum && ratioDen ? `${ratioNum}_per_${ratioDen}` : 'auto'} value={ratioNewName} onChange={(e) => setRatioNewName(e.target.value)} />
+            </div>
+          )}
+
+          {tool === 'format' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12 }}>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Column</label>
+              <select value={fmtCol} onChange={(e) => setFmtCol(e.target.value)}>
+                <option value="">— select —</option>
+                {numVars.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Operation</label>
+              <select value={fmtOp} onChange={(e) => setFmtOp(e.target.value)}>
+                <option value="round">Round decimals</option>
+                <option value="abs">Absolute value</option>
+                <option value="pct_of_max">% of max</option>
+                <option value="log1p">Log transform (log1p)</option>
+                <option value="zscore">Z-score (standardize)</option>
+                <option value="minmax">Min-max scale (0–1)</option>
+              </select>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Decimal places</label>
+              <input type="number" min={0} max={8} value={fmtParam} onChange={(e) => setFmtParam(e.target.value)} style={{ width: 80 }} disabled={fmtOp !== 'round'} />
+              <label style={{ color: 'var(--color-text-secondary)' }}>New column name</label>
+              <input type="text" placeholder={fmtCol || 'auto'} value={fmtNewName} onChange={(e) => setFmtNewName(e.target.value)} />
+            </div>
+          )}
+
+          {msg && (
+            <p style={{ fontSize: 12, margin: '10px 0 0', color: msg.startsWith('Applied') ? 'var(--color-text-success)' : 'var(--color-text-danger)' }}>{msg}</p>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <button className="ax-btn prim" onClick={applyFeat} disabled={busy} type="button">
+              {busy ? 'Applying…' : 'Apply'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function highlightSection(section) {

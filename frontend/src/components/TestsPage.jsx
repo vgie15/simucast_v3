@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
-import AdvancedPage from './AdvancedPage'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
 
@@ -189,9 +188,6 @@ export default function TestsPage({ dataset }) {
         />
       )}
 
-      <div style={{ marginTop: 24 }}>
-        <AdvancedPage dataset={dataset} embedded />
-      </div>
     </>
   )
 }

@@ -6,6 +6,7 @@ import { AIInsightCard } from './AIExplainers'
 export default function DescribePage({ dataset }) {
   const [selected, setSelected] = useState([])
   const [result, setResult] = useState(null)
+  const [corrResult, setCorrResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [expandedExplain, setExpandedExplain] = useState({})
 
@@ -21,6 +22,16 @@ export default function DescribePage({ dataset }) {
       const variables = selected.length ? selected : (dataset.variables || []).map((v) => v.name)
       const r = await api.describe(dataset.id, { variables })
       setResult(r)
+      const selectedVars = dataset.variables || []
+      const numericSelected = selectedVars
+        .filter((v) => variables.includes(v.name) && ['numeric', 'int', 'float'].includes(v.dtype))
+        .map((v) => v.name)
+      if (numericSelected.length >= 2) {
+        const corr = await api.runTest(dataset.id, { kind: 'corr', variables: numericSelected })
+        setCorrResult(corr)
+      } else {
+        setCorrResult(null)
+      }
       setExpandedExplain({})
     } finally {
       setLoading(false)
@@ -38,6 +49,14 @@ export default function DescribePage({ dataset }) {
       <p className="ax-page-sub">Summarize variables, interpret distributions, and identify patterns worth testing next.</p>
 
       <p id="describe-section-variables" className="ax-lbl">Variables - tap to toggle</p>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+        <button className="ax-btn" type="button" onClick={() => setSelected((dataset.variables || []).map((v) => v.name))}>
+          Select all
+        </button>
+        <button className="ax-btn" type="button" onClick={() => setSelected([])} disabled={selected.length === 0}>
+          Clear
+        </button>
+      </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
         {(dataset.variables || []).map((v) => (
           <span
@@ -51,8 +70,8 @@ export default function DescribePage({ dataset }) {
         ))}
       </div>
 
-      <button className="ax-btn prim" disabled={loading} onClick={run} style={{ marginBottom: 16 }}>
-        {loading ? 'Running...' : selected.length ? `Run descriptives for ${selected.length} variable${selected.length === 1 ? '' : 's'}` : 'Run descriptives for all variables'}
+      <button className="ax-btn prim" disabled={loading || selected.length === 0} onClick={run} style={{ marginBottom: 16 }}>
+        {loading ? 'Running...' : `Run descriptives for ${selected.length} variable${selected.length === 1 ? '' : 's'}`}
       </button>
 
       {result && (
@@ -216,6 +235,27 @@ export default function DescribePage({ dataset }) {
             </>
           )}
 
+          {corrResult?.variables?.length >= 2 && (
+            <>
+              <p className="ax-lbl">Correlation overview</p>
+              <div className="ax-card" style={{ marginBottom: 14 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>
+                  Numeric relationship preview
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
+                  This heatmap summarizes pairwise numeric relationships for the selected variables. Stronger colors indicate stronger positive or negative associations.
+                </p>
+                <CorrelationHeatmap result={corrResult} />
+                {corrResult.strongest_pair && (
+                  <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '10px 0 0' }}>
+                    Strongest relationship: {corrResult.strongest_pair.var_a} and {corrResult.strongest_pair.var_b}
+                    {' '}({fmt(corrResult.strongest_pair.r)} correlation).
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
           <div className="ax-card" style={{ padding: 14 }}>
             <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Next step recommendation</p>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
@@ -225,6 +265,45 @@ export default function DescribePage({ dataset }) {
         </>
       )}
     </>
+  )
+}
+
+function CorrelationHeatmap({ result }) {
+  const vars = result.variables || []
+  if (!vars.length) return null
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 11, fontFamily: 'var(--font-mono)', minWidth: Math.max(420, vars.length * 78) }}>
+        <thead>
+          <tr>
+            <th style={{ padding: '6px 8px' }}></th>
+            {vars.map((v) => (
+              <th key={v} style={{ padding: '6px 8px', color: 'var(--color-text-secondary)', fontWeight: 500, fontSize: 10 }}>
+                {v}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {vars.map((r) => (
+            <tr key={r}>
+              <td style={{ padding: '6px 8px', fontWeight: 500, fontSize: 10, color: 'var(--color-text-secondary)' }}>{r}</td>
+              {vars.map((c) => {
+                const v = Number(result.matrix?.[r]?.[c] ?? 0)
+                const abs = Math.abs(v)
+                const alpha = abs > 0.9 ? 0.7 : abs > 0.7 ? 0.5 : abs > 0.4 ? 0.3 : abs > 0.2 ? 0.15 : 0.05
+                const bg = r === c ? `rgba(127,119,221,${alpha})` : v >= 0 ? `rgba(15,110,86,${alpha})` : `rgba(163,45,45,${alpha})`
+                return (
+                  <td key={c} style={{ padding: '7px 10px', textAlign: 'center', background: bg, border: '0.5px solid var(--color-border-tertiary)' }}>
+                    {fmt(v)}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

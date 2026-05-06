@@ -2980,6 +2980,11 @@ def run_test(ds_id):
                 "pairs": pairs[:10],
                 "strongest_pair": pairs[0] if pairs else None,
             }
+            if len(cols) == 2:
+                clean_pair = df[[cols[0], cols[1]]].dropna()
+                if len(clean_pair):
+                    sample = clean_pair.sample(min(200, len(clean_pair)), random_state=42)
+                    result["scatter_points"] = sample.values.tolist()
         else:
             return {"error": "unknown test kind"}, 400
 
@@ -3015,8 +3020,10 @@ def do_cluster(ds_id):
             return {"error": "not found"}, 404
         df = df_from_dataset(ds)
         X = numeric_df(df, cols).dropna()
-        if len(X) == 0:
-            return {"error": "no numeric data"}, 400
+        if X.shape[1] < 2:
+            return {"error": "K-means clustering requires at least 2 numeric variables."}, 400
+        if len(X) < k:
+            return {"error": f"K-means clustering requires at least {k} complete rows for k={k}. Choose fewer clusters or select variables with fewer missing values."}, 400
         Xs = StandardScaler().fit_transform(X)
         km = KMeans(n_clusters=k, n_init=10, random_state=42).fit(Xs)
         # pca to 2d for plotting
@@ -3046,8 +3053,10 @@ def do_pca(ds_id):
             return {"error": "not found"}, 404
         df = df_from_dataset(ds)
         X = numeric_df(df, cols).dropna()
-        if X.shape[1] == 0:
-            return {"error": "no numeric data"}, 400
+        if X.shape[1] < 2:
+            return {"error": "PCA requires at least 2 numeric variables."}, 400
+        if len(X) < 2:
+            return {"error": "PCA requires at least 2 complete rows after removing missing values."}, 400
         Xs = StandardScaler().fit_transform(X)
         n_comp = min(5, X.shape[1])
         pca = PCA(n_components=n_comp).fit(Xs)
@@ -4436,6 +4445,113 @@ def ai_project_plan(ds_id):
             return jsonify(fallback)
     finally:
         s.close()
+
+@app.route("/api/datasets/<ds_id>/feature_engineer", methods=["POST"])
+def feature_engineer(ds_id):
+    """Apply a feature engineering operation to the active dataset."""
+    body = request.get_json() or {}
+    operation = body.get("operation")
+    s = db()
+    try:
+        ds = s.query(Dataset).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        df = df_from_dataset(ds, s)
+
+        if operation == "bin":
+            col = body.get("column")
+            bins = int(body.get("bins", 3))
+            labels = body.get("labels") or None
+            new_name = body.get("new_name") or f"{col}_bin"
+            if col not in df.columns:
+                return {"error": f"Column '{col}' not found"}, 400
+            if labels and len(labels) != bins:
+                labels = None
+            df[new_name] = pd.cut(df[col], bins=bins, labels=labels)
+            summary = f"Created '{new_name}' by binning '{col}' into {bins} bins."
+
+        elif operation == "average":
+            cols = body.get("columns", [])
+            new_name = body.get("new_name") or ("_".join(cols[:3]) + "_avg")
+            missing = [c for c in cols if c not in df.columns]
+            if missing:
+                return {"error": f"Columns not found: {missing}"}, 400
+            df[new_name] = df[cols].mean(axis=1)
+            summary = f"Created '{new_name}' as the row-wise average of {cols}."
+
+        elif operation == "ratio":
+            num = body.get("numerator")
+            den = body.get("denominator")
+            new_name = body.get("new_name") or f"{num}_per_{den}"
+            if num not in df.columns or den not in df.columns:
+                return {"error": "Numerator or denominator column not found"}, 400
+            df[new_name] = df[num] / df[den].replace(0, float("nan"))
+            summary = f"Created '{new_name}' as {num} / {den}."
+
+        elif operation == "round":
+            col = body.get("column")
+            decimals = int(body.get("param", 2))
+            new_name = body.get("new_name") or col
+            if col not in df.columns:
+                return {"error": f"Column '{col}' not found"}, 400
+            df[new_name] = df[col].round(decimals)
+            summary = f"Rounded '{col}' to {decimals} decimal places → '{new_name}'."
+
+        elif operation == "abs":
+            col = body.get("column")
+            new_name = body.get("new_name") or col
+            if col not in df.columns:
+                return {"error": f"Column '{col}' not found"}, 400
+            df[new_name] = df[col].abs()
+            summary = f"Applied absolute value to '{col}' → '{new_name}'."
+
+        elif operation == "log1p":
+            col = body.get("column")
+            new_name = body.get("new_name") or f"{col}_log"
+            if col not in df.columns:
+                return {"error": f"Column '{col}' not found"}, 400
+            import numpy as np
+            df[new_name] = np.log1p(df[col].clip(lower=0))
+            summary = f"Applied log1p transform to '{col}' → '{new_name}'."
+
+        elif operation == "zscore":
+            col = body.get("column")
+            new_name = body.get("new_name") or f"{col}_z"
+            if col not in df.columns:
+                return {"error": f"Column '{col}' not found"}, 400
+            mu, sigma = df[col].mean(), df[col].std()
+            df[new_name] = (df[col] - mu) / (sigma if sigma > 0 else 1)
+            summary = f"Z-scored '{col}' (mean={mu:.2f}, sd={sigma:.2f}) → '{new_name}'."
+
+        elif operation == "minmax":
+            col = body.get("column")
+            new_name = body.get("new_name") or f"{col}_scaled"
+            if col not in df.columns:
+                return {"error": f"Column '{col}' not found"}, 400
+            mn, mx = df[col].min(), df[col].max()
+            df[new_name] = (df[col] - mn) / ((mx - mn) if mx != mn else 1)
+            summary = f"Min-max scaled '{col}' → '{new_name}'."
+
+        elif operation == "pct_of_max":
+            col = body.get("column")
+            new_name = body.get("new_name") or f"{col}_pct"
+            if col not in df.columns:
+                return {"error": f"Column '{col}' not found"}, 400
+            mx = df[col].max()
+            df[new_name] = (df[col] / mx * 100) if mx != 0 else 0
+            summary = f"Converted '{col}' to % of max → '{new_name}'."
+
+        else:
+            return {"error": f"Unknown operation: {operation}"}, 400
+
+        create_stage(s, ds, df, op_type=f"feature_engineer_{operation}", op_params=body, summary=summary)
+        s.commit()
+        return jsonify({"ok": True, "summary": summary})
+    except Exception as e:
+        return {"error": str(e)}, 400
+    finally:
+        s.close()
+
 
 @app.route("/api/datasets/<ds_id>/ai/recommend", methods=["POST"])
 def ai_recommend(ds_id):

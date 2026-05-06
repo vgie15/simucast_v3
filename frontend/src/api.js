@@ -293,6 +293,13 @@ export const api = {
       body: JSON.stringify({ prompt }),
     }),
 
+  // feature engineering
+  featureEngineer: (datasetId, body) =>
+    request(`/api/datasets/${datasetId}/feature_engineer`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   // report
   buildReport: (id, sections) =>
     request(`/api/datasets/${id}/report`, {

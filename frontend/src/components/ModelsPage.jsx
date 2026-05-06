@@ -515,11 +515,13 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                     <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{a.desc}</p>
                   </div>
                 </div>
-                {a.interpretable && (
-                  <span className="ax-chip" style={{ background: 'var(--color-background-secondary)' }}>
-                    interpretable
-                  </span>
-                )}
+                <span className="ax-chip" style={{
+                  background: a.interpretable ? '#DCFCE7' : 'var(--color-background-secondary)',
+                  color: a.interpretable ? '#16A34A' : 'var(--color-text-tertiary)',
+                  fontSize: 10,
+                }}>
+                  {a.interpretable ? '✓ interpretable' : 'complex'}
+                </span>
               </div>
             </label>
           ))}

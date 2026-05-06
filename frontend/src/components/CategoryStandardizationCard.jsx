@@ -191,10 +191,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
             {visibleSuggestions.length} column{visibleSuggestions.length === 1 ? '' : 's'} need review. Review, skip, or apply when useful.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="ax-btn" onClick={skipAll} disabled={loading || busy}>Skip all</button>
-          <button className="ax-btn" onClick={() => load()} disabled={loading}>Refresh</button>
-        </div>
+        {/* buttons removed — use per-column Skip / Previous / Next controls below */}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', marginBottom: 10 }}>
