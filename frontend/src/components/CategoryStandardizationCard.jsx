@@ -66,11 +66,6 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
     setSelectedColumn(nextVisible[0]?.column || '')
   }
 
-  const skipAll = () => {
-    setSkippedColumns((currentSkipped) => Array.from(new Set([...currentSkipped, ...suggestions.map((s) => s.column)])))
-    setSelectedColumn('')
-  }
-
   const resumeSkipped = () => {
     setSkippedColumns([])
     setSelectedColumn(suggestions[0]?.column || '')
@@ -162,12 +157,9 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
                 : 'No category standardization suggestions are pending.'}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {suggestions.length && visibleSuggestions.length === 0 ? (
-              <button className="ax-btn" onClick={resumeSkipped} disabled={loading}>Resume review</button>
-            ) : null}
-            <button className="ax-btn" onClick={() => load()} disabled={loading}>Refresh</button>
-          </div>
+          {suggestions.length && visibleSuggestions.length === 0 ? (
+            <button className="ax-btn" onClick={resumeSkipped} disabled={loading}>Resume review</button>
+          ) : null}
         </div>
         {appliedSummary && (
           <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 10 }}>

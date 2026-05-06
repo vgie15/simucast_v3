@@ -1502,11 +1502,21 @@ input[type="range"]::-moz-range-thumb {
 .ax-switch.on::after { left: 16px; }
 
 /* --- project sub-nav (horizontal tab bar inside project workspace) --- */
+.ax-workflow-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: -24px -32px 24px;
+  background: var(--color-background-primary);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+}
+
 .ax-subnav {
   display: flex;
   gap: 18px;
   border-bottom: 0.5px solid var(--color-border-tertiary);
-  margin: -24px -32px 0;
+  margin: 0;
   padding: 0 28px;
   background: var(--color-background-primary);
   overflow-x: auto;
@@ -1593,12 +1603,11 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .ax-flow-context {
-  margin: 0 -32px 24px;
+  margin: 0;
   padding: 12px 28px 14px;
   background: var(--color-background-primary);
   color: var(--color-text-secondary);
   font-size: 13px;
-  border-bottom: 0.5px solid var(--color-border-tertiary);
 }
 
 .ax-page-title {
@@ -2685,11 +2694,14 @@ input[type="range"]::-moz-range-thumb {
     padding: 18px;
   }
   .ax-subnav {
-    margin: -18px -18px 0;
+    margin: 0;
     padding: 0 14px;
   }
+  .ax-workflow-header {
+    margin: -18px -18px 20px;
+  }
   .ax-flow-context {
-    margin: 0 -18px 20px;
+    margin: 0;
     padding: 10px 14px 12px;
   }
   .ax-page-title {

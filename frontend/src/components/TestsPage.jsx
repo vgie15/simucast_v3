@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Scatter } from 'react-chartjs-2'
 import { api } from '../api'
 import AIAssistantPanel from './AIAssistantPanel'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
@@ -272,11 +273,80 @@ function TestResult({ kind, result, setup, datasetId }) {
       ]} measure={setup.measure} />}
       {kind === 'anova' && <GroupMeanBars means={Object.entries(result.group_means || {}).map(([label, value]) => ({ label, value }))} measure={setup.measure} />}
       {kind === 'chi' && <ContingencyTable result={result} />}
-      {kind === 'corr' && <CorrelationMatrix result={result} />}
+      {kind === 'corr' && (
+        <>
+          <CorrelationScatter result={result} />
+          <CorrelationMatrix result={result} />
+        </>
+      )}
 
       <div className="ax-card" style={{ padding: 14 }}>
         <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Next step guidance</p>
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>{summary.next}</p>
+      </div>
+    </div>
+  )
+}
+
+function CorrelationScatter({ result }) {
+  const pair = result.strongest_pair
+  const vars = result.variables || []
+  const points = result.scatter_points || []
+  if (!pair || vars.length !== 2 || points.length === 0) return null
+
+  const chartPoints = points.map(([x, y]) => ({ x: Number(x), y: Number(y) })).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+  if (!chartPoints.length) return null
+  const xs = chartPoints.map((p) => p.x)
+  const ys = chartPoints.map((p) => p.y)
+  const xMean = avg(xs)
+  const yMean = avg(ys)
+  const denom = xs.reduce((sum, x) => sum + ((x - xMean) ** 2), 0) || 1
+  const slope = xs.reduce((sum, x, i) => sum + ((x - xMean) * (ys[i] - yMean)), 0) / denom
+  const intercept = yMean - slope * xMean
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const trend = [
+    { x: minX, y: intercept + slope * minX },
+    { x: maxX, y: intercept + slope * maxX },
+  ]
+
+  return (
+    <div className="ax-card">
+      <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>Relationship scatter plot</p>
+      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+        Visual check for {vars[0]} and {vars[1]}. The line shows the overall trend behind the correlation result.
+      </p>
+      <div style={{ height: 260 }}>
+        <Scatter
+          data={{
+            datasets: [
+              {
+                label: 'Rows',
+                data: chartPoints,
+                backgroundColor: 'rgba(249,115,22,0.45)',
+                pointRadius: 3,
+              },
+              {
+                label: 'Trend',
+                data: trend,
+                type: 'line',
+                borderColor: '#111827',
+                borderWidth: 2,
+                pointRadius: 0,
+                showLine: true,
+              },
+            ],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { title: { display: true, text: vars[0] }, ticks: { font: { size: 10 } } },
+              y: { title: { display: true, text: vars[1] }, ticks: { font: { size: 10 } } },
+            },
+          }}
+        />
       </div>
     </div>
   )
@@ -481,6 +551,10 @@ function effectLabel(value, cutoffs) {
   if (value >= cutoffs[1]) return 'moderate'
   if (value >= cutoffs[0]) return 'small'
   return 'very small'
+}
+
+function avg(values) {
+  return values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1)
 }
 
 function corrStrength(value) {

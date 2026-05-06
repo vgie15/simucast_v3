@@ -83,22 +83,24 @@ export default function ProjectWorkspace() {
 
   return (
     <>
-      <div className="ax-subnav">
-        {TABS.map((t, index) => {
-          const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
-          const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
-          return (
-          <NavLink
-            key={t.key}
-            to={`/projects/${id}/${t.key}`}
-            className={() => `ax-subnav-item ${state}`}
-            end
-          >
-            {t.label}
-          </NavLink>
-        )})}
+      <div className="ax-workflow-header">
+        <div className="ax-subnav">
+          {TABS.map((t, index) => {
+            const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
+            const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
+            return (
+            <NavLink
+              key={t.key}
+              to={`/projects/${id}/${t.key}`}
+              className={() => `ax-subnav-item ${state}`}
+              end
+            >
+              {t.label}
+            </NavLink>
+          )})}
+        </div>
+        <p className="ax-flow-context">{activeTabMeta.subtitle}</p>
       </div>
-      <p className="ax-flow-context">{activeTabMeta.subtitle}</p>
 
       <div style={{ marginBottom: 12 }}>
         <Link to="/projects" style={{ fontSize: 11, color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
