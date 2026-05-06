@@ -81,6 +81,8 @@ export function AuthProvider({ children }) {
     loading,
     isGuest: !!session?.is_guest,
     isAuthenticated: !!session && !session.is_guest,
+    // true when guest has used their one project slot (even if they deleted the project)
+    guestAtLimit: !!session?.is_guest && (session?.usage_count ?? 0) >= (session?.limit ?? 1),
     login,
     signup,
     logout,
@@ -115,17 +117,10 @@ function AuthModal({ initialMode, onClose }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [transferred, setTransferred] = useState(false)
-  const [hasGuestData, setHasGuestData] = useState(false)
 
   const wasGuest = auth.isGuest
-
-  // Only show the transfer notice if the guest actually has projects to transfer
-  useEffect(() => {
-    if (!auth.isGuest) return
-    api.listDatasets().then((list) => {
-      setHasGuestData(Array.isArray(list) ? list.length > 0 : false)
-    }).catch(() => {})
-  }, [auth.isGuest])
+  // Show transfer notice only if guest has actually used their project slot
+  const hasGuestData = auth.guestAtLimit
 
   const submit = async (event) => {
     event.preventDefault()

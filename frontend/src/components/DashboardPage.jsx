@@ -9,7 +9,7 @@ export default function DashboardPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const navigate = useNavigate()
   const auth = useAuth()
-  const guestAtLimit = auth.isGuest && datasets.length >= 1
+  const guestAtLimit = auth.guestAtLimit
 
   useEffect(() => {
     api.listDatasets().then(setDatasets).catch(console.error)

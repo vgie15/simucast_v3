@@ -77,13 +77,10 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
       setError('Pick a file from the list.')
       return
     }
-    if (auth.isGuest) {
-      const current = await api.listDatasets().catch(() => [])
-      if (current.length >= 1) {
-        setError('Guest accounts are limited to 1 project. Sign up or log in to create more.')
-        auth.showAuthModal('signup')
-        return
-      }
+    if (auth.guestAtLimit) {
+      setError('Guest accounts are limited to 1 project. Sign up or log in to create more.')
+      auth.showAuthModal('signup')
+      return
     }
     setBusy(true)
     setError(null)

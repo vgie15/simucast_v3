@@ -1010,8 +1010,7 @@ def upload_dataset():
     try:
         sess, _ = _auth_from_request(s)
         if sess and sess.is_guest:
-            existing_count = _dataset_scope(s.query(Dataset), s).count()
-            if existing_count >= 1:
+            if int(sess.guest_usage_count or 0) >= 1:
                 return {
                     "error": "Guest accounts can only upload 1 dataset. Sign up or log in to upload more.",
                     "auth_required": True,
@@ -1112,6 +1111,9 @@ def upload_dataset():
                 commit=False,
                 dedupe_key=f"sheet:{ds_id}:{active_sheet}",
             )
+        # Consume one guest slot (persists even if project is later deleted)
+        if sess and sess.is_guest:
+            sess.guest_usage_count = int(sess.guest_usage_count or 0) + 1
         s.commit()
         return {
             "id": ds_id,
@@ -1122,6 +1124,7 @@ def upload_dataset():
             "variables": variables,
             "sheets": _sheet_list(ds),
             "active_sheet": active_sheet,
+            "usage_count": int(sess.guest_usage_count) if sess and sess.is_guest else None,
         }
     finally:
         s.close()
