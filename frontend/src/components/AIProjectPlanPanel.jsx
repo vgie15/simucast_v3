@@ -9,7 +9,12 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
   const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
-  const [mode, setMode] = useState(() => (modeKey ? window.localStorage.getItem(modeKey) || 'auto' : 'auto'))
+  const [mode, setMode] = useState(() => {
+    if (!modeKey) return 'auto'
+    const saved = window.localStorage.getItem(modeKey) || 'auto'
+    // 'off' was removed — treat it as 'auto'
+    return saved === 'off' ? 'auto' : saved
+  })
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -17,7 +22,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   const [collapsed, setCollapsed] = useState(false)
 
   const load = async (force = false) => {
-    if (!datasetId || mode === 'off') return
+    if (!datasetId) return
     const cacheKey = `simucast.aiPlan.${datasetId}.${stageKey}.${mode}`
     if (!force) {
       const cached = window.localStorage.getItem(cacheKey)
@@ -46,7 +51,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   useEffect(() => {
     if (!modeKey) return
     const saved = window.localStorage.getItem(modeKey) || 'auto'
-    setMode(saved)
+    setMode(saved === 'off' ? 'auto' : saved)
   }, [modeKey])
 
   useEffect(() => {
@@ -111,7 +116,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
   }
 
   return (
-    <section className="ax-card ax-plan-panel">
+    <section className={`ax-card ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}>
       <div className="ax-panel-sticky-header">
         <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
           <button
@@ -154,41 +159,28 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
             >
               System only
             </button>
-            <button
-              type="button"
-              className={mode === 'off' ? 'active' : ''}
-              onClick={() => setGuidanceMode('off', modeKey, setMode, setPlan)}
-            >
-              Hide
-            </button>
           </div>
         )}
       </div>{/* end sticky header */}
 
       {!collapsed && (
         <>
-          {mode === 'off' && (
-            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-              Guided planning is off for this project.
-            </p>
-          )}
-
-          {mode !== 'off' && plan?.error && (
+          {plan?.error && (
             <div className="ax-plan-fallback">
               <strong>AI call failed</strong>
               <span>{plan.error}</span>
             </div>
           )}
 
-          {mode !== 'off' && loading && !plan && (
+          {loading && !plan && (
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
               Planning the workflow...
             </p>
           )}
-          {mode !== 'off' && error && (
+          {error && (
             <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>
           )}
-          {mode !== 'off' && isAutoFallback && (
+          {isAutoFallback && (
             <div className="ax-plan-fallback">
               <strong>AI unavailable</strong>
               <span>
@@ -196,13 +188,13 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
               </span>
             </div>
           )}
-          {mode !== 'off' && !isAutoFallback && plan?.summary && (
+          {!isAutoFallback && plan?.summary && (
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
               {plan.summary}
             </p>
           )}
 
-          {mode !== 'off' && !isAutoFallback && plan && (
+          {!isAutoFallback && plan && (
             <div className="ax-plan-list">
               {steps
                 .map((step, index) => ({ step, index }))

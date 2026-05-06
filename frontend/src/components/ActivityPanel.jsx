@@ -172,34 +172,33 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
 
   return (
     <div className="ax-card ax-activity-panel">
-      <div className="ax-panel-sticky-header ax-row" style={{ marginBottom: 8 }}>
-        <div>
-          <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Documentation</p>
-          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-            Project actions for methods, audit trail, and reports.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="ax-btn" onClick={load} disabled={loading}>Refresh</button>
+      <div className="ax-panel-sticky-header">
+        <div className="ax-row" style={{ marginBottom: 8 }}>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Documentation</p>
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+              Project actions for methods, audit trail, and reports.
+            </p>
+          </div>
           <button
             className="ax-btn"
-            style={{ background: 'rgba(220, 38, 38, 0.08)', borderColor: 'rgba(220, 38, 38, 0.35)', color: '#DC2626' }}
+            style={{ background: 'rgba(220, 38, 38, 0.08)', borderColor: 'rgba(220, 38, 38, 0.35)', color: '#DC2626', flexShrink: 0 }}
             onClick={resetProject}
             disabled={busy}
           >
             Reset project
           </button>
         </div>
-      </div>
 
-      <div className="ax-activity-filters">
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-          {FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-        </select>
-        <select value={order} onChange={(e) => setOrder(e.target.value)}>
-          <option value="desc">Latest first</option>
-          <option value="asc">Oldest first</option>
-        </select>
+        <div className="ax-activity-filters" style={{ marginBottom: 0 }}>
+          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+            {FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+          </select>
+          <select value={order} onChange={(e) => setOrder(e.target.value)}>
+            <option value="desc">Latest first</option>
+            <option value="asc">Oldest first</option>
+          </select>
+        </div>
       </div>
 
       {loading && activity.length === 0 ? (

@@ -2027,9 +2027,9 @@ input[type="range"]::-moz-range-thumb {
 }
 .ax-plan-mode {
   display: grid;
-  grid-template-columns: 1fr 1fr 0.7fr;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin: 8px 0 10px;
+  margin: 8px 0 4px;
   padding: 4px;
   border-radius: 10px;
   background: var(--color-background-secondary);
@@ -2150,10 +2150,18 @@ input[type="range"]::-moz-range-thumb {
   line-height: 1.35;
 }
 .ax-plan-panel {
-  flex: 1 1 0;
+  /* shrinks to header when collapsed; caps at 45% of rail so docs always has room */
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 45%;
   overflow-y: auto;
   padding: 0;
+  transition: max-height 0.25s ease;
+}
+.ax-plan-panel.ax-plan-collapsed {
+  /* when collapsed, only show the sticky header — no scroll, no cap */
+  max-height: none;
+  overflow: visible;
 }
 .ax-activity-panel {
   flex: 1 1 0;
@@ -2184,7 +2192,8 @@ input[type="range"]::-moz-range-thumb {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-top: 8px;
+  margin-bottom: 0;
 }
 .ax-activity-filters select,
 .ax-activity-filters input {
