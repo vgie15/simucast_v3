@@ -1010,7 +1010,13 @@ def upload_dataset():
     try:
         sess, _ = _auth_from_request(s)
         if sess and sess.is_guest:
-            if int(sess.guest_usage_count or 0) >= 1:
+            existing_count = _dataset_scope(s.query(Dataset), s).count()
+            usage = int(sess.guest_usage_count or 0)
+            # Retroactively sync for sessions created before the usage counter existed
+            if existing_count > usage:
+                sess.guest_usage_count = existing_count
+                usage = existing_count
+            if usage >= 1 or existing_count >= 1:
                 return {
                     "error": "Guest accounts can only upload 1 dataset. Sign up or log in to upload more.",
                     "auth_required": True,

@@ -76,6 +76,13 @@ export function AuthProvider({ children }) {
     return r.session
   }, [saveSession])
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const r = await api.authMe()
+      if (r?.session) saveSession(r)
+    } catch { /* ignore — stale session stays */ }
+  }, [saveSession])
+
   const value = useMemo(() => ({
     session,
     loading,
@@ -88,9 +95,10 @@ export function AuthProvider({ children }) {
     logout,
     ensureGuest,
     resetGuestSession,
+    refreshSession,
     updateSession: saveSession,
     showAuthModal: (mode = 'login') => setModalMode(mode),
-  }), [session, loading, login, signup, logout, ensureGuest, resetGuestSession, saveSession])
+  }), [session, loading, login, signup, logout, ensureGuest, resetGuestSession, refreshSession, saveSession])
 
   return (
     <AuthContext.Provider value={value}>

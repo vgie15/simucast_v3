@@ -96,6 +96,7 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
         setBusy(false)
         return
       }
+      await auth.refreshSession?.()
       reset()
       onCreated(result)
     } catch (err) {
@@ -115,6 +116,7 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
       if (pendingSheet && pendingSheet !== pendingResult.active_sheet) {
         final = await api.selectSheet(pendingResult.id, pendingSheet)
       }
+      await auth.refreshSession?.()
       reset()
       onCreated(final)
     } catch (err) {

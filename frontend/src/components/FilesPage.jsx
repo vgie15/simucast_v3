@@ -34,6 +34,7 @@ export default function FilesPage() {
     try {
       await api.deleteDataset(file.id)
       setDatasets((current) => current.filter((d) => d.id !== file.id))
+      await auth.refreshSession?.()
     } catch (err) {
       await dialog.alert({ title: 'Delete Failed', message: err.message, variant: 'danger' })
     }
@@ -45,6 +46,7 @@ export default function FilesPage() {
     setUploading(true)
     try {
       const result = await api.uploadDataset(f)
+      await auth.refreshSession?.()
       navigate(`/projects/${result.id}`)
     } catch (err) {
       await dialog.alert({ title: 'Upload Failed', message: err.message, variant: 'danger' })

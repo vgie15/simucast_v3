@@ -34,6 +34,7 @@ export default function ProjectsPage() {
     try {
       await api.deleteDataset(project.id)
       setDatasets((current) => current.filter((d) => d.id !== project.id))
+      await auth.refreshSession?.()
     } catch (err) {
       await dialog.alert({ title: 'Delete Failed', message: err.message, variant: 'danger' })
     }
