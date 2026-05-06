@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
-import { useAuth } from './AuthProvider'
+import { useAuth, markGuestSlotUsed } from './AuthProvider'
 
 export default function NewProjectModal({ open, onClose, onCreated }) {
   const auth = useAuth()
@@ -89,6 +89,8 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
         mode === 'upload'
           ? await api.uploadDataset(file, name.trim(), description.trim())
           : await api.createFromDataset(selectedId, name.trim(), description.trim())
+      // Mark the guest slot used immediately — persists even if project is later deleted
+      if (auth.isGuest) markGuestSlotUsed(auth.session?.token)
       // If Excel has multiple sheets, pause for sheet selection before navigating
       if ((result.sheets || []).length > 1) {
         setPendingResult(result)

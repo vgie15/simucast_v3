@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { useAuth } from './AuthProvider'
+import { useAuth, markGuestSlotUsed } from './AuthProvider'
 import { useDialog } from './DialogProvider'
 
 export default function FilesPage() {
@@ -46,6 +46,7 @@ export default function FilesPage() {
     setUploading(true)
     try {
       const result = await api.uploadDataset(f)
+      if (auth.isGuest) markGuestSlotUsed(auth.session?.token)
       await auth.refreshSession?.()
       navigate(`/projects/${result.id}`)
     } catch (err) {

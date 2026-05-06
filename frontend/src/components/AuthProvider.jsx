@@ -4,6 +4,23 @@ import { api } from '../api'
 
 const AuthContext = createContext(null)
 
+// localStorage key that stores the guest token that has consumed its one slot.
+// Never cleared on delete — only on sign-up / login (new real account).
+const GUEST_SLOT_KEY = 'simucast.guestSlot'
+
+function isGuestSlotUsed(token) {
+  if (!token) return false
+  return localStorage.getItem(GUEST_SLOT_KEY) === token
+}
+
+export function markGuestSlotUsed(token) {
+  if (token) localStorage.setItem(GUEST_SLOT_KEY, token)
+}
+
+function clearGuestSlot() {
+  localStorage.removeItem(GUEST_SLOT_KEY)
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -13,6 +30,10 @@ export function AuthProvider({ children }) {
     const next = payload?.session || payload
     setSession(next || null)
     api.setSessionToken(next?.token || '')
+    // Sync localStorage slot flag from backend usage_count
+    if (next?.is_guest && (next?.usage_count ?? 0) >= 1) {
+      markGuestSlotUsed(next.token)
+    }
   }, [])
 
   const ensureGuest = useCallback(async () => {
@@ -47,6 +68,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const r = await api.authLogin(email, password)
+    clearGuestSlot()
     saveSession(r)
     setModalMode(null)
     return r.session
@@ -54,6 +76,7 @@ export function AuthProvider({ children }) {
 
   const signup = useCallback(async (email, password, fullName = '') => {
     const r = await api.authSignup(email, password, fullName)
+    clearGuestSlot()
     saveSession(r)
     setModalMode(null)
     return r.session
@@ -88,8 +111,12 @@ export function AuthProvider({ children }) {
     loading,
     isGuest: !!session?.is_guest,
     isAuthenticated: !!session && !session.is_guest,
-    // true when guest has used their one project slot (even if they deleted the project)
-    guestAtLimit: !!session?.is_guest && (session?.usage_count ?? 0) >= (session?.limit ?? 1),
+    // true when guest has EVER created a project — based on backend count OR persistent localStorage flag.
+    // Deleting the project does NOT reset this — the slot is consumed permanently.
+    guestAtLimit: !!session?.is_guest && (
+      (session?.usage_count ?? 0) >= (session?.limit ?? 1) ||
+      isGuestSlotUsed(session?.token)
+    ),
     login,
     signup,
     logout,
