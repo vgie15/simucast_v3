@@ -14,6 +14,9 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const fileRef = useRef(null)
+  // sheet selection step
+  const [pendingResult, setPendingResult] = useState(null) // dataset result waiting for sheet pick
+  const [pendingSheet, setPendingSheet] = useState('')
 
   useEffect(() => {
     if (!open || mode !== 'existing') return
@@ -35,6 +38,8 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
     setSelectedId(null)
     setError(null)
     setBusy(false)
+    setPendingResult(null)
+    setPendingSheet('')
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -87,6 +92,13 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
         mode === 'upload'
           ? await api.uploadDataset(file, name.trim(), description.trim())
           : await api.createFromDataset(selectedId, name.trim(), description.trim())
+      // If Excel has multiple sheets, pause for sheet selection before navigating
+      if ((result.sheets || []).length > 1) {
+        setPendingResult(result)
+        setPendingSheet(result.active_sheet || result.sheets[0]?.name || '')
+        setBusy(false)
+        return
+      }
       reset()
       onCreated(result)
     } catch (err) {
@@ -94,6 +106,22 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
         auth.showAuthModal('signup')
       }
       setError(err.message || 'Failed to create project')
+      setBusy(false)
+    }
+  }
+
+  const confirmSheet = async () => {
+    if (!pendingResult) return
+    setBusy(true)
+    try {
+      let final = pendingResult
+      if (pendingSheet && pendingSheet !== pendingResult.active_sheet) {
+        final = await api.selectSheet(pendingResult.id, pendingSheet)
+      }
+      reset()
+      onCreated(final)
+    } catch (err) {
+      setError(err.message || 'Could not select sheet')
       setBusy(false)
     }
   }
@@ -261,6 +289,28 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
           </div>
         )}
 
+        {/* Sheet selection step — shown after upload if Excel has multiple sheets */}
+        {pendingResult && (
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 4px' }}>Select a sheet</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+              This workbook has multiple sheets. Choose which one to use as the active dataset.
+            </p>
+            <select
+              value={pendingSheet}
+              onChange={(e) => setPendingSheet(e.target.value)}
+              disabled={busy}
+              style={{ ...inputStyle, marginBottom: 0 }}
+            >
+              {(pendingResult.sheets || []).map((s) => (
+                <option key={s.name} value={s.name}>
+                  {s.name} — {s.row_count?.toLocaleString()} rows, {s.col_count} columns{s.empty ? ' (empty)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {error && (
           <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>
             {error}
@@ -269,9 +319,15 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
 
         <div className="ax-row" style={{ justifyContent: 'flex-end', gap: 6 }}>
           <button className="ax-btn" onClick={close} disabled={busy} type="button">Cancel</button>
-          <button className="ax-btn prim" onClick={submit} disabled={busy} type="button">
-            {busy ? 'Creating…' : 'Create project'}
-          </button>
+          {pendingResult ? (
+            <button className="ax-btn prim" onClick={confirmSheet} disabled={busy} type="button">
+              {busy ? 'Saving…' : 'Use this sheet'}
+            </button>
+          ) : (
+            <button className="ax-btn prim" onClick={submit} disabled={busy} type="button">
+              {busy ? 'Creating…' : 'Create project'}
+            </button>
+          )}
         </div>
       </div>
     </div>

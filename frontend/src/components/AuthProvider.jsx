@@ -115,8 +115,17 @@ function AuthModal({ initialMode, onClose }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [transferred, setTransferred] = useState(false)
+  const [hasGuestData, setHasGuestData] = useState(false)
 
   const wasGuest = auth.isGuest
+
+  // Only show the transfer notice if the guest actually has projects to transfer
+  useEffect(() => {
+    if (!auth.isGuest) return
+    api.listDatasets().then((list) => {
+      setHasGuestData(Array.isArray(list) ? list.length > 0 : false)
+    }).catch(() => {})
+  }, [auth.isGuest])
 
   const submit = async (event) => {
     event.preventDefault()
@@ -196,7 +205,7 @@ function AuthModal({ initialMode, onClose }) {
               ? 'Sign up to save your projects, scenarios, and documentation.'
               : 'Sign in to access your saved scenarios and analysis.'}
           </p>
-          {mode === 'signup' && wasGuest && (
+          {mode === 'signup' && wasGuest && hasGuestData && (
             <div className="ax-auth-guest-notice">
               <span>✓</span>
               <span>Your guest session and any projects you&apos;ve created will be saved to your new account.</span>
