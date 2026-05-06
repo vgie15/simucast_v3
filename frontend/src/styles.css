@@ -252,6 +252,31 @@ input[type="range"]::-moz-range-thumb {
 }
 .ax-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Guest upgrade CTA — pill shape, accent outline */
+.ax-btn-signup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 7px 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-accent);
+  background: var(--color-background-primary);
+  color: var(--color-accent-dark);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.12s, transform 0.12s, box-shadow 0.12s;
+  white-space: nowrap;
+}
+.ax-btn-signup:hover {
+  background: var(--color-background-warning);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.18);
+}
+
 .ax-fix-highlight {
   animation: axFixPulse 2.6s ease-out;
   outline: 2px solid rgba(249, 115, 22, 0.85);
@@ -1820,16 +1845,7 @@ input[type="range"]::-moz-range-thumb {
 .ax-guest-banner span {
   line-height: 1.4;
 }
-.ax-guest-banner button[type="button"]:not(.ax-guest-banner-close) {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--color-accent);
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 13px;
-  text-decoration: underline;
-}
+/* ax-btn-signup inside banner inherits its own styles */
 .ax-guest-banner-close {
   background: none;
   border: none;

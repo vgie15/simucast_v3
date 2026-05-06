@@ -30,16 +30,15 @@ function GuestBanner() {
   if (!auth.isGuest || dismissed) return null
   return (
     <div className="ax-guest-banner">
-      <span>
-        👤 <strong>Guest Mode</strong> — your projects are temporary.{' '}
-        <button type="button" onClick={() => auth.showAuthModal('signup')}>
-          Sign up free
-        </button>{' '}
-        to save your work permanently.
-      </span>
-      <button type="button" className="ax-guest-banner-close" onClick={() => setDismissed(true)} aria-label="Dismiss">
-        ×
-      </button>
+      <span>👤 <strong>Guest Mode</strong> — your projects are temporary. Sign up to save your work permanently.</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <button type="button" className="ax-btn-signup" onClick={() => auth.showAuthModal('signup')}>
+          Sign up to add more
+        </button>
+        <button type="button" className="ax-guest-banner-close" onClick={() => setDismissed(true)} aria-label="Dismiss">
+          ×
+        </button>
+      </div>
     </div>
   )
 }

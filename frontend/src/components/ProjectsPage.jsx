@@ -47,7 +47,7 @@ export default function ProjectsPage() {
           <p className="ax-page-sub">Each project is a dataset you can clean, describe, test, and model.</p>
         </div>
         {guestAtLimit ? (
-          <button className="ax-btn" onClick={() => auth.showAuthModal('signup')} type="button">
+          <button className="ax-btn-signup" onClick={() => auth.showAuthModal('signup')} type="button">
             Sign up to add more
           </button>
         ) : (
@@ -58,15 +58,7 @@ export default function ProjectsPage() {
       </div>
       {guestAtLimit && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
-          Guest accounts are limited to 1 project.{' '}
-          <button
-            type="button"
-            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-accent)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
-            onClick={() => auth.showAuthModal('signup')}
-          >
-            Sign up free
-          </button>{' '}
-          to keep your work and create more projects.
+          Guest accounts are limited to 1 project. Sign up to keep your work and create more.
         </p>
       )}
 
