@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
+import { useAuth } from './AuthProvider'
 import NewProjectModal from './NewProjectModal'
 
 export default function DashboardPage() {
   const [datasets, setDatasets] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const navigate = useNavigate()
+  const auth = useAuth()
+  const guestAtLimit = auth.isGuest && datasets.length >= 1
 
   useEffect(() => {
     api.listDatasets().then(setDatasets).catch(console.error)
@@ -22,12 +25,15 @@ export default function DashboardPage() {
           <h1 className="ax-page-title" style={{ marginBottom: 0 }}>Dashboard</h1>
           <p className="ax-page-sub">Quick overview of your work in SimuCast.</p>
         </div>
-        <button
-          className="ax-btn prim"
-          onClick={() => setModalOpen(true)}
-        >
-          + Add new project
-        </button>
+        {guestAtLimit ? (
+          <button className="ax-btn-signup" type="button" onClick={() => auth.showAuthModal('signup')}>
+            Sign up to add more
+          </button>
+        ) : (
+          <button className="ax-btn prim" onClick={() => setModalOpen(true)}>
+            + Add new project
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, margin: '12px 0 16px' }}>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
+import { useAuth } from './AuthProvider'
 import { useDialog } from './DialogProvider'
 
 export default function FilesPage() {
@@ -9,6 +10,8 @@ export default function FilesPage() {
   const fileRef = useRef(null)
   const navigate = useNavigate()
   const dialog = useDialog()
+  const auth = useAuth()
+  const guestAtLimit = auth.isGuest && datasets.length >= 1
 
   useEffect(() => {
     api.listDatasets().then(setDatasets).catch(console.error)
@@ -65,13 +68,19 @@ export default function FilesPage() {
           onChange={handleUpload}
           style={{ display: 'none' }}
         />
-        <button
-          className="ax-btn prim"
-          disabled={uploading}
-          onClick={() => fileRef.current?.click()}
-        >
-          {uploading ? 'Uploading…' : 'Upload new file'}
-        </button>
+        {guestAtLimit ? (
+          <button className="ax-btn-signup" type="button" onClick={() => auth.showAuthModal('signup')}>
+            Sign up to add more
+          </button>
+        ) : (
+          <button
+            className="ax-btn prim"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? 'Uploading…' : 'Upload new file'}
+          </button>
+        )}
       </div>
 
       {datasets.length === 0 ? (
