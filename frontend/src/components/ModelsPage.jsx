@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
-import AIAssistantPanel from './AIAssistantPanel'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
 import { useAuth } from './AuthProvider'
@@ -361,8 +360,6 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       <p className="ax-page-sub">
         Pick a target, select features, choose algorithms, and train them all in one click.
       </p>
-
-      <AIAssistantPanel datasetId={dataset.id} context="models" />
 
       {/* Step 1 — target */}
       <Step n={1} id="models-step-1" title="Pick a target — what to predict">

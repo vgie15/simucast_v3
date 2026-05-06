@@ -169,8 +169,8 @@ export default function LandingPage() {
           <FeatureCard
             tone="soft"
             icon="M5 18l4-8 4 5 4-9 2 12"
-            title="Tests and Models"
-            body="Run descriptive statistics, hypothesis tests, strict regression/classification models, and inspect feature influence."
+            title="Analysis and Models"
+            body="Run descriptive statistics, statistical analysis, strict regression/classification models, and inspect feature influence."
             stats={['MAE/RMSE/R2', 'Accuracy/F1/AUC', 'Train-test split']}
           />
           <FeatureCard
@@ -186,7 +186,7 @@ export default function LandingPage() {
         <p>Supporting teams that need data work to be explainable, repeatable, and easy to present.</p>
         <div className="ax-audience-grid">
           <Audience icon="cap" title="Academic Administrators" body="Make data-driven decisions on resource allocation, intervention programs, and student support strategies." checks={['Enrollment forecasting', 'Retention planning']} />
-          <Audience icon="scope" title="Educational Researchers" body="Analyse patterns, test hypotheses, and publish findings with comprehensive analytical tools." checks={['Pattern discovery', 'Hypothesis testing']} />
+          <Audience icon="scope" title="Educational Researchers" body="Analyse patterns, test relationships, and publish findings with comprehensive analytical tools." checks={['Pattern discovery', 'Statistical analysis']} />
           <Audience icon="chart" title="Data Analysts" body="Streamline workflows with automated modeling, scenario testing, and report generation capabilities." checks={['Automated workflows', 'Quick reporting']} />
         </div>
       </section>

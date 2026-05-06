@@ -40,7 +40,7 @@ export default function AdvancedPage({ dataset, embedded = false }) {
     <>
       {embedded ? (
         <>
-          <p className="ax-lbl" style={{ marginTop: 0 }}>Advanced tests</p>
+          <p className="ax-lbl" style={{ marginTop: 0 }}>Advanced Analysis</p>
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 0 }}>
             K-means clustering and principal component analysis.
           </p>

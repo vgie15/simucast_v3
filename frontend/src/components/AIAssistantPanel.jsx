@@ -56,7 +56,7 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
     }
   }
 
-  const recommendations = data?.recommendations || []
+  const recommendations = (data?.recommendations || []).filter(hasRecommendationContent)
   const sectionTitle = title || titleForContext(context)
 
   return (
@@ -290,6 +290,21 @@ function RecommendationCard({ rec, datasetId, context }) {
         </div>
       )}
     </div>
+  )
+}
+
+function hasRecommendationContent(rec) {
+  if (!rec || typeof rec !== 'object') return false
+  return Boolean(
+    rec.title ||
+    rec.test ||
+    rec.target ||
+    rec.method ||
+    rec.rationale ||
+    rec.variables?.length ||
+    rec.algorithms?.length ||
+    rec.preprocessing?.length ||
+    rec.leakage_risks?.length,
   )
 }
 

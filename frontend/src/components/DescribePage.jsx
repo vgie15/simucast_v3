@@ -101,6 +101,7 @@ export default function DescribePage({ dataset }) {
               title="AI narrative"
               question="Write a short narrative summary of these descriptive statistics for a non-statistician: what the data looks like, the most notable distributions or skews, and any data-quality concerns worth following up on."
               refreshKey={result?.run_id || JSON.stringify(numericStats.map((s) => s.variable))}
+              suggestedNextStep={{ page: 'tests', section: 'fix-correlation-test', relatedPlanStepId: 'tests-correlation', label: 'Open Analysis setup' }}
             />
           </div>
 
@@ -262,7 +263,7 @@ export default function DescribePage({ dataset }) {
           <div className="ax-card" style={{ padding: 14 }}>
             <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Next step recommendation</p>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-              Use Tests next to check whether these patterns are statistically meaningful. Correlation is useful for numeric relationships; group tests are useful when comparing outcomes across categories.
+              Use Analysis next to check whether these patterns are statistically meaningful. Correlation is useful for numeric relationships; group tests are useful when comparing outcomes across categories.
             </p>
           </div>
         </>

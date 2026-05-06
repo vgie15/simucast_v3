@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import ColumnValuesModal from './ColumnValuesModal'
-import AIAssistantPanel from './AIAssistantPanel'
 import ManualTransformsCard from './ManualTransformsCard'
 import DataGridViewer from './DataGridViewer'
 import CategoryStandardizationCard from './CategoryStandardizationCard'
@@ -285,8 +284,6 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
           onDataChanged={handleApplied}
         />
       </div>
-
-      <AIAssistantPanel key={historyKey} datasetId={dataset.id} context="data" />
 
       <FeatureEngineeringCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
 

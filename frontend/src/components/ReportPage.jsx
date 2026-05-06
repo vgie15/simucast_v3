@@ -6,7 +6,7 @@ import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 const SECTIONS = [
   { key: 'summary', label: 'Executive summary' },
   { key: 'descriptives', label: 'Descriptive insights' },
-  { key: 'tests', label: 'Tests and predictive insights' },
+  { key: 'tests', label: 'Analysis and predictive insights' },
   { key: 'models', label: 'Model performance' },
   { key: 'ai_interpretation', label: 'AI interpretation' },
   { key: 'documentation', label: 'Appendix actions' },

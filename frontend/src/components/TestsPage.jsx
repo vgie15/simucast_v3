@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Scatter } from 'react-chartjs-2'
 import { api } from '../api'
-import AIAssistantPanel from './AIAssistantPanel'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
@@ -94,10 +93,8 @@ export default function TestsPage({ dataset }) {
 
   return (
     <>
-      <h1 className="ax-page-title">Hypothesis testing</h1>
+      <h1 className="ax-page-title">Statistical Analysis</h1>
       <p className="ax-page-sub">Evaluate relationships, compare groups, and turn statistical results into decisions.</p>
-
-      <AIAssistantPanel datasetId={dataset.id} context="tests" />
 
       <p className="ax-lbl">Test type</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8, marginBottom: 14 }}>
@@ -231,6 +228,7 @@ function TestResult({ kind, result, setup, datasetId }) {
         title={`AI interpretation of this ${kind === 'corr' ? 'correlation' : kind} result`}
         question="Interpret these test results in plain English: what do the numbers mean here, is the effect practically meaningful, and what should the user do next?"
         refreshKey={JSON.stringify({ kind, result })}
+        suggestedNextStep={{ page: 'models', section: 'fix-target-handling', relatedPlanStepId: 'models-train', label: 'Open Models setup' }}
       />
       <div className="ax-card" style={{ borderLeft: `3px solid ${summary.significant ? '#1D9E75' : '#888'}` }}>
         <div className="ax-row" style={{ marginBottom: 10, alignItems: 'flex-start' }}>

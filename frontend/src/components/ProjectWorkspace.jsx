@@ -15,7 +15,7 @@ const TABS = [
   { key: 'data', label: 'Data', subtitle: 'Preparing your dataset' },
   { key: 'expand', label: 'Expand', subtitle: 'Expanding and engineering rows' },
   { key: 'describe', label: 'Describe', subtitle: 'Summarizing patterns and distributions' },
-  { key: 'tests', label: 'Tests', subtitle: 'Running statistical tests' },
+  { key: 'tests', label: 'Analysis', subtitle: 'Running statistical analysis' },
   { key: 'models', label: 'Models', subtitle: 'Building predictive models' },
   { key: 'whatif', label: 'What-if', subtitle: 'Testing saved scenarios' },
   { key: 'report', label: 'Report', subtitle: 'Creating insights and documentation' },
@@ -208,7 +208,7 @@ function NextPagePrompt({ activeTab, datasetId }) {
   const copy = {
     data: 'After cleaning and standardizing the dataset, expand rows or engineer more data.',
     expand: 'Next, summarize the prepared dataset before formal testing.',
-    describe: 'Next, run statistical tests to evaluate relationships and group differences.',
+    describe: 'Next, run statistical analysis to evaluate relationships and group differences.',
     tests: 'Next, train models using the strongest candidate targets and features.',
     models: 'Next, compare saved scenarios using trained interpretable models.',
     whatif: 'Next, generate a report with documentation, notes, results, and scenarios.',

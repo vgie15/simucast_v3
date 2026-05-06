@@ -3,6 +3,36 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { BusyOverlay, SkeletonCards } from './LoadingStates'
 
+const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
+const DATA_CHANGE_ACTIONS = new Set([
+  'cell_edit',
+  'batch_cell_edit',
+  'clean',
+  'clean_group',
+  'impute',
+  'winsorize',
+  'convert',
+  'drop',
+  'drop_rows',
+  'drop_duplicates',
+  'remove_duplicates',
+  'category_standardization',
+  'rename',
+  'type_conversion',
+  'feature_engineer',
+  'feature_engineer_bin',
+  'feature_engineer_average',
+  'feature_engineer_ratio',
+  'feature_engineer_round',
+  'feature_engineer_log',
+  'feature_engineer_zscore',
+  'feature_engineer_minmax',
+  'expand',
+  'restore',
+  'reset',
+  'undo_step',
+])
+
 export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollapsedChange }) {
   const navigate = useNavigate()
   const datasetId = dataset?.id
@@ -10,17 +40,29 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
   const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
+  const introKey = 'simucast.guidedPlanIntroSeen'
   const [mode, setMode] = useState(() => {
     if (!modeKey) return 'auto'
     const saved = window.localStorage.getItem(modeKey) || 'auto'
-    // 'off' was removed — treat it as 'auto'
     return saved === 'off' ? 'auto' : saved
   })
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState([])
+  const [activity, setActivity] = useState([])
   const [collapsed, setCollapsed] = useState(false)
+  const [introVisible, setIntroVisible] = useState(false)
+
+  const loadActivity = async () => {
+    if (!datasetId) return
+    try {
+      const r = await api.listActivity(datasetId, 'asc')
+      setActivity(r.activity || [])
+    } catch {
+      setActivity([])
+    }
+  }
 
   const load = async (force = false) => {
     if (!datasetId) return
@@ -30,6 +72,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       if (cached) {
         try {
           setPlan(JSON.parse(cached))
+          loadActivity()
           return
         } catch {
           window.localStorage.removeItem(cacheKey)
@@ -42,10 +85,17 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       const r = await api.aiProjectPlan(datasetId, mode)
       setPlan(r)
       window.localStorage.setItem(cacheKey, JSON.stringify(r))
-    } catch (err) {
-      setError(err.message || 'Could not generate plan')
+    } catch {
+      setError('AI plan unavailable. Using built-in guided workflow.')
+      try {
+        const fallback = await api.aiProjectPlan(datasetId, 'system')
+        setPlan({ ...fallback, error: 'AI plan unavailable. Using built-in guided workflow.' })
+      } catch {
+        setPlan(null)
+      }
     } finally {
       setLoading(false)
+      loadActivity()
     }
   }
 
@@ -74,35 +124,52 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId, stageKey, mode])
 
-  const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
-  const currentPageOrder = PAGE_ORDER[activeTab] ?? -1
+  useEffect(() => {
+    loadActivity()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId, stageKey])
 
-  const steps = plan?.steps || []
-  const doneSet = useMemo(() => new Set(done), [done])
-
-  const isEffectiveDone = (step) =>
-    doneSet.has(step.id) || (PAGE_ORDER[step.page] ?? 99) < currentPageOrder
-
-  const nextStep = steps.find((step) => !isEffectiveDone(step))
-  const isAI = plan?.ai === true
-  const isAutoFallback = mode === 'auto' && plan && plan.ai !== true
-
-  const toggleCollapsed = () => {
-    setCollapsed((c) => {
-      const next = !c
-      if (collapseKey) window.localStorage.setItem(collapseKey, next ? '1' : '0')
-      onCollapsedChange?.(next)
-      return next
-    })
-  }
-
-  // notify parent of initial collapsed state on mount
   useEffect(() => {
     if (!collapseKey) return
     const initial = window.localStorage.getItem(collapseKey) === '1'
     onCollapsedChange?.(initial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapseKey])
+
+  const steps = plan?.steps || []
+  const doneSet = useMemo(() => new Set(done), [done])
+  const progress = useMemo(() => deriveProgress(activity), [activity])
+  const latestDataChange = progress.latestDataChangeAt || null
+  const stepStates = useMemo(
+    () => steps.map((step) => getStepState(step, progress, latestDataChange, doneSet)),
+    [steps, progress, latestDataChange, doneSet],
+  )
+  const nextStepState = stepStates.find((item) => ['blocked', 'warning', 'stale', 'pending'].includes(item.status))
+  const isAI = plan?.ai === true
+  const isAutoFallback = mode === 'auto' && plan && plan.ai !== true
+  const ready = !!plan && !loading
+
+  useEffect(() => {
+    if (!datasetId || !ready) return
+    if (window.localStorage.getItem(introKey) === '1') return
+    if (collapsed) {
+      setCollapsed(false)
+      if (collapseKey) window.localStorage.setItem(collapseKey, '0')
+      onCollapsedChange?.(false)
+    }
+    const t = window.setTimeout(() => setIntroVisible(true), 300)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId, ready])
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current
+      if (collapseKey) window.localStorage.setItem(collapseKey, next ? '1' : '0')
+      onCollapsedChange?.(next)
+      return next
+    })
+  }
 
   const toggleDone = (stepId) => {
     const next = doneSet.has(stepId) ? done.filter((id) => id !== stepId) : [...done, stepId]
@@ -125,9 +192,14 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     navigate(`/projects/${datasetId}/${step.page}`)
   }
 
+  const dismissIntro = (remember) => {
+    if (remember) window.localStorage.setItem(introKey, '1')
+    setIntroVisible(false)
+  }
+
   return (
     <section
-      className={`ax-card ax-plan-panel ax-busy-host${collapsed ? ' ax-plan-collapsed' : ''} ${loading ? 'is-busy' : ''}`}
+      className={`ax-card ax-plan-panel ax-busy-host${collapsed ? ' ax-plan-collapsed' : ''} ${loading ? 'is-busy' : ''} ${introVisible ? 'ax-plan-spotlight' : ''}`}
       style={!collapsed && planH ? { height: planH, maxHeight: 'none' } : undefined}
     >
       <BusyOverlay
@@ -140,6 +212,9 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           ? ['Building dataset profile', 'Generating recommendations', 'Preparing guided plan']
           : ['Checking data quality', 'Mapping fixes to pages', 'Preparing guided plan']}
       />
+
+      {introVisible && <GuidedPlanIntro onClose={() => dismissIntro(true)} onSoftClose={() => dismissIntro(true)} />}
+
       <div className="ax-panel-sticky-header">
         <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
           <button
@@ -164,72 +239,54 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
               {isAI ? 'AI Guided Plan' : 'System Guided Plan'}
             </span>
           </button>
+          {!collapsed && (
+            <button className="ax-btn mini" type="button" onClick={() => load(true)} disabled={loading}>
+              Refresh
+            </button>
+          )}
         </div>
 
         {!collapsed && (
           <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 0 }}>
-            <button
-              type="button"
-              className={mode === 'auto' ? 'active' : ''}
-              onClick={() => setGuidanceMode('auto', modeKey, setMode, setPlan)}
-            >
+            <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => setGuidanceMode('auto', modeKey, setMode, setPlan)}>
               AI guided
             </button>
-            <button
-              type="button"
-              className={mode === 'system' ? 'active' : ''}
-              onClick={() => setGuidanceMode('system', modeKey, setMode, setPlan)}
-            >
+            <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => setGuidanceMode('system', modeKey, setMode, setPlan)}>
               System only
             </button>
           </div>
         )}
-      </div>{/* end sticky header */}
+      </div>
 
       {!collapsed && (
         <>
-          {plan?.error && (
+          {(plan?.error || error || isAutoFallback) && (
             <div className="ax-plan-fallback">
-              <strong>AI call failed</strong>
-              <span>{plan.error}</span>
+              <strong>AI plan unavailable.</strong>
+              <span>Using built-in guided workflow.</span>
             </div>
           )}
 
-          {loading && !plan && (
-            <SkeletonCards count={3} />
-          )}
-          {error && (
-            <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>
-          )}
-          {isAutoFallback && (
-            <div className="ax-plan-fallback">
-              <strong>AI unavailable</strong>
-              <span>
-                Could not generate an AI plan. Switch to <strong>System only</strong> to use the built-in workflow guide.
-              </span>
-            </div>
-          )}
-          {!isAutoFallback && plan?.summary && (
+          {loading && !plan && <SkeletonCards count={3} />}
+
+          {plan?.summary && (
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
               {plan.summary}
             </p>
           )}
 
-          {!isAutoFallback && plan && (
+          {plan && (
             <div className="ax-plan-list">
               {steps
-                .map((step, index) => ({ step, index }))
-                .sort((a, b) => {
-                  const aDone = isEffectiveDone(a.step) ? 1 : 0
-                  const bDone = isEffectiveDone(b.step) ? 1 : 0
-                  return aDone - bDone || a.index - b.index
-                })
-                .map(({ step, index }, position) => {
-                  const isDone = isEffectiveDone(step)
-                  const isNext = nextStep?.id === step.id
+                .map((step, index) => ({ step, index, state: stepStates[index] || { status: 'pending', step } }))
+                .sort((a, b) => statusSort(a.state.status) - statusSort(b.state.status) || a.index - b.index)
+                .map(({ step, index, state }, position) => {
+                  const isCompleted = state.status === 'completed'
+                  const isNext = nextStepState?.step?.id === step.id
+                  const displayStatus = isNext && !isCompleted ? 'active' : state.status
                   const target = targetForStep(step)
-                  const pendingCount = steps.filter((s) => !isEffectiveDone(s)).length
-                  const showDoneDivider = isDone && position === pendingCount && pendingCount < steps.length
+                  const pendingCount = stepStates.filter((item) => item.status !== 'completed').length
+                  const showDoneDivider = isCompleted && position === pendingCount && pendingCount < steps.length
                   return (
                     <React.Fragment key={`${step.id}-${index}`}>
                       {showDoneDivider && (
@@ -237,42 +294,46 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
                           <span>Completed</span>
                         </div>
                       )}
-                      <article className={`ax-plan-step ${isDone ? 'done' : ''} ${isNext ? 'next' : ''}`}>
+                      <article className={`ax-plan-step ${displayStatus} ${isNext ? 'next' : ''}`}>
                         <button
                           className="ax-plan-check"
                           onClick={() => toggleDone(step.id)}
                           type="button"
-                          aria-label={isDone ? 'Mark step incomplete' : 'Mark step complete'}
+                          aria-label={isCompleted ? 'Mark step incomplete' : 'Mark step complete'}
                         >
-                          {isDone ? '✓' : index + 1}
+                          {isCompleted ? 'Done' : index + 1}
                         </button>
                         <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: 13, fontWeight: 750, margin: 0 }}>{step.title}</p>
-                          {!isDone && step.rationale && (
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <p style={{ fontSize: 13, fontWeight: 750, margin: 0 }}>{step.title}</p>
+                            <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
+                          </div>
+                          {state.status === 'stale' && (
+                            <p style={{ fontSize: 11, color: 'var(--color-text-warning)', margin: '3px 0 0' }}>
+                              Re-run recommended because the dataset changed after this step.
+                            </p>
+                          )}
+                          {!isCompleted && step.rationale && (
                             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>
                               {step.rationale}
                             </p>
                           )}
-                          {!isDone && step.columns?.length > 0 && (
+                          {!isCompleted && step.columns?.length > 0 && (
                             <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>
                               {step.columns.slice(0, 4).join(', ')}
                             </p>
                           )}
-                          {!isDone && (
+                          {!isCompleted && (
                             <>
                               <div className="ax-plan-target">
                                 <span>Use</span>
                                 <strong>{target.label}</strong>
                                 <small>{target.hint}</small>
                               </div>
-                              <button
-                                className="ax-btn mini"
-                                onClick={() => goToStep(step)}
-                                type="button"
-                                style={{ marginTop: 6 }}
-                              >
-                                Open {target.shortLabel}
+                              <button className="ax-btn mini" onClick={() => goToStep(step)} type="button" style={{ marginTop: 6 }}>
+                                {state.status === 'stale' ? 'Re-run ' : 'Open '}{target.shortLabel}
                               </button>
+                              {step.rationale && <WhyThisMatters text={step.rationale} />}
                             </>
                           )}
                         </div>
@@ -294,15 +355,114 @@ function setGuidanceMode(nextMode, modeKey, setMode, setPlan) {
   setPlan(null)
 }
 
+function deriveProgress(activity) {
+  const progress = {
+    completedAt: {},
+    latestDataChangeAt: null,
+    warnings: {},
+  }
+  for (const item of activity || []) {
+    const createdAt = Date.parse(item.created_at || '')
+    if (!Number.isFinite(createdAt)) continue
+    const action = String(item.action_type || item.kind || '').toLowerCase()
+    const kind = String(item.kind || '').toLowerCase()
+    const summary = String(item.summary || '').toLowerCase()
+    const category = String(item.category || item.detail?.category || '').toLowerCase()
+    if (isDataChangingAction(action) || item.related_stage_id || item.ref_type === 'stage') {
+      progress.latestDataChangeAt = Math.max(progress.latestDataChangeAt || 0, createdAt)
+    }
+    if (kind === 'analysis' || category === 'analysis') {
+      if (action === 'describe' || summary.includes('describe')) mark(progress, 'describe', createdAt)
+      if (action.startsWith('test_') || summary.includes('test') || action === 'cluster' || action === 'pca') mark(progress, 'tests', createdAt)
+    }
+    if (action === 'train_model' || kind === 'model' || category === 'model') mark(progress, 'models', createdAt)
+    if (action === 'save_whatif_scenario' || kind === 'whatif' || category === 'whatif') mark(progress, 'whatif', createdAt)
+    if (action === 'generate_report' || kind === 'report' || category === 'report') mark(progress, 'report', createdAt)
+    if (isDataChangingAction(action) || item.related_stage_id || item.ref_type === 'stage') mark(progress, 'data', createdAt)
+    if (action === 'expand') mark(progress, 'expand', createdAt)
+  }
+  return progress
+}
+
+function mark(progress, page, at) {
+  progress.completedAt[page] = Math.max(progress.completedAt[page] || 0, at)
+}
+
+function isDataChangingAction(action) {
+  if (DATA_CHANGE_ACTIONS.has(action)) return true
+  return action.startsWith('clean')
+    || action.startsWith('group_')
+    || action.startsWith('feature_engineer')
+    || action.startsWith('merge')
+    || action.startsWith('drop')
+    || action.startsWith('cast')
+    || action.startsWith('split')
+}
+
+function getStepState(step, progress, latestDataChange, doneSet) {
+  const page = step.page || 'data'
+  const completedAt = progress.completedAt[page]
+  const manuallyDone = doneSet.has(step.id)
+  const downstream = (PAGE_ORDER[page] ?? 0) > PAGE_ORDER.data
+  if ((completedAt || manuallyDone) && downstream && latestDataChange && completedAt && latestDataChange > completedAt) {
+    return { step, status: 'stale', completedAt }
+  }
+  if (completedAt || manuallyDone) return { step, status: 'completed', completedAt }
+  if (step.priority === 'high') return { step, status: 'warning' }
+  return { step, status: 'pending' }
+}
+
+function statusSort(status) {
+  const order = { blocked: 0, warning: 1, stale: 2, pending: 3, active: 4, completed: 5 }
+  return order[status] ?? 3
+}
+
+function statusLabel(status) {
+  const labels = {
+    pending: 'pending',
+    active: 'current',
+    completed: 'completed',
+    stale: 'stale',
+    warning: 'recommended',
+    blocked: 'blocked',
+  }
+  return labels[status] || status
+}
+
+function GuidedPlanIntro({ onClose, onSoftClose }) {
+  return (
+    <div className="ax-plan-intro">
+      <p style={{ fontSize: 14, fontWeight: 800, margin: 0 }}>Meet your Guided Plan</p>
+      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
+        This panel recommends the next useful preparation, analysis, modeling, and reporting steps based on your dataset.
+      </p>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <button className="ax-btn prim mini" type="button" onClick={onClose}>Got it</button>
+        <button className="ax-btn mini" type="button" onClick={onSoftClose}>Don't show again</button>
+      </div>
+    </div>
+  )
+}
+
+function WhyThisMatters({ text }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ marginTop: 6 }}>
+      <button className="ax-link-btn" type="button" onClick={() => setOpen((current) => !current)}>
+        Why this matters
+      </button>
+      {open && (
+        <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+          {text}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function Chevron({ open }) {
   return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      fill="none"
-      style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
-    >
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
       <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
     </svg>
   )
@@ -313,7 +473,7 @@ function labelForPage(page) {
     data: 'Data',
     expand: 'Expand',
     describe: 'Describe',
-    tests: 'Tests',
+    tests: 'Analysis',
     models: 'Models',
     whatif: 'What-if',
     report: 'Report',
@@ -326,6 +486,14 @@ function sectionForStep(step) {
 }
 
 function targetForStep(step) {
+  if (step.section) {
+    return {
+      section: step.section,
+      label: `${labelForPage(step.page)} > Recommended section`,
+      shortLabel: labelForPage(step.page),
+      hint: 'Open the exact section recommended for this step.',
+    }
+  }
   const text = `${step.id || ''} ${step.title || ''}`.toLowerCase()
   if (step.page === 'data') {
     if (text.includes('categor')) {
@@ -386,8 +554,8 @@ function targetForStep(step) {
   if (step.page === 'tests') {
     return {
       section: 'fix-correlation-test',
-      label: 'Tests > Test setup',
-      shortLabel: 'test setup',
+      label: 'Analysis > Test setup',
+      shortLabel: 'analysis setup',
       hint: 'Choose the test type and variables for relationship or group analysis.',
     }
   }

@@ -45,6 +45,7 @@ function GuestBanner() {
 
 function AppRoutes() {
   const location = useLocation()
+  const isProjectWorkspace = /^\/projects\/[^/]+/.test(location.pathname)
   if (location.pathname === '/') {
     return (
       <Routes>
@@ -58,7 +59,7 @@ function AppRoutes() {
       <Sidebar />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <GuestBanner />
-        <main className="ax-main" style={{ flex: 1 }}>
+        <main className={`ax-main${isProjectWorkspace ? ' ax-main-project' : ''}`} style={{ flex: 1 }}>
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/projects" element={<ProjectsPage />} />

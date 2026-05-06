@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { InlineSpinner, SkeletonCards } from './LoadingStates'
 
@@ -147,7 +148,9 @@ export function AIInsightCard({
   autoLoad = true,
   compact = false,
   refreshKey,
+  suggestedNextStep,
 }) {
+  const navigate = useNavigate()
   const [text, setText] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -175,6 +178,17 @@ export function AIInsightCard({
     } finally {
       setLoading(false)
     }
+  }
+
+  const goToSuggestedStep = () => {
+    if (!datasetId || !suggestedNextStep?.page || !suggestedNextStep?.section) return
+    window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify({
+      page: suggestedNextStep.page,
+      section: suggestedNextStep.section,
+      ts: Date.now(),
+      relatedPlanStepId: suggestedNextStep.relatedPlanStepId,
+    }))
+    navigate(`/projects/${datasetId}/${suggestedNextStep.page}`)
   }
 
   useEffect(() => {
@@ -242,6 +256,11 @@ export function AIInsightCard({
         >
           {text}
         </p>
+      )}
+      {suggestedNextStep?.page && suggestedNextStep?.section && (
+        <button className="ax-btn mini" type="button" onClick={goToSuggestedStep} style={{ marginTop: 8 }}>
+          {suggestedNextStep.label || 'Open suggested next step'}
+        </button>
       )}
     </div>
   )

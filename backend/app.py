@@ -618,6 +618,17 @@ def clean_json(obj):
         return None
     return obj
 
+def friendly_error_message(err, fallback="The operation could not be completed. Check your inputs and try again."):
+    text = str(err or "").strip()
+    lower = text.lower()
+    if "jsondecodeerror" in lower or "expecting value" in lower:
+        return "The AI response could not be read. Using the built-in workflow instead."
+    if "boolean subtract" in lower:
+        return "The classification metrics could not be computed for this target. Try standardizing the target categories or choosing another target."
+    if "traceback" in lower or "\n" in text or "sklearn" in lower or "numpy" in lower:
+        return fallback
+    return text or fallback
+
 def log_activity(session, dataset_id, kind, summary, detail=None, ref_type=None, ref_id=None, commit=True, dedupe_key=None):
     detail = clean_json(detail or {})
     if dedupe_key:
@@ -4006,7 +4017,7 @@ def train_many_models(ds_id):
                     "has_whatif": r["coefficients"] is not None,
                 })
             except Exception as e:
-                skipped.append({"algorithm": algo, "reason": str(e)})
+                skipped.append({"algorithm": algo, "reason": friendly_error_message(e, "This model could not be trained with the current target and feature setup.")})
 
         if results and sess and sess.is_guest:
             sess.guest_usage_count = int(sess.guest_usage_count or 0) + 1
@@ -4425,8 +4436,8 @@ def ai_project_plan(ds_id):
             "modeling, what-if analysis, and report. Include only steps that make "
             "sense for this dataset. Each step must include: id, page "
             "(data|expand|describe|tests|models|whatif|report), title, rationale, "
-            "priority (high|medium|low), and optional columns. "
-            'Respond as JSON: {"summary": str, "steps": [{"id": str, "page": str, "title": str, "rationale": str, "priority": "high|medium|low", "columns": [str]}]}'
+            "priority (high|medium|low), optional columns, and optional section id when obvious. "
+            'Respond as JSON: {"summary": str, "steps": [{"id": str, "page": str, "section": str, "title": str, "rationale": str, "priority": "high|medium|low", "columns": [str]}]}'
         )
         try:
             payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1800)
@@ -4441,7 +4452,7 @@ def ai_project_plan(ds_id):
         except Exception as e:
             print(f"AI project plan failed: {e}", flush=True)
             fallback = _rule_based_project_plan(df, variables)
-            fallback["error"] = f"AI call failed: {e.__class__.__name__}"
+            fallback["error"] = "AI plan unavailable. Using built-in guided workflow."
             return jsonify(fallback)
     finally:
         s.close()
@@ -4548,7 +4559,7 @@ def feature_engineer(ds_id):
         s.commit()
         return jsonify({"ok": True, "summary": summary})
     except Exception as e:
-        return {"error": str(e)}, 400
+        return {"error": friendly_error_message(e, "Feature engineering could not be applied. Check the selected columns and options.")}, 400
     finally:
         s.close()
 
@@ -4657,7 +4668,7 @@ def ai_recommend(ds_id):
         except Exception as e:
             print(f"AI recommend failed: {e}", flush=True)
             fallback = _rule_based_recommend(context, df, variables)
-            fallback["error"] = f"AI call failed: {e.__class__.__name__}"
+            fallback["error"] = "AI recommendations unavailable. Using built-in guidance."
             return jsonify(fallback)
     finally:
         s.close()
@@ -4727,7 +4738,7 @@ def ai_explain(ds_id):
             return jsonify(response)
         except Exception as e:
             print(f"AI explain failed: {e}", flush=True)
-            return jsonify({"ai": False, "explanation": f"AI call failed: {e}"})
+            return jsonify({"ai": False, "explanation": "AI explanation unavailable right now. You can continue with the built-in interpretation and try again later."})
     finally:
         s.close()
 
@@ -4838,10 +4849,13 @@ def _normalize_project_steps(steps):
         out.append({
             "id": str(raw.get("id") or f"{page}-{idx}"),
             "page": page,
+            "section": str(raw.get("section") or "").strip(),
             "title": title,
             "rationale": str(raw.get("rationale") or raw.get("summary") or "").strip(),
             "priority": priority,
+            "status": str(raw.get("status") or "pending").lower(),
             "columns": [str(c) for c in (raw.get("columns") or []) if c is not None],
+            "relatedActivityIds": [str(c) for c in (raw.get("relatedActivityIds") or []) if c is not None],
         })
     return out[:10]
 
@@ -5008,7 +5022,7 @@ def build_report(ds_id):
         if "tests" in sections:
             if tests_:
                 report["sections"].append({
-                    "title": "Hypothesis test interpretation",
+                    "title": "Statistical analysis interpretation",
                     "body": _tests_report_text(tests_),
                     "items": [{"kind": a.kind, "config": jload(a.config), "result": jload(a.result), "summary": _test_report_line(a)} for a in tests_],
                 })
@@ -5076,9 +5090,9 @@ def _auto_summary(ds, analyses, models):
             bits.append(f"The strongest saved model is {best.algorithm} for {best.target}, explaining about {metrics['r2']:.1%} of observed variation.")
     sig_tests = [a for a in analyses if a.kind.startswith("test_") and (jload(a.result) or {}).get("significant")]
     if sig_tests:
-        bits.append(f"{len(sig_tests)} hypothesis test(s) found statistically significant evidence at p < 0.05.")
+        bits.append(f"{len(sig_tests)} statistical analysis result(s) found statistically significant evidence at p < 0.05.")
     elif any(a.kind.startswith("test_") for a in analyses):
-        bits.append("The recorded hypothesis tests did not find strong statistical evidence at p < 0.05.")
+        bits.append("The recorded statistical analyses did not find strong statistical evidence at p < 0.05.")
     bits.append("Detailed project actions are placed in the appendix so the main report stays focused on findings and interpretation.")
     return " ".join(bits)
 
@@ -5111,7 +5125,7 @@ def _describe_report_text(result):
 def _tests_report_text(tests):
     lines = [_test_report_line(a) for a in tests[-5:]]
     lines = [line for line in lines if line]
-    return "\n".join(f"- {line}" for line in lines) if lines else "No hypothesis tests have been recorded yet."
+    return "\n".join(f"- {line}" for line in lines) if lines else "No statistical analyses have been recorded yet."
 
 
 def _test_report_line(analysis):
@@ -5262,7 +5276,7 @@ def _old_auto_summary(ds, analyses, models):
             bits.append(f"Best model ({latest.algorithm}) achieves R²={metrics['r2']:.3f} predicting {latest.target}.")
     sig_tests = [a for a in analyses if a.kind.startswith("test_") and (jload(a.result) or {}).get("significant")]
     if sig_tests:
-        bits.append(f"{len(sig_tests)} hypothesis tests returned significant results (p < 0.05).")
+        bits.append(f"{len(sig_tests)} statistical analyses returned significant results (p < 0.05).")
     return " ".join(bits)
 
 # --- helper to save analysis rows ---

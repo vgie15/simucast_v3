@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
-import AIAssistantPanel from './AIAssistantPanel'
 import { useDialog } from './DialogProvider'
 
 /**
@@ -109,8 +108,6 @@ export default function ExpandPage({ dataset, setDataset }) {
           </p>
         </div>
       )}
-
-      <AIAssistantPanel datasetId={dataset.id} context="expand" />
 
       <div id="expand-section-controls" className="ax-card" style={{ marginBottom: 16 }}>
         <p className="ax-lbl" style={{ margin: '0 0 6px' }}>Method</p>
