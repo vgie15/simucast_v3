@@ -114,6 +114,9 @@ function AuthModal({ initialMode, onClose }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [transferred, setTransferred] = useState(false)
+
+  const wasGuest = auth.isGuest
 
   const submit = async (event) => {
     event.preventDefault()
@@ -123,8 +126,14 @@ function AuthModal({ initialMode, onClose }) {
       if (mode === 'signup') {
         if (password !== confirmPassword) throw new Error('passwords do not match')
         await auth.signup(email, password, fullName)
+        if (wasGuest) {
+          setTransferred(true)
+          setTimeout(() => { onClose(); navigate('/dashboard') }, 2000)
+          return
+        }
+      } else {
+        await auth.login(email, password)
       }
-      else await auth.login(email, password)
     } catch (err) {
       setError(err.message || 'Could not continue')
     } finally {
@@ -151,6 +160,20 @@ function AuthModal({ initialMode, onClose }) {
     }
   }
 
+  if (transferred) {
+    return (
+      <div className="ax-dialog-backdrop" role="presentation">
+        <div className="ax-auth-modal" style={{ textAlign: 'center', padding: '40px 32px' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 8px' }}>Account created!</h2>
+          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: 0 }}>
+            Your guest session and projects have been saved to your new account.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="ax-dialog-backdrop" role="presentation" onMouseDown={onClose}>
       <form className="ax-auth-modal" onSubmit={submit} onMouseDown={(e) => e.stopPropagation()}>
@@ -173,6 +196,12 @@ function AuthModal({ initialMode, onClose }) {
               ? 'Sign up to save your projects, scenarios, and documentation.'
               : 'Sign in to access your saved scenarios and analysis.'}
           </p>
+          {mode === 'signup' && wasGuest && (
+            <div className="ax-auth-guest-notice">
+              <span>✓</span>
+              <span>Your guest session and any projects you&apos;ve created will be saved to your new account.</span>
+            </div>
+          )}
           {mode === 'signup' && (
             <label className="ax-field ax-auth-field">
               <span>Full Name</span>

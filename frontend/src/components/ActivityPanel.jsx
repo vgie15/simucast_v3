@@ -172,7 +172,7 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
 
   return (
     <div className="ax-card ax-activity-panel">
-      <div className="ax-row" style={{ marginBottom: 8 }}>
+      <div className="ax-panel-sticky-header ax-row" style={{ marginBottom: 8 }}>
         <div>
           <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Documentation</p>
           <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>

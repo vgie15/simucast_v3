@@ -112,34 +112,34 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
 
   return (
     <section className="ax-card ax-plan-panel">
-      <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-expanded={!collapsed}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            background: 'none',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            font: 'inherit',
-            color: 'inherit',
-            textAlign: 'left',
-          }}
-        >
-          <Chevron open={!collapsed} />
-          <span style={{ fontSize: 16, fontWeight: 800 }}>
-            {isAI ? 'AI Guided Plan' : 'System Guided Plan'}
-          </span>
-        </button>
-      </div>
+      <div className="ax-panel-sticky-header">
+        <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              font: 'inherit',
+              color: 'inherit',
+              textAlign: 'left',
+            }}
+          >
+            <Chevron open={!collapsed} />
+            <span style={{ fontSize: 16, fontWeight: 800 }}>
+              {isAI ? 'AI Guided Plan' : 'System Guided Plan'}
+            </span>
+          </button>
+        </div>
 
-      {!collapsed && (
-        <>
-          <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 10 }}>
+        {!collapsed && (
+          <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 0 }}>
             <button
               type="button"
               className={mode === 'auto' ? 'active' : ''}
@@ -162,7 +162,11 @@ export default function AIProjectPlanPanel({ dataset, activeTab }) {
               Hide
             </button>
           </div>
+        )}
+      </div>{/* end sticky header */}
 
+      {!collapsed && (
+        <>
           {mode === 'off' && (
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
               Guided planning is off for this project.
