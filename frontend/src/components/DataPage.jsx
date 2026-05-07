@@ -239,7 +239,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         </div>
       )}
 
-      <div className="ax-card" style={{ marginBottom: 16 }}>
+      <div id="data-section-raw_data" className="ax-card" style={{ marginBottom: 16 }}>
         <div className="ax-row">
           <div>
             <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Raw data</p>
@@ -285,14 +285,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         />
       </div>
 
-      <FeatureEngineeringCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
-
       <div id="data-section-manual_transforms">
         <ManualTransformsCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
-      </div>
-
-      <div id="data-section-category_standardization">
-        <CategoryStandardizationCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
@@ -375,6 +369,14 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         )}
       </div>
 
+      <div id="data-section-category_standardization">
+        <CategoryStandardizationCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
+      </div>
+
+      <div id="data-section-feature_engineering">
+        <FeatureEngineeringCard key={historyKey} dataset={dataset} onApplied={handleApplied} />
+      </div>
+
       {activeVar && (
         <ColumnValuesModal
           datasetId={dataset.id}
@@ -389,14 +391,14 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 function CleanGroupCard({ group, kind, title, description, applying, onApply }) {
   const items = group?.columns || []
   const [selected, setSelected] = useState(() => items.map((item) => item.variable).filter(Boolean))
-  const [action, setAction] = useState(group?.default_action || defaultGroupAction(kind))
+  const [action, setAction] = useState(() => recommendedGroupAction(kind, group, items).action)
   const [keep, setKeep] = useState(group?.default_keep || 'first')
   const [advanced, setAdvanced] = useState(false)
   const [overrides, setOverrides] = useState({})
 
   useEffect(() => {
     setSelected(items.map((item) => item.variable).filter(Boolean))
-    setAction(group?.default_action || defaultGroupAction(kind))
+    setAction(recommendedGroupAction(kind, group, items).action)
     setKeep(group?.default_keep || 'first')
     setOverrides({})
     setAdvanced(false)
@@ -422,6 +424,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
     ? []
     : Array.from(new Map(items.flatMap((item) => item.options || []).map((opt) => [opt.action, opt])).values())
   const columns = kind === 'duplicates' ? (group?.columns || []) : selected
+  const recommendation = recommendedGroupAction(kind, group, items, action, keep)
 
   return (
     <div className={`ax-card ax-busy-host ${applying ? 'is-busy' : ''}`} style={{ padding: 14 }}>
@@ -452,13 +455,16 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
       </div>
 
       {kind === 'duplicates' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', marginTop: 12, fontSize: 12 }}>
-          <label style={{ color: 'var(--color-text-secondary)' }}>Keep occurrence</label>
-          <select value={keep} onChange={(e) => setKeep(e.target.value)}>
-            <option value="first">First row</option>
-            <option value="last">Last row</option>
-          </select>
-        </div>
+        <>
+          <RecommendationNote recommendation={recommendation} />
+          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', marginTop: 12, fontSize: 12 }}>
+            <label style={{ color: 'var(--color-text-secondary)' }}>Keep occurrence</label>
+            <select value={keep} onChange={(e) => setKeep(e.target.value)}>
+              <option value="first">First row</option>
+              <option value="last">Last row</option>
+            </select>
+          </div>
+        </>
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', marginTop: 12, fontSize: 12 }}>
@@ -469,6 +475,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
               ))}
             </select>
           </div>
+          <RecommendationNote recommendation={recommendation} />
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
             {items.map((item) => (
@@ -550,6 +557,99 @@ function defaultGroupAction(kind) {
   return 'impute_mean'
 }
 
+function optionExists(items, action) {
+  return items.some((item) => (item.options || []).some((opt) => opt.action === action))
+}
+
+function recommendedGroupAction(kind, group, items = [], currentAction, keep = 'first') {
+  if (kind === 'duplicates') {
+    return {
+      action: 'drop_duplicates',
+      label: 'Remove duplicates, keep first occurrence',
+      why: `${group?.count || 0} exact duplicate row${group?.count === 1 ? '' : 's'} can be removed without changing unique records.`,
+    }
+  }
+  if (kind === 'outliers') {
+    return {
+      action: 'winsorize',
+      label: 'Cap to IQR bounds',
+      why: 'Capping keeps rows in the dataset while limiting extreme values that can distort summaries and models.',
+    }
+  }
+  if (kind === 'type') {
+    return {
+      action: 'convert_date',
+      label: 'Convert to date',
+      why: 'These columns look date-like, so parsing them improves sorting, filtering, and reporting.',
+    }
+  }
+  if (kind === 'missing') {
+    const totalMissing = items.reduce((sum, item) => sum + Number(item.count || 0), 0)
+    const hasMedian = optionExists(items, 'impute_median')
+    const action = hasMedian && currentAction === 'impute_median' ? 'impute_median' : 'impute_mean'
+    const label = action === 'impute_median'
+        ? 'Fill with median'
+        : 'Fill numeric with mean, categorical with most common'
+    const why = action === 'impute_median'
+        ? 'Median is robust when values may be skewed or affected by outliers.'
+        : 'This grouped default uses the average for numeric columns and automatically falls back to the mode for categorical columns.'
+    return { action, label, why: `${why} ${totalMissing} blank value${totalMissing === 1 ? '' : 's'} detected across the selected columns.` }
+  }
+  return {
+    action: defaultGroupAction(kind),
+    label: cleanActionLabel(defaultGroupAction(kind)),
+    why: 'This is the safest available grouped action for the detected issue.',
+  }
+}
+
+function RecommendationNote({ recommendation }) {
+  if (!recommendation) return null
+  return (
+    <div style={{
+      marginTop: 10,
+      padding: '9px 10px',
+      border: '0.5px solid var(--color-border-tertiary)',
+      borderRadius: 8,
+      background: 'var(--color-background-secondary)',
+      fontSize: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-primary)' }}>Recommended</span>
+        <strong>{recommendation.label}</strong>
+      </div>
+      <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>
+    </div>
+  )
+}
+
+function recommendBinning(numericVariables = []) {
+  const candidates = numericVariables.filter((v) => {
+    const name = String(v.name || '').toLowerCase()
+    const unique = Number(v.unique || 0)
+    return unique >= 8 && !name.includes('id') && !name.endsWith('_id')
+  })
+  const preferred = candidates.find((v) => /age|income|score|rate|gpa|hours|attendance|subject/.test(String(v.name || '').toLowerCase())) || candidates[0]
+  if (!preferred) return null
+  return {
+    column: preferred.name,
+    label: `Create 3 bins for ${preferred.name}`,
+    why: 'Grouped low/medium/high ranges can make this numeric variable easier to compare in analysis and reports.',
+  }
+}
+
+function recommendNumericFormatting(numericVariables = []) {
+  const candidate = numericVariables.find((v) => {
+    const name = String(v.name || '').toLowerCase()
+    return v.dtype === 'float' && !name.includes('id') && !name.endsWith('_id')
+  })
+  if (!candidate) return null
+  return {
+    column: candidate.name,
+    label: `Round ${candidate.name} to 2 decimals`,
+    why: 'Use numeric formatting only when values show excessive or inconsistent decimal precision.',
+  }
+}
+
 function FeatureEngineeringCard({ dataset, onApplied }) {
   const [open, setOpen] = useState(false)
   const [tool, setTool] = useState('bins') // 'bins' | 'format'
@@ -557,7 +657,8 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
   const [msg, setMsg] = useState(null)
 
   const variables = dataset?.variables || []
-  const numVars = variables.filter((v) => ['numeric','int','float'].includes(v.dtype)).map((v) => v.name)
+  const numericVariables = variables.filter((v) => ['numeric','int','float'].includes(v.dtype))
+  const numVars = numericVariables.map((v) => v.name)
 
   // Bins state
   const [binCol, setBinCol] = useState('')
@@ -570,6 +671,23 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
   const [fmtOp, setFmtOp] = useState('round')
   const [fmtParam, setFmtParam] = useState('2')
   const [fmtNewName, setFmtNewName] = useState('')
+  const binRecommendation = recommendBinning(numericVariables)
+  const formatRecommendation = recommendNumericFormatting(numericVariables)
+
+  useEffect(() => {
+    if (!binCol && binRecommendation?.column) {
+      setBinCol(binRecommendation.column)
+      setBinCount(3)
+      setBinLabels('low, medium, high')
+    }
+  }, [binRecommendation?.column, binCol])
+
+  useEffect(() => {
+    if (!fmtCol && formatRecommendation?.column) {
+      setFmtCol(formatRecommendation.column)
+      setFmtParam('2')
+    }
+  }, [formatRecommendation?.column, fmtCol])
 
   const applyFeat = async () => {
     setBusy(true)
@@ -628,18 +746,39 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
           </div>
 
           {tool === 'bins' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12 }}>
+            <div>
+              <RecommendationNote recommendation={binRecommendation || {
+                label: 'No strong binning recommendation',
+                why: 'Binning is optional and works best for numeric columns where grouped interpretation is useful.',
+              }} />
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 12px' }}>
+                Binning loses numeric detail. Use it only when grouped ranges help explain the data.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12 }}>
               <label style={{ color: 'var(--color-text-secondary)' }}>Column to bin</label>
               <select value={binCol} onChange={(e) => setBinCol(e.target.value)}>
                 <option value="">— select —</option>
                 {numVars.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
               <label style={{ color: 'var(--color-text-secondary)' }}>Number of bins</label>
-              <input type="number" min={2} max={20} value={binCount} onChange={(e) => setBinCount(e.target.value)} style={{ width: 80 }} />
+              <input
+                type="number"
+                min={2}
+                max={20}
+                value={binCount}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setBinCount(value)
+                  if (Number(value) === 3) setBinLabels('low, medium, high')
+                  if (Number(value) === 5) setBinLabels('very low, low, medium, high, very high')
+                }}
+                style={{ width: 80 }}
+              />
               <label style={{ color: 'var(--color-text-secondary)' }}>Labels (optional)</label>
               <input type="text" placeholder="low, medium, high" value={binLabels} onChange={(e) => setBinLabels(e.target.value)} />
               <label style={{ color: 'var(--color-text-secondary)' }}>New column name</label>
               <input type="text" placeholder={binCol ? `${binCol}_bin` : 'auto'} value={binNewName} onChange={(e) => setBinNewName(e.target.value)} />
+              </div>
             </div>
           )}
 
@@ -677,7 +816,12 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
           )}
 
           {tool === 'format' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12 }}>
+            <div>
+              <RecommendationNote recommendation={formatRecommendation || {
+                label: 'No numeric formatting needed',
+                why: 'Only round or format values when decimal precision is excessive or inconsistent.',
+              }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12, marginTop: 12 }}>
               <label style={{ color: 'var(--color-text-secondary)' }}>Column</label>
               <select value={fmtCol} onChange={(e) => setFmtCol(e.target.value)}>
                 <option value="">— select —</option>
@@ -691,6 +835,7 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
               <input type="number" min={0} max={8} value={fmtParam} onChange={(e) => setFmtParam(e.target.value)} style={{ width: 80 }} disabled={fmtOp !== 'round'} />
               <label style={{ color: 'var(--color-text-secondary)' }}>New column name</label>
               <input type="text" placeholder={fmtCol || 'auto'} value={fmtNewName} onChange={(e) => setFmtNewName(e.target.value)} />
+              </div>
             </div>
           )}
 

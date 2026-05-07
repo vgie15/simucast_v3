@@ -22,9 +22,31 @@ function clearGuestSlot() {
 }
 
 export function AuthProvider({ children }) {
+  const navigate = useNavigate()
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [modalMode, setModalMode] = useState(null)
+
+  const clearProjectState = useCallback(() => {
+    window.sessionStorage.removeItem('simucast.fixTarget')
+    for (const store of [window.localStorage, window.sessionStorage]) {
+      const keys = []
+      for (let i = 0; i < store.length; i += 1) {
+        const key = store.key(i)
+        if (
+          key?.startsWith('simucast.aiPlan.') ||
+          key?.startsWith('simucast.aiPlan.done.') ||
+          key?.startsWith('simucast.aiPlan.collapsed.') ||
+          key?.startsWith('simucast.activeProject') ||
+          key?.startsWith('simucast.selectedProject') ||
+          key?.startsWith('simucast.currentDataset')
+        ) {
+          keys.push(key)
+        }
+      }
+      keys.forEach((key) => store.removeItem(key))
+    }
+  }, [])
 
   const saveSession = useCallback((payload) => {
     const next = payload?.session || payload
@@ -70,6 +92,11 @@ export function AuthProvider({ children }) {
     const r = await api.authLogin(email, password)
     clearGuestSlot()
     saveSession(r)
+    try {
+      const me = await api.authMe()
+      saveSession(me)
+    } catch { /* returned login session is enough */ }
+    window.dispatchEvent(new CustomEvent('simucast-auth-changed'))
     setModalMode(null)
     return r.session
   }, [saveSession])
@@ -78,6 +105,11 @@ export function AuthProvider({ children }) {
     const r = await api.authSignup(email, password, fullName)
     clearGuestSlot()
     saveSession(r)
+    try {
+      const me = await api.authMe()
+      saveSession(me)
+    } catch { /* returned signup session is enough */ }
+    window.dispatchEvent(new CustomEvent('simucast-auth-changed'))
     setModalMode(null)
     return r.session
   }, [saveSession])
@@ -87,10 +119,15 @@ export function AuthProvider({ children }) {
       await api.authLogout()
     } finally {
       api.setSessionToken('')
+      setSession(null)
+      clearGuestSlot()
+      clearProjectState()
       const guest = await api.authGuest()
       saveSession(guest)
+      window.dispatchEvent(new CustomEvent('simucast-auth-changed'))
+      navigate('/dashboard', { replace: true })
     }
-  }, [saveSession])
+  }, [clearProjectState, navigate, saveSession])
 
   const resetGuestSession = useCallback(async () => {
     api.setSessionToken('')
@@ -165,14 +202,11 @@ function AuthModal({ initialMode, onClose }) {
       if (mode === 'signup') {
         if (password !== confirmPassword) throw new Error('passwords do not match')
         await auth.signup(email, password, fullName)
-        if (wasGuest) {
-          setTransferred(true)
-          setTimeout(() => { onClose(); navigate('/dashboard') }, 2000)
-          return
-        }
       } else {
         await auth.login(email, password)
       }
+      onClose()
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.message || 'Could not continue')
     } finally {

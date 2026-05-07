@@ -14,8 +14,13 @@ export default function FilesPage() {
   const guestAtLimit = auth.guestAtLimit
 
   useEffect(() => {
-    api.listDatasets().then(setDatasets).catch(console.error)
-  }, [])
+    let cancelled = false
+    setDatasets([])
+    api.listDatasets()
+      .then((rows) => { if (!cancelled) setDatasets(rows) })
+      .catch((err) => { if (!cancelled) console.error(err) })
+    return () => { cancelled = true }
+  }, [auth.session?.token])
 
   const deleteFile = async (file, event) => {
     event.stopPropagation()

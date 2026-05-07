@@ -12,6 +12,10 @@ export default function LandingPage() {
     window.sessionStorage.removeItem('simucast.fixTarget')
   }, [])
 
+  useEffect(() => {
+    if (auth.isAuthenticated) navigate('/dashboard', { replace: true })
+  }, [auth.isAuthenticated, navigate])
+
   const launch = () => {
     if (auth.isAuthenticated) navigate('/dashboard')
     else auth.showAuthModal('login')

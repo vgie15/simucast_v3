@@ -584,6 +584,14 @@ function targetForStep(step) {
         hint: 'Choose the issue group, select the method, then apply the grouped fix.',
       }
     }
+    if (text.includes('feature') || text.includes('engineer') || text.includes('bin') || text.includes('format')) {
+      return {
+        section: 'data-section-feature_engineering',
+        label: 'Data > Feature engineering and numeric formatting',
+        shortLabel: 'feature engineering',
+        hint: 'Create optional binned features or format numeric precision when useful.',
+      }
+    }
     return {
       section: 'data-section-manual_transforms',
       label: 'Data > Manual transforms',

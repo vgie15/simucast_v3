@@ -291,12 +291,10 @@ def _auth_from_request(session):
 def _dataset_scope(query, session):
     sess, user = _auth_from_request(session)
     if not sess:
-        return query
-    # Keep legacy/orphan projects visible during the auth migration so local
-    # development data does not disappear.
+        return query.filter(False)
     if user:
-        return query.filter((Dataset.user_id == user.id) | (Dataset.user_id.is_(None) & Dataset.session_id.is_(None)))
-    return query.filter((Dataset.session_id == sess.id) | (Dataset.user_id.is_(None) & Dataset.session_id.is_(None)))
+        return query.filter(Dataset.user_id == user.id)
+    return query.filter(Dataset.session_id == sess.id)
 
 def _attach_owner(ds, session):
     sess, user = _auth_from_request(session)
@@ -4424,6 +4422,224 @@ def get_model(model_id):
 
 # --- AI assistant (simple rule-based; swap for Claude API later) ---
 
+_SIMUCAST_CAPABILITIES = [
+    ("Data preparation", [
+        "review dataset", "handle missing values", "handle outliers", "remove duplicates",
+        "standardize categorical labels", "change column type", "rename columns",
+        "drop rows/columns", "export cleaned data",
+    ]),
+    ("Feature engineering", ["create bins", "numeric formatting"]),
+    ("Describe", [
+        "run descriptive statistics", "inspect variable cards", "view histogram/distribution",
+        "view categorical distribution", "view correlation overview",
+    ]),
+    ("Analysis", [
+        "run correlation", "run t-test", "run ANOVA", "run chi-square",
+        "run PCA", "run K-means clustering",
+    ]),
+    ("Models", [
+        "select target", "choose regression/classification algorithms", "configure validation split",
+        "review preprocessing plan", "check multicollinearity", "check class balance",
+        "train models", "compare metrics", "inspect feature importance", "check model health/overfitting",
+    ]),
+    ("What-if", [
+        "use trained model", "adjust feature values", "compare baseline vs current prediction",
+        "save scenario", "review extrapolation risk",
+    ]),
+    ("Report", [
+        "include documentation logs", "include analysis results", "include model results",
+        "include what-if scenarios", "include selected visualizations", "generate/export report",
+    ]),
+]
+
+def _capability_text():
+    lines = []
+    for category, items in _SIMUCAST_CAPABILITIES:
+        lines.append(f"{category}:")
+        lines.extend(f"- {item}" for item in items)
+    return "\n".join(lines)
+
+def _plan_prompt_profile(ds, df, variables, session):
+    profile = _dataset_profile(ds, df, variables)
+    profile["column_names"] = list(df.columns)
+    profile["detected_types"] = {v.get("name"): v.get("dtype") for v in variables or []}
+    profile["missing_values"] = {v.get("name"): int(v.get("missing") or 0) for v in variables or []}
+    profile["unique_counts"] = {v.get("name"): int(v.get("unique") or 0) for v in variables or []}
+    profile["numeric_ranges"] = {}
+    for v in variables or []:
+        name = v.get("name")
+        if name in df.columns and v.get("dtype") in ("numeric", "int", "float", "binary"):
+            num = pd.to_numeric(df[name], errors="coerce").dropna()
+            if len(num):
+                profile["numeric_ranges"][name] = {
+                    "min": float(num.min()),
+                    "max": float(num.max()),
+                    "mean": round(float(num.mean()), 4),
+                }
+    nums = list(profile["numeric_ranges"].keys())
+    profile["correlations"] = []
+    if len(nums) >= 2:
+        try:
+            corr = df[nums].corr(numeric_only=True).abs()
+            pairs = []
+            for i, a in enumerate(nums):
+                for b in nums[i + 1:]:
+                    val = corr.loc[a, b]
+                    if pd.notna(val):
+                        pairs.append({"columns": [a, b], "abs_r": round(float(val), 4)})
+            profile["correlations"] = sorted(pairs, key=lambda x: x["abs_r"], reverse=True)[:8]
+        except Exception:
+            profile["correlations"] = []
+    profile["target_candidates"] = [
+        v.get("name") for v in variables or []
+        if v.get("dtype") in ("binary", "category", "numeric", "int", "float")
+        and int(v.get("unique") or 0) > 1
+    ][:10]
+    try:
+        logs = (
+            session.query(ActivityLog)
+            .filter_by(dataset_id=ds.id)
+            .order_by(ActivityLog.created_at.desc())
+            .limit(12)
+            .all()
+        )
+        profile["previous_completed_actions"] = [
+            {
+                "kind": log.kind,
+                "summary": log.summary,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in logs
+        ]
+    except Exception:
+        profile["previous_completed_actions"] = []
+    profile["simucast_supported_capabilities"] = [
+        {"category": category, "features": items}
+        for category, items in _SIMUCAST_CAPABILITIES
+    ]
+    return profile
+
+def _parse_ai_plan_text(text):
+    text = (text or "").strip()
+    if not text:
+        return []
+    blocks = []
+    current = []
+    for line in text.splitlines():
+        if re.match(r"^\s*\d+\.\s+", line) and current:
+            blocks.append(current)
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        blocks.append(current)
+
+    category_pages = {
+        "data preparation": "data",
+        "feature engineering": "data",
+        "describe": "describe",
+        "analysis": "tests",
+        "statistical analysis": "tests",
+        "models": "models",
+        "model": "models",
+        "what-if": "whatif",
+        "what if": "whatif",
+        "report": "report",
+    }
+    feature_routes = [
+        ("standardize categorical labels", "data", "data-section-category_standardization"),
+        ("category standardization", "data", "data-section-category_standardization"),
+        ("handle missing values", "data", "fix-cleaning-suggestions"),
+        ("handle outliers", "data", "fix-cleaning-suggestions"),
+        ("remove duplicates", "data", "fix-cleaning-suggestions"),
+        ("drop rows/columns", "data", "data-section-manual_transforms"),
+        ("change column type", "data", "data-section-manual_transforms"),
+        ("rename columns", "data", "data-section-manual_transforms"),
+        ("review dataset", "data", "data-section-raw_data"),
+        ("export cleaned data", "data", "data-section-raw_data"),
+        ("create bins", "data", "data-section-feature_engineering"),
+        ("numeric formatting", "data", "data-section-feature_engineering"),
+        ("run descriptive statistics", "describe", "describe-section-variables"),
+        ("inspect variable cards", "describe", "describe-section-variables"),
+        ("view histogram/distribution", "describe", "describe-section-variables"),
+        ("view categorical distribution", "describe", "describe-section-variables"),
+        ("view correlation overview", "describe", "describe-section-variables"),
+        ("run correlation", "tests", "fix-correlation-test"),
+        ("run t-test", "tests", "fix-correlation-test"),
+        ("run anova", "tests", "fix-correlation-test"),
+        ("run chi-square", "tests", "fix-correlation-test"),
+        ("run pca", "tests", "fix-correlation-test"),
+        ("run k-means clustering", "tests", "fix-correlation-test"),
+        ("select target", "models", "fix-target-handling"),
+        ("choose regression/classification algorithms", "models", "fix-target-handling"),
+        ("configure validation split", "models", "fix-target-handling"),
+        ("review preprocessing plan", "models", "fix-target-handling"),
+        ("check multicollinearity", "models", "fix-feature-selection"),
+        ("check class balance", "models", "fix-target-handling"),
+        ("train models", "models", "fix-target-handling"),
+        ("compare metrics", "models", "fix-target-handling"),
+        ("inspect feature importance", "models", "fix-feature-selection"),
+        ("check model health/overfitting", "models", "fix-target-handling"),
+        ("use trained model", "whatif", "whatif-section-controls"),
+        ("adjust feature values", "whatif", "whatif-section-controls"),
+        ("compare baseline vs current prediction", "whatif", "whatif-section-controls"),
+        ("save scenario", "whatif", "whatif-section-controls"),
+        ("review extrapolation risk", "whatif", "whatif-section-controls"),
+        ("include documentation logs", "report", "ax-report-preview"),
+        ("include analysis results", "report", "ax-report-preview"),
+        ("include model results", "report", "ax-report-preview"),
+        ("include what-if scenarios", "report", "ax-report-preview"),
+        ("include selected visualizations", "report", "ax-report-preview"),
+        ("generate/export report", "report", "ax-report-preview"),
+    ]
+
+    parsed = []
+    for idx, block in enumerate(blocks, start=1):
+        raw_title = re.sub(r"^\s*\d+\.\s*", "", block[0]).strip()
+        fields = {}
+        for line in block[1:]:
+            match = re.match(r"^\s*([A-Za-z -]+):\s*(.*)$", line.strip())
+            if match:
+                fields[match.group(1).strip().lower()] = match.group(2).strip()
+        title = raw_title or fields.get("title") or f"Step {idx}"
+        category = fields.get("category", "").lower()
+        use = fields.get("use", "")
+        columns = [
+            c.strip() for c in re.split(r",|;", fields.get("columns", ""))
+            if c.strip() and c.strip().lower() not in {"none", "n/a", "all"}
+        ]
+
+        use_text = use.lower()
+        page = category_pages.get(category)
+        section = ""
+        matched_feature = None
+        for feature, route_page, route_section in feature_routes:
+            if feature in use_text:
+                page = route_page
+                section = route_section
+                matched_feature = feature
+                break
+        if not matched_feature:
+            title_text = title.lower()
+            for feature, route_page, route_section in feature_routes:
+                if any(part in title_text for part in feature.split("/")[:1]):
+                    page = route_page
+                    section = route_section
+                    matched_feature = feature
+                    break
+        if not page or not matched_feature:
+            continue
+        parsed.append({
+            "id": f"{page}-{re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-') or idx}",
+            "page": page,
+            "section": section,
+            "title": title,
+            "rationale": fields.get("why", ""),
+            "priority": "medium",
+            "columns": columns,
+        })
+    return parsed
+
 @app.route("/api/datasets/<ds_id>/ai/project_plan", methods=["POST"])
 def ai_project_plan(ds_id):
     """Generate an end-to-end guided workflow plan for the current dataset stage."""
@@ -4436,7 +4652,7 @@ def ai_project_plan(ds_id):
             return {"error": "not found"}, 404
         df = df_from_dataset(ds, s)
         variables = _current_variables(ds, s)
-        profile = _dataset_profile(ds, df, variables)
+        profile = _plan_prompt_profile(ds, df, variables, s)
         if mode == "system":
             return jsonify(_rule_based_project_plan(df, variables))
 
@@ -4485,19 +4701,40 @@ def ai_project_plan(ds_id):
             "Use exact section ids from the capability list when possible. "
             'Respond as JSON: {"summary": str, "steps": [{"id": str, "page": str, "section": str, "title": str, "rationale": str, "priority": "high|medium|low", "columns": [str]}]}'
         )
+        system = (
+            "You are SimuCast's project guide. Recommend a concise, ordered workflow "
+            "for a non-expert user. Only recommend features SimuCast supports. "
+            "Do not invent pages, buttons, tools, algorithms, reports, or actions. "
+            "Keep the Guided Plan high-level; method choices such as mean vs median, "
+            "cap vs remove, and exact bin labels belong inside the relevant SimuCast card, "
+            "not in this plan. Use exact column names from the dataset profile."
+        )
+        prompt = (
+            "Create a SimuCast Guided Plan using only this capability list:\n\n"
+            f"{_capability_text()}\n\n"
+            "Use this exact plain text format. Do not use JSON, markdown tables, or code fences.\n"
+            "1. Step title\n"
+            "Category: Data preparation / Feature engineering / Describe / Analysis / Models / What-if / Report\n"
+            "Why: one short reason\n"
+            "Use: exact SimuCast feature from the capability list\n"
+            "Columns: comma-separated relevant columns, or None\n\n"
+            "Rules:\n"
+            "- Sort steps in workflow order: Data preparation, optional Feature engineering, Describe, Analysis, Models, What-if, Report.\n"
+            "- Recommend high-level workflow steps only.\n"
+            "- Do not include method-level choices such as mean, median, mode, IQR cap, remove rows, or bin labels.\n"
+            "- Prefer 5 to 8 steps.\n"
+            "- If previous completed actions already cover a step, recommend the next useful step instead."
+        )
         try:
-            payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1800)
-            if not isinstance(payload, dict):
-                payload = {"steps": payload if isinstance(payload, list) else []}
-            steps = payload.get("steps") or []
-            if not isinstance(steps, list):
-                raise ValueError("AI project plan response did not include a steps array")
+            text = ai_call(profile, prompt, system=system, json_mode=False, max_tokens=1400)
+            steps = _parse_ai_plan_text(text)
             response = {
                 "ai": True,
-                "summary": payload.get("summary") or "AI generated a guided workflow for this dataset.",
+                "summary": f"AI suggested workflow for {len(df)} rows and {len(variables)} variables.",
                 "steps": _normalize_project_steps(steps),
             }
             if not response["steps"]:
+                print("AI project plan raw response:", (text or "")[:4000], flush=True)
                 raise ValueError("AI project plan returned no usable steps")
             _cache_put(_AI_CACHE, cache_key, response)
             return jsonify(clean_json(response))
@@ -4908,9 +5145,13 @@ def _normalize_project_steps(steps):
             "duplicate": "fix-cleaning-suggestions",
             "categor": "data-section-category_standardization",
             "standard": "data-section-category_standardization",
-            "feature": "data-section-manual_transforms",
-            "engineer": "data-section-manual_transforms",
+            "feature": "data-section-feature_engineering",
+            "engineer": "data-section-feature_engineering",
+            "bin": "data-section-feature_engineering",
+            "format": "data-section-feature_engineering",
             "transform": "data-section-manual_transforms",
+            "review": "data-section-raw_data",
+            "export": "data-section-raw_data",
         },
         "expand": {"": "expand-section-controls"},
         "describe": {"": "describe-section-variables"},
@@ -4927,7 +5168,8 @@ def _normalize_project_steps(steps):
         section = str(raw or "").strip()
         valid = {
             "fix-cleaning-suggestions", "data-section-category_standardization",
-            "data-section-manual_transforms", "expand-section-controls",
+            "data-section-manual_transforms", "data-section-feature_engineering",
+            "data-section-raw_data", "expand-section-controls",
             "describe-section-variables", "fix-correlation-test",
             "fix-target-handling", "fix-feature-selection",
             "whatif-section-controls", "ax-report-preview",

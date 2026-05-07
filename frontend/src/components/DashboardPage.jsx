@@ -12,8 +12,13 @@ export default function DashboardPage() {
   const guestAtLimit = auth.guestAtLimit
 
   useEffect(() => {
-    api.listDatasets().then(setDatasets).catch(console.error)
-  }, [])
+    let cancelled = false
+    setDatasets([])
+    api.listDatasets()
+      .then((rows) => { if (!cancelled) setDatasets(rows) })
+      .catch((err) => { if (!cancelled) console.error(err) })
+    return () => { cancelled = true }
+  }, [auth.session?.token])
 
   const totalRows = datasets.reduce((acc, d) => acc + (d.row_count || 0), 0)
   const latest = datasets[0]

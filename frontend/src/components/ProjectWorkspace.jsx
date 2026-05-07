@@ -10,6 +10,7 @@ import WhatIfPage from './WhatIfPage'
 import ReportPage from './ReportPage'
 import ActivityPanel from './ActivityPanel'
 import AIProjectPlanPanel from './AIProjectPlanPanel'
+import { useAuth } from './AuthProvider'
 
 const TABS = [
   { key: 'data', label: 'Data', subtitle: 'Preparing your dataset' },
@@ -24,6 +25,7 @@ const TABS = [
 export default function ProjectWorkspace() {
   const { id, tab = 'data' } = useParams()
   const navigate = useNavigate()
+  const auth = useAuth()
   const [dataset, setDataset] = useState(null)
   const [activeModel, setActiveModel] = useState(null)
   const [viewStageRequest, setViewStageRequest] = useState(null)
@@ -40,7 +42,14 @@ export default function ProjectWorkspace() {
       .then((d) => setDataset(d))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [id])
+  }, [id, auth.session?.token])
+
+  useEffect(() => {
+    if (!error) return
+    if (auth.isGuest || /not found|404/i.test(error)) {
+      navigate('/dashboard', { replace: true, state: { message: 'That project is not available in this session.' } })
+    }
+  }, [auth.isGuest, error, navigate])
 
   const go = (next) => navigate(`/projects/${id}/${next}`)
   const refreshDataset = async () => {
