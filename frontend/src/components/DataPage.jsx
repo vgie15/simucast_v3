@@ -491,8 +491,12 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
 
       {kind === 'duplicates' ? (
         <>
-          <RecommendationNote recommendation={recommendation} />
-          <DuplicateRecommendation group={group} />
+          <DuplicateRecommendation
+            group={group}
+            loading={aiLoading}
+            suggestion={aiSuggestion}
+            onAsk={askAiForRecommendation}
+          />
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             <button className="ax-btn mini" type="button" disabled>
               All duplicate rows selected
@@ -505,11 +509,6 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
               <option value="last">Last row</option>
             </select>
           </div>
-          <AiRecommendationBlock
-            loading={aiLoading}
-            suggestion={aiSuggestion}
-            onAsk={askAiForRecommendation}
-          />
         </>
       ) : (
         <>
@@ -521,8 +520,14 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
               ))}
             </select>
           </div>
-          <RecommendationNote recommendation={recommendation} />
-          <GroupedColumnRecommendations kind={kind} items={items} selected={selected} />
+          <GroupedColumnRecommendations
+            kind={kind}
+            items={items}
+            selected={selected}
+            aiLoading={aiLoading}
+            aiSuggestion={aiSuggestion}
+            onAskAi={askAiForRecommendation}
+          />
 
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             <button
@@ -575,11 +580,6 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
               ))}
             </div>
           )}
-          <AiRecommendationBlock
-            loading={aiLoading}
-            suggestion={aiSuggestion}
-            onAsk={askAiForRecommendation}
-          />
         </>
       )}
     </div>
@@ -597,13 +597,15 @@ function StatCard({ label, value }) {
 
 function AiRecommendationBlock({ loading, suggestion, onAsk }) {
   return (
-    <div style={{ marginTop: 12 }}>
-      <button className="ax-btn" type="button" onClick={onAsk} disabled={loading}>
-        {loading ? <InlineSpinner label="Asking AI..." /> : 'Ask AI for recommendation'}
-      </button>
+    <div style={{ marginTop: suggestion ? 8 : 0 }}>
+      {onAsk && (
+        <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
+          {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        </button>
+      )}
       {suggestion && (
         <div style={{
-          marginTop: 10,
+          marginTop: onAsk ? 10 : 0,
           padding: '10px 12px',
           border: '0.5px solid var(--color-border-tertiary)',
           borderRadius: 10,
@@ -759,15 +761,20 @@ function RecommendationNote({ recommendation }) {
   )
 }
 
-function GroupedColumnRecommendations({ kind, items = [], selected = [] }) {
+function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoading, aiSuggestion, onAskAi }) {
   if (!items.length || kind === 'duplicates') return null
   const selectedSet = new Set(selected)
   const groups = groupColumnRecommendations(kind, items)
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
-        Recommended actions by method <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>System recommended</span>
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
+          Recommended actions by method <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>System recommended</span>
+        </p>
+        <button className="ax-btn mini" type="button" onClick={onAskAi} disabled={aiLoading}>
+          {aiLoading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        </button>
+      </div>
       {groups.map((group) => {
         const selectedCount = group.items.filter((item) => selectedSet.has(item.variable)).length
         return (
@@ -809,6 +816,7 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [] }) {
           </div>
         )
       })}
+      <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
     </div>
   )
 }
@@ -865,14 +873,19 @@ function summarizeRecommendationGroup(kind, group) {
   return group.why
 }
 
-function DuplicateRecommendation({ group }) {
+function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
   const count = group?.count || 0
   if (!count) return null
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
-        What to do <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>System recommended</span>
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
+          What to do <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>System recommended</span>
+        </p>
+        <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
+          {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        </button>
+      </div>
       <div
         style={{
           display: 'grid',
@@ -892,6 +905,7 @@ function DuplicateRecommendation({ group }) {
           Keep the first occurrence so repeated rows do not inflate summaries, tests, or model training.
         </span>
       </div>
+      <AiRecommendationBlock loading={loading} suggestion={suggestion} />
     </div>
   )
 }

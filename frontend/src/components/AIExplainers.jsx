@@ -55,20 +55,35 @@ export function ExplainButton({
   const [open, setOpen] = useState(false)
   const [text, setText] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [position, setPosition] = useState(null)
   const popRef = useRef(null)
+  const buttonRef = useRef(null)
 
   useEffect(() => {
     if (!open) return
     const onDocClick = (e) => {
-      if (popRef.current && !popRef.current.contains(e.target)) setOpen(false)
+      if (
+        popRef.current &&
+        !popRef.current.contains(e.target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target)
+      ) setOpen(false)
     }
+    const onResize = () => setPosition(getPopoverPosition(buttonRef.current))
     document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onResize, true)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onResize, true)
+    }
   }, [open])
 
   const toggle = async () => {
     const next = !open
     setOpen(next)
+    if (next) setPosition(getPopoverPosition(buttonRef.current))
     if (!next || text || loading) return
     const k = keyOf(datasetId, step, params, result, question)
     const cached = cacheGet(k)
@@ -92,6 +107,7 @@ export function ExplainButton({
   return (
     <span style={{ position: 'relative', display: 'inline-block' }}>
       <button
+        ref={buttonRef}
         type="button"
         className={`ax-btn${size === 'mini' ? ' mini' : ''}`}
         onClick={toggle}
@@ -105,11 +121,11 @@ export function ExplainButton({
           ref={popRef}
           style={{
             position: 'fixed',
-            top: 84,
-            right: 24,
+            top: position?.top ?? 84,
+            left: position?.left ?? 24,
             zIndex: 10000,
-            width: 'min(560px, calc(100vw - 48px))',
-            maxHeight: 'calc(100vh - 120px)',
+            width: position?.width ?? 'min(520px, calc(100vw - 32px))',
+            maxHeight: position?.maxHeight ?? 'calc(100vh - 120px)',
             overflow: 'auto',
             padding: '14px 16px',
             background: 'var(--color-background-primary)',
@@ -127,6 +143,19 @@ export function ExplainButton({
       )}
     </span>
   )
+}
+
+function getPopoverPosition(button) {
+  if (!button || typeof window === 'undefined') return null
+  const rect = button.getBoundingClientRect()
+  const margin = 16
+  const preferredWidth = 520
+  const width = Math.min(preferredWidth, window.innerWidth - margin * 2)
+  let left = rect.right - width
+  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin))
+  const top = Math.min(rect.bottom + 8, window.innerHeight - 180)
+  const maxHeight = Math.max(180, window.innerHeight - top - margin)
+  return { top, left, width, maxHeight }
 }
 
 /**
