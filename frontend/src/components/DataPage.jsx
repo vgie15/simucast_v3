@@ -332,6 +332,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             <CleanGroupCard
+              datasetId={dataset.id}
               group={suggestionGroups.missing}
               kind="missing"
               title="Missing values"
@@ -340,6 +341,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
               onApply={applyGroupFix}
             />
             <CleanGroupCard
+              datasetId={dataset.id}
               group={suggestionGroups.outliers}
               kind="outliers"
               title="Outliers"
@@ -348,6 +350,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
               onApply={applyGroupFix}
             />
             <CleanGroupCard
+              datasetId={dataset.id}
               group={suggestionGroups.duplicates}
               kind="duplicates"
               title="Duplicates"
@@ -357,6 +360,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
             />
             {types > 0 && (
               <CleanGroupCard
+                datasetId={dataset.id}
                 group={suggestionGroups.type}
                 kind="type"
                 title="Type issues"
@@ -388,13 +392,15 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   )
 }
 
-function CleanGroupCard({ group, kind, title, description, applying, onApply }) {
+function CleanGroupCard({ datasetId, group, kind, title, description, applying, onApply }) {
   const items = group?.columns || []
   const [selected, setSelected] = useState(() => items.map((item) => item.variable).filter(Boolean))
   const [action, setAction] = useState(() => recommendedGroupAction(kind, group, items).action)
   const [keep, setKeep] = useState(group?.default_keep || 'first')
   const [advanced, setAdvanced] = useState(false)
   const [overrides, setOverrides] = useState({})
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState(null)
 
   useEffect(() => {
     setSelected(items.map((item) => item.variable).filter(Boolean))
@@ -402,6 +408,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
     setKeep(group?.default_keep || 'first')
     setOverrides(defaultOverrides(kind, items, recommendedGroupAction(kind, group, items).action))
     setAdvanced(false)
+    setAiSuggestion(null)
   }, [kind, JSON.stringify(items), group?.default_action, group?.default_keep])
 
   const duplicateCount = group?.count || 0
@@ -426,6 +433,28 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
   const columns = kind === 'duplicates' ? (group?.columns || []) : selected
   const recommendation = recommendedGroupAction(kind, group, items, action, keep)
   const selectedAll = kind !== 'duplicates' && items.length > 0 && selected.length === items.length
+  const selectedItems = kind === 'duplicates' ? items : items.filter((item) => selected.includes(item.variable))
+
+  const askAiForRecommendation = async () => {
+    if (aiLoading || !datasetId) return
+    setAiLoading(true)
+    setAiSuggestion(null)
+    try {
+      const payload = buildCleaningAiPayload(kind, group, items, selectedItems, recommendation, overrides, keep)
+      const res = await api.aiExplain(
+        datasetId,
+        `data-cleaning-${kind}-recommendation`,
+        payload,
+        'Give plain-text advice for this cleaning issue. Recommend among the available SimuCast methods only. Do not apply changes. Explain the safest option and mention any columns that need different handling.',
+        payload,
+      )
+      setAiSuggestion({ ok: true, text: res.explanation || res.summary || 'AI suggestion unavailable.' })
+    } catch {
+      setAiSuggestion({ ok: false, text: 'AI suggestion unavailable.' })
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   return (
     <div className={`ax-card ax-busy-host ${applying ? 'is-busy' : ''}`} style={{ padding: 14 }}>
@@ -472,6 +501,11 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
               <option value="last">Last row</option>
             </select>
           </div>
+          <AiRecommendationBlock
+            loading={aiLoading}
+            suggestion={aiSuggestion}
+            onAsk={askAiForRecommendation}
+          />
         </>
       ) : (
         <>
@@ -484,7 +518,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
             </select>
           </div>
           <RecommendationNote recommendation={recommendation} />
-          <ColumnRecommendationList kind={kind} items={items} />
+          <GroupedColumnRecommendations kind={kind} items={items} selected={selected} />
 
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             <button
@@ -519,6 +553,9 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
           </button>
           {advanced && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                Override only the columns that need a different method from the grouped recommendation.
+              </p>
               {items.filter((item) => selected.includes(item.variable)).map((item) => (
                 <div key={item.variable} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(180px, 260px)', gap: 10, alignItems: 'center', fontSize: 12 }}>
                   <span>{item.variable}</span>
@@ -534,6 +571,11 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
               ))}
             </div>
           )}
+          <AiRecommendationBlock
+            loading={aiLoading}
+            suggestion={aiSuggestion}
+            onAsk={askAiForRecommendation}
+          />
         </>
       )}
     </div>
@@ -547,6 +589,65 @@ function StatCard({ label, value }) {
       <p style={{ fontSize: 22, fontWeight: 500, margin: '4px 0 0' }}>{value}</p>
     </div>
   )
+}
+
+function AiRecommendationBlock({ loading, suggestion, onAsk }) {
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button className="ax-btn" type="button" onClick={onAsk} disabled={loading}>
+        {loading ? <InlineSpinner label="Asking AI..." /> : 'Ask AI for recommendation'}
+      </button>
+      {suggestion && (
+        <div style={{
+          marginTop: 10,
+          padding: '10px 12px',
+          border: '0.5px solid var(--color-border-tertiary)',
+          borderRadius: 10,
+          background: suggestion.ok ? 'var(--color-background-info)' : 'var(--color-background-secondary)',
+          fontSize: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>
+              AI suggestion
+            </span>
+            <span style={{ color: 'var(--color-text-tertiary)' }}>
+              advisory only
+            </span>
+          </div>
+          <p style={{ margin: 0, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap' }}>{suggestion.text}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function buildCleaningAiPayload(kind, group, items = [], selectedItems = [], recommendation, overrides = {}, keep = 'first') {
+  const compactItem = (item) => {
+    const rec = recommendedColumnAction(kind, item)
+    return {
+      column: item.variable,
+      missing_or_issue_count: item.count || 0,
+      system_recommended_action: rec.label,
+      system_reason: rec.why,
+      available_methods: (item.options || []).map((opt) => opt.label || cleanActionLabel(opt.action)),
+      selected_override: overrides[item.variable] ? cleanActionLabel(overrides[item.variable]) : null,
+      raw_recommendation: {
+        action: item.recommended_action || item.action,
+        reason: item.recommended_reason || item.description || '',
+      },
+    }
+  }
+  return {
+    issue_type: kind,
+    affected_count: kind === 'duplicates' ? group?.count || 0 : items.length,
+    selected_columns: selectedItems.map((item) => item.variable),
+    system_group_recommendation: recommendation,
+    duplicate_keep_rule: kind === 'duplicates' ? keep : undefined,
+    affected_columns: items.map(compactItem),
+    available_group_methods: kind === 'duplicates'
+      ? ['Remove duplicates, keep first occurrence', 'Remove duplicates, keep last occurrence']
+      : Array.from(new Set(items.flatMap((item) => (item.options || []).map((opt) => opt.label || cleanActionLabel(opt.action))))),
+  }
 }
 
 function KindBadge({ kind }) {
@@ -641,38 +742,110 @@ function RecommendationNote({ recommendation }) {
   )
 }
 
-function ColumnRecommendationList({ kind, items = [] }) {
+function GroupedColumnRecommendations({ kind, items = [], selected = [] }) {
   if (!items.length || kind === 'duplicates') return null
+  const selectedSet = new Set(selected)
+  const groups = groupColumnRecommendations(kind, items)
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
-        What to do by column <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>System recommended</span>
+        Recommended actions by method <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>System recommended</span>
       </p>
-      {items.map((item) => {
-        const rec = recommendedColumnAction(kind, item)
+      {groups.map((group) => {
+        const selectedCount = group.items.filter((item) => selectedSet.has(item.variable)).length
         return (
           <div
-            key={item.variable}
+            key={group.action}
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(130px, 1fr) minmax(150px, 1fr) 2fr',
-              gap: 8,
-              padding: '7px 8px',
-              border: '0.5px solid var(--color-border-tertiary)',
-              borderRadius: 8,
-              background: 'var(--color-background-primary)',
-              fontSize: 11,
-              alignItems: 'start',
+              padding: '10px 12px',
+              border: '0.5px solid rgba(249, 115, 22, 0.28)',
+              borderRadius: 10,
+              background: 'var(--color-accent-light)',
+              fontSize: 12,
             }}
           >
-            <strong>{item.variable}</strong>
-            <span>{rec.label}</span>
-            <span style={{ color: 'var(--color-text-secondary)' }}>{rec.why}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+              <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
+              <strong>{group.label}</strong>
+              <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>
+                {selectedCount}/{group.items.length} selected
+              </span>
+            </div>
+            <p style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)' }}>{group.why}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {group.items.map((item) => (
+                <span
+                  key={item.variable}
+                  className="ax-chip"
+                  style={{
+                    background: selectedSet.has(item.variable) ? '#fff' : 'var(--color-background-secondary)',
+                    color: selectedSet.has(item.variable) ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                    borderColor: selectedSet.has(item.variable) ? 'rgba(249, 115, 22, 0.35)' : 'transparent',
+                  }}
+                  title={recommendedColumnAction(kind, item).why}
+                >
+                  {item.variable}
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>{item.count || 0}</span>
+                </span>
+              ))}
+            </div>
           </div>
         )
       })}
     </div>
   )
+}
+
+function groupColumnRecommendations(kind, items = []) {
+  const grouped = new Map()
+  items.forEach((item) => {
+    const rec = recommendedColumnAction(kind, item)
+    const key = rec.action || rec.label
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        action: key,
+        label: rec.label,
+        why: summarizeRecommendationReason(kind, rec, item),
+        items: [],
+      })
+    }
+    grouped.get(key).items.push(item)
+  })
+  return Array.from(grouped.values()).map((group) => ({
+    ...group,
+    why: summarizeRecommendationGroup(kind, group),
+  }))
+}
+
+function summarizeRecommendationReason(kind, rec) {
+  if (kind === 'missing') {
+    if (rec.action === 'impute_median') return 'Median is safer for numeric columns with skew or outliers.'
+    if (rec.action === 'impute_mode') return 'Mode is appropriate for categorical columns because there is no numeric average.'
+    if (rec.action === 'impute_mean') return 'Mean is appropriate for numeric columns without strong skew or outlier concerns.'
+  }
+  if (kind === 'outliers') return 'Capping to IQR bounds reduces extreme-value distortion while keeping rows in the dataset.'
+  if (kind === 'type') return 'Converting date-like text makes the column easier to sort, filter, and report.'
+  return rec.why || 'This method matches the detected issue and available SimuCast fixes.'
+}
+
+function summarizeRecommendationGroup(kind, group) {
+  const names = group.items.map((item) => item.variable)
+  const count = group.items.reduce((sum, item) => sum + Number(item.count || 0), 0)
+  if (kind === 'missing') {
+    if (group.action === 'impute_median') {
+      return `${names.join(', ')} have ${count} blank value${count === 1 ? '' : 's'} and show skew/outlier risk, so median is safer than the mean.`
+    }
+    if (group.action === 'impute_mode') {
+      return `${names.join(', ')} are categorical columns with ${count} blank value${count === 1 ? '' : 's'}, so the most common valid label is safer than a numeric fill.`
+    }
+    if (group.action === 'impute_mean') {
+      return `${names.join(', ')} have ${count} blank value${count === 1 ? '' : 's'} and no strong skew/outlier warning, so the mean is a reasonable numeric fill.`
+    }
+  }
+  if (kind === 'outliers') {
+    return `${names.join(', ')} contain ${count} outlier value${count === 1 ? '' : 's'}; capping limits distortion while preserving rows for later analysis.`
+  }
+  return group.why
 }
 
 function DuplicateRecommendation({ group }) {
