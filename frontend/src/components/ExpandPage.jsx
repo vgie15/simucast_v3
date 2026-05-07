@@ -92,6 +92,21 @@ export default function ExpandPage({ dataset, setDataset }) {
         Grow a small dataset by resampling (preserves correlations) or synthesis (per-column independent).
       </p>
 
+      <div className="ax-card" style={{ marginBottom: 12, padding: 14, background: isSmall ? 'var(--color-accent-light)' : 'var(--color-background-secondary)' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: 13 }}>{isSmall ? 'Expansion may help' : 'Expansion is optional'}</strong>
+          <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
+          {isSmall
+            ? `This dataset has ${dataset.row_count.toLocaleString()} rows, so expansion can help demonstration and scenario testing. Start with bootstrap if preserving relationships matters.`
+            : `This dataset already has ${dataset.row_count.toLocaleString()} rows, so expansion is usually unnecessary for modeling. Use it only for demo scenarios or stress-testing.`}
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
+          Target rows: current {dataset.row_count.toLocaleString()} + {Math.max(0, targetRows - dataset.row_count).toLocaleString()} generated = {Math.max(targetRows, dataset.row_count).toLocaleString()} total.
+        </p>
+      </div>
+
       {!isSmall && (
         <div
           className="ax-card"

@@ -2112,6 +2112,26 @@ def clean_suggestions(ds_id):
             miss = int(df[col].isna().sum())
             if miss > 0:
                 is_numeric = pd.api.types.is_numeric_dtype(df[col])
+                recommended_action = "impute_mode"
+                recommended_reason = "Categorical blanks should use the most common label, not a numeric average."
+                skew = None
+                outlier_count = 0
+                if is_numeric:
+                    recommended_action = "impute_mean"
+                    recommended_reason = "Numeric blanks can use the mean when the distribution is not strongly skewed."
+                    numeric = pd.to_numeric(df[col], errors="coerce").dropna()
+                    if len(numeric) > 2:
+                        skew = float(numeric.skew())
+                    if len(numeric) >= 10:
+                        q1, q3 = numeric.quantile([0.25, 0.75])
+                        iqr = q3 - q1
+                        if iqr:
+                            outlier_count = int(((numeric < q1 - 1.5 * iqr) | (numeric > q3 + 1.5 * iqr)).sum())
+                    if (skew is not None and abs(skew) >= 1) or outlier_count > 0:
+                        recommended_action = "impute_median"
+                        recommended_reason = "Median is safer because the column is skewed or has outliers."
+                if miss / max(len(df), 1) >= 0.25:
+                    recommended_reason += " Missingness is high, so review before applying."
                 options = [
                     {
                         "action": "impute_mean",
@@ -2140,7 +2160,11 @@ def clean_suggestions(ds_id):
                     "kind": "missing",
                     "variable": col,
                     "count": miss,
-                    "action": options[0]["action"],
+                    "action": recommended_action,
+                    "recommended_action": recommended_action,
+                    "recommended_reason": recommended_reason,
+                    "skew": skew,
+                    "outlier_count": outlier_count,
                     "options": options,
                     "description": f"{miss} rows blank · impute with {'mean' if pd.api.types.is_numeric_dtype(df[col]) else 'mode'} or drop?",
                 })
@@ -2161,6 +2185,10 @@ def clean_suggestions(ds_id):
                     "variable": col,
                     "count": outliers,
                     "action": "winsorize",
+                    "recommended_action": "winsorize",
+                    "recommended_reason": "Cap to IQR bounds by default so rows stay available while extreme values are limited.",
+                    "lower_bound": float(lo),
+                    "upper_bound": float(hi),
                     "options": [
                         {
                             "action": "winsorize",
@@ -2919,20 +2947,24 @@ def describe(ds_id):
                     "value_counts": {str(k): int(v) for k, v in vc.items()},
                 })
 
-        # histogram data for the first numeric column, for charting
+        # histogram data for numeric columns, for charting
         histogram = None
+        histograms = {}
         num_cols = [c for c in cols if c in df.columns and pd.api.types.is_numeric_dtype(df[c])]
-        if num_cols:
+        for num_col in num_cols:
+            s_clean = df[num_col].dropna()
+            if len(s_clean):
+                counts, bin_edges = np.histogram(s_clean, bins=12)
+                histograms[num_col] = {
+                    "variable": num_col,
+                    "counts": counts.tolist(),
+                    "bins": bin_edges.tolist(),
+                }
+        if histograms:
             first = num_cols[0]
-            s_clean = df[first].dropna()
-            counts, bin_edges = np.histogram(s_clean, bins=12)
-            histogram = {
-                "variable": first,
-                "counts": counts.tolist(),
-                "bins": bin_edges.tolist(),
-            }
+            histogram = histograms.get(first)
 
-        result = {"stats": out, "histogram": histogram}
+        result = {"stats": out, "histogram": histogram, "histograms": histograms}
         _save_analysis(s, ds_id, "describe", body, result)
         return jsonify(clean_json(result))
     finally:

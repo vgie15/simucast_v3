@@ -93,6 +93,8 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const variables = dataset?.variables || []
   const candidateFeatures = variables.filter((v) => v.name !== target)
   const allFeatureNames = useMemo(() => candidateFeatures.map((v) => v.name), [target, variables])
+  const targetRecommendations = recommendTargets(variables)
+  const featureRecommendations = recommendFeatures(candidateFeatures)
 
   useEffect(() => {
     if (!dataset) return
@@ -382,6 +384,31 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             </option>
           ))}
         </select>
+        {targetRecommendations.length > 0 && (
+          <RecommendationPanel title="Recommended targets" source="System recommended">
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {targetRecommendations.map((rec) => (
+                <button
+                  key={rec.name}
+                  className="ax-btn mini"
+                  type="button"
+                  onClick={() => {
+                    setTarget(rec.name)
+                    setTargetMode('auto')
+                    setPositiveClass('')
+                    setFeatures(features.filter((f) => f !== rec.name))
+                  }}
+                  title={rec.why}
+                >
+                  {rec.name}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
+              Recommended targets are columns that look like outcomes, scores, statuses, or meaningful prediction goals.
+            </p>
+          </RecommendationPanel>
+        )}
         {plan && (
           <>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
@@ -438,11 +465,52 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             </span>
           ))}
         </div>
+        {featureRecommendations.length > 0 && (
+          <RecommendationPanel title="Recommended features" source="System recommended">
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>
+              Excludes likely IDs and the selected target. Watch for leakage: avoid columns that directly reveal the answer.
+            </p>
+            <button
+              className="ax-btn mini"
+              type="button"
+              onClick={() => setFeatures(featureRecommendations.map((v) => v.name))}
+              disabled={!target}
+            >
+              Use recommended features
+            </button>
+          </RecommendationPanel>
+        )}
       </Step>
       </div>
 
       {/* Step 3 — preprocessing plan */}
       <Step n={3} title="Preprocessing plan &amp; readiness" disabled={!target || features.length === 0}>
+        <div id="fix-numeric-preprocessing" className="ax-card" style={{ padding: 12, marginBottom: 12, background: 'var(--color-background-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>Encoding and scaling choices</p>
+            <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+            Categorical features are encoded for modeling. Scaling helps linear/logistic models compare numeric features fairly; tree models are less sensitive.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '160px minmax(0, 1fr)', gap: 10, alignItems: 'center', fontSize: 12 }}>
+            <label style={{ color: 'var(--color-text-secondary)' }}>Encoding</label>
+            <select disabled value="one_hot" style={{ width: '100%' }}>
+              <option value="one_hot">One-hot encoding for categorical features</option>
+            </select>
+            <label style={{ color: 'var(--color-text-secondary)' }}>Scaling</label>
+            <select
+              value={numericPreprocessing.scaling || 'auto'}
+              onChange={(e) => setNumericPreprocessing((cur) => ({ ...cur, scaling: e.target.value }))}
+              style={{ width: '100%' }}
+            >
+              <option value="auto">Auto recommended</option>
+              <option value="standard">Standard scaling</option>
+              <option value="minmax">Min-max scaling</option>
+              <option value="none">No scaling</option>
+            </select>
+          </div>
+        </div>
         {planLoading && (
           plan ? (
             <InlineSpinner label="Refreshing readiness checks..." />
@@ -500,6 +568,11 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 
       <Step n={5} id="models-step-5" title="Choose algorithms" disabled={!plan || (plan.validation_checks || []).some((c) => c.status === 'block')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <RecommendationPanel title="Algorithm guidance" source="System recommended">
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+              Use a simple interpretable baseline first, then compare with tree-based models. Random Forest can perform well but needs model-health checks for overfitting.
+            </p>
+          </RecommendationPanel>
           {visibleAlgos.map((a) => (
             <label
               key={a.key}
@@ -562,7 +635,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
               <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Tune parameters</p>
               <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
-                Defaults were used for the first training run. Adjust settings here, then train again to compare a tuned run.
+                Defaults were used for the first training run. Tuning is optional; try it when model health warns about overfitting or when metrics are close between models.
               </p>
               <ParameterSettings
                 selectedAlgos={selectedAlgos}
@@ -645,6 +718,45 @@ function Step({ n, title, disabled, children, id }) {
       <div style={{ pointerEvents: disabled ? 'none' : 'auto' }}>{children}</div>
     </div>
   )
+}
+
+function RecommendationPanel({ title, source, children }) {
+  return (
+    <div className="ax-card" style={{ padding: '9px 10px', marginTop: 10, background: 'var(--color-background-secondary)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: 12 }}>{title}</strong>
+        <span className="ax-chip" style={{ color: 'var(--color-primary)', fontSize: 10 }}>{source}</span>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function recommendTargets(variables = []) {
+  const scored = variables
+    .filter((v) => !isIdLike(v.name))
+    .map((v) => {
+      const name = String(v.name || '').toLowerCase()
+      let score = 0
+      if (/target|outcome|result|score|gpa|grade|graduate|pass|fail|status|risk|churn|label/.test(name)) score += 3
+      if (['category', 'binary', 'int', 'float', 'numeric'].includes(v.dtype)) score += 1
+      if (Number(v.unique || 0) > 1) score += 1
+      return { ...v, score, why: 'This column looks like a meaningful prediction outcome.' }
+    })
+    .sort((a, b) => b.score - a.score)
+  return scored.filter((v) => v.score >= 2).slice(0, 4)
+}
+
+function recommendFeatures(variables = []) {
+  return variables
+    .filter((v) => !isIdLike(v.name))
+    .filter((v) => ['category', 'binary', 'int', 'float', 'numeric', 'text'].includes(v.dtype))
+    .slice(0, 12)
+}
+
+function isIdLike(name) {
+  const n = String(name || '').toLowerCase()
+  return n === 'id' || n.endsWith('_id') || n.includes('student_id') || n.includes('uuid')
 }
 
 function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
@@ -896,7 +1008,10 @@ function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck 
                   key={check.key ?? i}
                   style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: '11px 14px', display: 'flex', alignItems: isOk ? 'center' : 'flex-start', gap: 10 }}
                 >
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', background: badgeBg, color: badgeColor, borderRadius: 4, flexShrink: 0, letterSpacing: '0.05em', marginTop: isOk ? 0 : 1 }}>
+                  <span
+                    title={isBlock ? 'Blocked means training should not proceed until this issue is fixed.' : isWarning ? 'Warning means training can continue, but results may be less reliable.' : 'OK means this check passed.'}
+                    style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', background: badgeBg, color: badgeColor, borderRadius: 4, flexShrink: 0, letterSpacing: '0.05em', marginTop: isOk ? 0 : 1, cursor: 'help' }}
+                  >
                     {isBlock ? 'BLOCK' : isWarning ? 'WARNING' : 'OK'}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -1201,7 +1316,7 @@ function ModelDetail({ model }) {
         <>
           <p className="ax-lbl" style={{ marginTop: 0 }}>Feature influence</p>
           <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '-4px 0 8px' }}>
-            Influence is aggregated to original dataset columns. It may be affected by correlated features.
+            Influence is aggregated to original dataset columns. "Increases" means higher values tend to raise the predicted value/probability; "Decreases" means they tend to lower it. Tree models show model-derived influence without a simple direction. Correlated features can affect these patterns.
           </p>
           <div style={{ height: Math.max(200, impLabels.length * 22), marginBottom: 14 }}>
             <Bar

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
-import { AIInsightCard } from './AIExplainers'
+import { ExplainButton } from './AIExplainers'
 import { InlineSpinner, SkeletonCards } from './LoadingStates'
 
 export default function DescribePage({ dataset }) {
@@ -11,6 +11,7 @@ export default function DescribePage({ dataset }) {
   const [loading, setLoading] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [expandedExplain, setExpandedExplain] = useState({})
+  const [chartVariable, setChartVariable] = useState('')
 
   useEffect(() => {
     if (!dataset?.id) return
@@ -72,8 +73,10 @@ export default function DescribePage({ dataset }) {
 
   const numericStats = (result?.stats || []).filter((s) => s.kind === 'numeric')
   const categoricalStats = (result?.stats || []).filter((s) => s.kind === 'categorical')
-  const insights = result ? buildKeyInsights(numericStats, categoricalStats) : []
-  const histogramInsight = result?.histogram ? describeHistogram(result.histogram, numericStats) : null
+  const recommendedVars = recommendDescribeVariables(dataset.variables || [])
+  const histograms = result?.histograms || (result?.histogram ? { [result.histogram.variable]: result.histogram } : {})
+  const selectedHistogram = histograms[chartVariable] || result?.histogram
+  const histogramInsight = selectedHistogram ? describeHistogram(selectedHistogram, numericStats) : null
 
   return (
     <>
@@ -82,6 +85,9 @@ export default function DescribePage({ dataset }) {
 
       <p id="describe-section-variables" className="ax-lbl">Variables - tap to toggle</p>
       <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+        <button className="ax-btn" type="button" onClick={() => setSelected(recommendedVars)}>
+          Use recommended variables
+        </button>
         <button className="ax-btn" type="button" onClick={() => setSelected((dataset.variables || []).map((v) => v.name))}>
           Select all
         </button>
@@ -110,32 +116,6 @@ export default function DescribePage({ dataset }) {
 
       {result && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(280px, 0.8fr)', gap: 12, marginBottom: 14 }}>
-            <div className="ax-card" style={{ padding: 14 }}>
-              <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px' }}>Key insights</p>
-              {insights.length ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  {insights.map((item, idx) => (
-                    <InsightLine key={idx} tone={item.tone} text={item.text} />
-                  ))}
-                </div>
-              ) : (
-                <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>Select variables and run descriptives to generate insights.</p>
-              )}
-            </div>
-
-            <AIInsightCard
-              datasetId={dataset.id}
-              step="describe-summary"
-              params={{ variables: selected.length ? selected : 'all' }}
-              result={{ numeric: numericStats, categorical: categoricalStats, histogram: result?.histogram }}
-              title="AI narrative"
-              question="Write a short narrative summary of these descriptive statistics for a non-statistician: what the data looks like, the most notable distributions or skews, and any data-quality concerns worth following up on."
-              refreshKey={result?.run_id || JSON.stringify(numericStats.map((s) => s.variable))}
-              suggestedNextStep={{ page: 'tests', section: 'fix-correlation-test', relatedPlanStepId: 'tests-correlation', label: 'Open Analysis setup' }}
-            />
-          </div>
-
           {(numericStats.length > 0 || categoricalStats.length > 0) && (
             <>
               <p className="ax-lbl">Variable insight cards</p>
@@ -153,6 +133,8 @@ export default function DescribePage({ dataset }) {
                       ['Skew', fmt(s.skew)],
                     ]}
                     insight={numericInsight(s)}
+                    datasetId={dataset.id}
+                    resultPayload={{ stat: s, histogram: histograms[s.variable] }}
                     expanded={!!expandedExplain[s.variable]}
                     onExplain={() => setExpandedExplain((cur) => ({ ...cur, [s.variable]: !cur[s.variable] }))}
                   />
@@ -169,6 +151,8 @@ export default function DescribePage({ dataset }) {
                       ['Valid n', s.n?.toLocaleString()],
                     ]}
                     insight={categoricalInsight(s)}
+                    datasetId={dataset.id}
+                    resultPayload={{ stat: s }}
                     distribution={topDistribution(s)}
                     expanded={!!expandedExplain[s.variable]}
                     onExplain={() => setExpandedExplain((cur) => ({ ...cur, [s.variable]: !cur[s.variable] }))}
@@ -181,6 +165,10 @@ export default function DescribePage({ dataset }) {
           {numericStats.length > 0 && (
             <>
               <p className="ax-lbl">Numeric summary</p>
+              <SummaryExplainer
+                title="How to read numeric summaries"
+                text="Mean is the average, SD shows spread, median is the middle value, range shows minimum to maximum, and skew describes whether values lean low or high."
+              />
               <div className="ax-card" style={{ padding: 0, overflow: 'auto', marginBottom: 12 }}>
                 <table className="ax-tbl">
                   <thead>
@@ -212,6 +200,10 @@ export default function DescribePage({ dataset }) {
           {categoricalStats.length > 0 && (
             <>
               <p className="ax-lbl">Categorical summary</p>
+              <SummaryExplainer
+                title="How to read categorical summaries"
+                text="Unique values count the labels present. Most common and share show whether one category dominates or whether the distribution is balanced."
+              />
               <div className="ax-card" style={{ padding: 0, overflow: 'auto', marginBottom: 12 }}>
                 <table className="ax-tbl">
                   <thead>
@@ -234,17 +226,23 @@ export default function DescribePage({ dataset }) {
             </>
           )}
 
-          {result.histogram && (
+          {selectedHistogram && (
             <>
-              <p className="ax-lbl">Distribution - {result.histogram.variable}</p>
+              <p className="ax-lbl">Distribution</p>
               <div className="ax-card" style={{ marginBottom: 14 }}>
+                <div className="ax-row" style={{ marginBottom: 10 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{selectedHistogram.variable}</p>
+                  <select value={selectedHistogram.variable} onChange={(e) => setChartVariable(e.target.value)} style={{ maxWidth: 260 }}>
+                    {Object.keys(histograms).map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </div>
                 <div style={{ height: 220 }}>
                   <Bar
                     data={{
-                      labels: result.histogram.bins.slice(0, -1).map((b, i) => `${fmt(b)}-${fmt(result.histogram.bins[i + 1])}`),
+                      labels: selectedHistogram.bins.slice(0, -1).map((b, i) => `${fmt(b)}-${fmt(selectedHistogram.bins[i + 1])}`),
                       datasets: [{
-                        label: result.histogram.variable,
-                        data: result.histogram.counts,
+                        label: selectedHistogram.variable,
+                        data: selectedHistogram.counts,
                         backgroundColor: '#7F77DD',
                         borderRadius: 2,
                       }],
@@ -275,7 +273,7 @@ export default function DescribePage({ dataset }) {
               <p className="ax-lbl">Correlation overview</p>
               <div className="ax-card" style={{ marginBottom: 14 }}>
                 <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>
-                  Numeric relationship preview
+                  Numeric relationship preview <InfoIcon text="Green means a positive relationship, red means a negative relationship, and stronger color means a stronger correlation. Values near 0 are weak." />
                 </p>
                 <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
                   This heatmap summarizes pairwise numeric relationships for the selected variables. Stronger colors indicate stronger positive or negative associations.
@@ -327,7 +325,7 @@ function CorrelationHeatmap({ result }) {
                 const v = Number(result.matrix?.[r]?.[c] ?? 0)
                 const abs = Math.abs(v)
                 const alpha = abs > 0.9 ? 0.7 : abs > 0.7 ? 0.5 : abs > 0.4 ? 0.3 : abs > 0.2 ? 0.15 : 0.05
-                const bg = r === c ? `rgba(127,119,221,${alpha})` : v >= 0 ? `rgba(15,110,86,${alpha})` : `rgba(163,45,45,${alpha})`
+                const bg = r === c ? `rgba(249,115,22,${alpha})` : v >= 0 ? `rgba(16,185,129,${alpha})` : `rgba(239,68,68,${alpha})`
                 return (
                   <td key={c} style={{ padding: '7px 10px', textAlign: 'center', background: bg, border: '0.5px solid var(--color-border-tertiary)' }}>
                     {fmt(v)}
@@ -342,24 +340,39 @@ function CorrelationHeatmap({ result }) {
   )
 }
 
-function InsightLine({ tone, text }) {
-  const styles = {
-    good: { bg: '#F0FAF6', fg: '#18765B', mark: 'OK' },
-    warn: { bg: '#FFF8EA', fg: '#7A4B00', mark: '!' },
-    info: { bg: '#EEF4FF', fg: '#255CA8', mark: 'i' },
-  }
-  const s = styles[tone] || styles.info
+function SummaryExplainer({ title, text }) {
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 }}>
-      <span style={{ flexShrink: 0, minWidth: 22, textAlign: 'center', borderRadius: 4, padding: '1px 4px', background: s.bg, color: s.fg, fontSize: 10, fontWeight: 600 }}>
-        {s.mark}
-      </span>
-      <span style={{ color: 'var(--color-text-secondary)' }}>{text}</span>
+    <div className="ax-card" style={{ padding: '8px 10px', marginBottom: 8, background: 'var(--color-accent-light)' }}>
+      <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 3px' }}>{title}</p>
+      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{text}</p>
     </div>
   )
 }
 
-function VariableCard({ title, type, tags, metrics, insight, distribution, expanded, onExplain }) {
+function InfoIcon({ text }) {
+  return (
+    <span
+      title={text}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 16,
+        height: 16,
+        marginLeft: 4,
+        borderRadius: 8,
+        background: 'var(--color-background-info, #EEF4FF)',
+        color: 'var(--color-text-info, #255CA8)',
+        fontSize: 11,
+        cursor: 'help',
+      }}
+    >
+      i
+    </span>
+  )
+}
+
+function VariableCard({ title, type, tags, metrics, insight, distribution, expanded, onExplain, datasetId, resultPayload }) {
   return (
     <div className="ax-card" style={{ padding: 12 }}>
       <div className="ax-row" style={{ alignItems: 'flex-start', marginBottom: 8 }}>
@@ -393,9 +406,19 @@ function VariableCard({ title, type, tags, metrics, insight, distribution, expan
         </div>
       )}
       <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{insight}</p>
-      <button className="ax-btn" onClick={onExplain} style={{ marginTop: 10 }}>
-        {expanded ? 'Hide explanation' : 'Explain this'}
-      </button>
+      <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+        <button className="ax-btn" onClick={onExplain}>
+          {expanded ? 'Hide rule explanation' : 'Explain terms'}
+        </button>
+        <ExplainButton
+          datasetId={datasetId}
+          step={`describe-variable-${type}`}
+          params={{ variable: title, type }}
+          result={resultPayload}
+          question={`Explain the descriptive summary for ${title} in plain language. Define the statistical terms briefly and say what the user should notice.`}
+          label="AI explain"
+        />
+      </div>
       {expanded && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0', borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 8 }}>
           {insight} This explanation is rule-based and remains available even without an AI key.
@@ -403,6 +426,12 @@ function VariableCard({ title, type, tags, metrics, insight, distribution, expan
       )}
     </div>
   )
+}
+
+function recommendDescribeVariables(variables = []) {
+  const numeric = variables.filter((v) => ['numeric', 'int', 'float', 'binary'].includes(v.dtype)).map((v) => v.name)
+  const categorical = variables.filter((v) => ['category', 'text'].includes(v.dtype)).map((v) => v.name)
+  return [...numeric.slice(0, 3), ...categorical.slice(0, 2)]
 }
 
 function buildKeyInsights(numericStats, categoricalStats) {

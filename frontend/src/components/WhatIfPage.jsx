@@ -13,6 +13,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
   const [baseline, setBaseline] = useState(null)
   const [scenarioName, setScenarioName] = useState('')
   const [scenarios, setScenarios] = useState([])
+  const [selectedScenarioName, setSelectedScenarioName] = useState('')
   const [restrictToRange, setRestrictToRange] = useState(false)
   const selectedModel = activeModel || fallbackModel
 
@@ -159,7 +160,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
         </div>
         {isProb && (
           <div style={{ height: 8, background: 'var(--color-background-secondary)', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${pct}%`, background: pct >= 60 ? '#E24B4A' : pct >= 35 ? '#EF9F27' : '#1D9E75', transition: 'width 0.15s' }} />
+            <div style={{ height: '100%', width: `${pct}%`, background: probabilityColor(pred, modelFull), transition: 'width 0.15s' }} />
           </div>
         )}
         <div style={{ marginTop: 12, padding: '10px 12px', border: `1px solid ${riskTone.border}`, background: riskTone.bg, borderRadius: 6, fontSize: 12, color: riskTone.fg }}>
@@ -284,9 +285,24 @@ export default function WhatIfPage({ dataset, activeModel }) {
         <>
           <p className="ax-lbl" style={{ marginTop: 14 }}>Scenario compare</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-            {baseline && <ScenarioCard name="Baseline" prediction={baseline} />}
-            {pred && <ScenarioCard name="Current inputs" prediction={pred} baseline={baseline} extrapolation={extrapolation} active />}
-            {scenarios.map((s, i) => <ScenarioCard key={i} name={s.name} prediction={s.prediction} baseline={baseline} extrapolation={s.extrapolation} />)}
+            {baseline && <ScenarioCard name="Baseline" prediction={baseline} inputs={baseline.inputs} />}
+            {pred && <ScenarioCard name="Current inputs" prediction={pred} baseline={baseline} extrapolation={extrapolation} inputs={inputs} active />}
+            {scenarios.map((s, i) => (
+              <ScenarioCard
+                key={i}
+                name={s.name}
+                prediction={s.prediction}
+                baseline={baseline}
+                extrapolation={s.extrapolation}
+                inputs={s.inputs}
+                active={selectedScenarioName === s.name}
+                onClick={() => {
+                  setInputs(s.inputs || {})
+                  setSelectedScenarioName(s.name)
+                  setPred(null)
+                }}
+              />
+            ))}
           </div>
         </>
       )}
@@ -294,12 +310,17 @@ export default function WhatIfPage({ dataset, activeModel }) {
   )
 }
 
-function ScenarioCard({ name, prediction, baseline, extrapolation, active }) {
+function ScenarioCard({ name, prediction, baseline, extrapolation, inputs, active, onClick }) {
   const isProb = prediction.kind === 'probability'
   const delta = baseline ? prediction.prediction - baseline.prediction : null
   const scenarioRisk = extrapolation?.overall_risk
   return (
-    <div className="ax-card" style={{ padding: '10px 12px', border: active ? '2px solid var(--color-border-info)' : undefined }}>
+    <div
+      className="ax-card"
+      onClick={onClick}
+      style={{ padding: '10px 12px', border: active ? '2px solid var(--color-border-info)' : undefined, cursor: onClick ? 'pointer' : undefined }}
+      title={onClick ? 'Load this scenario into the adjust feature values controls.' : undefined}
+    >
       <p style={{ fontSize: 11, color: active ? 'var(--color-text-info)' : 'var(--color-text-secondary)', margin: 0 }}>{name}</p>
       <p style={{ fontSize: 22, fontWeight: 500, margin: '2px 0 0' }}>
         {formatPrediction(prediction)}
@@ -314,8 +335,31 @@ function ScenarioCard({ name, prediction, baseline, extrapolation, active }) {
           Scenario risk: {scenarioRisk.toUpperCase()}
         </p>
       )}
+      {inputs && Object.keys(inputs).length > 0 && (
+        <details style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+          <summary style={{ fontSize: 11, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Values used</summary>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '3px 8px', marginTop: 6, fontSize: 10 }}>
+            {Object.entries(inputs).slice(0, 10).map(([key, value]) => (
+              <React.Fragment key={key}>
+                <span style={{ color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{key}</span>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>{String(value)}</span>
+              </React.Fragment>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   )
+}
+
+function probabilityColor(prediction, model) {
+  const target = String(prediction?.positive_class || prediction?.predicted_class || model?.target || '').toLowerCase()
+  const negativeTarget = /fail|risk|drop|churn|default|bad|loss|no|not|negative/.test(target)
+  if (negativeTarget) {
+    const pct = Math.round(Number(prediction?.prediction || 0) * 100)
+    return pct >= 60 ? '#EF4444' : pct >= 35 ? '#F97316' : '#10B981'
+  }
+  return '#3B82F6'
 }
 
 async function hydrateCurrentCategoryValues(datasetId, features) {

@@ -53,6 +53,7 @@ export default function TestsPage({ dataset }) {
   const categoricalVars = variables.filter((v) => ['category', 'binary'].includes(v.dtype))
   const selectedTest = TESTS.find((t) => t.key === kind) || TESTS[0]
   const canRun = kind === 'corr' ? corrVars.length >= 2 : kind === 'chi' ? varA && varB : group && measure
+  const pairRecs = recommendedTestPairs(kind, numericVars, categoricalVars)
 
   useEffect(() => {
     if (!dataset?.id) return
@@ -155,28 +156,28 @@ export default function TestsPage({ dataset }) {
           />
           <p className="ax-lbl" style={{ marginTop: 0 }}>Setup</p>
           {(kind === 't' || kind === 'anova') && (
-            <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 170px) minmax(0, 1fr)', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
               <label style={{ color: 'var(--color-text-secondary)' }}>Group variable (categorical)</label>
-              <select value={group} onChange={(e) => setGroup(e.target.value)}>
+              <select value={group} onChange={(e) => setGroup(e.target.value)} style={{ minWidth: 0, width: '100%' }}>
                 <option value="">- select -</option>
                 {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
               </select>
               <label style={{ color: 'var(--color-text-secondary)' }}>Measure variable (numeric)</label>
-              <select value={measure} onChange={(e) => setMeasure(e.target.value)}>
+              <select value={measure} onChange={(e) => setMeasure(e.target.value)} style={{ minWidth: 0, width: '100%' }}>
                 <option value="">- select -</option>
                 {numericVars.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
               </select>
             </div>
           )}
           {kind === 'chi' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 170px) minmax(0, 1fr)', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
               <label style={{ color: 'var(--color-text-secondary)' }}>Category variable A</label>
-              <select value={varA} onChange={(e) => setVarA(e.target.value)}>
+              <select value={varA} onChange={(e) => setVarA(e.target.value)} style={{ minWidth: 0, width: '100%' }}>
                 <option value="">- select -</option>
                 {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
               </select>
               <label style={{ color: 'var(--color-text-secondary)' }}>Category variable B</label>
-              <select value={varB} onChange={(e) => setVarB(e.target.value)}>
+              <select value={varB} onChange={(e) => setVarB(e.target.value)} style={{ minWidth: 0, width: '100%' }}>
                 <option value="">- select -</option>
                 {categoricalVars.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
               </select>
@@ -197,6 +198,31 @@ export default function TestsPage({ dataset }) {
                 ))}
               </div>
             </>
+          )}
+          {pairRecs.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>
+                Recommended pairs <span style={{ color: 'var(--color-primary)' }}>System recommended</span>
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {pairRecs.map((rec, idx) => (
+                  <button
+                    key={`${rec.label}-${idx}`}
+                    type="button"
+                    className="ax-card"
+                    style={{ padding: '7px 9px', textAlign: 'left', cursor: 'pointer' }}
+                    onClick={() => {
+                      if (kind === 'corr') setCorrVars(rec.variables)
+                      if (kind === 'chi') { setVarA(rec.varA); setVarB(rec.varB) }
+                      if (kind === 't' || kind === 'anova') { setGroup(rec.group); setMeasure(rec.measure) }
+                    }}
+                  >
+                    <span style={{ display: 'block', fontSize: 12, fontWeight: 600 }}>{rec.label}</span>
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{rec.why}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           <div style={{ marginTop: 12 }}>
             <button className="ax-btn prim" disabled={loading || !canRun} onClick={run}>
@@ -244,6 +270,46 @@ function InfoRow({ label, text }) {
       <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{text}</p>
     </div>
   )
+}
+
+function recommendedTestPairs(kind, numericVars = [], categoricalVars = []) {
+  const nums = numericVars.map((v) => v.name)
+  const cats = categoricalVars.map((v) => v.name)
+  if (kind === 'corr') {
+    const preferred = nums.filter((name) => /score|gpa|rate|hours|income|age/i.test(name)).slice(0, 4)
+    const variables = preferred.length >= 2 ? preferred : nums.slice(0, 4)
+    return variables.length >= 2 ? [{
+      label: variables.slice(0, 3).join(' + '),
+      variables,
+      why: 'Numeric variables can be compared with correlation to see whether they move together.',
+    }] : []
+  }
+  if (kind === 'chi') {
+    const pairs = []
+    for (let i = 0; i < cats.length; i += 1) {
+      for (let j = i + 1; j < cats.length; j += 1) {
+        pairs.push({
+          label: `${cats[i]} vs ${cats[j]}`,
+          varA: cats[i],
+          varB: cats[j],
+          why: 'Both variables are categorical, so chi-square can test whether their distributions are associated.',
+        })
+      }
+    }
+    return pairs.slice(0, 3)
+  }
+  const groups = categoricalVars
+    .filter((v) => kind === 't' ? Number(v.unique || 0) === 2 || v.dtype === 'binary' : Number(v.unique || 0) !== 2)
+    .map((v) => v.name)
+  const groupList = groups.length ? groups : cats
+  return groupList.slice(0, 2).flatMap((group) => nums.slice(0, 2).map((measure) => ({
+    label: `${measure} by ${group}`,
+    group,
+    measure,
+    why: kind === 't'
+      ? 'A two-group category and a numeric measure are a valid t-test setup.'
+      : 'A multi-group category and a numeric measure are a valid ANOVA setup.',
+  }))).slice(0, 3)
 }
 
 function TestResult({ kind, result, setup, datasetId }) {

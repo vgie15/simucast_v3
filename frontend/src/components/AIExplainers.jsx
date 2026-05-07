@@ -104,20 +104,22 @@ export function ExplainButton({
         <div
           ref={popRef}
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            right: 0,
-            zIndex: 50,
-            width: 320,
-            maxWidth: '90vw',
-            padding: '10px 12px',
+            position: 'fixed',
+            top: 84,
+            right: 24,
+            zIndex: 10000,
+            width: 'min(560px, calc(100vw - 48px))',
+            maxHeight: 'calc(100vh - 120px)',
+            overflow: 'auto',
+            padding: '14px 16px',
             background: 'var(--color-background-primary)',
             border: '0.5px solid var(--color-border-tertiary)',
-            borderRadius: 8,
+            borderRadius: 10,
             boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
             fontSize: 12,
             whiteSpace: 'pre-wrap',
             color: 'var(--color-text-primary)',
+            lineHeight: 1.55,
           }}
         >
           {loading ? <InlineSpinner label="Generating explanation..." /> : text}

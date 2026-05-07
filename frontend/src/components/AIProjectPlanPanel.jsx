@@ -447,12 +447,17 @@ function dataCompletionKey(action, summary) {
 
 function dataKeyFromText(action, summary) {
   const text = `${action || ''} ${summary || ''}`.toLowerCase()
-  if (text.includes('missing')) return 'data:missing'
-  if (text.includes('outlier') || text.includes('winsor')) return 'data:outliers'
-  if (text.includes('duplicate')) return 'data:duplicates'
-  if (text.includes('categor') || text.includes('standard')) return 'data:category'
-  if (text.includes('feature_engineer') || text.includes('bin') || text.includes('format')) return 'data:feature'
-  if (text.includes('rename') || text.includes('drop') || text.includes('cast') || text.includes('split') || text.includes('merge') || text.includes('type')) return 'data:manual'
+  const actionText = String(action || '').toLowerCase()
+  if (actionText.includes('missing') || actionText === 'impute') return 'data:missing'
+  if (actionText.includes('outlier') || actionText.includes('winsor')) return 'data:outliers'
+  if (actionText.includes('duplicate')) return 'data:duplicates'
+  if (actionText.includes('category_standardization')) return 'data:category'
+  if (actionText.includes('feature_engineer')) return 'data:feature'
+  if (actionText.includes('rename') || actionText.includes('drop') || actionText.includes('cast') || actionText.includes('split') || actionText.includes('merge') || actionText.includes('type_conversion') || actionText === 'cell_edit' || actionText === 'batch_cell_edit') return 'data:manual'
+  if (actionText.startsWith('group_')) {
+    if (text.includes('missing')) return 'data:missing'
+    if (text.includes('outlier')) return 'data:outliers'
+  }
   return ''
 }
 

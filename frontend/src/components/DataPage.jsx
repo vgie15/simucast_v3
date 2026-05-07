@@ -400,7 +400,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
     setSelected(items.map((item) => item.variable).filter(Boolean))
     setAction(recommendedGroupAction(kind, group, items).action)
     setKeep(group?.default_keep || 'first')
-    setOverrides({})
+    setOverrides(defaultOverrides(kind, items, recommendedGroupAction(kind, group, items).action))
     setAdvanced(false)
   }, [kind, JSON.stringify(items), group?.default_action, group?.default_keep])
 
@@ -459,7 +459,12 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
       {kind === 'duplicates' ? (
         <>
           <RecommendationNote recommendation={recommendation} />
-          <ColumnRecommendationList kind={kind} items={items} />
+          <DuplicateRecommendation group={group} />
+          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+            <button className="ax-btn mini" type="button" disabled>
+              All duplicate rows selected
+            </button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', marginTop: 12, fontSize: 12 }}>
             <label style={{ color: 'var(--color-text-secondary)' }}>Keep occurrence</label>
             <select value={keep} onChange={(e) => setKeep(e.target.value)}>
@@ -628,7 +633,7 @@ function RecommendationNote({ recommendation }) {
       fontSize: 12,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-primary)' }}>Recommended</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-primary)' }}>System recommended</span>
         <strong>{recommendation.label}</strong>
       </div>
       <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>
@@ -641,7 +646,7 @@ function ColumnRecommendationList({ kind, items = [] }) {
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
-        What to do by column
+        What to do by column <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>System recommended</span>
       </p>
       {items.map((item) => {
         const rec = recommendedColumnAction(kind, item)
@@ -670,11 +675,43 @@ function ColumnRecommendationList({ kind, items = [] }) {
   )
 }
 
+function DuplicateRecommendation({ group }) {
+  const count = group?.count || 0
+  if (!count) return null
+  return (
+    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
+        What to do <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>System recommended</span>
+      </p>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(130px, 1fr) minmax(150px, 1fr) 2fr',
+          gap: 8,
+          padding: '7px 8px',
+          border: '0.5px solid var(--color-border-tertiary)',
+          borderRadius: 8,
+          background: 'var(--color-background-primary)',
+          fontSize: 11,
+          alignItems: 'start',
+        }}
+      >
+        <strong>{count} duplicate row{count === 1 ? '' : 's'}</strong>
+        <span>Remove duplicates</span>
+        <span style={{ color: 'var(--color-text-secondary)' }}>
+          Keep the first occurrence so repeated rows do not inflate summaries, tests, or model training.
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function recommendedColumnAction(kind, item) {
   const options = item.options || []
   const has = (action) => options.some((opt) => opt.action === action)
   const count = Number(item.count || 0)
   if (kind === 'missing') {
+    const recommended = item.recommended_action || item.action
     if (has('impute_mode')) {
       return {
         action: 'impute_mode',
@@ -682,11 +719,18 @@ function recommendedColumnAction(kind, item) {
         why: `${count} blank value${count === 1 ? '' : 's'} in a categorical column should use the dominant label, not a numeric average.`,
       }
     }
+    if (recommended === 'impute_median' && has('impute_median')) {
+      return {
+        action: 'impute_median',
+        label: 'Fill with median',
+        why: `${count} blank value${count === 1 ? '' : 's'} detected. ${item.recommended_reason || 'Median is safer when a numeric column is skewed or outlier-heavy.'}`,
+      }
+    }
     if (has('impute_median') && count > 0) {
       return {
         action: 'impute_mean',
         label: 'Fill with mean',
-        why: `${count} blank value${count === 1 ? '' : 's'} detected. Mean is the default unless the column is visibly skewed or outlier-heavy; use the override for median if needed.`,
+        why: `${count} blank value${count === 1 ? '' : 's'} detected. ${item.recommended_reason || 'Mean is the default for numeric columns that are not visibly skewed or outlier-heavy.'}`,
       }
     }
     return { action: 'drop_rows', label: 'Review/drop rows', why: 'Use this only when missingness is too high or blanks are not safely imputable.' }
@@ -706,6 +750,15 @@ function recommendedColumnAction(kind, item) {
     }
   }
   return { action: item.action, label: cleanActionLabel(item.action), why: item.description || 'Recommended by the current dataset profile.' }
+}
+
+function defaultOverrides(kind, items = [], groupAction) {
+  if (kind !== 'missing') return {}
+  return Object.fromEntries(
+    items
+      .filter((item) => item.recommended_action && item.recommended_action !== groupAction)
+      .map((item) => [item.variable, item.recommended_action]),
+  )
 }
 
 function recommendBinning(numericVariables = []) {
