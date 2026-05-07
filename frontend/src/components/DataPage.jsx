@@ -333,6 +333,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             <CleanGroupCard
               datasetId={dataset.id}
+              stageId={dataset.current_stage_id}
               group={suggestionGroups.missing}
               kind="missing"
               title="Missing values"
@@ -342,6 +343,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
             />
             <CleanGroupCard
               datasetId={dataset.id}
+              stageId={dataset.current_stage_id}
               group={suggestionGroups.outliers}
               kind="outliers"
               title="Outliers"
@@ -351,6 +353,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
             />
             <CleanGroupCard
               datasetId={dataset.id}
+              stageId={dataset.current_stage_id}
               group={suggestionGroups.duplicates}
               kind="duplicates"
               title="Duplicates"
@@ -361,6 +364,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
             {types > 0 && (
               <CleanGroupCard
                 datasetId={dataset.id}
+                stageId={dataset.current_stage_id}
                 group={suggestionGroups.type}
                 kind="type"
                 title="Type issues"
@@ -392,7 +396,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   )
 }
 
-function CleanGroupCard({ datasetId, group, kind, title, description, applying, onApply }) {
+function CleanGroupCard({ datasetId, stageId, group, kind, title, description, applying, onApply }) {
   const items = group?.columns || []
   const [selected, setSelected] = useState(() => items.map((item) => item.variable).filter(Boolean))
   const [action, setAction] = useState(() => recommendedGroupAction(kind, group, items).action)
@@ -409,7 +413,7 @@ function CleanGroupCard({ datasetId, group, kind, title, description, applying, 
     setOverrides(defaultOverrides(kind, items, recommendedGroupAction(kind, group, items).action))
     setAdvanced(false)
     setAiSuggestion(null)
-  }, [kind, JSON.stringify(items), group?.default_action, group?.default_keep])
+  }, [kind, stageId, JSON.stringify(items), group?.default_action, group?.default_keep])
 
   const duplicateCount = group?.count || 0
   const hasWork = kind === 'duplicates' ? duplicateCount > 0 : items.length > 0
@@ -443,7 +447,7 @@ function CleanGroupCard({ datasetId, group, kind, title, description, applying, 
       const payload = buildCleaningAiPayload(kind, group, items, selectedItems, recommendation, overrides, keep)
       const res = await api.aiExplain(
         datasetId,
-        `data-cleaning-${kind}-recommendation`,
+        `data-cleaning-${kind}-recommendation:${stageId || 'current'}`,
         payload,
         'Give plain-text advice for this cleaning issue. Recommend among the available SimuCast methods only. Do not apply changes. Explain the safest option and mention any columns that need different handling.',
         payload,
@@ -639,6 +643,7 @@ function buildCleaningAiPayload(kind, group, items = [], selectedItems = [], rec
   }
   return {
     issue_type: kind,
+    active_stage_id: group?.stage_id || null,
     affected_count: kind === 'duplicates' ? group?.count || 0 : items.length,
     selected_columns: selectedItems.map((item) => item.variable),
     system_group_recommendation: recommendation,

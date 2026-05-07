@@ -2229,18 +2229,21 @@ def clean_suggestions(ds_id):
             "missing": {
                 "kind": "missing",
                 "title": "Missing values",
+                "stage_id": ds.current_stage_id,
                 "columns": [x for x in suggestions if x.get("kind") == "missing"],
                 "default_action": "impute_mean",
             },
             "outliers": {
                 "kind": "outliers",
                 "title": "Outliers",
+                "stage_id": ds.current_stage_id,
                 "columns": [x for x in suggestions if x.get("kind") == "outliers"],
                 "default_action": "winsorize",
             },
             "type": {
                 "kind": "type",
                 "title": "Type issues",
+                "stage_id": ds.current_stage_id,
                 "columns": [x for x in suggestions if x.get("kind") == "type"],
                 "default_action": "convert_date",
             },
@@ -2249,6 +2252,7 @@ def clean_suggestions(ds_id):
         groups["duplicates"] = {
             "kind": "duplicates",
             "title": "Duplicates",
+            "stage_id": ds.current_stage_id,
             "count": duplicate_count,
             "columns": list(df.columns),
             "options": [
