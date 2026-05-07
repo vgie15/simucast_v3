@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { BusyOverlay, SkeletonTable } from './LoadingStates'
+import HelpButton from './HelpButton'
 
 export default function DataGridViewer({
   datasetId,
@@ -192,8 +193,12 @@ export default function DataGridViewer({
       />
       <div className="ax-modal-header">
         <div>
-          <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>
+          <p style={{ fontSize: 14, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
             Data grid{stageLabel ? ` - ${stageLabel}` : ''}
+            <HelpButton
+              title="Data grid"
+              text="This card shows the active dataset stage. You can inspect rows, edit values, and click column headers to rename columns or change detected types before running analysis."
+            />
           </p>
           <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
             {total.toLocaleString()} rows - {headerVars.length} columns

@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { InlineSpinner, SkeletonCards } from './LoadingStates'
+import HelpButton from './HelpButton'
 
 // Lightweight in-memory cache so navigating back to a page that already
 // rendered an explanation doesn't re-bill. Keyed by datasetId+step+payload-hash.
@@ -28,7 +29,7 @@ function cacheSet(k, v) {
   _cache.set(k, v)
 }
 
-function SparkleIcon({ size = 12 }) {
+export function SparkleIcon({ size = 12 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
       <path
@@ -55,107 +56,91 @@ export function ExplainButton({
   const [open, setOpen] = useState(false)
   const [text, setText] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [position, setPosition] = useState(null)
-  const popRef = useRef(null)
-  const buttonRef = useRef(null)
+  const [isSaved, setIsSaved] = useState(false)
+  const [isAI, setIsAI] = useState(true)
 
   useEffect(() => {
     if (!open) return
-    const onDocClick = (e) => {
-      if (
-        popRef.current &&
-        !popRef.current.contains(e.target) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(e.target)
-      ) setOpen(false)
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false)
     }
-    const onResize = () => setPosition(getPopoverPosition(buttonRef.current))
-    document.addEventListener('mousedown', onDocClick)
-    window.addEventListener('resize', onResize)
-    window.addEventListener('scroll', onResize, true)
+    document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      window.removeEventListener('resize', onResize)
-      window.removeEventListener('scroll', onResize, true)
+      document.removeEventListener('keydown', onKey)
     }
   }, [open])
 
   const toggle = async () => {
     const next = !open
     setOpen(next)
-    if (next) setPosition(getPopoverPosition(buttonRef.current))
     if (!next || text || loading) return
     const k = keyOf(datasetId, step, params, result, question)
     const cached = cacheGet(k)
     if (cached) {
-      setText(cached)
+      setText(cached.explanation || cached)
+      setIsSaved(cached.saved !== false)
+      setIsAI(cached.ai !== false)
       return
     }
     setLoading(true)
     try {
       const r = await api.aiExplain(datasetId, step, params, question, result)
       const explanation = r?.explanation || 'No explanation returned.'
-      cacheSet(k, explanation)
+      cacheSet(k, { explanation, saved: r?.saved !== false, ai: r?.ai !== false })
       setText(explanation)
+      setIsSaved(r?.saved !== false)
+      setIsAI(r?.ai !== false)
     } catch (err) {
       setText('The explanation could not be generated right now. You can continue using the built-in system guidance.')
+      setIsSaved(false)
+      setIsAI(false)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <span style={{ position: 'relative', display: 'inline-block' }}>
+    <span className="ax-ai-explain-wrap">
       <button
-        ref={buttonRef}
         type="button"
-        className={`ax-btn${size === 'mini' ? ' mini' : ''}`}
+        className={`ax-btn ax-ai-explain-btn${size === 'mini' ? ' mini' : ''}`}
         onClick={toggle}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
       >
         <SparkleIcon size={11} />
         {label}
       </button>
       {open && (
-        <div
-          ref={popRef}
-          style={{
-            position: 'fixed',
-            top: position?.top ?? 84,
-            left: position?.left ?? 24,
-            zIndex: 10000,
-            width: position?.width ?? 'min(520px, calc(100vw - 32px))',
-            maxHeight: position?.maxHeight ?? 'calc(100vh - 120px)',
-            overflow: 'auto',
-            padding: '14px 16px',
-            background: 'var(--color-background-primary)',
-            border: '0.5px solid var(--color-border-tertiary)',
-            borderRadius: 10,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-            fontSize: 12,
-            whiteSpace: 'pre-wrap',
-            color: 'var(--color-text-primary)',
-            lineHeight: 1.55,
-          }}
-        >
-          {loading ? <InlineSpinner label="Generating explanation..." /> : text}
+        <div className="ax-ai-explain-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
+          <div
+            className="ax-ai-explain-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="AI explanation"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="ax-ai-explain-head">
+              <div>
+                <p className="ax-ai-explain-title"><SparkleIcon size={13} /> AI explanation</p>
+                <p className="ax-ai-explain-meta">
+                  {loading
+                    ? 'Generating and saving this explanation...'
+                    : isSaved
+                      ? 'Saved for this project and available for reports.'
+                      : isAI
+                        ? 'Generated explanation.'
+                        : 'Built-in fallback explanation.'}
+                </p>
+              </div>
+              <button type="button" className="ax-btn mini" onClick={() => setOpen(false)}>Close</button>
+            </div>
+            <div className="ax-ai-explain-body">
+              {loading ? <InlineSpinner label="Generating explanation..." /> : text}
+            </div>
+          </div>
         </div>
       )}
     </span>
   )
-}
-
-function getPopoverPosition(button) {
-  if (!button || typeof window === 'undefined') return null
-  const rect = button.getBoundingClientRect()
-  const margin = 16
-  const preferredWidth = 520
-  const width = Math.min(preferredWidth, window.innerWidth - margin * 2)
-  let left = rect.right - width
-  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin))
-  const top = Math.min(rect.bottom + 8, window.innerHeight - 180)
-  const maxHeight = Math.max(180, window.innerHeight - top - margin)
-  return { top, left, width, maxHeight }
 }
 
 /**
@@ -194,14 +179,14 @@ export function AIInsightCard({
     const k = keyOf(datasetId, step, params, result, question)
     const cached = cacheGet(k)
     if (cached) {
-      setText(cached)
+      setText(cached.explanation || cached)
       setLoading(false)
       return
     }
     try {
       const r = await api.aiExplain(datasetId, step, params, question, result)
       const explanation = r?.explanation || 'No explanation returned.'
-      cacheSet(k, explanation)
+      cacheSet(k, { explanation, saved: r?.saved !== false, ai: r?.ai !== false })
       setText(explanation)
       setIsAI(r?.ai !== false)
     } catch (err) {
@@ -247,6 +232,10 @@ export function AIInsightCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <SparkleIcon />
           <span style={{ fontSize: 12, fontWeight: 500 }}>{title}</span>
+          <HelpButton
+            title={title}
+            text="This AI card gives a plain-language interpretation for the result beside it. Generated explanations are saved with the project so they can be reused later, including in reports."
+          />
           {!isAI && text && (
             <span
               className="ax-chip"
@@ -262,11 +251,11 @@ export function AIInsightCard({
         </div>
         <button
           type="button"
-          className="ax-btn mini"
+          className="ax-btn ax-ai-explain-btn mini"
           onClick={load}
           disabled={loading}
         >
-          {loading ? <InlineSpinner label="Generating..." /> : text ? 'Refresh' : 'Generate'}
+          {loading ? <InlineSpinner label="Generating..." /> : <><SparkleIcon size={11} /> {text ? 'Refresh' : 'AI explain'}</>}
         </button>
       </div>
       {loading && !text && <SkeletonCards count={1} />}

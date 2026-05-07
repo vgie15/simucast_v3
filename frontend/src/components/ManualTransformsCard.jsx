@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
+import HelpButton from './HelpButton'
 
 const TABS = [
   { key: 'merge', label: 'Merge columns' },
@@ -83,7 +84,13 @@ export default function ManualTransformsCard({ dataset, onApplied }) {
   return (
     <div className="ax-card" style={{ marginBottom: 16 }}>
       <div style={{ marginBottom: 8 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Manual transforms</p>
+        <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          Manual transforms
+          <HelpButton
+            title="Manual transforms"
+            text="Use this card for structural edits such as merging columns, splitting a column, dropping rows, or dropping columns. These are broad data-shaping actions; each applied change creates a reversible stage."
+          />
+        </p>
         <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
           Restructure your data with merge, split, drop-column, and drop-row actions. Rename columns or change types directly from the Data View headers. Each apply creates a new
           stage so the original is preserved.

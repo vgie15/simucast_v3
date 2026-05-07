@@ -4,6 +4,7 @@ import { api } from '../api'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
+import HelpButton from './HelpButton'
 
 const TESTS = [
   {
@@ -128,7 +129,13 @@ export default function TestsPage({ dataset }) {
       <h1 className="ax-page-title">Statistical Analysis</h1>
       <p className="ax-page-sub">Evaluate relationships, compare groups, and turn statistical results into decisions.</p>
 
-      <p className="ax-lbl">Test type</p>
+      <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        Test type
+        <HelpButton
+          title="Test type"
+          text="Use these cards to choose the statistical analysis. Each test answers a different question: group differences, category association, or numeric relationships."
+        />
+      </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8, marginBottom: 14 }}>
         {TESTS.map((t) => (
           <button
@@ -154,7 +161,13 @@ export default function TestsPage({ dataset }) {
             title="Running statistical test..."
             detail="Preparing variables, computing the result, and building interpretation-ready output."
           />
-          <p className="ax-lbl" style={{ marginTop: 0 }}>Setup</p>
+          <p className="ax-lbl" style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Setup
+            <HelpButton
+              title="Analysis setup"
+              text="Use this card to choose valid columns for the selected test. SimuCast recommends compatible pairs so you do not have to guess which variables belong together."
+            />
+          </p>
           {(kind === 't' || kind === 'anova') && (
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 170px) minmax(0, 1fr)', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
               <label style={{ color: 'var(--color-text-secondary)' }}>Group variable (categorical)</label>
@@ -201,8 +214,13 @@ export default function TestsPage({ dataset }) {
           )}
           {pairRecs.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
                 Recommended pairs <span style={{ color: 'var(--color-primary)' }}>System recommended</span>
+                <HelpButton
+                  title="Recommended pairs"
+                  text="These pairs are selected from the detected column types. For example, t-tests need one two-group category and one numeric measure, while correlation needs numeric variables."
+                  size={16}
+                />
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {pairRecs.map((rec, idx) => (
@@ -232,7 +250,9 @@ export default function TestsPage({ dataset }) {
         </div>
 
         <div className="ax-card">
-          <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px' }}>Recommended use</p>
+          <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            Recommended use
+          </p>
           <InfoRow label="Why this test" text={selectedTest.summary} />
           <InfoRow label="Use when" text={selectedTest.use} />
           <InfoRow label="Avoid when" text={selectedTest.avoid} />
@@ -330,7 +350,13 @@ function TestResult({ kind, result, setup, datasetId }) {
       <div className="ax-card" style={{ borderLeft: `3px solid ${summary.significant ? '#1D9E75' : '#888'}` }}>
         <div className="ax-row" style={{ marginBottom: 10, alignItems: 'flex-start' }}>
           <div>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Test result summary</p>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Test result summary
+              <HelpButton
+                title="Test result summary"
+                text="This card translates the statistical result into metrics, a decision about the null hypothesis, and a plain-language conclusion. Use the AI explanation for a deeper interpretation of the exact numbers."
+              />
+            </p>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{summary.subtitle}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -358,7 +384,13 @@ function TestResult({ kind, result, setup, datasetId }) {
       </div>
 
       <div className="ax-card">
-        <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px' }}>Simple predictive insight</p>
+        <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          Simple predictive insight
+          <HelpButton
+            title="Simple predictive insight"
+            text="This card converts the test output into a prediction-like statement, such as which group tends to be higher or whether two variables tend to move together. It is not a machine learning model."
+          />
+        </p>
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{summary.predictive}</p>
       </div>
 
@@ -376,7 +408,13 @@ function TestResult({ kind, result, setup, datasetId }) {
       )}
 
       <div className="ax-card" style={{ padding: 14 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Next step guidance</p>
+        <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          Next step guidance
+          <HelpButton
+            title="Next step guidance"
+            text="This card tells you how to use the statistical result in the next part of the workflow, usually modeling, deeper analysis, or reporting."
+          />
+        </p>
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>{summary.next}</p>
       </div>
     </div>
@@ -407,7 +445,13 @@ function CorrelationScatter({ result }) {
 
   return (
     <div className="ax-card">
-      <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>Relationship scatter plot</p>
+      <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        Relationship scatter plot
+        <HelpButton
+          title="Relationship scatter plot"
+          text="This card plots paired numeric values so you can visually inspect whether the relationship is linear, weak, strong, or affected by outliers."
+        />
+      </p>
       <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
         Visual check for {vars[0]} and {vars[1]}. The line shows the overall trend behind the correlation result.
       </p>
@@ -481,7 +525,13 @@ function GroupMeanBars({ means, measure }) {
   const max = Math.max(...means.map((m) => Math.abs(Number(m.value) || 0)), 1)
   return (
     <div className="ax-card">
-      <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px' }}>Group mean comparison</p>
+      <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        Group mean comparison
+        <HelpButton
+          title="Group mean comparison"
+          text="This card compares average numeric values across groups. It helps you see the direction and size of differences behind t-test or ANOVA results."
+        />
+      </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {means.map((m) => (
           <div key={m.label} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 70px', gap: 8, alignItems: 'center', fontSize: 12 }}>
@@ -503,6 +553,13 @@ function ContingencyTable({ result }) {
   const cols = rows.length ? Object.keys(result.contingency[rows[0]] || {}) : []
   return (
     <div className="ax-card" style={{ padding: 0, overflow: 'auto' }}>
+      <p style={{ fontSize: 13, fontWeight: 500, margin: '12px 12px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        Contingency table
+        <HelpButton
+          title="Contingency table"
+          text="This card shows how two categorical variables overlap. Counts show how many rows fall in each combination; percentages help compare category patterns."
+        />
+      </p>
       <table className="ax-tbl">
         <thead>
           <tr><th></th>{cols.map((c) => <th key={c}>{c}</th>)}</tr>
@@ -531,6 +588,13 @@ function CorrelationMatrix({ result }) {
   const vars = result.variables || []
   return (
     <div className="ax-card" style={{ padding: 0, overflow: 'auto' }}>
+      <p style={{ fontSize: 13, fontWeight: 500, margin: '12px 12px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        Correlation matrix
+        <HelpButton
+          title="Correlation matrix"
+          text="This card lists pairwise correlations. Values near 1 are strong positive relationships, near -1 are strong negative relationships, and near 0 are weak relationships."
+        />
+      </p>
       <table className="ax-tbl">
         <thead>
           <tr><th></th>{vars.map((v) => <th key={v}>{v}</th>)}</tr>

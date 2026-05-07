@@ -6,6 +6,7 @@ import { AIInsightCard, ExplainButton } from './AIExplainers'
 import { useDialog } from './DialogProvider'
 import { useAuth } from './AuthProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
+import HelpButton from './HelpButton'
 
 const ALGOS = [
   { key: 'logistic', label: 'Logistic Regression', task: 'classification', interpretable: true,
@@ -67,15 +68,10 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 
   const handleFixAction = (fix) => {
     if (!fix?.route) return
-    const sectionMap = {
-      manual_transforms: 'data-section-manual_transforms',
-      category_standardization: 'data-section-category_standardization',
-      target_options: 'models-step-1',
-      class_weight: 'models-step-4',
-      algorithms: 'models-step-5',
-    }
-    const sectionId = sectionMap[fix.section] || ''
-    if (fix.route === 'models') {
+    const target = fixTargetFromBackendFix(fix)
+    if (!target) return
+    if (target.page === 'models') {
+      const sectionId = target.section
       const el = document.getElementById(sectionId)
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -83,10 +79,10 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
       }
     } else if (dataset?.id) {
-      if (sectionId) {
-        window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify({ page: fix.route, section: sectionId, ts: Date.now() }))
+      if (target.section) {
+        window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify({ page: target.page, section: target.section, ts: Date.now() }))
       }
-      navigate(`/projects/${dataset.id}/${fix.route}`)
+      navigate(`/projects/${dataset.id}/${target.page}`)
     }
   }
 
@@ -484,10 +480,16 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       </div>
 
       {/* Step 3 — preprocessing plan */}
-      <Step n={3} title="Preprocessing plan &amp; readiness" disabled={!target || features.length === 0}>
+      <Step n={3} id="models-step-3" title="Preprocessing plan &amp; readiness" disabled={!target || features.length === 0}>
         <div id="fix-numeric-preprocessing" className="ax-card" style={{ padding: 12, marginBottom: 12, background: 'var(--color-background-secondary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-            <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>Encoding and scaling choices</p>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Encoding and scaling choices
+              <HelpButton
+                title="Encoding and scaling choices"
+                text="This card controls model preprocessing. Categorical features are encoded for model input; numeric scaling is recommended for linear/logistic models and optional for tree-based models."
+              />
+            </p>
             <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
           </div>
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
@@ -633,7 +635,13 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           />
           {(results.models || []).length > 0 && (
             <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
-              <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Tune parameters</p>
+              <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                Tune parameters
+                <HelpButton
+                  title="Tune parameters"
+                  text="This card lets you adjust meaningful algorithm settings after an initial training run. Tuning is optional and most useful when model health warns about overfitting or when candidate models perform similarly."
+                />
+              </p>
               <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
                 Defaults were used for the first training run. Tuning is optional; try it when model health warns about overfitting or when metrics are close between models.
               </p>
@@ -655,7 +663,13 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       {/* Previous models */}
       {models.length > 0 && (
         <>
-          <p className="ax-lbl" style={{ marginTop: 20 }}>Previous models</p>
+          <p className="ax-lbl" style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Previous models
+            <HelpButton
+              title="Previous models"
+              text="This card lists saved trained models. You can restore their settings, send them to What-if analysis, or delete old runs to keep the project clean."
+            />
+          </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {models.map((m) => (
               <div key={m.id} className="ax-card" style={{ padding: '10px 12px' }}>
@@ -690,6 +704,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 }
 
 function Step({ n, title, disabled, children, id }) {
+  const help = modelStepHelp(title)
   return (
     <div
       id={id}
@@ -713,11 +728,38 @@ function Step({ n, title, disabled, children, id }) {
         >
           {n}
         </span>
-        <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{title}</p>
+        <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {title}
+          {help && <HelpButton title={plainTitle(title)} text={help} />}
+        </p>
       </div>
       <div style={{ pointerEvents: disabled ? 'none' : 'auto' }}>{children}</div>
     </div>
   )
+}
+
+function plainTitle(value) {
+  return String(value || '').replace(/&amp;/g, '&')
+}
+
+function modelStepHelp(title) {
+  const text = plainTitle(title).toLowerCase()
+  if (text.includes('target')) {
+    return 'Use this card to choose the outcome column the model should predict. SimuCast detects whether the target is numeric for regression or categorical for classification.'
+  }
+  if (text.includes('features')) {
+    return 'Use this card to choose the input columns used to predict the target. Avoid IDs and leakage columns that directly reveal the answer.'
+  }
+  if (text.includes('preprocessing')) {
+    return 'Use this card to review encoding, scaling, readiness checks, warnings, and blocks before training. It helps prevent invalid model setups.'
+  }
+  if (text.includes('validation')) {
+    return 'Use this card to decide how much data is held out for testing. Classification options help keep class proportions and handle imbalance.'
+  }
+  if (text.includes('algorithms')) {
+    return 'Use this card to select only task-appropriate algorithms. Compare an interpretable baseline with tree-based models, then inspect metrics and model health.'
+  }
+  return ''
 }
 
 function RecommendationPanel({ title, source, children }) {
@@ -725,6 +767,11 @@ function RecommendationPanel({ title, source, children }) {
     <div className="ax-card" style={{ padding: '9px 10px', marginTop: 10, background: 'var(--color-background-secondary)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
         <strong style={{ fontSize: 12 }}>{title}</strong>
+        <HelpButton
+          title={title}
+          text="This recommendation card explains the system's suggested choice for this part of the modeling workflow. You can still change the setup manually."
+          size={16}
+        />
         <span className="ax-chip" style={{ color: 'var(--color-primary)', fontSize: 10 }}>{source}</span>
       </div>
       {children}
@@ -1116,7 +1163,13 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
         question="Which of these trained models looks most promising and why? Translate the metrics into plain English (good/mediocre/poor) and call out any red flags like overfitting or class imbalance."
         refreshKey={JSON.stringify(compareSummary)}
       />
-      <p className="ax-lbl">Comparison</p>
+      <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        Comparison
+        <HelpButton
+          title="Model comparison"
+          text="This card compares trained models using task-appropriate metrics. The best marker highlights the strongest metric, but you should still inspect model health and feature influence."
+        />
+      </p>
       <ComparisonTable models={models} activeIdx={activeIdx} onPick={setActiveIdx} />
       {skipped?.length > 0 && (
         <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '6px 0 12px' }}>
@@ -1269,7 +1322,13 @@ function ModelHealthCard({ model }) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>Model health</p>
+        <p style={{ fontSize: 13, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          Model health
+          <HelpButton
+            title="Model health"
+            text="This card checks whether a trained model looks reliable. It flags possible overfitting, underfitting, class imbalance, weak test performance, or small-sample risk and suggests next actions."
+          />
+        </p>
         <span
           className="ax-chip"
           style={{
@@ -1314,7 +1373,13 @@ function ModelDetail({ model }) {
     <>
       {impLabels.length > 0 && (
         <>
-          <p className="ax-lbl" style={{ marginTop: 0 }}>Feature influence</p>
+          <p className="ax-lbl" style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Feature influence
+            <HelpButton
+              title="Feature influence"
+              text="This card ranks original dataset columns by how much they influenced the selected model. Direction is shown when meaningful: increases raise the prediction/probability, decreases lower it."
+            />
+          </p>
           <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '-4px 0 8px' }}>
             Influence is aggregated to original dataset columns. "Increases" means higher values tend to raise the predicted value/probability; "Decreases" means they tend to lower it. Tree models show model-derived influence without a simple direction. Correlated features can affect these patterns.
           </p>
@@ -1550,17 +1615,52 @@ function routeToFixTarget(route) {
   const map = {
     'data.missing_values': { page: 'data', section: 'fix-cleaning-suggestions' },
     'data.cleaning_suggestions': { page: 'data', section: 'fix-cleaning-suggestions' },
-    'data.category_standardization': { page: 'data', section: 'fix-category-standardization' },
+    'data.category_standardization': { page: 'data', section: 'data-section-category_standardization' },
     'data.outliers': { page: 'data', section: 'fix-cleaning-suggestions' },
     'data.duplicates': { page: 'data', section: 'fix-cleaning-suggestions' },
-    'models.target_handling': { page: 'models', section: 'fix-target-handling' },
-    'models.validation_split': { page: 'models', section: 'fix-model-split' },
+    'data.manual_transforms': { page: 'data', section: 'data-section-manual_transforms' },
+    'models.target_handling': { page: 'models', section: 'models-step-1' },
+    'models.validation_split': { page: 'models', section: 'models-step-4' },
+    'models.class_weight': { page: 'models', section: 'models-step-4' },
+    'models.algorithms': { page: 'models', section: 'models-step-5' },
     'models.scaling': { page: 'models', section: 'fix-numeric-preprocessing' },
     'models.numeric_preprocessing': { page: 'models', section: 'fix-numeric-preprocessing' },
     'models.features': { page: 'models', section: 'fix-feature-selection' },
     'tests.correlation': { page: 'tests', section: 'fix-correlation-test' },
   }
   return map[route]
+}
+
+function fixTargetFromBackendFix(fix) {
+  if (!fix) return null
+  if (String(fix.route || '').includes('.')) {
+    return routeToFixTarget(fix.route)
+  }
+  const page = fix.route
+  const sectionMap = {
+    manual_transforms: { page: 'data', section: 'data-section-manual_transforms' },
+    cleaning_suggestions: { page: 'data', section: 'fix-cleaning-suggestions' },
+    missing_values: { page: 'data', section: 'fix-cleaning-suggestions' },
+    outliers: { page: 'data', section: 'fix-cleaning-suggestions' },
+    duplicates: { page: 'data', section: 'fix-cleaning-suggestions' },
+    category_standardization: { page: 'data', section: 'data-section-category_standardization' },
+    target_options: { page: 'models', section: 'models-step-1' },
+    target_handling: { page: 'models', section: 'models-step-1' },
+    features: { page: 'models', section: 'fix-feature-selection' },
+    feature_selection: { page: 'models', section: 'fix-feature-selection' },
+    numeric_preprocessing: { page: 'models', section: 'fix-numeric-preprocessing' },
+    scaling: { page: 'models', section: 'fix-numeric-preprocessing' },
+    validation_split: { page: 'models', section: 'models-step-4' },
+    class_weight: { page: 'models', section: 'models-step-4' },
+    algorithms: { page: 'models', section: 'models-step-5' },
+    correlation: { page: 'tests', section: 'fix-correlation-test' },
+  }
+  const mapped = sectionMap[fix.section]
+  if (mapped) return mapped
+  if (page === 'models') return { page: 'models', section: 'models-step-3' }
+  if (page === 'data') return { page: 'data', section: 'fix-cleaning-suggestions' }
+  if (page === 'tests') return { page: 'tests', section: 'fix-correlation-test' }
+  return null
 }
 
 function routeLabel(route) {

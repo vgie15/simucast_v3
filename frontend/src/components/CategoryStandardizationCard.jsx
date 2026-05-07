@@ -3,6 +3,7 @@ import { api } from '../api'
 import { useDialog } from './DialogProvider'
 import { InlineSpinner } from './LoadingStates'
 import HelpButton from './HelpButton'
+import { SparkleIcon } from './AIExplainers'
 
 export default function CategoryStandardizationCard({ dataset, onApplied }) {
   const dialog = useDialog()
@@ -282,8 +283,8 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
               <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
               <InfoDot text="System recommended means SimuCast grouped labels using exact values, case/spacing similarities, and common binary/value patterns. You can still edit labels or uncheck values before applying." />
             </div>
-            <button className="ax-btn mini" type="button" onClick={askAiForRecommendation} disabled={aiLoading}>
-              {aiLoading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+            <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={askAiForRecommendation} disabled={aiLoading}>
+              {aiLoading ? <InlineSpinner label="Asking..." /> : <><SparkleIcon size={11} /> AI explain</>}
             </button>
           </div>
           <AiSuggestionBox loading={aiLoading} suggestion={aiSuggestion} />

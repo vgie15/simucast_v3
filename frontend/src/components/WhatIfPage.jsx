@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
+import HelpButton from './HelpButton'
 
 export default function WhatIfPage({ dataset, activeModel }) {
   const dialog = useDialog()
@@ -60,7 +61,13 @@ export default function WhatIfPage({ dataset, activeModel }) {
         <p className="ax-page-sub">Train or choose a model on the Models page to enable what-if.</p>
         {availableModels.length > 0 && (
           <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Choose a model for What-if</p>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Choose a model for What-if
+              <HelpButton
+                title="Choose a model for What-if"
+                text="This card lets you pick any trained model that supports prediction. Once selected, SimuCast prepares the model inputs so you can test scenarios."
+              />
+            </p>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
               All trained models can be prepared for What-if. Tree-based models may change predictions in steps when inputs cross learned thresholds.
             </p>
@@ -130,8 +137,12 @@ export default function WhatIfPage({ dataset, activeModel }) {
       <div id="whatif-section-controls" className="ax-card" style={{ marginBottom: 14, padding: 16 }}>
         <div className="ax-row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
           <div>
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
               Predicted {isProb ? `probability${pred?.positive_class ? ` of ${pred.positive_class}` : pred?.predicted_class ? ` of ${pred.predicted_class}` : ''}` : modelFull.target}
+              <HelpButton
+                title="Prediction result"
+                text="This card shows the model prediction for the current scenario. The baseline compares against the original average/default inputs, while the scenario risk warns when values go outside the training data range."
+              />
             </p>
             <p style={{ fontSize: 32, fontWeight: 500, margin: '2px 0 0', lineHeight: 1 }}>
               {isProb ? `${pct}%` : pred?.prediction?.toFixed(3) ?? '-'}
@@ -189,7 +200,13 @@ export default function WhatIfPage({ dataset, activeModel }) {
         )}
       </div>
 
-      <p className="ax-lbl">Adjust feature values</p>
+      <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        Adjust feature values
+        <HelpButton
+          title="Adjust feature values"
+          text="Use these controls to change the original model features and immediately see how the trained model prediction responds. Numeric controls show the observed range from training data."
+        />
+      </p>
       <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: -6 }}>
         See how dataset-learned values affect the prediction. Numeric controls show the observed range and mean from the training data.
       </p>
@@ -283,7 +300,13 @@ export default function WhatIfPage({ dataset, activeModel }) {
 
       {(baseline || scenarios.length > 0) && (
         <>
-          <p className="ax-lbl" style={{ marginTop: 14 }}>Scenario compare</p>
+          <p className="ax-lbl" style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Scenario compare
+            <HelpButton
+              title="Scenario compare"
+              text="This section compares the baseline, current inputs, and saved scenarios. Clicking a saved scenario loads its values back into the adjustment controls."
+            />
+          </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
             {baseline && <ScenarioCard name="Baseline" prediction={baseline} inputs={baseline.inputs} />}
             {pred && <ScenarioCard name="Current inputs" prediction={pred} baseline={baseline} extrapolation={extrapolation} inputs={inputs} active />}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'
+import HelpButton from './HelpButton'
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -175,7 +176,13 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
       <div className="ax-panel-sticky-header">
         <div className="ax-row" style={{ marginBottom: 8 }}>
           <div>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Documentation</p>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Documentation
+              <HelpButton
+                title="Documentation"
+                text="This card records the project audit trail: data preparation steps, analyses, model runs, scenarios, reports, notes, and undo/restore actions. These entries are used in reports and help explain what was done."
+              />
+            </p>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
               Project actions for methods, audit trail, and reports.
             </p>

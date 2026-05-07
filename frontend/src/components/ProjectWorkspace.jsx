@@ -228,7 +228,9 @@ function NextPagePrompt({ activeTab, datasetId }) {
   return (
     <div className="ax-card ax-next-card">
       <div>
-        <p style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Ready for the next step?</p>
+        <p style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
+          Ready for the next step?
+        </p>
         <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
           {copy[activeTab] || 'Continue the workflow on the next page.'}
         </p>

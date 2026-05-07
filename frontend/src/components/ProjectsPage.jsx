@@ -4,6 +4,7 @@ import { api } from '../api'
 import { useDialog } from './DialogProvider'
 import { useAuth } from './AuthProvider'
 import NewProjectModal from './NewProjectModal'
+import HelpButton from './HelpButton'
 
 export default function ProjectsPage() {
   const [datasets, setDatasets] = useState([])
@@ -68,7 +69,13 @@ export default function ProjectsPage() {
         </p>
       )}
 
-      <p className="ax-lbl" style={{ marginTop: 16 }}>All projects</p>
+      <p className="ax-lbl" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+        All projects
+        <HelpButton
+          title="All projects"
+          text="This card list contains the projects available to the current account or guest session. Opening a project returns you to its dataset, analyses, models, and documentation."
+        />
+      </p>
       {datasets.length === 0 ? (
         <div className="ax-card">
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>

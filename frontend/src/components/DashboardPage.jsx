@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from './AuthProvider'
 import NewProjectModal from './NewProjectModal'
+import HelpButton from './HelpButton'
 
 export default function DashboardPage() {
   const [datasets, setDatasets] = useState([])
@@ -49,7 +50,13 @@ export default function DashboardPage() {
 
       <section style={{ marginBottom: 20 }}>
         <div className="ax-row" style={{ marginBottom: 8 }}>
-          <p className="ax-lbl" style={{ margin: 0 }}>Recent projects</p>
+          <p className="ax-lbl" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Recent projects
+            <HelpButton
+              title="Recent projects"
+              text="This card group lists the newest datasets/projects you have opened in SimuCast. Open one to continue cleaning, analysis, modeling, what-if scenarios, or reporting."
+            />
+          </p>
           <Link to="/projects" style={{ fontSize: 11, color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
             View all →
           </Link>
@@ -84,7 +91,13 @@ export default function DashboardPage() {
 
       <section>
         <div className="ax-row" style={{ marginBottom: 8 }}>
-          <p className="ax-lbl" style={{ margin: 0 }}>Recent files</p>
+          <p className="ax-lbl" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Recent files
+            <HelpButton
+              title="Recent files"
+              text="This card group lists uploaded source files. Each file is attached to a project and can be reopened from here."
+            />
+          </p>
           <Link to="/files" style={{ fontSize: 11, color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
             View all →
           </Link>
@@ -133,8 +146,9 @@ export default function DashboardPage() {
 function StatCard({ label, value, small }) {
   return (
     <div className="ax-card">
-      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
         {label}
+        <HelpButton title={label} text={dashboardStatHelp(label)} size={16} />
       </p>
       <p
         style={{
@@ -150,4 +164,11 @@ function StatCard({ label, value, small }) {
       </p>
     </div>
   )
+}
+
+function dashboardStatHelp(label) {
+  if (label === 'Projects') return 'The number of projects currently visible for this account or guest session.'
+  if (label === 'Total rows') return 'The total number of dataset rows across the projects currently visible.'
+  if (label === 'Latest project') return 'The most recently listed project so you can quickly return to recent work.'
+  return 'Dashboard summary value.'
 }

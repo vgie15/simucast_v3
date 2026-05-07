@@ -45,12 +45,29 @@ export function AuthProvider({ children }) {
 
   const saveSession = useCallback((payload) => {
     const next = payload?.session || payload
-    setSession(next || null)
-    api.setSessionToken(next?.token || '')
-    // Sync localStorage slot flag from backend usage_count
-    if (next?.is_guest && (next?.usage_count ?? 0) >= 1) {
-      markGuestSlotUsed()
-    }
+    setSession((current) => {
+      if (!next) {
+        api.setSessionToken('')
+        return null
+      }
+      const sameSession = !!current && (!next.token || current.token === next.token)
+      const merged = sameSession
+        ? {
+            ...current,
+            ...next,
+            token: next.token || current.token,
+            user_id: next.user_id ?? current.user_id,
+            email: next.email ?? current.email,
+            full_name: next.full_name ?? current.full_name,
+          }
+        : next
+      api.setSessionToken(merged?.token || '')
+      // Sync localStorage slot flag from backend usage_count
+      if (merged?.is_guest && (merged?.usage_count ?? 0) >= 1) {
+        markGuestSlotUsed()
+      }
+      return merged || null
+    })
   }, [])
 
   const ensureGuest = useCallback(async () => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'
+import HelpButton from './HelpButton'
 
 /**
  * ExpandPage
@@ -95,6 +96,10 @@ export default function ExpandPage({ dataset, setDataset }) {
       <div className="ax-card" style={{ marginBottom: 12, padding: 14, background: isSmall ? 'var(--color-accent-light)' : 'var(--color-background-secondary)' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <strong style={{ fontSize: 13 }}>{isSmall ? 'Expansion may help' : 'Expansion is optional'}</strong>
+          <HelpButton
+            title="Expansion recommendation"
+            text="This card explains whether row expansion is useful for the current dataset. Expansion is optional: bootstrap is safer for preserving relationships, while synthetic generation adds more varied rows but may weaken relationships."
+          />
           <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
         </div>
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
@@ -125,7 +130,13 @@ export default function ExpandPage({ dataset, setDataset }) {
       )}
 
       <div id="expand-section-controls" className="ax-card" style={{ marginBottom: 16 }}>
-        <p className="ax-lbl" style={{ margin: '0 0 6px' }}>Method</p>
+        <p className="ax-lbl" style={{ margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          Method
+          <HelpButton
+            title="Expansion controls"
+            text="Use this card to choose the expansion method, target row count, and preview drift before applying. The preview helps check whether generated rows still resemble the original dataset."
+          />
+        </p>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <MethodCard
             active={method === 'bootstrap'}

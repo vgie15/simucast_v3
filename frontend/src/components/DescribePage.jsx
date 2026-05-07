@@ -74,7 +74,6 @@ export default function DescribePage({ dataset }) {
 
   const numericStats = (result?.stats || []).filter((s) => s.kind === 'numeric')
   const categoricalStats = (result?.stats || []).filter((s) => s.kind === 'categorical')
-  const recommendedVars = recommendDescribeVariables(dataset.variables || [])
   const histograms = result?.histograms || (result?.histogram ? { [result.histogram.variable]: result.histogram } : {})
   const selectedHistogram = histograms[chartVariable] || result?.histogram
   const histogramInsight = selectedHistogram ? describeHistogram(selectedHistogram, numericStats) : null
@@ -84,11 +83,10 @@ export default function DescribePage({ dataset }) {
       <h1 className="ax-page-title">Descriptive statistics</h1>
       <p className="ax-page-sub">Summarize variables, interpret distributions, and identify patterns worth testing next.</p>
 
-      <p id="describe-section-variables" className="ax-lbl">Variables - tap to toggle</p>
+      <p id="describe-section-variables" className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        Variables - tap to toggle
+      </p>
       <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-        <button className="ax-btn" type="button" onClick={() => setSelected(recommendedVars)}>
-          Use recommended variables
-        </button>
         <button className="ax-btn" type="button" onClick={() => setSelected((dataset.variables || []).map((v) => v.name))}>
           Select all
         </button>
@@ -165,7 +163,13 @@ export default function DescribePage({ dataset }) {
 
           {numericStats.length > 0 && (
             <>
-              <p className="ax-lbl">Numeric summary</p>
+              <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Numeric summary
+                <HelpButton
+                  title="Numeric summary"
+                  text="This card summarizes numeric variables with count, average, spread, quartiles, range, and skew. Use it to spot unusual values, wide variation, or skew before tests and modeling."
+                />
+              </p>
               <SummaryExplainer
                 title="How to read numeric summaries"
                 text="Mean is the average, SD shows spread, median is the middle value, range shows minimum to maximum, and skew describes whether values lean low or high."
@@ -200,7 +204,13 @@ export default function DescribePage({ dataset }) {
 
           {categoricalStats.length > 0 && (
             <>
-              <p className="ax-lbl">Categorical summary</p>
+              <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Categorical summary
+                <HelpButton
+                  title="Categorical summary"
+                  text="This card summarizes category columns by valid count, number of unique labels, dominant label, and distribution. Use it to check imbalance and messy labels."
+                />
+              </p>
               <SummaryExplainer
                 title="How to read categorical summaries"
                 text="Unique values count the labels present. Most common and share show whether one category dominates or whether the distribution is balanced."
@@ -229,7 +239,13 @@ export default function DescribePage({ dataset }) {
 
           {selectedHistogram && (
             <>
-              <p className="ax-lbl">Distribution</p>
+              <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Distribution
+                <HelpButton
+                  title="Distribution chart"
+                  text="This card visualizes one numeric variable at a time. Switch the selected variable to compare shapes, concentration, and possible unusual ranges."
+                />
+              </p>
               <div className="ax-card" style={{ marginBottom: 14 }}>
                 <div className="ax-row" style={{ marginBottom: 10 }}>
                   <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{selectedHistogram.variable}</p>
@@ -271,7 +287,13 @@ export default function DescribePage({ dataset }) {
 
           {corrResult?.variables?.length >= 2 && (
             <>
-              <p className="ax-lbl">Correlation overview</p>
+              <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Correlation overview
+                <HelpButton
+                  title="Correlation overview"
+                  text="This card shows how numeric variables move together. Stronger colors mean stronger relationships; use it to decide which pairs are worth testing or modeling."
+                />
+              </p>
               <div className="ax-card" style={{ marginBottom: 14 }}>
                 <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>
                   Numeric relationship preview <InfoIcon text="Green means a positive relationship, red means a negative relationship, and stronger color means a stronger correlation. Values near 0 are weak." />
@@ -291,7 +313,13 @@ export default function DescribePage({ dataset }) {
           )}
 
           <div className="ax-card" style={{ padding: 14 }}>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Next step recommendation</p>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Next step recommendation
+              <HelpButton
+                title="Next step recommendation"
+                text="This card connects descriptive results to the next workflow stage. It suggests whether relationship tests, group comparisons, or modeling are the natural next move."
+              />
+            </p>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
               Use Analysis next to check whether these patterns are statistically meaningful. Correlation is useful for numeric relationships; group tests are useful when comparing outcomes across categories.
             </p>
@@ -359,7 +387,9 @@ function VariableCard({ title, type, tags, metrics, insight, distribution, expan
     <div className="ax-card" style={{ padding: 12 }}>
       <div className="ax-row" style={{ alignItems: 'flex-start', marginBottom: 8 }}>
         <div>
-          <p style={{ fontSize: 13, fontWeight: 500, margin: 0, fontFamily: 'var(--font-mono)' }}>{title}</p>
+          <p style={{ fontSize: 13, fontWeight: 500, margin: 0, fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {title}
+          </p>
           <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>{type}</p>
         </div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -408,12 +438,6 @@ function VariableCard({ title, type, tags, metrics, insight, distribution, expan
       )}
     </div>
   )
-}
-
-function recommendDescribeVariables(variables = []) {
-  const numeric = variables.filter((v) => ['numeric', 'int', 'float', 'binary'].includes(v.dtype)).map((v) => v.name)
-  const categorical = variables.filter((v) => ['category', 'text'].includes(v.dtype)).map((v) => v.name)
-  return [...numeric.slice(0, 3), ...categorical.slice(0, 2)]
 }
 
 function buildKeyInsights(numericStats, categoricalStats) {

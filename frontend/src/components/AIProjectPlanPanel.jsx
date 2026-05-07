@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { BusyOverlay, SkeletonCards } from './LoadingStates'
+import HelpButton from './HelpButton'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
 const PLAN_CACHE_VERSION = 'v4'
@@ -240,37 +241,32 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       />
 
       <div className="ax-panel-sticky-header">
-        <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-expanded={!collapsed}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              font: 'inherit',
-              color: 'inherit',
-              textAlign: 'left',
-            }}
-          >
-            <Chevron open={!collapsed} />
-            <span style={{ fontSize: 16, fontWeight: 800 }}>
-              {isAI ? 'AI Guided Plan' : 'System Guided Plan'}
-            </span>
-          </button>
+        <div className="ax-plan-panel-head" style={{ marginBottom: collapsed ? 0 : 8 }}>
+          <div className="ax-plan-title-wrap">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-expanded={!collapsed}
+              className="ax-plan-title-button"
+            >
+              <Chevron open={!collapsed} />
+              <span>{isAI ? 'AI Guided Plan' : 'System Guided Plan'}</span>
+            </button>
+            <HelpButton
+              title="Guided Plan"
+              text="This card orders the recommended workflow for the current project. The orange card is the current step; completed, stale, optional, and skipped steps are kept calmer so you can focus on what to do next."
+            />
+          </div>
           {!collapsed && (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div className="ax-plan-head-actions">
               <button className="ax-btn mini" type="button" onClick={() => setExpanded(true)} disabled={!plan}>
                 Expand plan
               </button>
-              <button className="ax-btn mini" type="button" onClick={() => load(true)} disabled={loading}>
-                Refresh
-              </button>
+              {mode === 'auto' && (
+                <button className="ax-btn mini" type="button" onClick={() => load(true)} disabled={loading}>
+                  {loading ? 'Generating...' : 'Retry AI'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -301,6 +297,12 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           {plan?.summary && (
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
               {plan.summary}
+            </p>
+          )}
+
+          {mode === 'system' && plan && (
+            <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '-4px 0 10px' }}>
+              Built-in workflow updates automatically with project changes.
             </p>
           )}
 
@@ -592,6 +594,10 @@ function GuidedPlanModal({ isAI, mode, error, summary, items, nextStepId, onClos
               {mode === 'auto' && isAI ? 'AI generated' : 'Built-in workflow'} - {items.length} ordered steps
             </p>
           </div>
+          <HelpButton
+            title="Full Guided Plan"
+            text="This expanded view shows every workflow step, its status, why it matters, and the exact SimuCast feature to open. Actions here use the same routing and card highlight as the sidebar plan."
+          />
           <button className="ax-btn" type="button" onClick={onClose}>Close</button>
         </div>
         {error && (

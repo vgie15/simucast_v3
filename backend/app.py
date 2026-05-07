@@ -5049,6 +5049,52 @@ def ai_recommend(ds_id):
         s.close()
 
 
+def _saved_ai_explanation(session, ds_id, cache_key):
+    rows = (
+        session.query(Analysis)
+        .filter_by(dataset_id=ds_id, kind="ai_explanation")
+        .order_by(Analysis.created_at.desc())
+        .limit(80)
+        .all()
+    )
+    for row in rows:
+        cfg = jload(row.config) or {}
+        if cfg.get("cache_key") == cache_key:
+            result = jload(row.result) or {}
+            return {
+                "analysis_id": row.id,
+                "ai": result.get("ai", True),
+                "explanation": result.get("explanation") or "",
+            }
+    return None
+
+
+def _store_ai_explanation(session, ds_id, cache_key, step, params, question, source_result, explanation, is_ai, stage_id):
+    existing = _saved_ai_explanation(session, ds_id, cache_key)
+    if existing:
+        return existing.get("analysis_id")
+    analysis_id = str(uuid.uuid4())
+    session.add(Analysis(
+        id=analysis_id,
+        dataset_id=ds_id,
+        kind="ai_explanation",
+        config=jdump({
+            "cache_key": cache_key,
+            "stage_id": stage_id,
+            "step": step,
+            "params": params,
+            "question": question,
+        }),
+        result=jdump({
+            "ai": bool(is_ai),
+            "explanation": explanation,
+            "source_result": source_result,
+        }),
+    ))
+    session.commit()
+    return analysis_id
+
+
 @app.route("/api/datasets/<ds_id>/ai/explain", methods=["POST"])
 def ai_explain(ds_id):
     """Free-form 'explain this' for a step the UI is showing the user.
@@ -5080,6 +5126,17 @@ def ai_explain(ds_id):
         if cached is not None:
             return jsonify(cached)
 
+        saved = _saved_ai_explanation(s, ds_id, cache_key)
+        if saved is not None:
+            response = {
+                "ai": bool(saved.get("ai", True)),
+                "explanation": saved.get("explanation") or "",
+                "saved": True,
+                "analysis_id": saved.get("analysis_id"),
+            }
+            _cache_put(_AI_CACHE, cache_key, response)
+            return jsonify(response)
+
         df = df_from_dataset(ds, s)
         variables = _current_variables(ds, s)
         profile = _dataset_profile(ds, df, variables)
@@ -5108,7 +5165,19 @@ def ai_explain(ds_id):
         prompt = "\n".join(parts)
         try:
             text = ai_call(profile, prompt, system=system, max_tokens=300)
-            response = {"ai": True, "explanation": text}
+            analysis_id = _store_ai_explanation(
+                s,
+                ds_id,
+                cache_key,
+                step,
+                params,
+                question,
+                result,
+                text,
+                True,
+                ds.current_stage_id,
+            )
+            response = {"ai": True, "explanation": text, "saved": True, "analysis_id": analysis_id}
             _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
             return jsonify(response)
         except Exception as e:
@@ -5524,6 +5593,7 @@ def build_report(ds_id):
     sections = body.get("sections") or ["summary", "descriptives", "tests", "models"]
     s = db()
     try:
+        sess, user = _auth_from_request(s)
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
@@ -5546,6 +5616,7 @@ def build_report(ds_id):
         }
         latest_describe = next((a for a in reversed(analyses) if a.kind == "describe"), None)
         tests_ = [a for a in analyses if a.kind.startswith("test_")]
+        ai_explanations = [a for a in analyses if a.kind == "ai_explanation"]
 
         if "summary" in sections:
             report["sections"].append({
@@ -5589,22 +5660,37 @@ def build_report(ds_id):
                 "body": _feature_influence_report_text(models),
             })
         if "ai_interpretation" in sections:
-            report["sections"].append({
-                "title": "AI interpretation",
-                "body": "AI interpretation is not available yet. The report currently uses rule-based explanations so it remains understandable without an AI connection.",
-            })
+            report["sections"].append(_ai_explanations_report_section(ai_explanations))
         if "documentation" in sections:
             report["sections"].append({
                 "title": "Appendix: Project actions",
                 "body": _documentation_summary_text(activity),
                 "items": [activity_payload(a) for a in activity],
             })
+        report_artifact_id = None
+        if user:
+            report_artifact_id = str(uuid.uuid4())
+            report["artifact_id"] = report_artifact_id
+            s.add(Analysis(
+                id=report_artifact_id,
+                dataset_id=ds_id,
+                kind="report",
+                config=jdump(clean_json({"sections": sections})),
+                result=jdump(clean_json(report)),
+            ))
         log_activity(
             s,
             ds_id,
             "report",
             "Generated report",
-            detail={"category": "report", "action_type": "generate_report", "sections": sections},
+            detail={
+                "category": "report",
+                "action_type": "generate_report",
+                "sections": sections,
+                "persisted": bool(user),
+            },
+            ref_type="analysis" if report_artifact_id else None,
+            ref_id=report_artifact_id,
         )
         return jsonify(clean_json(report))
     finally:
@@ -5636,6 +5722,41 @@ def _auto_summary(ds, analyses, models):
         bits.append("The recorded statistical analyses did not find strong statistical evidence at p < 0.05.")
     bits.append("Detailed project actions are placed in the appendix so the main report stays focused on findings and interpretation.")
     return " ".join(bits)
+
+
+def _ai_explanations_report_section(explanations):
+    saved = []
+    for item in explanations[-8:]:
+        cfg = jload(item.config) or {}
+        result = jload(item.result) or {}
+        text = (result.get("explanation") or "").strip()
+        if not text:
+            continue
+        saved.append({
+            "kind": cfg.get("step") or "AI explanation",
+            "summary": _shorten(text, 360),
+            "result": {"interpretation": text},
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+        })
+    if not saved:
+        return {
+            "title": "AI interpretation",
+            "body": "No saved AI explanations are available yet. Use AI explain on result cards to include those explanations in future reports.",
+            "items": [],
+        }
+    body = "Saved AI explanations from result cards are included below so the report can reuse the interpretations already generated during analysis."
+    return {
+        "title": "AI interpretation",
+        "body": body,
+        "items": saved,
+    }
+
+
+def _shorten(text, limit=240):
+    text = " ".join(str(text or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
 
 
 def _describe_report_text(result):

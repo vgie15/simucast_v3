@@ -8,6 +8,7 @@ import CategoryStandardizationCard from './CategoryStandardizationCard'
 import { useDialog } from './DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 import HelpButton from './HelpButton'
+import { SparkleIcon } from './AIExplainers'
 
 export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const dialog = useDialog()
@@ -220,7 +221,13 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         <div className="ax-card" style={{ marginBottom: 16 }}>
           <div className="ax-row" style={{ alignItems: 'center' }}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Workbook sheet</p>
+              <p style={{ fontSize: 13, fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                Workbook sheet
+                <HelpButton
+                  title="Workbook sheet"
+                  text="Use this card when an uploaded Excel file has multiple sheets. Switching sheets reloads the data preview, detected types, suggested fixes, and downstream project state."
+                />
+              </p>
               <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
                 Select which Excel sheet powers the active dataset.
               </p>
@@ -243,7 +250,13 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       <div id="data-section-raw_data" className="ax-card" style={{ marginBottom: 16 }}>
         <div className="ax-row">
           <div>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Raw data</p>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Raw data
+              <HelpButton
+                title="Raw data"
+                text="Use this card to confirm which dataset stage you are viewing and export the current cleaned data as CSV. This is the handoff point for checking or sharing the prepared dataset."
+              />
+            </p>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
               Browse, inspect, and export the active dataset.
             </p>
@@ -304,7 +317,13 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
           steps={['Applying grouped fixes', 'Refreshing dataset preview', 'Updating documentation']}
         />
         <div className="ax-row" style={{ marginBottom: 8 }}>
-          <p className="ax-lbl" style={{ margin: 0 }}>Suggested fixes by issue type</p>
+          <p className="ax-lbl" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Suggested fixes by issue type
+            <HelpButton
+              title="Suggested fixes"
+              text="This section groups data quality issues into missing values, outliers, duplicates, and type issues. Each card explains what columns are affected, what method is recommended, and why before applying a documented cleanup step."
+            />
+          </p>
           {suggestions.length > 0 && (
             <button className="ax-btn prim" onClick={applyAllSuggestions} disabled={applyingAll || suggestionsLoading}>
               {applyingAll ? <InlineSpinner label="Applying..." /> : 'Apply all'}
@@ -588,9 +607,17 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
 }
 
 function StatCard({ label, value }) {
+  const help = {
+    Missing: 'Shows how many columns currently have blank or missing values that may need imputation, dropping, or review.',
+    Outliers: 'Shows how many numeric columns currently contain extreme values that may distort summaries, tests, and models.',
+    Duplicates: 'Shows the number of exact duplicate rows detected in the active dataset stage.',
+  }
   return (
     <div style={{ background: 'var(--color-background-primary)', borderRadius: 6, padding: 12, border: '0.5px solid var(--color-border-tertiary)' }}>
-      <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, display: 'flex', alignItems: 'center', gap: 5 }}>
+        {label}
+        <HelpButton title={`${label} count`} text={help[label]} size={16} />
+      </p>
       <p style={{ fontSize: 22, fontWeight: 500, margin: '4px 0 0' }}>{value}</p>
     </div>
   )
@@ -606,8 +633,8 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
   return (
     <div style={{ marginTop: suggestion ? 8 : 0 }}>
       {onAsk && (
-        <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
-          {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={onAsk} disabled={loading}>
+          {loading ? <InlineSpinner label="Asking..." /> : <><SparkleIcon size={11} /> AI explain</>}
         </button>
       )}
       {suggestion && (
@@ -779,8 +806,8 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
           <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
           <InfoDot text="System recommended means SimuCast selected this method using the current dataset profile, column type, missing count, skew, and outlier checks. You can still change it manually." />
         </div>
-        <button className="ax-btn mini" type="button" onClick={onAskAi} disabled={aiLoading}>
-          {aiLoading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={onAskAi} disabled={aiLoading}>
+          {aiLoading ? <InlineSpinner label="Asking..." /> : <><SparkleIcon size={11} /> AI explain</>}
         </button>
       </div>
       {groups.map((group) => {
@@ -892,8 +919,8 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
           <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
           <InfoDot text="System recommended means SimuCast selected this action from the current duplicate scan. You can still choose which duplicate occurrence to keep." />
         </div>
-        <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
-          {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={onAsk} disabled={loading}>
+          {loading ? <InlineSpinner label="Asking..." /> : <><SparkleIcon size={11} /> AI explain</>}
         </button>
       </div>
       <div
@@ -1016,12 +1043,12 @@ function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
         <InfoDot text={info} />
       </div>
       <button
-        className="ax-btn mini"
+        className="ax-btn ax-ai-explain-btn mini"
         type="button"
         onClick={onAsk}
         disabled={loading}
       >
-        {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        {loading ? <InlineSpinner label="Asking..." /> : <><SparkleIcon size={11} /> AI explain</>}
       </button>
     </div>
   )
