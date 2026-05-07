@@ -3704,16 +3704,23 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             raise ValueError(f"algorithm '{algo}' not supported for classification")
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
+        y_train_pred = clf.predict(X_train)
         metrics = {
             "task": "classification",
+            "train_accuracy": float(accuracy_score(y_train, y_train_pred)),
+            "train_precision": float(precision_score(y_train, y_train_pred, average="weighted", zero_division=0)),
+            "train_recall": float(recall_score(y_train, y_train_pred, average="weighted", zero_division=0)),
+            "train_f1": float(f1_score(y_train, y_train_pred, average="weighted", zero_division=0)),
             "accuracy": float(accuracy_score(y_test, y_pred)),
             "precision": float(precision_score(y_test, y_pred, average="weighted", zero_division=0)),
             "recall": float(recall_score(y_test, y_pred, average="weighted", zero_division=0)),
             "f1": float(f1_score(y_test, y_pred, average="weighted", zero_division=0)),
             "split": plan.get("split"),
+            "split_rows": {"train": int(len(X_train)), "test": int(len(X_test))},
             "class_weight": plan.get("class_weight"),
             "model_params": params,
         }
+        metrics["generalization_gap"] = float(metrics["train_accuracy"] - metrics["accuracy"])
         if len(np.unique(y)) == 2 and hasattr(clf, "predict_proba"):
             try:
                 y_proba = clf.predict_proba(X_test)[:, 1]
@@ -3732,14 +3739,20 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             raise ValueError(f"algorithm '{algo}' not supported for regression")
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
+        y_train_pred = clf.predict(X_train)
         metrics = {
             "task": "regression",
+            "train_r2": float(r2_score(y_train, y_train_pred)),
+            "train_rmse": float(np.sqrt(mean_squared_error(y_train, y_train_pred))),
+            "train_mae": float(np.mean(np.abs(y_train - y_train_pred))),
             "r2": float(r2_score(y_test, y_pred)),
             "rmse": float(np.sqrt(mean_squared_error(y_test, y_pred))),
             "mae": float(np.mean(np.abs(y_test - y_pred))),
             "split": plan.get("split"),
+            "split_rows": {"train": int(len(X_train)), "test": int(len(X_test))},
             "model_params": params,
         }
+        metrics["generalization_gap"] = float(metrics["train_r2"] - metrics["r2"])
 
     influence = _feature_influence_from_model(clf, X.columns.tolist(), features, algo)
 
@@ -5301,6 +5314,36 @@ def _save_analysis(session, ds_id, kind, config, result):
     )
     session.commit()
     return a
+
+
+@app.route("/api/datasets/<ds_id>/analyses", methods=["GET"])
+def list_analyses(ds_id):
+    """Return saved analysis artifacts so workflow pages can restore prior output."""
+    kind = (request.args.get("kind") or "").strip()
+    limit = min(max(_parse_num(request.args.get("limit"), 20, int), 1), 100)
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        q = s.query(Analysis).filter_by(dataset_id=ds_id)
+        if kind:
+            q = q.filter_by(kind=kind)
+        analyses = q.order_by(Analysis.created_at.desc()).limit(limit).all()
+        return jsonify({
+            "analyses": [
+                {
+                    "id": a.id,
+                    "kind": a.kind,
+                    "config": jload(a.config) or {},
+                    "result": jload(a.result) or {},
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in analyses
+            ]
+        })
+    finally:
+        s.close()
 
 
 

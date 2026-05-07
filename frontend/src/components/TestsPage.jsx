@@ -46,12 +46,43 @@ export default function TestsPage({ dataset }) {
   const [corrVars, setCorrVars] = useState([])
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [restoring, setRestoring] = useState(false)
 
   const variables = dataset?.variables || []
   const numericVars = variables.filter((v) => ['numeric', 'int', 'float', 'binary'].includes(v.dtype))
   const categoricalVars = variables.filter((v) => ['category', 'binary'].includes(v.dtype))
   const selectedTest = TESTS.find((t) => t.key === kind) || TESTS[0]
   const canRun = kind === 'corr' ? corrVars.length >= 2 : kind === 'chi' ? varA && varB : group && measure
+
+  useEffect(() => {
+    if (!dataset?.id) return
+    let alive = true
+    setRestoring(true)
+    api.listAnalyses(dataset.id, '', 20)
+      .then((r) => {
+        if (!alive) return
+        const latest = (r.analyses || []).find((a) => String(a.kind || '').startsWith('test_'))
+        if (!latest) {
+          setResult(null)
+          return
+        }
+        const restoredKind = String(latest.kind || '').replace(/^test_/, '')
+        const config = latest.config || {}
+        setKind(restoredKind || 't')
+        setResult(latest.result || null)
+        setGroup(config.group || '')
+        setMeasure(config.measure || '')
+        setVarA(config.var_a || '')
+        setVarB(config.var_b || '')
+        setCorrVars(config.variables || [])
+      })
+      .finally(() => {
+        if (alive) setRestoring(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [dataset?.id])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -183,7 +214,7 @@ export default function TestsPage({ dataset }) {
         </div>
       </div>
 
-      {loading && !result && <SkeletonCards count={2} />}
+      {(loading || restoring) && !result && <SkeletonCards count={2} />}
 
       {result && (
         <TestResult

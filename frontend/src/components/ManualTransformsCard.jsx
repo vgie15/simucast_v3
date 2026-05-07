@@ -3,10 +3,8 @@ import { api } from '../api'
 
 const TABS = [
   { key: 'merge', label: 'Merge columns' },
-  { key: 'rename', label: 'Rename' },
   { key: 'drop_cols', label: 'Drop columns' },
   { key: 'drop_rows', label: 'Drop rows' },
-  { key: 'cast', label: 'Change type' },
   { key: 'split', label: 'Split column' },
 ]
 
@@ -87,7 +85,7 @@ export default function ManualTransformsCard({ dataset, onApplied }) {
       <div style={{ marginBottom: 8 }}>
         <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Manual transforms</p>
         <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-          Restructure your data — merge, rename, drop, change types. Each apply creates a new
+          Restructure your data with merge, split, drop-column, and drop-row actions. Rename columns or change types directly from the Data View headers. Each apply creates a new
           stage so the original is preserved.
         </p>
       </div>

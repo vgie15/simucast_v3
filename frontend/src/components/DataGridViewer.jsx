@@ -21,12 +21,15 @@ export default function DataGridViewer({
   const [editing, setEditing] = useState(null)
   const [pendingEdits, setPendingEdits] = useState({})
   const [savingEdits, setSavingEdits] = useState(false)
+  const [savingHeader, setSavingHeader] = useState(false)
+  const [headerEdit, setHeaderEdit] = useState(null)
   const [cellError, setCellError] = useState(null)
 
   useEffect(() => {
     setPage(1)
     setEditing(null)
     setPendingEdits({})
+    setHeaderEdit(null)
     setCellError(null)
   }, [datasetId, stageId, refreshKey])
 
@@ -134,11 +137,57 @@ export default function DataGridViewer({
     }
   }
 
+  const openHeaderEdit = (variable) => {
+    if (readOnly || savingHeader) return
+    const normalizedType = variable.dtype === 'int' || variable.dtype === 'float'
+      ? 'numeric'
+      : ['numeric', 'category', 'text', 'datetime'].includes(variable.dtype)
+        ? variable.dtype
+        : 'category'
+    setHeaderEdit({
+      column: variable.name,
+      newName: variable.name,
+      dtype: normalizedType,
+    })
+  }
+
+  const applyHeaderEdit = async () => {
+    if (!headerEdit || savingHeader) return
+    const oldName = headerEdit.column
+    const newName = String(headerEdit.newName || '').trim()
+    const needsRename = newName && newName !== oldName
+    const currentVar = variables.find((v) => v.name === oldName)
+    const currentType = currentVar?.dtype === 'int' || currentVar?.dtype === 'float' ? 'numeric' : currentVar?.dtype
+    const needsType = headerEdit.dtype && headerEdit.dtype !== currentType
+    if (!needsRename && !needsType) {
+      setHeaderEdit(null)
+      return
+    }
+    setSavingHeader(true)
+    setCellError(null)
+    try {
+      let activeName = oldName
+      if (needsRename) {
+        await api.transform(datasetId, 'rename_column', { column: oldName, new_name: newName })
+        activeName = newName
+      }
+      if (needsType) {
+        await api.transform(datasetId, 'cast_column', { column: activeName, to: headerEdit.dtype })
+      }
+      setHeaderEdit(null)
+      await onDataChanged?.()
+    } catch (err) {
+      setCellError(err.message || 'Column update failed')
+    } finally {
+      setSavingHeader(false)
+    }
+  }
+
   return (
-    <div className={`ax-card ax-data-grid-panel ax-busy-host ${savingEdits ? 'is-busy' : ''}`}>
+    <div className={`ax-card ax-data-grid-panel ax-busy-host ${savingEdits || savingHeader ? 'is-busy' : ''}`}>
       <BusyOverlay
-        active={savingEdits}
-        title="Saving data edits..."
+        active={savingEdits || savingHeader}
+        title={savingHeader ? 'Updating column metadata...' : 'Saving data edits...'}
         detail="Creating a reversible dataset stage and refreshing the grid."
       />
       <div className="ax-modal-header">
@@ -194,9 +243,41 @@ export default function DataGridViewer({
                     <tr>
                       <th className="ax-grid-row-num-head">#</th>
                       {headerVars.map((v) => (
-                        <th key={v.name}>
-                          {v.name}
-                          <span className="ax-grid-type">{v.dtype}</span>
+                        <th key={v.name} className="ax-grid-header-cell">
+                          <button
+                            type="button"
+                            className="ax-grid-header-button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              openHeaderEdit(v)
+                            }}
+                            disabled={readOnly || !!stageColumns}
+                            title={readOnly || stageColumns ? 'Historical stage headers are read-only' : 'Rename or change type'}
+                          >
+                            <span>{v.name}</span>
+                            <span className="ax-grid-type">{v.dtype}</span>
+                          </button>
+                          {headerEdit?.column === v.name && (
+                            <div className="ax-grid-header-menu" onClick={(event) => event.stopPropagation()}>
+                              <label>
+                                <span>Column name</span>
+                                <input value={headerEdit.newName} onChange={(event) => setHeaderEdit({ ...headerEdit, newName: event.target.value })} autoFocus />
+                              </label>
+                              <label>
+                                <span>Type</span>
+                                <select value={headerEdit.dtype} onChange={(event) => setHeaderEdit({ ...headerEdit, dtype: event.target.value })}>
+                                  <option value="numeric">numeric</option>
+                                  <option value="category">category</option>
+                                  <option value="text">text</option>
+                                  <option value="datetime">datetime</option>
+                                </select>
+                              </label>
+                              <div className="ax-grid-header-actions">
+                                <button type="button" className="ax-btn mini prim" disabled={savingHeader} onClick={applyHeaderEdit}>Apply</button>
+                                <button type="button" className="ax-btn mini" disabled={savingHeader} onClick={() => setHeaderEdit(null)}>Cancel</button>
+                              </div>
+                            </div>
+                          )}
                         </th>
                       ))}
                     </tr>

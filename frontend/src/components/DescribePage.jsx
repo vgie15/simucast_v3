@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import { AIInsightCard } from './AIExplainers'
@@ -9,7 +9,38 @@ export default function DescribePage({ dataset }) {
   const [result, setResult] = useState(null)
   const [corrResult, setCorrResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [restoring, setRestoring] = useState(false)
   const [expandedExplain, setExpandedExplain] = useState({})
+
+  useEffect(() => {
+    if (!dataset?.id) return
+    let alive = true
+    setRestoring(true)
+    Promise.all([
+      api.listAnalyses(dataset.id, 'describe', 1).catch(() => ({ analyses: [] })),
+      api.listAnalyses(dataset.id, 'test_corr', 1).catch(() => ({ analyses: [] })),
+    ])
+      .then(([describeRows, corrRows]) => {
+        if (!alive) return
+        const latestDescribe = describeRows.analyses?.[0]
+        const latestCorr = corrRows.analyses?.[0]
+        if (latestDescribe) {
+          setResult(latestDescribe.result)
+          setSelected(latestDescribe.config?.variables || [])
+        } else {
+          setResult(null)
+          setSelected([])
+        }
+        setCorrResult(latestCorr?.result || null)
+        setExpandedExplain({})
+      })
+      .finally(() => {
+        if (alive) setRestoring(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [dataset?.id])
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
 
@@ -75,7 +106,7 @@ export default function DescribePage({ dataset }) {
         {loading ? <InlineSpinner label="Running descriptives..." /> : `Run descriptives for ${selected.length} variable${selected.length === 1 ? '' : 's'}`}
       </button>
 
-      {loading && !result && <SkeletonCards count={3} />}
+      {(loading || restoring) && !result && <SkeletonCards count={3} />}
 
       {result && (
         <>

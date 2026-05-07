@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Scatter, Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'
@@ -12,6 +12,31 @@ export default function AdvancedPage({ dataset, embedded = false }) {
   const [k, setK] = useState(4)
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!dataset?.id) return
+    let alive = true
+    api.listAnalyses(dataset.id, '', 20)
+      .then((r) => {
+        if (!alive) return
+        const latest = (r.analyses || []).find((a) => ['cluster', 'pca'].includes(a.kind))
+        if (!latest) {
+          setResult(null)
+          return
+        }
+        const config = latest.config || {}
+        setMethod(latest.kind)
+        setVars(config.variables || [])
+        if (config.k) setK(config.k)
+        setResult({ method: latest.kind, ...(latest.result || {}) })
+      })
+      .catch(() => {
+        if (alive) setResult(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [dataset?.id])
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
 

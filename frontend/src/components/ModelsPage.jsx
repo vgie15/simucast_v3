@@ -1008,6 +1008,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
           Skipped: {skipped.map((s) => `${s.algorithm} (${s.reason})`).join(' · ')}
         </p>
       )}
+      <ModelHealthCard model={active} />
 
       <div className="ax-card" style={{ padding: 14, marginTop: 8 }}>
         <div className="ax-row" style={{ marginBottom: 10 }}>
@@ -1140,6 +1141,54 @@ function ComparisonTable({ models, activeIdx, onPick }) {
   )
 }
 
+function ModelHealthCard({ model }) {
+  const health = assessModelHealth(model)
+  if (!health) return null
+  return (
+    <div
+      className="ax-card"
+      style={{
+        padding: 14,
+        margin: '10px 0',
+        borderLeft: `3px solid ${health.tone === 'warn' ? 'var(--color-text-warning)' : 'var(--color-text-success)'}`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>Model health</p>
+        <span
+          className="ax-chip"
+          style={{
+            background: health.tone === 'warn' ? '#FEF3C7' : '#DCFCE7',
+            color: health.tone === 'warn' ? '#D97706' : '#16A34A',
+          }}
+        >
+          {health.label}
+        </span>
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
+        {health.summary}
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 6, marginBottom: 8 }}>
+        {health.metrics.map((item) => (
+          <div key={item.label} style={{ background: 'var(--color-background-secondary)', borderRadius: 6, padding: '7px 9px' }}>
+            <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: 0 }}>{item.label}</p>
+            <p style={{ fontSize: 13, fontWeight: 650, margin: '2px 0 0' }}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+      {health.actions.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {health.actions.map((action) => (
+            <p key={action} style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+              - {action}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ModelDetail({ model }) {
   const influence = normalizeInfluence(model.feature_influence || model.feature_importance)
   const impLabels = influence.map((item) => item.feature)
@@ -1191,6 +1240,71 @@ function ModelDetail({ model }) {
       )}
     </>
   )
+}
+
+function assessModelHealth(model) {
+  const m = model?.metrics
+  if (!m) return null
+  const gap = Number(m.generalization_gap)
+  const rows = m.split_rows || {}
+  if (m.task === 'classification') {
+    const train = Number(m.train_accuracy)
+    const test = Number(m.accuracy)
+    if (!Number.isFinite(train) || !Number.isFinite(test)) {
+      return {
+        tone: 'warn',
+        label: 'Needs review',
+        summary: 'This saved model does not include train-vs-test health metrics. Re-train it to check for overfitting.',
+        metrics: [{ label: 'Test accuracy', value: pct(test) }],
+        actions: ['Re-train the model so SimuCast can compare training and test performance.'],
+      }
+    }
+    const overfit = Number.isFinite(gap) && (gap >= 0.15 || (train >= 0.95 && test < 0.85))
+    return {
+      tone: overfit ? 'warn' : 'good',
+      label: overfit ? 'Possible overfitting' : 'No major overfitting signal',
+      summary: overfit
+        ? 'The model performs much better on training rows than test rows, so it may be memorizing patterns that do not generalize.'
+        : 'Training and test performance are close enough that there is no obvious overfitting signal from this split.',
+      metrics: [
+        { label: 'Train accuracy', value: pct(train) },
+        { label: 'Test accuracy', value: pct(test) },
+        { label: 'Gap', value: pct(Math.max(gap, 0)) },
+        rows.test ? { label: 'Test rows', value: rows.test.toLocaleString() } : null,
+      ].filter(Boolean),
+      actions: overfit
+        ? ['Try a smaller tree depth or higher minimum samples per leaf.', 'Use fewer weak or duplicate features.', 'Keep the stratified split on for classification targets.']
+        : ['Still validate with another split or fresh data before treating this as final.'],
+    }
+  }
+  const train = Number(m.train_r2)
+  const test = Number(m.r2)
+  if (!Number.isFinite(train) || !Number.isFinite(test)) {
+    return {
+      tone: 'warn',
+      label: 'Needs review',
+      summary: 'This saved model does not include train-vs-test health metrics. Re-train it to check for overfitting.',
+      metrics: [{ label: 'Test R2', value: num(test) }],
+      actions: ['Re-train the model so SimuCast can compare training and test performance.'],
+    }
+  }
+  const overfit = Number.isFinite(gap) && (gap >= 0.15 || (train >= 0.9 && test < 0.65))
+  return {
+    tone: overfit ? 'warn' : 'good',
+    label: overfit ? 'Possible overfitting' : 'No major overfitting signal',
+    summary: overfit
+      ? 'The model explains training rows much better than test rows, which suggests weak generalization.'
+      : 'Training and test R2 are close enough that this split does not show a strong overfitting warning.',
+    metrics: [
+      { label: 'Train R2', value: num(train) },
+      { label: 'Test R2', value: num(test) },
+      { label: 'Gap', value: num(Math.max(gap, 0)) },
+      rows.test ? { label: 'Test rows', value: rows.test.toLocaleString() } : null,
+    ].filter(Boolean),
+    actions: overfit
+      ? ['Reduce tree depth or increase minimum samples per leaf.', 'Remove redundant features or address multicollinearity.', 'Compare against a simpler baseline model.']
+      : ['Check residuals and validate on fresh data before final reporting.'],
+  }
 }
 
 function ConfusionMatrix({ cm }) {

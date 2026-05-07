@@ -224,6 +224,12 @@ export const api = {
     }),
 
   // describe
+  listAnalyses: (id, kind = '', limit = 20) => {
+    const qs = new URLSearchParams()
+    if (kind) qs.set('kind', kind)
+    if (limit) qs.set('limit', String(limit))
+    return request(`/api/datasets/${id}/analyses${qs.toString() ? `?${qs.toString()}` : ''}`)
+  },
   describe: (id, body) =>
     request(`/api/datasets/${id}/describe`, {
       method: 'POST',

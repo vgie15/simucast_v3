@@ -40,7 +40,6 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
   const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
-  const introKey = 'simucast.guidedPlanIntroSeen'
   const [mode, setMode] = useState(() => {
     if (!modeKey) return 'auto'
     const saved = window.localStorage.getItem(modeKey) || 'auto'
@@ -52,7 +51,6 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const [done, setDone] = useState([])
   const [activity, setActivity] = useState([])
   const [collapsed, setCollapsed] = useState(false)
-  const [introVisible, setIntroVisible] = useState(false)
 
   const loadActivity = async () => {
     if (!datasetId) return
@@ -147,21 +145,6 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const nextStepState = stepStates.find((item) => ['blocked', 'warning', 'stale', 'pending'].includes(item.status))
   const isAI = plan?.ai === true
   const isAutoFallback = mode === 'auto' && plan && plan.ai !== true
-  const ready = !!plan && !loading
-
-  useEffect(() => {
-    if (!datasetId || !ready) return
-    if (window.localStorage.getItem(introKey) === '1') return
-    if (collapsed) {
-      setCollapsed(false)
-      if (collapseKey) window.localStorage.setItem(collapseKey, '0')
-      onCollapsedChange?.(false)
-    }
-    const t = window.setTimeout(() => setIntroVisible(true), 300)
-    return () => window.clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, ready])
-
   const toggleCollapsed = () => {
     setCollapsed((current) => {
       const next = !current
@@ -192,14 +175,9 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     navigate(`/projects/${datasetId}/${step.page}`)
   }
 
-  const dismissIntro = (remember) => {
-    if (remember) window.localStorage.setItem(introKey, '1')
-    setIntroVisible(false)
-  }
-
   return (
     <section
-      className={`ax-card ax-plan-panel ax-busy-host${collapsed ? ' ax-plan-collapsed' : ''} ${loading ? 'is-busy' : ''} ${introVisible ? 'ax-plan-spotlight' : ''}`}
+      className={`ax-card ax-plan-panel ax-busy-host${collapsed ? ' ax-plan-collapsed' : ''} ${loading ? 'is-busy' : ''}`}
       style={!collapsed && planH ? { height: planH, maxHeight: 'none' } : undefined}
     >
       <BusyOverlay
@@ -212,8 +190,6 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           ? ['Building dataset profile', 'Generating recommendations', 'Preparing guided plan']
           : ['Checking data quality', 'Mapping fixes to pages', 'Preparing guided plan']}
       />
-
-      {introVisible && <GuidedPlanIntro onClose={() => dismissIntro(true)} onSoftClose={() => dismissIntro(true)} />}
 
       <div className="ax-panel-sticky-header">
         <div className="ax-row" style={{ marginBottom: collapsed ? 0 : 8, alignItems: 'center' }}>
@@ -427,21 +403,6 @@ function statusLabel(status) {
     blocked: 'blocked',
   }
   return labels[status] || status
-}
-
-function GuidedPlanIntro({ onClose, onSoftClose }) {
-  return (
-    <div className="ax-plan-intro">
-      <p style={{ fontSize: 14, fontWeight: 800, margin: 0 }}>Meet your Guided Plan</p>
-      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-        This panel recommends the next useful preparation, analysis, modeling, and reporting steps based on your dataset.
-      </p>
-      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        <button className="ax-btn prim mini" type="button" onClick={onClose}>Got it</button>
-        <button className="ax-btn mini" type="button" onClick={onSoftClose}>Don't show again</button>
-      </div>
-    </div>
-  )
 }
 
 function WhyThisMatters({ text }) {
