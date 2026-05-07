@@ -314,32 +314,28 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
                               Re-run recommended because the dataset changed after this step.
                             </p>
                           )}
-                          {!isCompleted && step.rationale && (
+                          {step.rationale && (
                             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>
                               {step.rationale}
                             </p>
                           )}
-                          {!isCompleted && step.columns?.length > 0 && (
+                          {step.columns?.length > 0 && (
                             <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>
                               {step.columns.slice(0, 4).join(', ')}
                             </p>
                           )}
-                          {!isCompleted && (
-                            <>
-                              <p style={{ fontSize: 10, color: 'var(--color-primary)', fontWeight: 750, margin: '5px 0 0' }}>
-                                {isAI ? 'AI recommended' : 'System recommended'}
-                              </p>
-                              <div className="ax-plan-target">
-                                <span>Use</span>
-                                <strong>{target.label}</strong>
-                                <small>{target.hint}</small>
-                              </div>
-                              <button className="ax-btn mini" onClick={() => goToStep(step)} type="button" style={{ marginTop: 6 }}>
-                                {state.status === 'stale' ? 'Re-run ' : 'Open '}{target.shortLabel}
-                              </button>
-                              {step.rationale && <WhyThisMatters text={step.rationale} />}
-                            </>
-                          )}
+                          <p style={{ fontSize: 10, color: 'var(--color-primary)', fontWeight: 750, margin: '5px 0 0' }}>
+                            {isAI ? 'AI recommended' : 'System recommended'}
+                          </p>
+                          <div className="ax-plan-target">
+                            <span>Use</span>
+                            <strong>{target.label}</strong>
+                            <small>{target.hint}</small>
+                          </div>
+                          <button className="ax-btn mini" onClick={() => goToStep(step)} type="button" style={{ marginTop: 6 }}>
+                            {state.status === 'stale' ? 'Re-run ' : 'Open '}{target.shortLabel}
+                          </button>
+                          {step.rationale && <WhyThisMatters text={step.rationale} />}
                         </div>
                       </article>
                     </React.Fragment>

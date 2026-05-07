@@ -2315,8 +2315,8 @@ input[type="range"]::-moz-range-thumb {
   background: var(--color-background-warning);
 }
 .ax-plan-step.completed {
-  opacity: 0.6;
-  max-height: 86px;
+  opacity: 0.86;
+  max-height: none;
   overflow: hidden;
 }
 .ax-plan-step.stale {
@@ -2375,7 +2375,7 @@ input[type="range"]::-moz-range-thumb {
   background: var(--color-text-success);
   border-color: var(--color-text-success);
   color: #fff;
-  font-size: 9px;
+  font-size: 12px;
 }
 .ax-plan-step.next .ax-plan-check {
   background: var(--color-accent);
