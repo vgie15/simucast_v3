@@ -139,10 +139,10 @@ export default function DataGridViewer({
 
   const openHeaderEdit = (variable) => {
     if (readOnly || savingHeader) return
-    const normalizedType = variable.dtype === 'int' || variable.dtype === 'float'
-      ? 'numeric'
-      : ['numeric', 'category', 'text', 'datetime'].includes(variable.dtype)
-        ? variable.dtype
+    const normalizedType = ['int', 'float', 'category', 'text', 'datetime', 'binary'].includes(variable.dtype)
+      ? variable.dtype
+      : variable.dtype === 'numeric'
+        ? 'float'
         : 'category'
     setHeaderEdit({
       column: variable.name,
@@ -157,7 +157,7 @@ export default function DataGridViewer({
     const newName = String(headerEdit.newName || '').trim()
     const needsRename = newName && newName !== oldName
     const currentVar = variables.find((v) => v.name === oldName)
-    const currentType = currentVar?.dtype === 'int' || currentVar?.dtype === 'float' ? 'numeric' : currentVar?.dtype
+    const currentType = currentVar?.dtype === 'numeric' ? 'float' : currentVar?.dtype
     const needsType = headerEdit.dtype && headerEdit.dtype !== currentType
     if (!needsRename && !needsType) {
       setHeaderEdit(null)
@@ -266,7 +266,9 @@ export default function DataGridViewer({
                               <label>
                                 <span>Type</span>
                                 <select value={headerEdit.dtype} onChange={(event) => setHeaderEdit({ ...headerEdit, dtype: event.target.value })}>
-                                  <option value="numeric">numeric</option>
+                                  <option value="int">int</option>
+                                  <option value="float">float</option>
+                                  <option value="binary">binary</option>
                                   <option value="category">category</option>
                                   <option value="text">text</option>
                                   <option value="datetime">datetime</option>

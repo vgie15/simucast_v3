@@ -2026,7 +2026,7 @@ def column_stats(ds_id, col_name):
 
         # type-error count: values that don't match the declared dtype
         type_errors = 0
-        if dtype in ("numeric", "binary"):
+        if dtype in ("numeric", "int", "float", "binary"):
             coerced = pd.to_numeric(present, errors="coerce")
             type_errors = int(coerced.isna().sum())
         elif dtype == "datetime":
@@ -2034,7 +2034,7 @@ def column_stats(ds_id, col_name):
             type_errors = int(coerced.isna().sum())
         out["type_errors"] = type_errors
 
-        if dtype in ("numeric", "binary"):
+        if dtype in ("numeric", "int", "float", "binary"):
             num = pd.to_numeric(present, errors="coerce").dropna()
             zeros = int((num == 0).sum())
             out["zero_count"] = zeros
@@ -2538,7 +2538,7 @@ def transform(ds_id):
       - drop_columns:  {columns}
       - drop_rows:     {column, predicate=missing|equals|gt|lt|in,
                          value?}
-      - cast_column:   {column, to: numeric|datetime|category|text}
+      - cast_column:   {column, to: int|float|datetime|category|text|binary}
       - split_column:  {column, separator, into}
     """
     body = request.get_json() or {}
@@ -2662,11 +2662,28 @@ def _apply_transform(df, op, params):
         if col not in df.columns:
             raise ValueError(f"cast_column: '{col}' not in columns")
         out = df.copy()
-        if to == "numeric":
+        if to in ("numeric", "float"):
             coerced = pd.to_numeric(out[col], errors="coerce")
             errors = int(coerced.isna().sum() - out[col].isna().sum())
-            out[col] = coerced
-            return out, f"Cast '{col}' to numeric ({errors} value{'s' if errors != 1 else ''} became NaN)"
+            out[col] = coerced.astype(float) if to == "float" else coerced
+            label = "float" if to == "float" else "numeric"
+            return out, f"Cast '{col}' to {label} ({errors} value{'s' if errors != 1 else ''} became NaN)"
+        if to == "int":
+            coerced = pd.to_numeric(out[col], errors="coerce")
+            errors = int(coerced.isna().sum() - out[col].isna().sum())
+            out[col] = coerced.round().astype("Int64")
+            return out, f"Cast '{col}' to int ({errors} value{'s' if errors != 1 else ''} became NaN)"
+        if to == "binary":
+            present = out[col].dropna().astype(str).str.strip().str.lower()
+            truthy = {"1", "true", "yes", "y"}
+            falsy = {"0", "false", "no", "n"}
+            allowed = truthy | falsy
+            errors = int((~present.isin(allowed)).sum())
+            mapped = out[col].astype(str).str.strip().str.lower().map(
+                lambda value: True if value in truthy else (False if value in falsy else None)
+            )
+            out[col] = mapped.where(out[col].notna(), None)
+            return out, f"Cast '{col}' to binary ({errors} value{'s' if errors != 1 else ''} became NaN)"
         if to == "datetime":
             coerced = pd.to_datetime(out[col], errors="coerce")
             errors = int(coerced.isna().sum() - out[col].isna().sum())
@@ -4437,7 +4454,7 @@ def get_model(model_id):
 
 _SIMUCAST_CAPABILITIES = [
     ("Data preparation", [
-        "review dataset", "handle missing values", "handle outliers", "remove duplicates",
+        "handle missing values", "handle outliers", "remove duplicates",
         "standardize categorical labels", "change column type", "rename columns",
         "drop rows/columns", "export cleaned data",
     ]),
@@ -4574,7 +4591,6 @@ def _parse_ai_plan_text(text):
         ("drop rows/columns", "data", "data-section-manual_transforms"),
         ("change column type", "data", "data-section-manual_transforms"),
         ("rename columns", "data", "data-section-manual_transforms"),
-        ("review dataset", "data", "data-section-raw_data"),
         ("export cleaned data", "data", "data-section-raw_data"),
         ("create bins", "data", "data-section-feature_engineering"),
         ("numeric formatting", "data", "data-section-feature_engineering"),
@@ -4680,7 +4696,7 @@ def ai_project_plan(ds_id):
         if mode == "system":
             return jsonify(_rule_based_project_plan(df, variables))
 
-        cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "project_plan", {"mode": mode})
+        cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "project_plan", {"mode": mode, "plan_version": 3})
         cached = _AI_CACHE.get(cache_key)
         if cached is not None:
             return jsonify(cached)
@@ -4744,7 +4760,7 @@ def ai_project_plan(ds_id):
             "Columns: comma-separated relevant columns, or None\n\n"
             "Rules:\n"
             "- Sort steps in workflow order: Data preparation, optional Feature engineering, optional Expand, Describe, Analysis, Models, What-if, Report.\n"
-            "- Inside Data preparation, follow the UI order: review dataset/export, manual transforms, missing values, outliers, duplicates, category standardization, optional feature tools.\n"
+            "- Inside Data preparation, follow the UI order: manual transforms, missing values, outliers, duplicates, category standardization, optional feature tools.\n"
             "- Inside Expand, follow: decide if expansion is needed, choose Bootstrap or Synthetic, configure target rows, preview, apply.\n"
             "- Inside Describe, follow: select variables, generate summaries, review visualizations, review correlations, explain findings.\n"
             "- Inside Analysis, follow: choose/recommend test, choose valid column pair, configure test, run test, explain results.\n"
@@ -5275,15 +5291,6 @@ def _rule_based_project_plan(df, variables):
             outlier_cols.append(col)
     duplicate_count = int(df.duplicated().sum()) if len(df) else 0
     steps = []
-    steps.append({
-        "id": "data-review-manual-transforms",
-        "page": "data",
-        "section": "data-section-manual_transforms",
-        "title": "Review manual transforms before cleanup",
-        "rationale": "Check whether columns need renaming, type changes, drops, merges, or splits before applying automatic fixes.",
-        "priority": "medium",
-        "columns": [],
-    })
     if missing_cols:
         steps.append({
             "id": "data-missing-values",

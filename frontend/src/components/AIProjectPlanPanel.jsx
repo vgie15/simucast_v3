@@ -5,6 +5,7 @@ import { api } from '../api'
 import { BusyOverlay, SkeletonCards } from './LoadingStates'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
+const PLAN_CACHE_VERSION = 'v3'
 const DATA_CHANGE_ACTIONS = new Set([
   'cell_edit',
   'batch_cell_edit',
@@ -66,7 +67,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
   const load = async (force = false) => {
     if (!datasetId) return
-    const cacheKey = `simucast.aiPlan.${datasetId}.${stageKey}.${mode}`
+    const cacheKey = `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${stageKey}.${mode}`
     if (!force) {
       const cached = window.localStorage.getItem(cacheKey)
       if (cached) {
@@ -172,7 +173,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const handleModeChange = (nextMode) => {
     if (nextMode === mode) return
     if (modeKey) window.localStorage.setItem(modeKey, nextMode)
-    const nextCacheKey = `simucast.aiPlan.${datasetId}.${stageKey}.${nextMode}`
+    const nextCacheKey = `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${stageKey}.${nextMode}`
     const cached = window.localStorage.getItem(nextCacheKey)
     if (cached) {
       try {
@@ -371,6 +372,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 function deriveProgress(activity) {
   const progress = {
     completedAt: {},
+    invalidatedAt: {},
     latestDataChangeAt: null,
     warnings: {},
   }
@@ -381,8 +383,20 @@ function deriveProgress(activity) {
     const kind = String(item.kind || '').toLowerCase()
     const summary = String(item.summary || '').toLowerCase()
     const category = String(item.category || item.detail?.category || '').toLowerCase()
+    const reversal = isReversalAction(action, kind, summary)
     if (isDataChangingAction(action) || item.related_stage_id || item.ref_type === 'stage') {
       progress.latestDataChangeAt = Math.max(progress.latestDataChangeAt || 0, createdAt)
+    }
+    if (reversal) {
+      const invalidatedKey = dataKeyFromText(action, summary)
+      if (invalidatedKey) {
+        invalidate(progress, invalidatedKey, createdAt)
+      } else if (`${action} ${kind} ${summary}`.includes('reset') || `${action} ${kind} ${summary}`.includes('restore')) {
+        for (const key of ['data:manual', 'data:missing', 'data:outliers', 'data:duplicates', 'data:category', 'data:feature']) {
+          invalidate(progress, key, createdAt)
+        }
+      }
+      continue
     }
     if (kind === 'analysis' || category === 'analysis') {
       if (action === 'describe' || summary.includes('describe')) mark(progress, 'describe', createdAt)
@@ -402,6 +416,10 @@ function mark(progress, page, at) {
   progress.completedAt[page] = Math.max(progress.completedAt[page] || 0, at)
 }
 
+function invalidate(progress, key, at) {
+  progress.invalidatedAt[key] = Math.max(progress.invalidatedAt[key] || 0, at)
+}
+
 function isDataChangingAction(action) {
   if (DATA_CHANGE_ACTIONS.has(action)) return true
   return action.startsWith('clean')
@@ -413,7 +431,21 @@ function isDataChangingAction(action) {
     || action.startsWith('split')
 }
 
+function isReversalAction(action, kind, summary) {
+  const text = `${action || ''} ${kind || ''} ${summary || ''}`.toLowerCase()
+  return text.includes('undo')
+    || text.includes('undid')
+    || text.includes('restore')
+    || text.includes('reset project')
+    || text.includes('reset dataset')
+}
+
 function dataCompletionKey(action, summary) {
+  if (isReversalAction(action, '', summary)) return ''
+  return dataKeyFromText(action, summary)
+}
+
+function dataKeyFromText(action, summary) {
   const text = `${action || ''} ${summary || ''}`.toLowerCase()
   if (text.includes('missing')) return 'data:missing'
   if (text.includes('outlier') || text.includes('winsor')) return 'data:outliers'
@@ -441,8 +473,12 @@ function getStepState(step, progress, latestDataChange, doneSet) {
   const page = step.page || 'data'
   const completionKey = completionKeyForStep(step)
   const completedAt = progress.completedAt[completionKey] || progress.completedAt[page]
+  const invalidatedAt = progress.invalidatedAt?.[completionKey] || 0
   const manuallyDone = doneSet.has(step.id)
   const downstream = (PAGE_ORDER[page] ?? 0) > PAGE_ORDER.data
+  if (completedAt && invalidatedAt > completedAt) {
+    return { step, status: 'stale', completedAt }
+  }
   if ((completedAt || manuallyDone) && downstream && latestDataChange && completedAt && latestDataChange > completedAt) {
     return { step, status: 'stale', completedAt }
   }
