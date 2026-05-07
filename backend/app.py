@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text
 from sqlalchemy.exc import OperationalError
@@ -81,7 +81,7 @@ def _too_large(_e):
     mb_limit = MAX_UPLOAD_BYTES // (1024 * 1024)
     return jsonify({"error": f"File is too large. Maximum allowed is {mb_limit} MB."}), 413
 
-@app.route("/")
+@app.route("/api/health")
 def home():
     return "API is running 🚀"
 
@@ -5869,6 +5869,30 @@ def list_analyses(ds_id):
     finally:
         s.close()
 
+
+FRONTEND_DIST_PATH = os.environ.get(
+    "FRONTEND_DIST_PATH",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")),
+)
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_react_app(path):
+    """Serve the React SPA and fall back to index.html for client-side routes."""
+    normalized = (path or "").lstrip("/")
+    if normalized.startswith("api/"):
+        return jsonify({"error": "Not found"}), 404
+
+    if not os.path.isdir(FRONTEND_DIST_PATH):
+        return "API is running. Frontend build not found.", 200
+
+    if normalized:
+        asset_path = os.path.join(FRONTEND_DIST_PATH, normalized)
+        if os.path.isfile(asset_path):
+            directory, filename = os.path.split(asset_path)
+            return send_from_directory(directory, filename)
+
+    return send_from_directory(FRONTEND_DIST_PATH, "index.html")
 
 
 # ========================================================================
