@@ -223,11 +223,7 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
             return (
               <div
                 key={item.id}
-                className={`ax-activity-item ${isActive ? 'active' : ''}`}
-                style={{
-                  borderColor: isActive ? 'var(--color-accent)' : undefined,
-                  background: isActive ? 'var(--color-accent-light)' : undefined,
-                }}
+                className="ax-activity-item"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--color-text-tertiary)' }}>
@@ -237,7 +233,6 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
                     {labelFor(item.action_type || item.category || item.kind)}
                   </span>
                   {item.stage?.op_type && <span className="ax-chip ax-badge-data">{item.stage.op_type}</span>}
-                  {isActive && <span className="ax-chip ax-badge-active">active</span>}
                   <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
                     {item.created_at ? new Date(item.created_at).toLocaleString() : ''}
                   </span>
@@ -430,3 +425,4 @@ function badgeClassFor(kind) {
   if (label.includes('note')) return 'ax-badge-note'
   return 'ax-badge-default'
 }
+

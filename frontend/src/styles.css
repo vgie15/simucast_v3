@@ -406,12 +406,29 @@ input[type="range"]::-moz-range-thumb {
   background: var(--color-background-secondary);
   color: var(--color-text-secondary);
 }
-.ax-badge-active {
-  background: var(--color-accent);
-  color: #fff;
-}
-
 .ax-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.ax-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-secondary);
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.ax-help-button:hover,
+.ax-help-button:focus-visible {
+  color: var(--color-accent);
+  border-color: rgba(249, 115, 22, 0.45);
+  background: var(--color-accent-light);
+}
 
 /* --- async/loading states --- */
 .ax-busy-host {
@@ -2587,9 +2604,6 @@ input[type="range"]::-moz-range-thumb {
   padding: 12px;
   background: var(--color-background-primary);
   box-shadow: 0 6px 18px rgba(17, 24, 39, 0.04);
-}
-.ax-activity-item.active {
-  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.28), 0 10px 24px rgba(249, 115, 22, 0.12);
 }
 .ax-activity-details {
   margin-top: 8px;

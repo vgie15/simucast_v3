@@ -7,6 +7,7 @@ import DataGridViewer from './DataGridViewer'
 import CategoryStandardizationCard from './CategoryStandardizationCard'
 import { useDialog } from './DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
+import HelpButton from './HelpButton'
 
 export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const dialog = useDialog()
@@ -452,9 +453,9 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
         'Give plain-text advice for this cleaning issue. Recommend among the available SimuCast methods only. Do not apply changes. Explain the safest option and mention any columns that need different handling.',
         payload,
       )
-      setAiSuggestion({ ok: true, text: res.explanation || res.summary || 'AI advisory unavailable.' })
+      setAiSuggestion({ ok: true, text: res.explanation || res.summary || 'AI suggestion unavailable.' })
     } catch {
-      setAiSuggestion({ ok: false, text: 'AI advisory unavailable.' })
+      setAiSuggestion({ ok: false, text: 'AI suggestion unavailable.' })
     } finally {
       setAiLoading(false)
     }
@@ -472,6 +473,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <KindBadge kind={kind} />
             <strong style={{ fontSize: 14 }}>{title}</strong>
+            <HelpButton title={`${title}: what this card does`} text={helpTextForCleanCard(kind)} />
             <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
               {kind === 'duplicates' ? `${duplicateCount} duplicate rows` : `${items.length} affected column${items.length === 1 ? '' : 's'}`}
             </span>
@@ -604,14 +606,8 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
   return (
     <div style={{ marginTop: suggestion ? 8 : 0 }}>
       {onAsk && (
-        <button
-          className="ax-btn mini"
-          type="button"
-          onClick={onAsk}
-          disabled={loading}
-          style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
-        >
-          {loading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
+        <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
+          {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
         </button>
       )}
       {suggestion && (
@@ -630,7 +626,7 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: collapsed ? 0 : 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>
-                AI advisory
+                AI suggestion
               </span>
               <span style={{ color: 'var(--color-text-tertiary)' }}>
                 advisory only
@@ -685,6 +681,16 @@ function buildCleaningAiPayload(kind, group, items = [], selectedItems = [], rec
       ? ['Remove duplicates, keep first occurrence', 'Remove duplicates, keep last occurrence']
       : Array.from(new Set(items.flatMap((item) => (item.options || []).map((opt) => opt.label || cleanActionLabel(opt.action))))),
   }
+}
+
+function helpTextForCleanCard(kind) {
+  const help = {
+    missing: 'Use this card to fill or remove blank values. SimuCast recommends safer methods per column type, then lets you apply one grouped cleanup step or override columns individually.',
+    outliers: 'Use this card to review extreme numeric values. Capping keeps rows while limiting distortion; removing rows is reserved for clearly invalid cases.',
+    duplicates: 'Use this card to remove exact duplicate rows. Keeping the first occurrence is usually safest because it preserves one valid copy of each repeated record.',
+    type: 'Use this card to fix detected type issues, such as text-like dates or numeric-looking values. Correct types make summaries, tests, models, and reports more reliable.',
+  }
+  return help[kind] || 'Use this card to review and apply a recommended data preparation step.'
 }
 
 function KindBadge({ kind }) {
@@ -770,17 +776,11 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
           <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>
             Recommended actions by method
           </p>
-          <SystemSourceLabel />
-          <InfoDot text="System recommendation means SimuCast selected this method using the current dataset profile, column type, issue count, skew, and outlier checks. You can still change it manually." />
+          <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+          <InfoDot text="System recommended means SimuCast selected this method using the current dataset profile, column type, missing count, skew, and outlier checks. You can still change it manually." />
         </div>
-        <button
-          className="ax-btn mini"
-          type="button"
-          onClick={onAskAi}
-          disabled={aiLoading}
-          style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
-        >
-          {aiLoading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
+        <button className="ax-btn mini" type="button" onClick={onAskAi} disabled={aiLoading}>
+          {aiLoading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
         </button>
       </div>
       {groups.map((group) => {
@@ -789,22 +789,21 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
           <div
             key={group.action}
             style={{
-              padding: '10px 0',
-              borderTop: '0.5px solid var(--color-border-tertiary)',
+              padding: '10px 12px',
+              border: '0.5px solid rgba(249, 115, 22, 0.28)',
+              borderRadius: 10,
+              background: 'var(--color-accent-light)',
               fontSize: 12,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+              <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
               <strong>{group.label}</strong>
               <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>
                 {selectedCount}/{group.items.length} selected
               </span>
             </div>
-            <p style={{ margin: '0 0 6px', color: 'var(--color-text-secondary)' }}>{shortRecommendation(group)}</p>
-            <details style={{ marginBottom: 8 }}>
-              <summary style={{ cursor: 'pointer', color: 'var(--color-text-tertiary)', fontSize: 11 }}>Why this recommendation?</summary>
-              <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)' }}>{group.why}</p>
-            </details>
+            <p style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)' }}>{group.why}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {group.items.map((item) => (
                 <span
@@ -817,7 +816,8 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
                   }}
                   title={recommendedColumnAction(kind, item).why}
                 >
-                  {formatIssueChip(item, kind)}
+                  {item.variable}
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>{item.count || 0}</span>
                 </span>
               ))}
             </div>
@@ -848,19 +848,6 @@ function groupColumnRecommendations(kind, items = []) {
     ...group,
     why: summarizeRecommendationGroup(kind, group),
   }))
-}
-
-function shortRecommendation(group) {
-  const names = group.items.map((item) => item.variable)
-  if (names.length <= 2) return `Use ${group.label.toLowerCase()} for ${names.join(', ')}.`
-  return `Use ${group.label.toLowerCase()} for ${names.slice(0, 2).join(', ')} and ${names.length - 2} more column${names.length - 2 === 1 ? '' : 's'}.`
-}
-
-function formatIssueChip(item, kind) {
-  const count = Number(item.count || 0)
-  if (kind === 'missing') return `${item.variable} (${count} missing)`
-  if (kind === 'outliers') return `${item.variable} (${count} outliers)`
-  return `${item.variable} (${count})`
 }
 
 function summarizeRecommendationReason(kind, rec) {
@@ -902,17 +889,11 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>What to do</p>
-          <SystemSourceLabel />
-          <InfoDot text="System recommendation means SimuCast selected this action from the current duplicate scan. You can still choose which duplicate occurrence to keep." />
+          <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+          <InfoDot text="System recommended means SimuCast selected this action from the current duplicate scan. You can still choose which duplicate occurrence to keep." />
         </div>
-        <button
-          className="ax-btn mini"
-          type="button"
-          onClick={onAsk}
-          disabled={loading}
-          style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
-        >
-          {loading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
+        <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
+          {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
         </button>
       </div>
       <div
@@ -939,36 +920,8 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
   )
 }
 
-function SystemSourceLabel() {
-  return (
-    <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommendation</span>
-  )
-}
-
 function InfoDot({ text }) {
-  return (
-    <span
-      title={text}
-      aria-label={text}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 18,
-        height: 18,
-        borderRadius: '999px',
-        border: '1px solid var(--color-border-secondary)',
-        background: 'var(--color-background-primary)',
-        color: 'var(--color-text-secondary)',
-        fontSize: 11,
-        fontWeight: 800,
-        lineHeight: 1,
-        cursor: 'help',
-      }}
-    >
-      i
-    </span>
-  )
+  return <HelpButton title="Recommendation help" text={text} />
 }
 
 function recommendedColumnAction(kind, item) {
@@ -1059,7 +1012,7 @@ function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>{title}</p>
-        <SystemSourceLabel />
+        <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
         <InfoDot text={info} />
       </div>
       <button
@@ -1067,9 +1020,8 @@ function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
         type="button"
         onClick={onAsk}
         disabled={loading}
-        style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
       >
-        {loading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
+        {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
       </button>
     </div>
   )
@@ -1079,12 +1031,15 @@ function FeatureRecommendationCard({ recommendation }) {
   if (!recommendation) return null
   return (
     <div style={{
-      padding: '8px 0',
-      borderTop: '0.5px solid var(--color-border-tertiary)',
+      padding: '10px 12px',
+      border: '0.5px solid rgba(249, 115, 22, 0.28)',
+      borderRadius: 10,
+      background: 'var(--color-accent-light)',
       fontSize: 12,
       marginBottom: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+        <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
         <strong>{recommendation.label}</strong>
       </div>
       <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>
@@ -1160,9 +1115,9 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
         'Give plain-text advice for this optional feature tool. Recommend only supported SimuCast actions: create bins or numeric formatting. Explain whether it is useful and what settings to use. Do not apply changes.',
         payload,
       )
-      setAiSuggestion({ ok: true, text: r.explanation || 'AI advisory unavailable.' })
+      setAiSuggestion({ ok: true, text: r.explanation || 'AI suggestion unavailable.' })
     } catch {
-      setAiSuggestion({ ok: false, text: 'AI advisory unavailable.' })
+      setAiSuggestion({ ok: false, text: 'AI suggestion unavailable.' })
     } finally {
       setAiLoading(false)
     }
@@ -1206,6 +1161,10 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
           <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
         </svg>
         <span style={{ fontSize: 13, fontWeight: 500 }}>Optional feature tools and numeric formatting</span>
+        <HelpButton
+          title="Optional feature tools: what this card does"
+          text="Use this card for optional enrichment and display cleanup. Create bins when grouped ranges are easier to interpret, or apply numeric formatting when decimal precision is excessive or inconsistent."
+        />
         <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>Optional: create binned features or standardize decimal places</span>
       </button>
 

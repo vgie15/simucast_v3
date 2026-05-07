@@ -3,6 +3,7 @@ import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import { ExplainButton } from './AIExplainers'
 import { InlineSpinner, SkeletonCards } from './LoadingStates'
+import HelpButton from './HelpButton'
 
 export default function DescribePage({ dataset }) {
   const [selected, setSelected] = useState([])
@@ -350,26 +351,7 @@ function SummaryExplainer({ title, text }) {
 }
 
 function InfoIcon({ text }) {
-  return (
-    <span
-      title={text}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 16,
-        height: 16,
-        marginLeft: 4,
-        borderRadius: 8,
-        background: 'var(--color-background-info, #EEF4FF)',
-        color: 'var(--color-text-info, #255CA8)',
-        fontSize: 11,
-        cursor: 'help',
-      }}
-    >
-      i
-    </span>
-  )
+  return <HelpButton title="How to read this" text={text} size={16} />
 }
 
 function VariableCard({ title, type, tags, metrics, insight, distribution, expanded, onExplain, datasetId, resultPayload }) {
