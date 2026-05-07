@@ -4456,15 +4456,33 @@ def ai_project_plan(ds_id):
             "short. All string fields must be plain text — no markdown "
             "headings, tables, code fences, or bold/italic."
         )
+        system += (
+            " SimuCast capabilities and route targets: "
+            "Data page can use section fix-cleaning-suggestions for grouped missing-value, "
+            "outlier, duplicate, and suggested data fixes; section data-section-category_standardization "
+            "for categorical label review and standardization; section data-section-manual_transforms "
+            "for manual transforms and lightweight feature engineering. "
+            "Expand page can use section expand-section-controls for row expansion. "
+            "Describe page can use section describe-section-variables for descriptive statistics, "
+            "distributions, charts, and variable summaries. "
+            "Analysis page uses backend page value tests and section fix-correlation-test for "
+            "correlation, group comparison, chi-square, and advanced analysis setup. "
+            "Models page can use section fix-target-handling for target setup and section "
+            "fix-feature-selection for feature selection/model preparation. "
+            "What-if page can use section whatif-section-controls for saved model scenarios. "
+            "Report page can use section ax-report-preview for report generation and preview. "
+            "Only recommend actions this system can actually perform."
+        )
         prompt = (
             "Analyze the dataset profile and create a guided project plan across "
-            "the SimuCast workflow: data cleaning, description, statistical tests, "
-            "modeling, what-if analysis, and report. Include only steps that make "
+            "the SimuCast workflow: data preparation, optional expansion, description, "
+            "statistical analysis, modeling, what-if analysis, and report. Include only steps that make "
             "sense for this dataset. Sort the steps in workflow order only: "
             "data, expand if needed, describe, tests, models, whatif, report. "
             "Do not sort by priority. Each step must include: id, page "
             "(data|expand|describe|tests|models|whatif|report), title, rationale, "
             "priority (high|medium|low), optional columns, and optional section id when obvious. "
+            "Use exact section ids from the capability list when possible. "
             'Respond as JSON: {"summary": str, "steps": [{"id": str, "page": str, "section": str, "title": str, "rationale": str, "priority": "high|medium|low", "columns": [str]}]}'
         )
         try:
@@ -4871,6 +4889,56 @@ def _rule_based_recommend(context, df, variables):
 def _normalize_project_steps(steps):
     valid_pages = {"data", "expand", "describe", "tests", "models", "whatif", "report"}
     page_order = {"data": 0, "expand": 1, "describe": 2, "tests": 3, "models": 4, "whatif": 5, "report": 6}
+    page_aliases = {
+        "analysis": "tests",
+        "test": "tests",
+        "statistical_analysis": "tests",
+        "what-if": "whatif",
+        "what_if": "whatif",
+        "scenario": "whatif",
+        "scenarios": "whatif",
+        "model": "models",
+    }
+    section_ids = {
+        "data": {
+            "missing": "fix-cleaning-suggestions",
+            "clean": "fix-cleaning-suggestions",
+            "suggest": "fix-cleaning-suggestions",
+            "outlier": "fix-cleaning-suggestions",
+            "duplicate": "fix-cleaning-suggestions",
+            "categor": "data-section-category_standardization",
+            "standard": "data-section-category_standardization",
+            "feature": "data-section-manual_transforms",
+            "engineer": "data-section-manual_transforms",
+            "transform": "data-section-manual_transforms",
+        },
+        "expand": {"": "expand-section-controls"},
+        "describe": {"": "describe-section-variables"},
+        "tests": {"": "fix-correlation-test"},
+        "models": {
+            "feature": "fix-feature-selection",
+            "target": "fix-target-handling",
+            "": "fix-target-handling",
+        },
+        "whatif": {"": "whatif-section-controls"},
+        "report": {"": "ax-report-preview"},
+    }
+    def normalize_section(page, raw, step):
+        section = str(raw or "").strip()
+        valid = {
+            "fix-cleaning-suggestions", "data-section-category_standardization",
+            "data-section-manual_transforms", "expand-section-controls",
+            "describe-section-variables", "fix-correlation-test",
+            "fix-target-handling", "fix-feature-selection",
+            "whatif-section-controls", "ax-report-preview",
+        }
+        if section in valid:
+            return section
+        text = f"{section} {step.get('id', '')} {step.get('title', '')}".lower()
+        for needle, fallback in section_ids.get(page, {}).items():
+            if needle == "" or needle in text:
+                return fallback
+        return section
     def sub_order(step):
         text = f"{step.get('section', '')} {step.get('id', '')} {step.get('title', '')}".lower()
         if "missing" in text:
@@ -4886,7 +4954,8 @@ def _normalize_project_steps(steps):
     for idx, raw in enumerate(steps or [], start=1):
         if not isinstance(raw, dict):
             continue
-        page = str(raw.get("page") or "data").lower()
+        page = str(raw.get("page") or "data").lower().replace(" ", "_")
+        page = page_aliases.get(page, page)
         if page not in valid_pages:
             page = "data"
         title = str(raw.get("title") or raw.get("action") or f"Step {idx}").strip()
@@ -4898,7 +4967,7 @@ def _normalize_project_steps(steps):
         out.append({
             "id": str(raw.get("id") or f"{page}-{idx}"),
             "page": page,
-            "section": str(raw.get("section") or "").strip(),
+            "section": normalize_section(page, raw.get("section"), raw),
             "title": title,
             "rationale": str(raw.get("rationale") or raw.get("summary") or "").strip(),
             "priority": priority,

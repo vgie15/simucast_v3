@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { BusyOverlay, SkeletonCards } from './LoadingStates'
@@ -329,20 +330,21 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           )}
         </>
       )}
-      {expanded && plan && (
+      {expanded && plan && createPortal(
         <GuidedPlanModal
-          isAI={isAI}
-          mode={mode}
-          error={plan?.error || error || isAutoFallback}
-          summary={plan.summary}
-          items={planItems}
-          nextStepId={nextStepState?.step?.id}
-          onClose={() => setExpanded(false)}
-          onGo={(step) => {
-            setExpanded(false)
-            goToStep(step)
-          }}
-        />
+            isAI={isAI}
+            mode={mode}
+            error={plan?.error || error || isAutoFallback}
+            summary={plan.summary}
+            items={planItems}
+            nextStepId={nextStepState?.step?.id}
+            onClose={() => setExpanded(false)}
+            onGo={(step) => {
+              setExpanded(false)
+              goToStep(step)
+            }}
+          />,
+        document.body,
       )}
     </section>
   )
