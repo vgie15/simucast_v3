@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'
+import { InlineSpinner } from './LoadingStates'
 
 export default function CategoryStandardizationCard({ dataset, onApplied }) {
   const dialog = useDialog()
@@ -11,6 +12,8 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   const [busy, setBusy] = useState(false)
   const [appliedSummary, setAppliedSummary] = useState(null)
   const [skippedColumns, setSkippedColumns] = useState([])
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState(null)
 
   const load = async (preferredColumn) => {
     if (!dataset?.id) return
@@ -40,8 +43,13 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
 
   useEffect(() => {
     setSkippedColumns([])
+    setAiSuggestion(null)
     load()
   }, [dataset?.id, dataset?.current_stage_id])
+
+  useEffect(() => {
+    setAiSuggestion(null)
+  }, [selectedColumn])
 
   const current = suggestions.find((s) => s.column === selectedColumn)
   const visibleSuggestions = suggestions.filter((s) => !skippedColumns.includes(s.column))
@@ -100,6 +108,39 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
         },
       ],
     }))
+  }
+
+  const askAiForRecommendation = async () => {
+    if (!dataset?.id || !current || aiLoading) return
+    setAiLoading(true)
+    setAiSuggestion(null)
+    try {
+      const payload = {
+        stage_id: dataset.current_stage_id,
+        column: selectedColumn,
+        unique_values: uniqueValues,
+        system_groups: groups.map((group) => ({
+          final_label: group.suggested_label,
+          selected_values: Object.entries(group.selected || {})
+            .filter(([, selected]) => selected)
+            .map(([value]) => value),
+          reason: group.reason,
+        })),
+        available_action: 'standardize categorical labels',
+      }
+      const r = await api.aiExplain(
+        dataset.id,
+        `category-standardization-recommendation:${dataset.current_stage_id || 'current'}:${selectedColumn}`,
+        payload,
+        'Give plain-text advice for this category standardization card. Recommend which source values should belong under each final label. Use only the current values and do not apply changes.',
+        payload,
+      )
+      setAiSuggestion({ ok: true, text: r.explanation || 'AI suggestion unavailable.' })
+    } catch {
+      setAiSuggestion({ ok: false, text: 'AI suggestion unavailable.' })
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   const apply = async () => {
@@ -220,6 +261,19 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
 
       {current && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>
+                Recommended label groups
+              </p>
+              <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+              <InfoDot text="System recommended means SimuCast grouped labels using exact values, case/spacing similarities, and common binary/value patterns. You can still edit labels or uncheck values before applying." />
+            </div>
+            <button className="ax-btn mini" type="button" onClick={askAiForRecommendation} disabled={aiLoading}>
+              {aiLoading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+            </button>
+          </div>
+          <AiSuggestionBox loading={aiLoading} suggestion={aiSuggestion} />
           <div className="ax-card" style={{ padding: 10, background: 'var(--color-background-primary)' }}>
             <p style={{ fontSize: 11, fontWeight: 500, margin: '0 0 6px' }}>Unique values detected</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -231,9 +285,12 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
             </div>
           </div>
           {groups.map((group, index) => (
-            <div key={index} className="ax-card" style={{ padding: 10, background: 'var(--color-background-secondary)' }}>
+            <div key={index} className="ax-card" style={{ padding: 12, background: 'var(--color-accent-light)', border: '0.5px solid rgba(249, 115, 22, 0.28)' }}>
               <div className="ax-row" style={{ marginBottom: 8 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>Group {index + 1}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
+                  <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>Group {index + 1}</p>
+                </div>
                 <button className="ax-btn danger" onClick={() => deleteGroup(index)} disabled={busy} type="button">
                   Delete group
                 </button>
@@ -281,6 +338,68 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
               {busy ? 'Applying...' : 'Apply and go next'}
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InfoDot({ text }) {
+  return (
+    <span
+      title={text}
+      aria-label={text}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 18,
+        height: 18,
+        borderRadius: '999px',
+        border: '1px solid var(--color-border-secondary)',
+        background: 'var(--color-background-primary)',
+        color: 'var(--color-text-secondary)',
+        fontSize: 11,
+        fontWeight: 800,
+        lineHeight: 1,
+        cursor: 'help',
+      }}
+    >
+      i
+    </span>
+  )
+}
+
+function AiSuggestionBox({ suggestion }) {
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => {
+    if (suggestion) setCollapsed(false)
+  }, [suggestion?.text])
+  if (!suggestion) return null
+  return (
+    <div style={{
+      padding: '10px 12px',
+      border: '0.5px solid var(--color-border-tertiary)',
+      borderRadius: 10,
+      background: suggestion.ok ? 'var(--color-background-info)' : 'var(--color-background-secondary)',
+      fontSize: 12,
+      maxHeight: 260,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: collapsed ? 0 : 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>AI suggestion</span>
+          <span style={{ color: 'var(--color-text-tertiary)' }}>advisory only</span>
+        </div>
+        <button className="ax-btn mini" type="button" onClick={() => setCollapsed((v) => !v)}>
+          {collapsed ? 'Show' : 'Hide'}
+        </button>
+      </div>
+      {!collapsed && (
+        <div style={{ overflowY: 'auto', paddingRight: 4, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+          {suggestion.text}
         </div>
       )}
     </div>

@@ -1037,11 +1037,48 @@ function recommendNumericFormatting(numericVariables = []) {
   }
 }
 
+function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>{title}</p>
+        <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+        <InfoDot text={info} />
+      </div>
+      <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
+        {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+      </button>
+    </div>
+  )
+}
+
+function FeatureRecommendationCard({ recommendation }) {
+  if (!recommendation) return null
+  return (
+    <div style={{
+      padding: '10px 12px',
+      border: '0.5px solid rgba(249, 115, 22, 0.28)',
+      borderRadius: 10,
+      background: 'var(--color-accent-light)',
+      fontSize: 12,
+      marginBottom: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+        <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
+        <strong>{recommendation.label}</strong>
+      </div>
+      <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>
+    </div>
+  )
+}
+
 function FeatureEngineeringCard({ dataset, onApplied }) {
   const [open, setOpen] = useState(false)
   const [tool, setTool] = useState('bins') // 'bins' | 'format'
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState(null)
 
   const variables = dataset?.variables || []
   const numericVariables = variables.filter((v) => ['numeric','int','float'].includes(v.dtype))
@@ -1075,6 +1112,41 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
       setFmtParam('2')
     }
   }, [formatRecommendation?.column, fmtCol])
+
+  useEffect(() => {
+    setAiSuggestion(null)
+  }, [tool, dataset?.current_stage_id])
+
+  const askAiForFeatureRecommendation = async () => {
+    if (!dataset?.id || aiLoading) return
+    setAiLoading(true)
+    setAiSuggestion(null)
+    try {
+      const activeRecommendation = tool === 'bins' ? binRecommendation : formatRecommendation
+      const payload = {
+        stage_id: dataset.current_stage_id,
+        tool,
+        system_recommendation: activeRecommendation || null,
+        selected_options: tool === 'bins'
+          ? { column: binCol, bins: binCount, labels: binLabels, new_name: binNewName || `${binCol || 'column'}_bin` }
+          : { column: fmtCol, operation: fmtOp, decimals: fmtParam, new_name: fmtNewName || fmtCol },
+        numeric_columns: numericVariables.map((v) => ({ name: v.name, type: v.dtype, unique: v.unique })),
+        supported_actions: ['create bins', 'numeric formatting'],
+      }
+      const r = await api.aiExplain(
+        dataset.id,
+        `feature-tools-${tool}-recommendation:${dataset.current_stage_id || 'current'}`,
+        payload,
+        'Give plain-text advice for this optional feature tool. Recommend only supported SimuCast actions: create bins or numeric formatting. Explain whether it is useful and what settings to use. Do not apply changes.',
+        payload,
+      )
+      setAiSuggestion({ ok: true, text: r.explanation || 'AI suggestion unavailable.' })
+    } catch {
+      setAiSuggestion({ ok: false, text: 'AI suggestion unavailable.' })
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const applyFeat = async () => {
     setBusy(true)
@@ -1134,10 +1206,17 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
 
           {tool === 'bins' && (
             <div>
-              <RecommendationNote recommendation={binRecommendation || {
+              <FeatureRecommendationHeader
+                title="Recommended binning setup"
+                info="System recommended means SimuCast chose a simple optional binning setup from numeric columns that are easier to interpret in grouped ranges. Binning is optional and loses numeric detail."
+                loading={aiLoading}
+                onAsk={askAiForFeatureRecommendation}
+              />
+              <FeatureRecommendationCard recommendation={binRecommendation || {
                 label: 'No strong binning recommendation',
                 why: 'Binning is optional and works best for numeric columns where grouped interpretation is useful.',
               }} />
+              <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
               <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 12px' }}>
                 Binning loses numeric detail. Use it only when grouped ranges help explain the data.
               </p>
@@ -1204,10 +1283,17 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
 
           {tool === 'format' && (
             <div>
-              <RecommendationNote recommendation={formatRecommendation || {
+              <FeatureRecommendationHeader
+                title="Recommended numeric formatting"
+                info="System recommended means SimuCast checks numeric columns for excessive or inconsistent decimal precision. Formatting is optional and should be used for cleaner display, exports, and reports."
+                loading={aiLoading}
+                onAsk={askAiForFeatureRecommendation}
+              />
+              <FeatureRecommendationCard recommendation={formatRecommendation || {
                 label: 'No numeric formatting needed',
                 why: 'Only round or format values when decimal precision is excessive or inconsistent.',
               }} />
+              <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
               <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12, marginTop: 12 }}>
               <label style={{ color: 'var(--color-text-secondary)' }}>Column</label>
               <select value={fmtCol} onChange={(e) => setFmtCol(e.target.value)}>
