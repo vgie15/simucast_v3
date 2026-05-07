@@ -609,6 +609,10 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
           borderRadius: 10,
           background: suggestion.ok ? 'var(--color-background-info)' : 'var(--color-background-secondary)',
           fontSize: 12,
+          maxHeight: 260,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>
@@ -618,7 +622,15 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
               advisory only
             </span>
           </div>
-          <p style={{ margin: 0, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap' }}>{suggestion.text}</p>
+          <div style={{
+            overflowY: 'auto',
+            paddingRight: 4,
+            color: 'var(--color-text-secondary)',
+            whiteSpace: 'pre-wrap',
+            lineHeight: 1.55,
+          }}>
+            {suggestion.text}
+          </div>
         </div>
       )}
     </div>
