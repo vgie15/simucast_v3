@@ -472,7 +472,6 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <KindBadge kind={kind} />
             <strong style={{ fontSize: 14 }}>{title}</strong>
-            <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
             <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
               {kind === 'duplicates' ? `${duplicateCount} duplicate rows` : `${items.length} affected column${items.length === 1 ? '' : 's'}`}
             </span>
@@ -596,6 +595,12 @@ function StatCard({ label, value }) {
 }
 
 function AiRecommendationBlock({ loading, suggestion, onAsk }) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    if (suggestion) setCollapsed(false)
+  }, [suggestion?.text])
+
   return (
     <div style={{ marginTop: suggestion ? 8 : 0 }}>
       {onAsk && (
@@ -616,23 +621,30 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>
-              AI suggestion
-            </span>
-            <span style={{ color: 'var(--color-text-tertiary)' }}>
-              advisory only
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: collapsed ? 0 : 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>
+                AI suggestion
+              </span>
+              <span style={{ color: 'var(--color-text-tertiary)' }}>
+                advisory only
+              </span>
+            </div>
+            <button className="ax-btn mini" type="button" onClick={() => setCollapsed((v) => !v)}>
+              {collapsed ? 'Show' : 'Hide'}
+            </button>
           </div>
-          <div style={{
-            overflowY: 'auto',
-            paddingRight: 4,
-            color: 'var(--color-text-secondary)',
-            whiteSpace: 'pre-wrap',
-            lineHeight: 1.55,
-          }}>
-            {suggestion.text}
-          </div>
+          {!collapsed && (
+            <div style={{
+              overflowY: 'auto',
+              paddingRight: 4,
+              color: 'var(--color-text-secondary)',
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.55,
+            }}>
+              {suggestion.text}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -768,9 +780,13 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
-          Recommended actions by method <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>System recommended</span>
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>
+            Recommended actions by method
+          </p>
+          <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+          <InfoDot text="System recommended means SimuCast selected this method using the current dataset profile, column type, missing count, skew, and outlier checks. You can still change it manually." />
+        </div>
         <button className="ax-btn mini" type="button" onClick={onAskAi} disabled={aiLoading}>
           {aiLoading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
         </button>
@@ -879,9 +895,11 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
-          What to do <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>System recommended</span>
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>What to do</p>
+          <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+          <InfoDot text="System recommended means SimuCast selected this action from the current duplicate scan. You can still choose which duplicate occurrence to keep." />
+        </div>
         <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
           {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
         </button>
@@ -907,6 +925,32 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
       </div>
       <AiRecommendationBlock loading={loading} suggestion={suggestion} />
     </div>
+  )
+}
+
+function InfoDot({ text }) {
+  return (
+    <span
+      title={text}
+      aria-label={text}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 18,
+        height: 18,
+        borderRadius: '999px',
+        border: '1px solid var(--color-border-secondary)',
+        background: 'var(--color-background-primary)',
+        color: 'var(--color-text-secondary)',
+        fontSize: 11,
+        fontWeight: 800,
+        lineHeight: 1,
+        cursor: 'help',
+      }}
+    >
+      i
+    </span>
   )
 }
 
