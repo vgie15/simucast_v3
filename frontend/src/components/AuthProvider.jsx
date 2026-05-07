@@ -4,21 +4,16 @@ import { api } from '../api'
 
 const AuthContext = createContext(null)
 
-// localStorage key that stores the guest token that has consumed its one slot.
-// Never cleared on delete — only on sign-up / login (new real account).
-const GUEST_SLOT_KEY = 'simucast.guestSlot'
+// Browser/device-level flag that a guest project slot was already consumed.
+// Never cleared by delete, signup, login, migration, or logout.
+const GUEST_SLOT_KEY = 'simucast.guestSlot.used'
 
-function isGuestSlotUsed(token) {
-  if (!token) return false
-  return localStorage.getItem(GUEST_SLOT_KEY) === token
+function isGuestSlotUsed() {
+  return localStorage.getItem(GUEST_SLOT_KEY) === '1'
 }
 
-export function markGuestSlotUsed(token) {
-  if (token) localStorage.setItem(GUEST_SLOT_KEY, token)
-}
-
-function clearGuestSlot() {
-  localStorage.removeItem(GUEST_SLOT_KEY)
+export function markGuestSlotUsed() {
+  localStorage.setItem(GUEST_SLOT_KEY, '1')
 }
 
 export function AuthProvider({ children }) {
@@ -54,7 +49,7 @@ export function AuthProvider({ children }) {
     api.setSessionToken(next?.token || '')
     // Sync localStorage slot flag from backend usage_count
     if (next?.is_guest && (next?.usage_count ?? 0) >= 1) {
-      markGuestSlotUsed(next.token)
+      markGuestSlotUsed()
     }
   }, [])
 
@@ -90,7 +85,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const r = await api.authLogin(email, password)
-    clearGuestSlot()
+    clearProjectState()
     saveSession(r)
     try {
       const me = await api.authMe()
@@ -99,11 +94,11 @@ export function AuthProvider({ children }) {
     window.dispatchEvent(new CustomEvent('simucast-auth-changed'))
     setModalMode(null)
     return r.session
-  }, [saveSession])
+  }, [clearProjectState, saveSession])
 
   const signup = useCallback(async (email, password, fullName = '') => {
     const r = await api.authSignup(email, password, fullName)
-    clearGuestSlot()
+    clearProjectState()
     saveSession(r)
     try {
       const me = await api.authMe()
@@ -112,7 +107,7 @@ export function AuthProvider({ children }) {
     window.dispatchEvent(new CustomEvent('simucast-auth-changed'))
     setModalMode(null)
     return r.session
-  }, [saveSession])
+  }, [clearProjectState, saveSession])
 
   const logout = useCallback(async () => {
     try {
@@ -120,7 +115,6 @@ export function AuthProvider({ children }) {
     } finally {
       api.setSessionToken('')
       setSession(null)
-      clearGuestSlot()
       clearProjectState()
       const guest = await api.authGuest()
       saveSession(guest)
@@ -152,7 +146,7 @@ export function AuthProvider({ children }) {
     // Deleting the project does NOT reset this — the slot is consumed permanently.
     guestAtLimit: !!session?.is_guest && (
       (session?.usage_count ?? 0) >= (session?.limit ?? 1) ||
-      isGuestSlotUsed(session?.token)
+      isGuestSlotUsed()
     ),
     login,
     signup,

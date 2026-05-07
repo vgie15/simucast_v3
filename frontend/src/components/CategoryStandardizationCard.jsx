@@ -182,6 +182,9 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
           <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
             {visibleSuggestions.length} column{visibleSuggestions.length === 1 ? '' : 's'} need review. Review, skip, or apply when useful.
           </p>
+          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+            Optional but recommended when similar labels are detected. Check the source values that belong under each final label, then apply the mapping.
+          </p>
         </div>
         {/* buttons removed — use per-column Skip / Previous / Next controls below */}
       </div>
@@ -244,6 +247,14 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
               </div>
               <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '8px 0 4px' }}>
                 {group.reason}
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>
+                For <strong>{group.suggested_label || 'this final label'}</strong>, keep checked: {
+                  Object.entries(group.selected || {})
+                    .filter(([, selected]) => selected)
+                    .map(([value]) => value)
+                    .join(', ') || 'select matching values below'
+                }.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {uniqueValues.map((item) => (

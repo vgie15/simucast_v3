@@ -425,6 +425,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
     : Array.from(new Map(items.flatMap((item) => item.options || []).map((opt) => [opt.action, opt])).values())
   const columns = kind === 'duplicates' ? (group?.columns || []) : selected
   const recommendation = recommendedGroupAction(kind, group, items, action, keep)
+  const selectedAll = kind !== 'duplicates' && items.length > 0 && selected.length === items.length
 
   return (
     <div className={`ax-card ax-busy-host ${applying ? 'is-busy' : ''}`} style={{ padding: 14 }}>
@@ -438,6 +439,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <KindBadge kind={kind} />
             <strong style={{ fontSize: 14 }}>{title}</strong>
+            <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
             <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
               {kind === 'duplicates' ? `${duplicateCount} duplicate rows` : `${items.length} affected column${items.length === 1 ? '' : 's'}`}
             </span>
@@ -457,6 +459,7 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
       {kind === 'duplicates' ? (
         <>
           <RecommendationNote recommendation={recommendation} />
+          <ColumnRecommendationList kind={kind} items={items} />
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', marginTop: 12, fontSize: 12 }}>
             <label style={{ color: 'var(--color-text-secondary)' }}>Keep occurrence</label>
             <select value={keep} onChange={(e) => setKeep(e.target.value)}>
@@ -476,8 +479,19 @@ function CleanGroupCard({ group, kind, title, description, applying, onApply }) 
             </select>
           </div>
           <RecommendationNote recommendation={recommendation} />
+          <ColumnRecommendationList kind={kind} items={items} />
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+            <button
+              className="ax-btn mini"
+              type="button"
+              onClick={() => setSelected(selectedAll ? [] : items.map((item) => item.variable).filter(Boolean))}
+            >
+              {selectedAll ? 'Clear columns' : 'Select all columns'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
             {items.map((item) => (
               <label key={item.variable} className="ax-chip" style={{ cursor: 'pointer' }}>
                 <input
@@ -622,6 +636,78 @@ function RecommendationNote({ recommendation }) {
   )
 }
 
+function ColumnRecommendationList({ kind, items = [] }) {
+  if (!items.length || kind === 'duplicates') return null
+  return (
+    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', margin: 0 }}>
+        What to do by column
+      </p>
+      {items.map((item) => {
+        const rec = recommendedColumnAction(kind, item)
+        return (
+          <div
+            key={item.variable}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(130px, 1fr) minmax(150px, 1fr) 2fr',
+              gap: 8,
+              padding: '7px 8px',
+              border: '0.5px solid var(--color-border-tertiary)',
+              borderRadius: 8,
+              background: 'var(--color-background-primary)',
+              fontSize: 11,
+              alignItems: 'start',
+            }}
+          >
+            <strong>{item.variable}</strong>
+            <span>{rec.label}</span>
+            <span style={{ color: 'var(--color-text-secondary)' }}>{rec.why}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function recommendedColumnAction(kind, item) {
+  const options = item.options || []
+  const has = (action) => options.some((opt) => opt.action === action)
+  const count = Number(item.count || 0)
+  if (kind === 'missing') {
+    if (has('impute_mode')) {
+      return {
+        action: 'impute_mode',
+        label: 'Fill with most common value',
+        why: `${count} blank value${count === 1 ? '' : 's'} in a categorical column should use the dominant label, not a numeric average.`,
+      }
+    }
+    if (has('impute_median') && count > 0) {
+      return {
+        action: 'impute_mean',
+        label: 'Fill with mean',
+        why: `${count} blank value${count === 1 ? '' : 's'} detected. Mean is the default unless the column is visibly skewed or outlier-heavy; use the override for median if needed.`,
+      }
+    }
+    return { action: 'drop_rows', label: 'Review/drop rows', why: 'Use this only when missingness is too high or blanks are not safely imputable.' }
+  }
+  if (kind === 'outliers') {
+    return {
+      action: 'winsorize',
+      label: 'Cap to IQR bounds',
+      why: `${count} outlier value${count === 1 ? '' : 's'} detected. Capping reduces distortion while keeping the row for analysis.`,
+    }
+  }
+  if (kind === 'type') {
+    return {
+      action: 'convert_date',
+      label: 'Convert detected type',
+      why: 'The values look parseable as dates, so type conversion makes the column more usable.',
+    }
+  }
+  return { action: item.action, label: cleanActionLabel(item.action), why: item.description || 'Recommended by the current dataset profile.' }
+}
+
 function recommendBinning(numericVariables = []) {
   const candidates = numericVariables.filter((v) => {
     const name = String(v.name || '').toLowerCase()
@@ -726,8 +812,8 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
           <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
         </svg>
-        <span style={{ fontSize: 13, fontWeight: 500 }}>Feature engineering and numeric formatting</span>
-        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>Create binned features or standardize decimal places</span>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>Optional feature tools and numeric formatting</span>
+        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>Optional: create binned features or standardize decimal places</span>
       </button>
 
       {open && (

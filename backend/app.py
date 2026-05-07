@@ -304,11 +304,18 @@ def _attach_owner(ds, session):
     ds.user_id = user.id if user else None
 
 def _claim_guest_projects(session, guest_session, user_id):
-    if not guest_session:
+    if not guest_session or not guest_session.is_guest:
         return
     for ds in session.query(Dataset).filter_by(session_id=guest_session.id).all():
         ds.user_id = user_id
         ds.session_id = None
+
+def _client_guest_slot_used():
+    header = (request.headers.get("X-SimuCast-Guest-Used") or "").strip().lower()
+    if header in {"1", "true", "yes"}:
+        return True
+    body = request.get_json(silent=True) or {}
+    return bool(body.get("guest_slot_used"))
 
 def _guest_limit_response(sess):
     if sess and sess.is_guest and int(sess.guest_usage_count or 0) >= 1:
@@ -836,14 +843,18 @@ def _schema_guard():
 def create_guest_session():
     s = db()
     try:
+        client_used = _client_guest_slot_used()
         sess, user = _auth_from_request(s)
         if sess:
+            if sess.is_guest and client_used and int(sess.guest_usage_count or 0) < 1:
+                sess.guest_usage_count = 1
+                s.commit()
             return jsonify({"session": _session_payload(sess, user)})
         sess = UserSession(
             id=str(uuid.uuid4()),
             token=_new_token(),
             is_guest=1,
-            guest_usage_count=0,
+            guest_usage_count=1 if client_used else 0,
             expires_at=datetime.utcnow() + timedelta(days=14),
         )
         s.add(sess)
@@ -884,6 +895,7 @@ def signup():
         )
         s.add(user)
         s.add(sess)
+        # Guest work is claimed only when the user explicitly signs up from guest mode.
         _claim_guest_projects(s, old_sess, user.id)
         s.commit()
         return jsonify({"session": _session_payload(sess, user)})
@@ -900,7 +912,6 @@ def login():
         user = s.query(User).filter_by(email=email).first()
         if not user or not check_password_hash(user.password_hash, password):
             return {"error": "invalid email or password"}, 401
-        old_sess, _ = _auth_from_request(s)
         sess = UserSession(
             id=str(uuid.uuid4()),
             user_id=user.id,
@@ -910,7 +921,6 @@ def login():
             expires_at=datetime.utcnow() + timedelta(days=30),
         )
         s.add(sess)
-        _claim_guest_projects(s, old_sess, user.id)
         s.commit()
         return jsonify({"session": _session_payload(sess, user)})
     finally:
@@ -1034,6 +1044,9 @@ def upload_dataset():
         if sess and sess.is_guest:
             existing_count = _dataset_scope(s.query(Dataset), s).count()
             usage = int(sess.guest_usage_count or 0)
+            if _client_guest_slot_used() and usage < 1:
+                sess.guest_usage_count = 1
+                usage = 1
             # Retroactively sync for sessions created before the usage counter existed
             if existing_count > usage:
                 sess.guest_usage_count = existing_count
@@ -4429,6 +4442,10 @@ _SIMUCAST_CAPABILITIES = [
         "drop rows/columns", "export cleaned data",
     ]),
     ("Feature engineering", ["create bins", "numeric formatting"]),
+    ("Expand", [
+        "decide whether expansion is needed", "recommend Bootstrap vs Synthetic",
+        "configure target rows", "preview generated rows/stat changes", "apply expansion",
+    ]),
     ("Describe", [
         "run descriptive statistics", "inspect variable cards", "view histogram/distribution",
         "view categorical distribution", "view correlation overview",
@@ -4537,6 +4554,8 @@ def _parse_ai_plan_text(text):
     category_pages = {
         "data preparation": "data",
         "feature engineering": "data",
+        "expand": "expand",
+        "data expansion": "expand",
         "describe": "describe",
         "analysis": "tests",
         "statistical analysis": "tests",
@@ -4559,6 +4578,11 @@ def _parse_ai_plan_text(text):
         ("export cleaned data", "data", "data-section-raw_data"),
         ("create bins", "data", "data-section-feature_engineering"),
         ("numeric formatting", "data", "data-section-feature_engineering"),
+        ("decide whether expansion is needed", "expand", "expand-section-controls"),
+        ("recommend bootstrap vs synthetic", "expand", "expand-section-controls"),
+        ("configure target rows", "expand", "expand-section-controls"),
+        ("preview generated rows/stat changes", "expand", "expand-section-controls"),
+        ("apply expansion", "expand", "expand-section-controls"),
         ("run descriptive statistics", "describe", "describe-section-variables"),
         ("inspect variable cards", "describe", "describe-section-variables"),
         ("view histogram/distribution", "describe", "describe-section-variables"),
@@ -4719,7 +4743,13 @@ def ai_project_plan(ds_id):
             "Use: exact SimuCast feature from the capability list\n"
             "Columns: comma-separated relevant columns, or None\n\n"
             "Rules:\n"
-            "- Sort steps in workflow order: Data preparation, optional Feature engineering, Describe, Analysis, Models, What-if, Report.\n"
+            "- Sort steps in workflow order: Data preparation, optional Feature engineering, optional Expand, Describe, Analysis, Models, What-if, Report.\n"
+            "- Inside Data preparation, follow the UI order: review dataset/export, manual transforms, missing values, outliers, duplicates, category standardization, optional feature tools.\n"
+            "- Inside Expand, follow: decide if expansion is needed, choose Bootstrap or Synthetic, configure target rows, preview, apply.\n"
+            "- Inside Describe, follow: select variables, generate summaries, review visualizations, review correlations, explain findings.\n"
+            "- Inside Analysis, follow: choose/recommend test, choose valid column pair, configure test, run test, explain results.\n"
+            "- Inside Models, follow: select target, select features, configure preprocessing, select algorithm, train, review metrics/model health, optional tuning.\n"
+            "- Inside What-if, follow: use trained model, adjust feature values, generate prediction, explain prediction, save/compare scenarios.\n"
             "- Recommend high-level workflow steps only.\n"
             "- Do not include method-level choices such as mean, median, mode, IQR cap, remove rows, or bin labels.\n"
             "- Prefer 5 to 8 steps.\n"
@@ -5183,15 +5213,23 @@ def _normalize_project_steps(steps):
         return section
     def sub_order(step):
         text = f"{step.get('section', '')} {step.get('id', '')} {step.get('title', '')}".lower()
-        if "missing" in text:
+        if "raw" in text or "review dataset" in text or "export" in text:
             return 0
-        if "clean" in text or "suggest" in text or "outlier" in text or "duplicate" in text:
+        if "manual" in text or "transform" in text or "rename" in text or "drop" in text or "type" in text:
             return 1
-        if "categor" in text or "standard" in text:
+        if "missing" in text:
             return 2
-        if "feature" in text or "engineer" in text or "transform" in text:
+        if "outlier" in text:
             return 3
-        return 5
+        if "duplicate" in text:
+            return 4
+        if "clean" in text or "suggest" in text:
+            return 5
+        if "categor" in text or "standard" in text:
+            return 6
+        if "feature" in text or "engineer" in text or "bin" in text or "format" in text:
+            return 7
+        return 8
     out = []
     for idx, raw in enumerate(steps or [], start=1):
         if not isinstance(raw, dict):
@@ -5224,24 +5262,87 @@ def _rule_based_project_plan(df, variables):
     cats = [v["name"] for v in variables if v.get("dtype") == "category"]
     bins = [v["name"] for v in variables if v.get("dtype") == "binary"]
     missing_cols = [v["name"] for v in variables if int(v.get("missing", 0) or 0) > 0]
+    outlier_cols = []
+    for col in nums:
+        if col not in df.columns:
+            continue
+        series = pd.to_numeric(df[col], errors="coerce").dropna()
+        if len(series) < 10:
+            continue
+        q1, q3 = series.quantile([0.25, 0.75])
+        iqr = q3 - q1
+        if iqr and int(((series < q1 - 1.5 * iqr) | (series > q3 + 1.5 * iqr)).sum()) > 0:
+            outlier_cols.append(col)
+    duplicate_count = int(df.duplicated().sum()) if len(df) else 0
     steps = []
+    steps.append({
+        "id": "data-review-manual-transforms",
+        "page": "data",
+        "section": "data-section-manual_transforms",
+        "title": "Review manual transforms before cleanup",
+        "rationale": "Check whether columns need renaming, type changes, drops, merges, or splits before applying automatic fixes.",
+        "priority": "medium",
+        "columns": [],
+    })
     if missing_cols:
         steps.append({
             "id": "data-missing-values",
             "page": "data",
+            "section": "fix-cleaning-suggestions",
             "title": f"Fix missing values in {', '.join(missing_cols[:3])}",
             "rationale": "Missing values can distort summaries, tests, and model training.",
             "priority": "high",
             "columns": missing_cols[:5],
         })
+    if outlier_cols:
+        steps.append({
+            "id": "data-outliers",
+            "page": "data",
+            "section": "fix-cleaning-suggestions",
+            "title": "Review outliers in numeric columns",
+            "rationale": "Extreme values can pull averages and model coefficients away from the typical pattern.",
+            "priority": "medium",
+            "columns": outlier_cols[:5],
+        })
+    if duplicate_count:
+        steps.append({
+            "id": "data-duplicates",
+            "page": "data",
+            "section": "fix-cleaning-suggestions",
+            "title": "Remove exact duplicate rows",
+            "rationale": f"{duplicate_count} duplicate row{'s' if duplicate_count != 1 else ''} may overweight repeated records.",
+            "priority": "medium",
+            "columns": [],
+        })
     if cats:
         steps.append({
             "id": "data-category-standardization",
             "page": "data",
+            "section": "data-section-category_standardization",
             "title": "Review categorical labels for standardization",
             "rationale": "Consistent labels keep categories from being split incorrectly during tests and modeling.",
             "priority": "high" if len(cats) else "medium",
             "columns": cats[:5],
+        })
+    if nums:
+        steps.append({
+            "id": "data-optional-feature-tools",
+            "page": "data",
+            "section": "data-section-feature_engineering",
+            "title": "Optional: review feature tools and numeric formatting",
+            "rationale": "Create bins or format numeric precision only when it improves interpretation.",
+            "priority": "low",
+            "columns": nums[:5],
+        })
+    if 0 < len(df) < 200:
+        steps.append({
+            "id": "expand-optional",
+            "page": "expand",
+            "section": "expand-section-controls",
+            "title": "Optional: decide whether to expand the dataset",
+            "rationale": "Small datasets can benefit from careful expansion, but preview distribution drift before applying.",
+            "priority": "low",
+            "columns": [],
         })
     steps.append({
         "id": "describe-overview",

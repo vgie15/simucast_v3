@@ -325,6 +325,9 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
                           )}
                           {!isCompleted && (
                             <>
+                              <p style={{ fontSize: 10, color: 'var(--color-primary)', fontWeight: 750, margin: '5px 0 0' }}>
+                                {isAI ? 'AI recommended' : 'System recommended'}
+                              </p>
                               <div className="ax-plan-target">
                                 <span>Use</span>
                                 <strong>{target.label}</strong>
@@ -388,7 +391,8 @@ function deriveProgress(activity) {
     if (action === 'train_model' || kind === 'model' || category === 'model') mark(progress, 'models', createdAt)
     if (action === 'save_whatif_scenario' || kind === 'whatif' || category === 'whatif') mark(progress, 'whatif', createdAt)
     if (action === 'generate_report' || kind === 'report' || category === 'report') mark(progress, 'report', createdAt)
-    if (isDataChangingAction(action) || item.related_stage_id || item.ref_type === 'stage') mark(progress, 'data', createdAt)
+    const dataKey = dataCompletionKey(action, summary)
+    if (dataKey) mark(progress, dataKey, createdAt)
     if (action === 'expand') mark(progress, 'expand', createdAt)
   }
   return progress
@@ -409,9 +413,34 @@ function isDataChangingAction(action) {
     || action.startsWith('split')
 }
 
+function dataCompletionKey(action, summary) {
+  const text = `${action || ''} ${summary || ''}`.toLowerCase()
+  if (text.includes('missing')) return 'data:missing'
+  if (text.includes('outlier') || text.includes('winsor')) return 'data:outliers'
+  if (text.includes('duplicate')) return 'data:duplicates'
+  if (text.includes('categor') || text.includes('standard')) return 'data:category'
+  if (text.includes('feature_engineer') || text.includes('bin') || text.includes('format')) return 'data:feature'
+  if (text.includes('rename') || text.includes('drop') || text.includes('cast') || text.includes('split') || text.includes('merge') || text.includes('type')) return 'data:manual'
+  return ''
+}
+
+function completionKeyForStep(step) {
+  const page = step?.page || 'data'
+  if (page !== 'data') return page
+  const text = `${step?.section || ''} ${step?.id || ''} ${step?.title || ''}`.toLowerCase()
+  if (text.includes('missing')) return 'data:missing'
+  if (text.includes('outlier')) return 'data:outliers'
+  if (text.includes('duplicate')) return 'data:duplicates'
+  if (text.includes('categor') || text.includes('standard')) return 'data:category'
+  if (text.includes('feature') || text.includes('engineer') || text.includes('bin') || text.includes('format')) return 'data:feature'
+  if (text.includes('manual') || text.includes('transform') || text.includes('rename') || text.includes('drop') || text.includes('type')) return 'data:manual'
+  return page
+}
+
 function getStepState(step, progress, latestDataChange, doneSet) {
   const page = step.page || 'data'
-  const completedAt = progress.completedAt[page]
+  const completionKey = completionKeyForStep(step)
+  const completedAt = progress.completedAt[completionKey] || progress.completedAt[page]
   const manuallyDone = doneSet.has(step.id)
   const downstream = (PAGE_ORDER[page] ?? 0) > PAGE_ORDER.data
   if ((completedAt || manuallyDone) && downstream && latestDataChange && completedAt && latestDataChange > completedAt) {
@@ -431,10 +460,14 @@ function workflowSort(step, originalIndex = 0) {
 
 function sectionRank(step) {
   const text = `${step?.section || ''} ${step?.id || ''} ${step?.title || ''}`.toLowerCase()
-  if (text.includes('missing')) return 0
-  if (text.includes('clean') || text.includes('suggest')) return 1
-  if (text.includes('categor')) return 2
-  if (text.includes('feature') || text.includes('engineer') || text.includes('transform')) return 3
+  if (text.includes('raw') || text.includes('review dataset') || text.includes('export')) return 0
+  if (text.includes('manual') || text.includes('transform') || text.includes('rename') || text.includes('drop') || text.includes('type')) return 1
+  if (text.includes('missing')) return 2
+  if (text.includes('outlier')) return 3
+  if (text.includes('duplicate')) return 4
+  if (text.includes('clean') || text.includes('suggest')) return 5
+  if (text.includes('categor') || text.includes('standard')) return 6
+  if (text.includes('feature') || text.includes('engineer') || text.includes('bin') || text.includes('format')) return 7
   return 5
 }
 
@@ -517,6 +550,9 @@ function GuidedPlanModal({ isAI, mode, error, summary, items, nextStepId, onClos
                     <small>{target.hint}</small>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color: 'var(--color-primary)', fontWeight: 750 }}>
+                      {isAI ? 'AI recommended' : 'System recommended'}
+                    </span>
                     <button className="ax-btn mini prim" type="button" onClick={() => onGo(step)}>
                       {state.status === 'stale' ? 'Re-run ' : 'Open '}{target.shortLabel}
                     </button>
@@ -587,8 +623,8 @@ function targetForStep(step) {
     if (text.includes('feature') || text.includes('engineer') || text.includes('bin') || text.includes('format')) {
       return {
         section: 'data-section-feature_engineering',
-        label: 'Data > Feature engineering and numeric formatting',
-        shortLabel: 'feature engineering',
+        label: 'Data > Optional feature tools and numeric formatting',
+        shortLabel: 'optional feature tools',
         hint: 'Create optional binned features or format numeric precision when useful.',
       }
     }

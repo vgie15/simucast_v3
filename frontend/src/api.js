@@ -5,6 +5,7 @@ const LOCAL_API_BASE =
     ? 'http://127.0.0.1:5000'
     : ''
 const TOKEN_KEY = 'simucast.sessionToken'
+const GUEST_SLOT_KEY = 'simucast.guestSlot.used'
 
 function getSessionToken() {
   return window.localStorage.getItem(TOKEN_KEY) || ''
@@ -19,6 +20,7 @@ function authHeaders(extra = {}) {
   const token = getSessionToken()
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(window.localStorage.getItem(GUEST_SLOT_KEY) === '1' ? { 'X-SimuCast-Guest-Used': '1' } : {}),
     ...extra,
   }
 }
@@ -97,7 +99,10 @@ async function _submitDataset(fd) {
 export const api = {
   getSessionToken,
   setSessionToken,
-  authGuest: () => request('/api/auth/guest', { method: 'POST' }),
+  authGuest: () => request('/api/auth/guest', {
+    method: 'POST',
+    body: JSON.stringify({ guest_slot_used: window.localStorage.getItem(GUEST_SLOT_KEY) === '1' }),
+  }),
   authSignup: (email, password, fullName = '') =>
     request('/api/auth/signup', {
       method: 'POST',
