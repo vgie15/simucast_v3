@@ -2357,12 +2357,19 @@ input[type="range"]::-moz-range-thumb {
 .ax-plan-check {
   width: 28px;
   height: 28px;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  align-self: start;
+  padding: 0;
   border: 0.5px solid var(--color-border-secondary);
   border-radius: 999px;
   background: var(--color-background-secondary);
   color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 800;
+  line-height: 1;
+  text-align: center;
 }
 .ax-plan-step.completed .ax-plan-check {
   background: var(--color-text-success);

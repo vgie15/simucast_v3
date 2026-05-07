@@ -72,13 +72,9 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       if (cached) {
         try {
           const cachedPlan = JSON.parse(cached)
-          if (mode === 'auto' && cachedPlan?.ai !== true) {
-            window.localStorage.removeItem(cacheKey)
-          } else {
-            setPlan(cachedPlan)
-            loadActivity()
-            return
-          }
+          setPlan(cachedPlan)
+          loadActivity()
+          return
         } catch {
           window.localStorage.removeItem(cacheKey)
         }
@@ -173,6 +169,25 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     if (doneKey) window.localStorage.setItem(doneKey, JSON.stringify(next))
   }
 
+  const handleModeChange = (nextMode) => {
+    if (nextMode === mode) return
+    if (modeKey) window.localStorage.setItem(modeKey, nextMode)
+    const nextCacheKey = `simucast.aiPlan.${datasetId}.${stageKey}.${nextMode}`
+    const cached = window.localStorage.getItem(nextCacheKey)
+    if (cached) {
+      try {
+        setPlan(JSON.parse(cached))
+      } catch {
+        window.localStorage.removeItem(nextCacheKey)
+        setPlan(null)
+      }
+    } else {
+      setPlan(null)
+    }
+    setError('')
+    setMode(nextMode)
+  }
+
   const goToStep = (step) => {
     if (!datasetId || !step?.page) return
     const section = sectionForStep(step)
@@ -242,10 +257,10 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
         {!collapsed && (
           <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 0 }}>
-            <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => setGuidanceMode('auto', modeKey, setMode, setPlan)}>
+            <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => handleModeChange('auto')}>
               AI guided
             </button>
-            <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => setGuidanceMode('system', modeKey, setMode, setPlan)}>
+            <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => handleModeChange('system')}>
               System only
             </button>
           </div>
@@ -348,12 +363,6 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       )}
     </section>
   )
-}
-
-function setGuidanceMode(nextMode, modeKey, setMode, setPlan) {
-  if (modeKey) window.localStorage.setItem(modeKey, nextMode)
-  setMode(nextMode)
-  setPlan(null)
 }
 
 function deriveProgress(activity) {
