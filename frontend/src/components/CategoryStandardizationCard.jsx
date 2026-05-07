@@ -14,6 +14,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   const [skippedColumns, setSkippedColumns] = useState([])
   const [aiLoading, setAiLoading] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState(null)
+  const [expandedGroups, setExpandedGroups] = useState({})
 
   const load = async (preferredColumn) => {
     if (!dataset?.id) return
@@ -49,6 +50,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
 
   useEffect(() => {
     setAiSuggestion(null)
+    setExpandedGroups({})
   }, [selectedColumn])
 
   const current = suggestions.find((s) => s.column === selectedColumn)
@@ -135,9 +137,9 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
         'Give plain-text advice for this category standardization card. Recommend which source values should belong under each final label. Use only the current values and do not apply changes.',
         payload,
       )
-      setAiSuggestion({ ok: true, text: r.explanation || 'AI suggestion unavailable.' })
+      setAiSuggestion({ ok: true, text: r.explanation || 'AI advisory unavailable.' })
     } catch {
-      setAiSuggestion({ ok: false, text: 'AI suggestion unavailable.' })
+      setAiSuggestion({ ok: false, text: 'AI advisory unavailable.' })
     } finally {
       setAiLoading(false)
     }
@@ -262,15 +264,21 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
       {current && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 2 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>
                 Recommended label groups
               </p>
-              <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
-              <InfoDot text="System recommended means SimuCast grouped labels using exact values, case/spacing similarities, and common binary/value patterns. You can still edit labels or uncheck values before applying." />
+              <SystemSourceLabel />
+              <InfoDot text="System recommendation means SimuCast grouped labels using exact values, case/spacing similarities, and common binary/value patterns. You can still edit labels or uncheck values before applying." />
             </div>
-            <button className="ax-btn mini" type="button" onClick={askAiForRecommendation} disabled={aiLoading}>
-              {aiLoading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+            <button
+              className="ax-btn mini"
+              type="button"
+              onClick={askAiForRecommendation}
+              disabled={aiLoading}
+              style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
+            >
+              {aiLoading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
             </button>
           </div>
           <AiSuggestionBox loading={aiLoading} suggestion={aiSuggestion} />
@@ -285,49 +293,68 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
             </div>
           </div>
           {groups.map((group, index) => (
-            <div key={index} className="ax-card" style={{ padding: 12, background: 'var(--color-accent-light)', border: '0.5px solid rgba(249, 115, 22, 0.28)' }}>
-              <div className="ax-row" style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
-                  <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>Group {index + 1}</p>
+            <div key={index} style={{ padding: '10px 0', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+              <div className="ax-row" style={{ marginBottom: 6, alignItems: 'flex-start' }}>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>
+                    {group.suggested_label || `Group ${index + 1}`}
+                    <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 500, marginLeft: 6 }}>
+                      ← {selectedValues(group).length} selected label{selectedValues(group).length === 1 ? '' : 's'}
+                    </span>
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                    {selectedValues(group).slice(0, 5).map((value) => (
+                      <span key={value} className="ax-chip">{value}</span>
+                    ))}
+                    {selectedValues(group).length > 5 && (
+                      <span className="ax-chip">+{selectedValues(group).length - 5} more</span>
+                    )}
+                  </div>
+                  <details style={{ marginTop: 6 }}>
+                    <summary style={{ cursor: 'pointer', color: 'var(--color-text-tertiary)', fontSize: 11 }}>Why this mapping?</summary>
+                    <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>{group.reason}</p>
+                  </details>
                 </div>
                 <button className="ax-btn danger" onClick={() => deleteGroup(index)} disabled={busy} type="button">
                   Delete group
                 </button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 10px', alignItems: 'center' }}>
-                <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Final label</label>
-                <input
-                  value={group.suggested_label || ''}
-                  onChange={(e) => setGroup(index, { suggested_label: e.target.value })}
-                />
-              </div>
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '8px 0 4px' }}>
-                {group.reason}
-              </p>
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>
-                For <strong>{group.suggested_label || 'this final label'}</strong>, keep checked: {
-                  Object.entries(group.selected || {})
-                    .filter(([, selected]) => selected)
-                    .map(([value]) => value)
-                    .join(', ') || 'select matching values below'
-                }.
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {uniqueValues.map((item) => (
-                  <label key={item.value} className="ax-chip" style={{ cursor: 'pointer' }}>
+              <button
+                className="ax-btn mini"
+                type="button"
+                onClick={() => setExpandedGroups((current) => ({ ...current, [index]: !current[index] }))}
+              >
+                {expandedGroups[index] ? 'Hide selection' : 'Review selection'}
+              </button>
+              {expandedGroups[index] && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 10px', alignItems: 'center', marginBottom: 8 }}>
+                    <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Final label</label>
                     <input
-                      type="checkbox"
-                      checked={!!group.selected?.[item.value]}
-                      onChange={(e) => {
-                        setGroup(index, { selected: { ...(group.selected || {}), [item.value]: e.target.checked } })
-                      }}
+                      value={group.suggested_label || ''}
+                      onChange={(e) => setGroup(index, { suggested_label: e.target.value })}
                     />
-                    <span style={{ marginLeft: 4 }}>{item.value}</span>
-                    <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 3 }}>({item.count})</span>
-                  </label>
-                ))}
-              </div>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>
+                    Check only the detected labels that should become <strong>{group.suggested_label || 'this final label'}</strong>.
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {uniqueValues.map((item) => (
+                      <label key={item.value} className="ax-chip" style={{ cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={!!group.selected?.[item.value]}
+                          onChange={(e) => {
+                            setGroup(index, { selected: { ...(group.selected || {}), [item.value]: e.target.checked } })
+                          }}
+                        />
+                        <span style={{ marginLeft: 4 }}>{item.value}</span>
+                        <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 3 }}>({item.count})</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <div className="ax-row">
@@ -341,6 +368,18 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
         </div>
       )}
     </div>
+  )
+}
+
+function selectedValues(group) {
+  return Object.entries(group.selected || {})
+    .filter(([, selected]) => selected)
+    .map(([value]) => value)
+}
+
+function SystemSourceLabel() {
+  return (
+    <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommendation</span>
   )
 }
 
@@ -390,7 +429,7 @@ function AiSuggestionBox({ suggestion }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: collapsed ? 0 : 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>AI suggestion</span>
+          <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>AI advisory</span>
           <span style={{ color: 'var(--color-text-tertiary)' }}>advisory only</span>
         </div>
         <button className="ax-btn mini" type="button" onClick={() => setCollapsed((v) => !v)}>

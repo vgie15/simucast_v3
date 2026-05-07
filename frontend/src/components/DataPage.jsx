@@ -452,9 +452,9 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
         'Give plain-text advice for this cleaning issue. Recommend among the available SimuCast methods only. Do not apply changes. Explain the safest option and mention any columns that need different handling.',
         payload,
       )
-      setAiSuggestion({ ok: true, text: res.explanation || res.summary || 'AI suggestion unavailable.' })
+      setAiSuggestion({ ok: true, text: res.explanation || res.summary || 'AI advisory unavailable.' })
     } catch {
-      setAiSuggestion({ ok: false, text: 'AI suggestion unavailable.' })
+      setAiSuggestion({ ok: false, text: 'AI advisory unavailable.' })
     } finally {
       setAiLoading(false)
     }
@@ -604,8 +604,14 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
   return (
     <div style={{ marginTop: suggestion ? 8 : 0 }}>
       {onAsk && (
-        <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
-          {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        <button
+          className="ax-btn mini"
+          type="button"
+          onClick={onAsk}
+          disabled={loading}
+          style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
+        >
+          {loading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
         </button>
       )}
       {suggestion && (
@@ -624,7 +630,7 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: collapsed ? 0 : 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ color: suggestion.ok ? 'var(--color-text-info)' : 'var(--color-text-secondary)', fontWeight: 750 }}>
-                AI suggestion
+                AI advisory
               </span>
               <span style={{ color: 'var(--color-text-tertiary)' }}>
                 advisory only
@@ -753,26 +759,6 @@ function recommendedGroupAction(kind, group, items = [], currentAction, keep = '
   }
 }
 
-function RecommendationNote({ recommendation }) {
-  if (!recommendation) return null
-  return (
-    <div style={{
-      marginTop: 10,
-      padding: '9px 10px',
-      border: '0.5px solid var(--color-border-tertiary)',
-      borderRadius: 8,
-      background: 'var(--color-background-secondary)',
-      fontSize: 12,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-primary)' }}>System recommended</span>
-        <strong>{recommendation.label}</strong>
-      </div>
-      <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>
-    </div>
-  )
-}
-
 function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoading, aiSuggestion, onAskAi }) {
   if (!items.length || kind === 'duplicates') return null
   const selectedSet = new Set(selected)
@@ -784,11 +770,17 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
           <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>
             Recommended actions by method
           </p>
-          <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
-          <InfoDot text="System recommended means SimuCast selected this method using the current dataset profile, column type, missing count, skew, and outlier checks. You can still change it manually." />
+          <SystemSourceLabel />
+          <InfoDot text="System recommendation means SimuCast selected this method using the current dataset profile, column type, issue count, skew, and outlier checks. You can still change it manually." />
         </div>
-        <button className="ax-btn mini" type="button" onClick={onAskAi} disabled={aiLoading}>
-          {aiLoading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        <button
+          className="ax-btn mini"
+          type="button"
+          onClick={onAskAi}
+          disabled={aiLoading}
+          style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
+        >
+          {aiLoading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
         </button>
       </div>
       {groups.map((group) => {
@@ -797,21 +789,22 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
           <div
             key={group.action}
             style={{
-              padding: '10px 12px',
-              border: '0.5px solid rgba(249, 115, 22, 0.28)',
-              borderRadius: 10,
-              background: 'var(--color-accent-light)',
+              padding: '10px 0',
+              borderTop: '0.5px solid var(--color-border-tertiary)',
               fontSize: 12,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-              <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
               <strong>{group.label}</strong>
               <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>
                 {selectedCount}/{group.items.length} selected
               </span>
             </div>
-            <p style={{ margin: '0 0 8px', color: 'var(--color-text-secondary)' }}>{group.why}</p>
+            <p style={{ margin: '0 0 6px', color: 'var(--color-text-secondary)' }}>{shortRecommendation(group)}</p>
+            <details style={{ marginBottom: 8 }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--color-text-tertiary)', fontSize: 11 }}>Why this recommendation?</summary>
+              <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)' }}>{group.why}</p>
+            </details>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {group.items.map((item) => (
                 <span
@@ -824,8 +817,7 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
                   }}
                   title={recommendedColumnAction(kind, item).why}
                 >
-                  {item.variable}
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>{item.count || 0}</span>
+                  {formatIssueChip(item, kind)}
                 </span>
               ))}
             </div>
@@ -856,6 +848,19 @@ function groupColumnRecommendations(kind, items = []) {
     ...group,
     why: summarizeRecommendationGroup(kind, group),
   }))
+}
+
+function shortRecommendation(group) {
+  const names = group.items.map((item) => item.variable)
+  if (names.length <= 2) return `Use ${group.label.toLowerCase()} for ${names.join(', ')}.`
+  return `Use ${group.label.toLowerCase()} for ${names.slice(0, 2).join(', ')} and ${names.length - 2} more column${names.length - 2 === 1 ? '' : 's'}.`
+}
+
+function formatIssueChip(item, kind) {
+  const count = Number(item.count || 0)
+  if (kind === 'missing') return `${item.variable} (${count} missing)`
+  if (kind === 'outliers') return `${item.variable} (${count} outliers)`
+  return `${item.variable} (${count})`
 }
 
 function summarizeRecommendationReason(kind, rec) {
@@ -897,11 +902,17 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>What to do</p>
-          <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
-          <InfoDot text="System recommended means SimuCast selected this action from the current duplicate scan. You can still choose which duplicate occurrence to keep." />
+          <SystemSourceLabel />
+          <InfoDot text="System recommendation means SimuCast selected this action from the current duplicate scan. You can still choose which duplicate occurrence to keep." />
         </div>
-        <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
-          {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+        <button
+          className="ax-btn mini"
+          type="button"
+          onClick={onAsk}
+          disabled={loading}
+          style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
+        >
+          {loading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
         </button>
       </div>
       <div
@@ -925,6 +936,12 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
       </div>
       <AiRecommendationBlock loading={loading} suggestion={suggestion} />
     </div>
+  )
+}
+
+function SystemSourceLabel() {
+  return (
+    <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommendation</span>
   )
 }
 
@@ -1042,11 +1059,17 @@ function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>{title}</p>
-        <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+        <SystemSourceLabel />
         <InfoDot text={info} />
       </div>
-      <button className="ax-btn mini" type="button" onClick={onAsk} disabled={loading}>
-        {loading ? <InlineSpinner label="Asking..." /> : 'Ask AI'}
+      <button
+        className="ax-btn mini"
+        type="button"
+        onClick={onAsk}
+        disabled={loading}
+        style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--color-text-secondary)' }}
+      >
+        {loading ? <InlineSpinner label="Asking..." /> : 'Need AI advice?'}
       </button>
     </div>
   )
@@ -1056,15 +1079,12 @@ function FeatureRecommendationCard({ recommendation }) {
   if (!recommendation) return null
   return (
     <div style={{
-      padding: '10px 12px',
-      border: '0.5px solid rgba(249, 115, 22, 0.28)',
-      borderRadius: 10,
-      background: 'var(--color-accent-light)',
+      padding: '8px 0',
+      borderTop: '0.5px solid var(--color-border-tertiary)',
       fontSize: 12,
       marginBottom: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-        <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
         <strong>{recommendation.label}</strong>
       </div>
       <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>
@@ -1140,9 +1160,9 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
         'Give plain-text advice for this optional feature tool. Recommend only supported SimuCast actions: create bins or numeric formatting. Explain whether it is useful and what settings to use. Do not apply changes.',
         payload,
       )
-      setAiSuggestion({ ok: true, text: r.explanation || 'AI suggestion unavailable.' })
+      setAiSuggestion({ ok: true, text: r.explanation || 'AI advisory unavailable.' })
     } catch {
-      setAiSuggestion({ ok: false, text: 'AI suggestion unavailable.' })
+      setAiSuggestion({ ok: false, text: 'AI advisory unavailable.' })
     } finally {
       setAiLoading(false)
     }
@@ -1208,7 +1228,7 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
             <div>
               <FeatureRecommendationHeader
                 title="Recommended binning setup"
-                info="System recommended means SimuCast chose a simple optional binning setup from numeric columns that are easier to interpret in grouped ranges. Binning is optional and loses numeric detail."
+                info="System recommendation means SimuCast chose a simple optional binning setup from numeric columns that are easier to interpret in grouped ranges. Binning is optional and loses numeric detail."
                 loading={aiLoading}
                 onAsk={askAiForFeatureRecommendation}
               />
@@ -1285,7 +1305,7 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
             <div>
               <FeatureRecommendationHeader
                 title="Recommended numeric formatting"
-                info="System recommended means SimuCast checks numeric columns for excessive or inconsistent decimal precision. Formatting is optional and should be used for cleaner display, exports, and reports."
+                info="System recommendation means SimuCast checks numeric columns for excessive or inconsistent decimal precision. Formatting is optional and should be used for cleaner display, exports, and reports."
                 loading={aiLoading}
                 onAsk={askAiForFeatureRecommendation}
               />
