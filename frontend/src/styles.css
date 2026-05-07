@@ -2238,18 +2238,19 @@ input[type="range"]::-moz-range-thumb {
 
 .ax-workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 400px);
   gap: 22px;
   align-items: start;
 }
 .ax-right-rail {
   position: sticky;
-  top: 16px;
-  height: calc(100vh - 120px);
+  top: 112px;
+  height: calc(100vh - 132px);
   display: flex;
   flex-direction: column;
   gap: 12px;
   overflow: hidden;
+  align-self: start;
 }
 .ax-plan-panel {
   padding: 14px;
@@ -2437,27 +2438,12 @@ input[type="range"]::-moz-range-thumb {
   min-height: 0;
   overflow-y: auto;
   padding: 0;
+  overscroll-behavior: contain;
 }
 .ax-plan-panel.ax-plan-collapsed {
   flex: 0 0 auto;
   overflow: visible;
   height: auto !important;
-}
-.ax-plan-spotlight {
-  position: relative;
-  z-index: 1201;
-  box-shadow: 0 0 0 9999px rgba(17, 24, 39, 0.42), 0 24px 60px rgba(17, 24, 39, 0.22);
-}
-.ax-plan-intro {
-  position: sticky;
-  top: 72px;
-  z-index: 5;
-  margin: 10px 14px;
-  padding: 12px;
-  border: 1px solid rgba(249, 115, 22, 0.4);
-  border-radius: 12px;
-  background: var(--color-background-primary);
-  box-shadow: 0 14px 36px rgba(17, 24, 39, 0.14);
 }
 .ax-rail-resize {
   flex: 0 0 6px;
@@ -2478,6 +2464,7 @@ input[type="range"]::-moz-range-thumb {
   min-height: 0;
   overflow-y: auto;
   padding: 0;
+  overscroll-behavior: contain;
 }
 .ax-panel-sticky-header {
   position: sticky;
@@ -2492,6 +2479,52 @@ input[type="range"]::-moz-range-thumb {
 .ax-plan-list,
 .ax-activity-panel > *:not(.ax-panel-sticky-header) {
   padding: 0 14px 14px;
+}
+.ax-plan-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(17, 24, 39, 0.46);
+}
+.ax-plan-modal {
+  width: min(920px, calc(100vw - 40px));
+  max-height: calc(100vh - 56px);
+  overflow: auto;
+  border-radius: 16px;
+  border: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+  box-shadow: 0 28px 80px rgba(17, 24, 39, 0.28);
+  padding: 18px;
+}
+.ax-plan-modal-header {
+  position: sticky;
+  top: -18px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -18px -18px 16px;
+  padding: 18px;
+  background: var(--color-background-primary);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  border-radius: 16px 16px 0 0;
+}
+.ax-plan-modal-list {
+  display: grid;
+  gap: 10px;
+}
+.ax-plan-step-full {
+  grid-template-columns: 36px minmax(0, 1fr);
+  padding: 14px;
+}
+.ax-plan-step-full.completed {
+  max-height: none;
+  opacity: 0.78;
 }
 .ax-activity-list {
   display: flex;

@@ -789,15 +789,28 @@ def _parse_ai_json(text):
     if s.startswith("```"):
         s = re.sub(r"^```(?:json|JSON)?\s*\n?", "", s)
         s = re.sub(r"\n?```\s*$", "", s).strip()
-    try:
-        return json.loads(s)
-    except Exception:
-        # Fall back to the largest {...} substring — handles leading/trailing prose.
-        start = s.find("{")
-        end = s.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            return json.loads(s[start : end + 1])
-        raise
+    candidates = [s]
+    start = s.find("{")
+    end = s.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        candidates.append(s[start : end + 1])
+    arr_start = s.find("[")
+    arr_end = s.rfind("]")
+    if arr_start != -1 and arr_end != -1 and arr_end > arr_start:
+        candidates.append('{"steps": ' + s[arr_start : arr_end + 1] + "}")
+
+    last_error = None
+    for candidate in candidates:
+        repaired = candidate.strip()
+        repaired = repaired.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
+        repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
+        try:
+            return json.loads(repaired)
+        except Exception as exc:
+            last_error = exc
+    err = ValueError(f"AI returned invalid JSON: {last_error}")
+    err.raw_response = text
+    raise err
 
 
 # ========================================================================
@@ -4447,23 +4460,34 @@ def ai_project_plan(ds_id):
             "Analyze the dataset profile and create a guided project plan across "
             "the SimuCast workflow: data cleaning, description, statistical tests, "
             "modeling, what-if analysis, and report. Include only steps that make "
-            "sense for this dataset. Each step must include: id, page "
+            "sense for this dataset. Sort the steps in workflow order only: "
+            "data, expand if needed, describe, tests, models, whatif, report. "
+            "Do not sort by priority. Each step must include: id, page "
             "(data|expand|describe|tests|models|whatif|report), title, rationale, "
             "priority (high|medium|low), optional columns, and optional section id when obvious. "
             'Respond as JSON: {"summary": str, "steps": [{"id": str, "page": str, "section": str, "title": str, "rationale": str, "priority": "high|medium|low", "columns": [str]}]}'
         )
         try:
             payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1800)
+            if not isinstance(payload, dict):
+                payload = {"steps": payload if isinstance(payload, list) else []}
             steps = payload.get("steps") or []
+            if not isinstance(steps, list):
+                raise ValueError("AI project plan response did not include a steps array")
             response = {
                 "ai": True,
                 "summary": payload.get("summary") or "AI generated a guided workflow for this dataset.",
                 "steps": _normalize_project_steps(steps),
             }
+            if not response["steps"]:
+                raise ValueError("AI project plan returned no usable steps")
             _cache_put(_AI_CACHE, cache_key, response)
             return jsonify(clean_json(response))
         except Exception as e:
             print(f"AI project plan failed: {e}", flush=True)
+            raw = getattr(e, "raw_response", None)
+            if raw:
+                print("AI project plan raw response:", raw[:4000], flush=True)
             fallback = _rule_based_project_plan(df, variables)
             fallback["error"] = "AI plan unavailable. Using built-in guided workflow."
             return jsonify(fallback)
@@ -4846,6 +4870,18 @@ def _rule_based_recommend(context, df, variables):
 
 def _normalize_project_steps(steps):
     valid_pages = {"data", "expand", "describe", "tests", "models", "whatif", "report"}
+    page_order = {"data": 0, "expand": 1, "describe": 2, "tests": 3, "models": 4, "whatif": 5, "report": 6}
+    def sub_order(step):
+        text = f"{step.get('section', '')} {step.get('id', '')} {step.get('title', '')}".lower()
+        if "missing" in text:
+            return 0
+        if "clean" in text or "suggest" in text or "outlier" in text or "duplicate" in text:
+            return 1
+        if "categor" in text or "standard" in text:
+            return 2
+        if "feature" in text or "engineer" in text or "transform" in text:
+            return 3
+        return 5
     out = []
     for idx, raw in enumerate(steps or [], start=1):
         if not isinstance(raw, dict):
@@ -4870,7 +4906,7 @@ def _normalize_project_steps(steps):
             "columns": [str(c) for c in (raw.get("columns") or []) if c is not None],
             "relatedActivityIds": [str(c) for c in (raw.get("relatedActivityIds") or []) if c is not None],
         })
-    return out[:10]
+    return sorted(out, key=lambda step: (page_order.get(step.get("page"), 99), sub_order(step), step.get("id", "")))[:10]
 
 def _rule_based_project_plan(df, variables):
     nums = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]

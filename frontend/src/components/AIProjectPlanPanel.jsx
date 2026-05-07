@@ -51,6 +51,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const [done, setDone] = useState([])
   const [activity, setActivity] = useState([])
   const [collapsed, setCollapsed] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const loadActivity = async () => {
     if (!datasetId) return
@@ -69,9 +70,14 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       const cached = window.localStorage.getItem(cacheKey)
       if (cached) {
         try {
-          setPlan(JSON.parse(cached))
-          loadActivity()
-          return
+          const cachedPlan = JSON.parse(cached)
+          if (mode === 'auto' && cachedPlan?.ai !== true) {
+            window.localStorage.removeItem(cacheKey)
+          } else {
+            setPlan(cachedPlan)
+            loadActivity()
+            return
+          }
         } catch {
           window.localStorage.removeItem(cacheKey)
         }
@@ -142,7 +148,13 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     () => steps.map((step) => getStepState(step, progress, latestDataChange, doneSet)),
     [steps, progress, latestDataChange, doneSet],
   )
-  const nextStepState = stepStates.find((item) => ['blocked', 'warning', 'stale', 'pending'].includes(item.status))
+  const planItems = useMemo(
+    () => steps
+      .map((step, index) => ({ step, index, state: stepStates[index] || { status: 'pending', step } }))
+      .sort((a, b) => workflowSort(a.step, a.index) - workflowSort(b.step, b.index)),
+    [steps, stepStates],
+  )
+  const nextStepState = planItems.find((item) => ['blocked', 'warning', 'stale', 'pending'].includes(item.state.status))?.state
   const isAI = plan?.ai === true
   const isAutoFallback = mode === 'auto' && plan && plan.ai !== true
   const toggleCollapsed = () => {
@@ -216,9 +228,14 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
             </span>
           </button>
           {!collapsed && (
-            <button className="ax-btn mini" type="button" onClick={() => load(true)} disabled={loading}>
-              Refresh
-            </button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button className="ax-btn mini" type="button" onClick={() => setExpanded(true)} disabled={!plan}>
+                Expand plan
+              </button>
+              <button className="ax-btn mini" type="button" onClick={() => load(true)} disabled={loading}>
+                Refresh
+              </button>
+            </div>
           )}
         </div>
 
@@ -253,23 +270,14 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
           {plan && (
             <div className="ax-plan-list">
-              {steps
-                .map((step, index) => ({ step, index, state: stepStates[index] || { status: 'pending', step } }))
-                .sort((a, b) => statusSort(a.state.status) - statusSort(b.state.status) || a.index - b.index)
-                .map(({ step, index, state }, position) => {
+              {planItems
+                .map(({ step, state }, position) => {
                   const isCompleted = state.status === 'completed'
                   const isNext = nextStepState?.step?.id === step.id
                   const displayStatus = isNext && !isCompleted ? 'active' : state.status
                   const target = targetForStep(step)
-                  const pendingCount = stepStates.filter((item) => item.status !== 'completed').length
-                  const showDoneDivider = isCompleted && position === pendingCount && pendingCount < steps.length
                   return (
-                    <React.Fragment key={`${step.id}-${index}`}>
-                      {showDoneDivider && (
-                        <div className="ax-plan-done-divider">
-                          <span>Completed</span>
-                        </div>
-                      )}
+                    <React.Fragment key={`${step.id}-${position}`}>
                       <article className={`ax-plan-step ${displayStatus} ${isNext ? 'next' : ''}`}>
                         <button
                           className="ax-plan-check"
@@ -277,7 +285,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
                           type="button"
                           aria-label={isCompleted ? 'Mark step incomplete' : 'Mark step complete'}
                         >
-                          {isCompleted ? 'Done' : index + 1}
+                          {position + 1}
                         </button>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -320,6 +328,21 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
             </div>
           )}
         </>
+      )}
+      {expanded && plan && (
+        <GuidedPlanModal
+          isAI={isAI}
+          mode={mode}
+          error={plan?.error || error || isAutoFallback}
+          summary={plan.summary}
+          items={planItems}
+          nextStepId={nextStepState?.step?.id}
+          onClose={() => setExpanded(false)}
+          onGo={(step) => {
+            setExpanded(false)
+            goToStep(step)
+          }}
+        />
       )}
     </section>
   )
@@ -384,13 +407,24 @@ function getStepState(step, progress, latestDataChange, doneSet) {
     return { step, status: 'stale', completedAt }
   }
   if (completedAt || manuallyDone) return { step, status: 'completed', completedAt }
+  if (['blocked', 'warning'].includes(step.status)) return { step, status: step.status }
   if (step.priority === 'high') return { step, status: 'warning' }
   return { step, status: 'pending' }
 }
 
-function statusSort(status) {
-  const order = { blocked: 0, warning: 1, stale: 2, pending: 3, active: 4, completed: 5 }
-  return order[status] ?? 3
+function workflowSort(step, originalIndex = 0) {
+  const pageScore = PAGE_ORDER[step?.page || 'data'] ?? 99
+  const sectionScore = sectionRank(step)
+  return pageScore * 1000 + sectionScore * 10 + originalIndex / 100
+}
+
+function sectionRank(step) {
+  const text = `${step?.section || ''} ${step?.id || ''} ${step?.title || ''}`.toLowerCase()
+  if (text.includes('missing')) return 0
+  if (text.includes('clean') || text.includes('suggest')) return 1
+  if (text.includes('categor')) return 2
+  if (text.includes('feature') || text.includes('engineer') || text.includes('transform')) return 3
+  return 5
 }
 
 function statusLabel(status) {
@@ -417,6 +451,72 @@ function WhyThisMatters({ text }) {
           {text}
         </p>
       )}
+    </div>
+  )
+}
+
+function GuidedPlanModal({ isAI, mode, error, summary, items, nextStepId, onClose, onGo }) {
+  return (
+    <div className="ax-plan-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <div className="ax-plan-modal" role="dialog" aria-modal="true" aria-label="Full guided plan" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="ax-plan-modal-header">
+          <div>
+            <p style={{ fontSize: 18, fontWeight: 850, margin: 0 }}>{isAI ? 'AI Guided Plan' : 'System Guided Plan'}</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>
+              {mode === 'auto' && isAI ? 'AI generated' : 'Built-in workflow'} - {items.length} ordered steps
+            </p>
+          </div>
+          <button className="ax-btn" type="button" onClick={onClose}>Close</button>
+        </div>
+        {error && (
+          <div className="ax-plan-fallback" style={{ margin: '0 0 12px' }}>
+            <strong>AI plan unavailable.</strong>
+            <span>Using built-in guided workflow.</span>
+          </div>
+        )}
+        {summary && <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>{summary}</p>}
+        <div className="ax-plan-modal-list">
+          {items.map(({ step, state }, position) => {
+            const isCompleted = state.status === 'completed'
+            const isNext = nextStepId === step.id && !isCompleted
+            const displayStatus = isNext ? 'active' : state.status
+            const target = targetForStep(step)
+            return (
+              <article key={`${step.id}-${position}`} className={`ax-plan-step ax-plan-step-full ${displayStatus} ${isNext ? 'next' : ''}`}>
+                <span className="ax-plan-check">{position + 1}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <p style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>{step.title}</p>
+                    <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
+                  </div>
+                  {state.status === 'stale' && (
+                    <p style={{ fontSize: 12, color: 'var(--color-text-warning)', margin: '4px 0 0' }}>
+                      Re-run recommended because the dataset changed after this step.
+                    </p>
+                  )}
+                  {step.rationale && <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>{step.rationale}</p>}
+                  {step.columns?.length > 0 && (
+                    <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '6px 0 0' }}>
+                      Columns: {step.columns.join(', ')}
+                    </p>
+                  )}
+                  <div className="ax-plan-target">
+                    <span>Use</span>
+                    <strong>{target.label}</strong>
+                    <small>{target.hint}</small>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                    <button className="ax-btn mini prim" type="button" onClick={() => onGo(step)}>
+                      {state.status === 'stale' ? 'Re-run ' : 'Open '}{target.shortLabel}
+                    </button>
+                    {step.rationale && <WhyThisMatters text={step.rationale} />}
+                  </div>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

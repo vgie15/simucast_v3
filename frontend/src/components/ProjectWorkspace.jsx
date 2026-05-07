@@ -177,12 +177,15 @@ function RightRail({ dataset, activeTab, onViewStage, onRestored }) {
     localStorage.setItem(PLAN_H_KEY, String(Math.round(planH)))
   }, [planH])
 
+  const maxPlanHeight = Math.max(PLAN_H_MIN, Math.round((typeof window !== 'undefined' ? window.innerHeight - 132 : 640) * PLAN_H_MAX_RATIO))
+  const effectivePlanH = Math.min(planH, maxPlanHeight)
+
   return (
     <div className="ax-right-rail" ref={railRef}>
       <AIProjectPlanPanel
         dataset={dataset}
         activeTab={activeTab}
-        planH={planCollapsed ? undefined : planH}
+        planH={planCollapsed ? undefined : effectivePlanH}
         onCollapsedChange={setPlanCollapsed}
       />
       {!planCollapsed && (
