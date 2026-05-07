@@ -4806,6 +4806,7 @@ def ai_project_plan(ds_id):
         try:
             text = ai_call(profile, prompt, system=system, json_mode=False, max_tokens=1400)
             steps = _parse_ai_plan_text(text)
+            steps = _filter_project_steps_for_dataset(steps, df, variables)
             response = {
                 "ai": True,
                 "summary": f"AI suggested workflow for {len(df)} rows and {len(variables)} variables.",
@@ -5304,6 +5305,42 @@ def _normalize_project_steps(steps):
             "relatedActivityIds": [str(c) for c in (raw.get("relatedActivityIds") or []) if c is not None],
         })
     return sorted(out, key=lambda step: (page_order.get(step.get("page"), 99), sub_order(step), step.get("id", "")))[:10]
+
+def _filter_project_steps_for_dataset(steps, df, variables):
+    """Validate AI recommendations against factual dataset state before rendering."""
+    variables = variables or []
+    missing_cols = {v["name"] for v in variables if int(v.get("missing", 0) or 0) > 0}
+    duplicate_count = int(df.duplicated().sum()) if len(df) else 0
+    numeric_cols = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]
+    outlier_cols = set()
+    for col in numeric_cols:
+        if col not in df.columns:
+            continue
+        series = pd.to_numeric(df[col], errors="coerce").dropna()
+        if len(series) < 10:
+            continue
+        q1, q3 = series.quantile([0.25, 0.75])
+        iqr = q3 - q1
+        if iqr and int(((series < q1 - 1.5 * iqr) | (series > q3 + 1.5 * iqr)).sum()) > 0:
+            outlier_cols.add(col)
+
+    filtered = []
+    for step in steps or []:
+        text = f"{step.get('id', '')} {step.get('title', '')} {step.get('section', '')}".lower()
+        if "duplicate" in text and duplicate_count <= 0:
+            continue
+        if "missing" in text and not missing_cols:
+            continue
+        if "outlier" in text and not outlier_cols:
+            continue
+        if step.get("page") == "expand" and len(df) >= 500:
+            continue
+        if "missing" in text:
+            step["columns"] = [c for c in (step.get("columns") or []) if c in missing_cols] or list(missing_cols)[:5]
+        if "outlier" in text:
+            step["columns"] = [c for c in (step.get("columns") or []) if c in outlier_cols] or list(outlier_cols)[:5]
+        filtered.append(step)
+    return filtered
 
 def _rule_based_project_plan(df, variables):
     nums = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]

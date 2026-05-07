@@ -2334,6 +2334,10 @@ input[type="range"]::-moz-range-thumb {
   border-color: rgba(220, 38, 38, 0.45);
   background: rgba(220, 38, 38, 0.06);
 }
+.ax-plan-step.skipped {
+  opacity: 0.72;
+  background: var(--color-background-secondary);
+}
 .ax-plan-done-divider {
   display: flex;
   align-items: center;
@@ -2407,6 +2411,34 @@ input[type="range"]::-moz-range-thumb {
 .ax-plan-status.blocked {
   background: rgba(220, 38, 38, 0.08);
   color: var(--color-text-danger);
+}
+.ax-plan-status.skipped {
+  background: var(--color-background-secondary);
+  color: var(--color-text-tertiary);
+}
+.ax-plan-requirement {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+.ax-plan-requirement.required {
+  background: #FEF2F2;
+  color: #DC2626;
+}
+.ax-plan-requirement.recommended {
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+}
+.ax-plan-requirement.optional {
+  background: #EEF4FF;
+  color: #255CA8;
 }
 .ax-plan-chip {
   background: var(--color-accent);

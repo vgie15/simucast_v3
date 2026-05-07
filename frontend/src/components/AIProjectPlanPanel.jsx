@@ -5,7 +5,7 @@ import { api } from '../api'
 import { BusyOverlay, SkeletonCards } from './LoadingStates'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
-const PLAN_CACHE_VERSION = 'v3'
+const PLAN_CACHE_VERSION = 'v4'
 const DATA_CHANGE_ACTIONS = new Set([
   'cell_edit',
   'batch_cell_edit',
@@ -40,17 +40,20 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const datasetId = dataset?.id
   const stageKey = dataset?.current_stage_id || 'original'
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
+  const skipKey = datasetId ? `simucast.aiPlan.skipped.${datasetId}.${stageKey}` : ''
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
   const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
   const [mode, setMode] = useState(() => {
-    if (!modeKey) return 'auto'
-    const saved = window.localStorage.getItem(modeKey) || 'auto'
-    return saved === 'off' ? 'auto' : saved
+    if (!modeKey) return 'system'
+    const saved = window.localStorage.getItem(modeKey)
+    if (!saved || saved === 'off') return 'system'
+    return saved
   })
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState([])
+  const [skipped, setSkipped] = useState([])
   const [activity, setActivity] = useState([])
   const [collapsed, setCollapsed] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -103,8 +106,8 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
   useEffect(() => {
     if (!modeKey) return
-    const saved = window.localStorage.getItem(modeKey) || 'auto'
-    setMode(saved === 'off' ? 'auto' : saved)
+    const saved = window.localStorage.getItem(modeKey)
+    setMode(!saved || saved === 'off' ? 'system' : saved)
   }, [modeKey])
 
   useEffect(() => {
@@ -115,6 +118,15 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       setDone([])
     }
   }, [doneKey])
+
+  useEffect(() => {
+    if (!skipKey) return
+    try {
+      setSkipped(JSON.parse(window.localStorage.getItem(skipKey) || '[]'))
+    } catch {
+      setSkipped([])
+    }
+  }, [skipKey])
 
   useEffect(() => {
     if (!collapseKey) return
@@ -140,11 +152,12 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
   const steps = plan?.steps || []
   const doneSet = useMemo(() => new Set(done), [done])
+  const skippedSet = useMemo(() => new Set(skipped), [skipped])
   const progress = useMemo(() => deriveProgress(activity), [activity])
   const latestDataChange = progress.latestDataChangeAt || null
   const stepStates = useMemo(
-    () => steps.map((step) => getStepState(step, progress, latestDataChange, doneSet)),
-    [steps, progress, latestDataChange, doneSet],
+    () => steps.map((step) => getStepState(step, progress, latestDataChange, doneSet, skippedSet)),
+    [steps, progress, latestDataChange, doneSet, skippedSet],
   )
   const planItems = useMemo(
     () => steps
@@ -168,6 +181,12 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     const next = doneSet.has(stepId) ? done.filter((id) => id !== stepId) : [...done, stepId]
     setDone(next)
     if (doneKey) window.localStorage.setItem(doneKey, JSON.stringify(next))
+  }
+
+  const toggleSkip = (stepId) => {
+    const next = skippedSet.has(stepId) ? skipped.filter((id) => id !== stepId) : [...skipped, stepId]
+    setSkipped(next)
+    if (skipKey) window.localStorage.setItem(skipKey, JSON.stringify(next))
   }
 
   const handleModeChange = (nextMode) => {
@@ -293,6 +312,8 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
                   const isNext = nextStepState?.step?.id === step.id
                   const displayStatus = isNext && !isCompleted ? 'active' : state.status
                   const target = targetForStep(step)
+                  const requirement = requirementForStep(step)
+                  const canSkip = requirement !== 'required' && !isCompleted
                   return (
                     <React.Fragment key={`${step.id}-${position}`}>
                       <article className={`ax-plan-step ${displayStatus} ${isNext ? 'next' : ''}`}>
@@ -308,6 +329,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                             <p style={{ fontSize: 13, fontWeight: 750, margin: 0 }}>{step.title}</p>
                             <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
+                            <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
                           </div>
                           {state.status === 'stale' && (
                             <p style={{ fontSize: 11, color: 'var(--color-text-warning)', margin: '3px 0 0' }}>
@@ -332,9 +354,23 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
                             <strong>{target.label}</strong>
                             <small>{target.hint}</small>
                           </div>
-                          <button className="ax-btn mini" onClick={() => goToStep(step)} type="button" style={{ marginTop: 6 }}>
-                            {state.status === 'stale' ? 'Re-run ' : 'Open '}{target.shortLabel}
-                          </button>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                            {state.status !== 'skipped' && (
+                              <button className="ax-btn mini" onClick={() => goToStep(step)} type="button">
+                                {state.status === 'stale' ? 'Re-run ' : 'Open '}{target.shortLabel}
+                              </button>
+                            )}
+                            {canSkip && state.status !== 'skipped' && (
+                              <button className="ax-btn mini" onClick={() => toggleSkip(step.id)} type="button">
+                                Skip
+                              </button>
+                            )}
+                            {state.status === 'skipped' && (
+                              <button className="ax-btn mini" onClick={() => toggleSkip(step.id)} type="button">
+                                Undo skip
+                              </button>
+                            )}
+                          </div>
                           {step.rationale && <WhyThisMatters text={step.rationale} />}
                         </div>
                       </article>
@@ -470,8 +506,9 @@ function completionKeyForStep(step) {
   return page
 }
 
-function getStepState(step, progress, latestDataChange, doneSet) {
+function getStepState(step, progress, latestDataChange, doneSet, skippedSet) {
   const page = step.page || 'data'
+  if (skippedSet.has(step.id)) return { step, status: 'skipped' }
   const completionKey = completionKeyForStep(step)
   const completedAt = progress.completedAt[completionKey] || progress.completedAt[page]
   const invalidatedAt = progress.invalidatedAt?.[completionKey] || 0
@@ -487,6 +524,13 @@ function getStepState(step, progress, latestDataChange, doneSet) {
   if (['blocked', 'warning'].includes(step.status)) return { step, status: step.status }
   if (step.priority === 'high') return { step, status: 'warning' }
   return { step, status: 'pending' }
+}
+
+function requirementForStep(step) {
+  const text = `${step?.id || ''} ${step?.title || ''} ${step?.priority || ''}`.toLowerCase()
+  if (text.includes('optional') || step?.priority === 'low') return 'optional'
+  if (text.includes('missing') || text.includes('target') || text.includes('train candidate') || text.includes('report')) return 'required'
+  return 'recommended'
 }
 
 function workflowSort(step, originalIndex = 0) {
@@ -516,6 +560,7 @@ function statusLabel(status) {
     stale: 'stale',
     warning: 'recommended',
     blocked: 'blocked',
+    skipped: 'skipped',
   }
   return labels[status] || status
 }
