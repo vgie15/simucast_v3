@@ -73,7 +73,7 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
       return
     }
     if (auth.guestAtLimit) {
-      setError('Guest accounts are limited to 1 project. Sign up or log in to create more.')
+      setError('Guest mode is limited to 1 temporary project. Sign up or log in to create saved projects.')
       auth.showAuthModal('signup')
       return
     }

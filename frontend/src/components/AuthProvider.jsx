@@ -177,6 +177,7 @@ export function AuthProvider({ children }) {
     updateSession: saveSession,
     showAuthModal: (mode = 'login') => setModalMode(mode),
     requireAccountForAI: () => setModalMode('ai'),
+    requireAccountForReports: () => setModalMode('report'),
   }), [session, loading, login, signup, logout, ensureGuest, resetGuestSession, refreshSession, saveSession])
 
   return (
@@ -204,6 +205,7 @@ function AuthModal({ initialMode, onClose }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const isAIPrompt = initialMode === 'ai'
+  const isReportPrompt = initialMode === 'report'
 
   const wasGuest = auth.isGuest
   const hasGuestData = auth.guestAtLimit
@@ -267,10 +269,18 @@ function AuthModal({ initialMode, onClose }) {
           <p className="ax-auth-subtitle">
             {isAIPrompt
               ? 'Create an account or log in to use AI recommendations, explanations, and guided insights.'
+              : isReportPrompt
+                ? 'Create an account to generate and save reports.'
               : mode === 'signup'
                 ? 'Sign up to create saved projects. Guest demo projects stay temporary and are not transferred.'
                 : 'Sign in to access your saved scenarios and analysis.'}
           </p>
+          {isReportPrompt && (
+            <div className="ax-auth-guest-notice">
+              <span>!</span>
+              <span>Report generation and export require an account. Guest projects remain temporary.</span>
+            </div>
+          )}
           {isAIPrompt && (
             <div className="ax-auth-guest-notice">
               <span>!</span>
@@ -344,7 +354,7 @@ function AuthModal({ initialMode, onClose }) {
           </button>
           <div className="ax-auth-divider"><span>OR</span></div>
           <button className="ax-btn ax-auth-guest" type="button" onClick={continueGuest} disabled={busy}>
-            {isAIPrompt ? 'Continue without AI' : 'Continue as Guest'}
+            {isAIPrompt ? 'Continue without AI' : isReportPrompt ? 'Continue without report' : 'Continue as Guest'}
           </button>
           <p>
             {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}

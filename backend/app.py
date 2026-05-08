@@ -70,6 +70,7 @@ app = Flask(__name__)
 # These are deliberately tight defaults for the capstone — bump if needed.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024   # 10 MB
 MAX_UPLOAD_ROWS = 100_000             # 100k rows
+GUEST_MODEL_LIMIT = 5
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 
@@ -141,6 +142,7 @@ class UserSession(Base):
     token = Column(String, unique=True, nullable=False, index=True)
     is_guest = Column(Integer, default=1)
     guest_usage_count = Column(Integer, default=0)
+    guest_model_usage_count = Column(Integer, default=0)
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -244,6 +246,11 @@ def _migrate_add_columns():
         with engine.begin() as conn:
             if "full_name" not in user_cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN full_name VARCHAR"))
+    if "sessions" in tables:
+        session_cols = {c["name"] for c in insp.get_columns("sessions")}
+        with engine.begin() as conn:
+            if "guest_model_usage_count" not in session_cols:
+                conn.execute(text("ALTER TABLE sessions ADD COLUMN guest_model_usage_count INTEGER DEFAULT 0"))
     if "datasets" not in tables:
         return
     cols = {c["name"] for c in insp.get_columns("datasets")}
@@ -290,6 +297,8 @@ def _session_payload(sess, user=None):
         "is_guest": bool(sess.is_guest),
         "usage_count": int(sess.guest_usage_count or 0),
         "limit": 1 if sess.is_guest else None,
+        "model_usage_count": int(getattr(sess, "guest_model_usage_count", 0) or 0),
+        "model_limit": GUEST_MODEL_LIMIT if sess.is_guest else None,
         "expires_at": sess.expires_at.isoformat() if sess.expires_at else None,
     }
 
@@ -348,6 +357,41 @@ def _ai_account_required_response(session):
             "error": "AI features require an account.",
             "auth_required": True,
             "ai_account_required": True,
+        }, 403
+    return None
+
+def _report_account_required_response(session):
+    sess, user = _auth_from_request(session)
+    if not sess or sess.is_guest or not user:
+        return {
+            "error": "Create an account to generate and save reports.",
+            "auth_required": True,
+            "report_account_required": True,
+        }, 403
+    return None
+
+def _guest_model_limit_response(session, sess, ds_id, requested_count=1):
+    if not sess or not sess.is_guest:
+        return None
+    used = int(getattr(sess, "guest_model_usage_count", 0) or 0)
+    remaining = max(GUEST_MODEL_LIMIT - used, 0)
+    if remaining <= 0:
+        return {
+            "error": f"Guest mode includes up to {GUEST_MODEL_LIMIT} total model trainings for this temporary session. Deleting models will not reset the limit. Sign up or log in to train more models.",
+            "auth_required": True,
+            "guest_model_limit": True,
+            "model_limit": GUEST_MODEL_LIMIT,
+            "models_used": used,
+            "models_remaining": 0,
+        }, 403
+    if requested_count > remaining:
+        return {
+            "error": f"Guest mode has {remaining} training attempt{'s' if remaining != 1 else ''} remaining. Select {remaining} or fewer algorithm{'s' if remaining != 1 else ''}, or create an account to train more.",
+            "auth_required": True,
+            "guest_model_limit": True,
+            "model_limit": GUEST_MODEL_LIMIT,
+            "models_used": used,
+            "models_remaining": remaining,
         }, 403
     return None
 
@@ -3438,6 +3482,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     target_options = target_options or {}
     test_size = min(max(_parse_num(target_options.get("test_size"), 0.2, float), 0.05), 0.5)
     validation_method = target_options.get("validation_method") if target_options.get("validation_method") in ("standard_split", "cross_validation") else "standard_split"
+    cv_folds = int(min(max(_parse_num(target_options.get("cv_folds"), 5, int), 3), 10))
     stratify_split = bool(target_options.get("stratify", True))
     class_weight = target_options.get("class_weight") if target_options.get("class_weight") in ("balanced", None) else None
     y = sub_clean[target]
@@ -3715,7 +3760,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         "detail": (
             f"Train {int((1 - test_size) * 100)}% / test {int(test_size * 100)}"
             + (" with stratification" if task == "classification" and stratify_split else "")
-            + (" plus 5-fold cross-validation." if validation_method == "cross_validation" else ".")
+            + (f" plus {cv_folds}-fold cross-validation." if validation_method == "cross_validation" else ".")
         ),
         "type": "modeling",
         "causes": [],
@@ -3752,8 +3797,10 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
             "test_size": test_size,
             "stratified": bool(task == "classification" and stratify_split),
             "validation_method": validation_method,
+            "cv_folds": cv_folds if validation_method == "cross_validation" else None,
         },
         "validation_method": validation_method,
+        "cv_folds": cv_folds if validation_method == "cross_validation" else None,
         "class_weight": class_weight if task == "classification" else None,
         "model_params": {a: _model_default_params(a) for a in algorithms or [] if a in ALGORITHM_CATALOG},
         "multicollinearity": multicollinearity,
@@ -3922,14 +3969,14 @@ def _cross_validation_metrics(algo, X, y, is_classification, params, plan):
             counts = pd.Series(y).value_counts()
             if len(counts) < 2:
                 return {"enabled": True, "available": False, "reason": "At least two classes are needed for cross-validation."}
-            folds = int(min(5, counts.min(), n_rows))
+            folds = int(min(int(plan.get("cv_folds") or 5), counts.min(), n_rows))
             if folds < 2:
                 return {"enabled": True, "available": False, "reason": "Each class needs at least two examples for cross-validation."}
             cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
             scoring = "accuracy"
             label = "accuracy"
         else:
-            folds = int(min(5, n_rows))
+            folds = int(min(int(plan.get("cv_folds") or 5), n_rows))
             if folds < 2:
                 return {"enabled": True, "available": False, "reason": "At least two complete rows are needed for cross-validation."}
             cv = KFold(n_splits=folds, shuffle=True, random_state=42)
@@ -4181,12 +4228,12 @@ def train_model(ds_id):
     s = db()
     try:
         sess, _ = _auth_from_request(s)
-        limited = _guest_limit_response(sess)
-        if limited:
-            return limited
         ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+        limited = _guest_model_limit_response(s, sess, ds_id, 1)
+        if limited:
+            return limited
         df = df_from_dataset(ds, s)
         if not features:
             features = [c for c in df.select_dtypes(include=[np.number]).columns if c != target]
@@ -4225,7 +4272,7 @@ def train_model(ds_id):
             commit=False,
         )
         if sess and sess.is_guest:
-            sess.guest_usage_count = int(sess.guest_usage_count or 0) + 1
+            sess.guest_model_usage_count = int(getattr(sess, "guest_model_usage_count", 0) or 0) + 1
         s.commit()
 
         return jsonify(clean_json({
@@ -4261,9 +4308,6 @@ def train_many_models(ds_id):
     s = db()
     try:
         sess, _ = _auth_from_request(s)
-        limited = _guest_limit_response(sess)
-        if limited:
-            return limited
         ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
@@ -4289,6 +4333,9 @@ def train_many_models(ds_id):
             valid.append(a)
         if not valid:
             return {"error": "no compatible algorithm for this target", "skipped": skipped}, 400
+        limited = _guest_model_limit_response(s, sess, ds_id, len(valid))
+        if limited:
+            return limited
 
         results = []
         for algo in valid:
@@ -4334,13 +4381,14 @@ def train_many_models(ds_id):
                 skipped.append({"algorithm": algo, "reason": friendly_error_message(e, "This model could not be trained with the current target and feature setup.")})
 
         if results and sess and sess.is_guest:
-            sess.guest_usage_count = int(sess.guest_usage_count or 0) + 1
+            sess.guest_model_usage_count = int(getattr(sess, "guest_model_usage_count", 0) or 0) + len(results)
             s.commit()
 
         return jsonify(clean_json({
             "preprocessing_plan": plan,
             "models": results,
             "skipped": skipped,
+            "guest_training_allowed": bool(sess and sess.is_guest),
             "session": _session_payload(sess) if sess else None,
         }))
     finally:
@@ -6110,6 +6158,9 @@ def build_report(ds_id):
     s = db()
     try:
         sess, user = _auth_from_request(s)
+        limited = _report_account_required_response(s)
+        if limited:
+            return limited
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404

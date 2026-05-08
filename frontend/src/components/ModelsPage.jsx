@@ -19,6 +19,8 @@ const ALGOS = [
     desc: 'Linear baseline for regression. Coefficients directly interpretable.' },
 ]
 
+const GUEST_MODEL_LIMIT = 5
+
 const PARAM_DEFS = {
   logistic: [
     { key: 'C', label: 'Regularization C', type: 'number', min: 0.001, max: 100, step: 0.1, defaultValue: 1 },
@@ -47,6 +49,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [positiveClass, setPositiveClass] = useState('')
   const [testSize, setTestSize] = useState(0.2)
   const [validationMethod, setValidationMethod] = useState('standard_split')
+  const [cvFolds, setCvFolds] = useState(5)
   const [stratify, setStratify] = useState(true)
   const [classWeight, setClassWeight] = useState(false)
   const [numericPreprocessing, setNumericPreprocessing] = useState({
@@ -113,6 +116,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       setPositiveClass(saved.positiveClass || '')
       setTestSize(saved.testSize ?? 0.2)
       setValidationMethod(saved.validationMethod || 'standard_split')
+      setCvFolds(saved.cvFolds || 5)
       setStratify(saved.stratify ?? true)
       setClassWeight(saved.classWeight ?? false)
       setFeatures(saved.features || [])
@@ -134,6 +138,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       positiveClass,
       testSize,
       validationMethod,
+      cvFolds,
       stratify,
       classWeight,
       features,
@@ -141,7 +146,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       modelParams,
       numericPreprocessing,
     }))
-  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing)])
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing)])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -173,7 +178,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           target,
           features,
           algorithms: chosenAlgos,
-          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, stratify, classWeight, numericPreprocessing),
+          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing),
         })
         if (!cancelled) {
           setPlan(r)
@@ -194,7 +199,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, stratify, classWeight, JSON.stringify(numericPreprocessing)])
+  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, JSON.stringify(numericPreprocessing)])
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -206,7 +211,12 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const selectAll = () => setFeatures(allFeatureNames)
   const selectNone = () => setFeatures([])
   const toggleAlgo = (key) => {
-    setChosenAlgos(chosenAlgos.includes(key) ? chosenAlgos.filter((a) => a !== key) : [...chosenAlgos, key])
+    if (chosenAlgos.includes(key)) {
+      setChosenAlgos(chosenAlgos.filter((a) => a !== key))
+      return
+    }
+    if (auth.isGuest && chosenAlgos.filter((a) => visibleAlgoKeys.includes(a)).length >= guestModelsRemaining) return
+    setChosenAlgos([...chosenAlgos, key])
   }
 
   // Filter the algorithm list based on the inferred task.
@@ -216,9 +226,23 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   })
   const visibleAlgoKeys = visibleAlgos.map((a) => a.key)
   const selectedAlgos = chosenAlgos.filter((a) => visibleAlgoKeys.includes(a))
+  const guestTrainingUsed = auth.session?.model_usage_count ?? 0
+  const guestModelsRemaining = auth.isGuest ? Math.max(GUEST_MODEL_LIMIT - guestTrainingUsed, 0) : Infinity
+  const guestModelLimitReached = auth.isGuest && guestModelsRemaining <= 0
+  const guestSelectionOverLimit = auth.isGuest && selectedAlgos.length > guestModelsRemaining
 
   const train = async () => {
     if (!target || features.length === 0 || selectedAlgos.length === 0) return
+    if (guestModelLimitReached || guestSelectionOverLimit) {
+      await dialog.alert({
+        title: 'Guest Model Limit Reached',
+        message: guestModelLimitReached
+          ? `Guest mode includes up to ${GUEST_MODEL_LIMIT} total model training attempts for this temporary session. Deleting models will not reset the limit. Create an account to remove guest training restrictions.`
+          : `You have ${guestModelsRemaining} training attempt${guestModelsRemaining === 1 ? '' : 's'} remaining. Select fewer algorithms or create an account to train more.`,
+        variant: 'danger',
+      })
+      return
+    }
     setTraining(true)
     setResults(null)
     try {
@@ -226,7 +250,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         target,
         features,
         algorithms: selectedAlgos,
-        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, stratify, classWeight, numericPreprocessing),
+        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing),
         model_params: modelParams,
       })
       if (r.session) auth.updateSession(r.session)
@@ -235,13 +259,27 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       const list = await api.listModels(dataset.id)
       setModels(list)
     } catch (err) {
-      if (err.auth_required || err.guest_limit) {
+      if (err.guest_model_limit) {
+        auth.showAuthModal('signup')
+        await dialog.alert({
+          title: 'Guest Training Limit Reached',
+          message: err.message || `Guest mode includes up to ${GUEST_MODEL_LIMIT} total model trainings for this temporary session. Deleting models will not reset the limit.`,
+          variant: 'danger',
+        })
+        return
+      }
+      if (err.guest_limit) {
         auth.showAuthModal('signup')
         await dialog.alert({
           title: 'Guest Limit Reached',
-          message: err.message || 'Create an account or log in to continue training models.',
+          message: err.message || 'Guest mode is limited to one temporary project. You can keep working inside your existing project, but creating another project requires an account.',
           variant: 'danger',
         })
+        return
+      }
+      if (err.auth_required) {
+        auth.showAuthModal('signup')
+        await dialog.alert({ title: 'Account Required', message: err.message || 'Create an account or log in to continue.', variant: 'danger' })
         return
       }
       await dialog.alert({ title: 'Training Failed', message: err.message, variant: 'danger' })
@@ -551,6 +589,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                 onChange={() => setValidationMethod('standard_split')}
               />
               Standard train/test split
+              <span className="ax-chip" style={{ fontSize: 10 }}>Faster</span>
             </label>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input
@@ -560,28 +599,59 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                 checked={validationMethod === 'cross_validation'}
                 onChange={() => setValidationMethod('cross_validation')}
               />
-              5-fold cross-validation
+              {cvFolds}-fold cross-validation
+              <HelpButton
+                title="Cross-validation"
+                text="The dataset is divided into several parts. The model trains multiple times using different combinations of training and testing data. This helps detect unstable or overfit results."
+              />
+              <span className="ax-chip" style={{ fontSize: 10 }}>Recommended for small datasets</span>
+              <span className="ax-chip" style={{ fontSize: 10 }}>More stable evaluation</span>
             </label>
           </div>
-          <span />
-          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-            Cross-validation trains and tests the model multiple times using different splits, which is helpful when the dataset is small or results feel unstable.
-          </p>
-          <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
-          <div>
-            <input
-              type="range"
-              min="0.05"
-              max="0.5"
-              step="0.05"
-              value={testSize}
-              onChange={(e) => setTestSize(Number(e.target.value))}
-              style={{ width: 'min(280px, 100%)' }}
-            />
-            <span style={{ marginLeft: 10, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-              Train {Math.round((1 - testSize) * 100)}% / Test {Math.round(testSize * 100)}%
-            </span>
-          </div>
+          {validationMethod === 'standard_split' ? (
+            <>
+              <span />
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                The model trains once using one train/test split. Adjust the holdout size to choose how much data is reserved for testing.
+              </p>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
+              <div>
+                <input
+                  type="range"
+                  min="0.05"
+                  max="0.5"
+                  step="0.05"
+                  value={testSize}
+                  onChange={(e) => setTestSize(Number(e.target.value))}
+                  style={{ width: 'min(280px, 100%)' }}
+                />
+                <span style={{ marginLeft: 10, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                  Train {Math.round((1 - testSize) * 100)}% / Test {Math.round(testSize * 100)}%
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Folds</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <select value={cvFolds} onChange={(e) => setCvFolds(Number(e.target.value))} style={{ width: 170 }}>
+                  <option value={3}>3 folds</option>
+                  <option value={5}>5 folds (recommended)</option>
+                  <option value={10}>10 folds</option>
+                </select>
+                <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                  5 folds works well for most datasets; 10 folds can give steadier estimates on smaller datasets.
+                </span>
+              </div>
+              <span />
+              <div className="ax-card" style={{ padding: '10px 12px', background: 'var(--color-background-info-soft)', borderColor: 'var(--color-border-info)' }}>
+                <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>Cross-validation rotates training and testing across {cvFolds} folds.</p>
+                <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+                  Cross-validation automatically rotates training and testing across {cvFolds} folds to produce more stable evaluation results.
+                </p>
+              </div>
+            </>
+          )}
           {plan?.task === 'classification' && (
             <>
               <label style={{ color: 'var(--color-text-secondary)' }}>Classification split</label>
@@ -606,13 +676,25 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
               Use a simple interpretable baseline first, then compare with tree-based models. Random Forest can perform well but needs model-health checks for overfitting.
             </p>
           </RecommendationPanel>
+          {auth.isGuest && (
+            <div className="ax-card" style={{ padding: '10px 12px', borderColor: guestModelLimitReached ? '#E24B4A' : 'var(--color-border-info)', background: guestModelLimitReached ? '#FFF1F1' : 'var(--color-background-info-soft)' }}>
+              <div className="ax-row">
+                <strong style={{ fontSize: 12 }}>Guest training usage</strong>
+                <span className="ax-chip" style={{ fontSize: 11 }}>{guestTrainingUsed}/{GUEST_MODEL_LIMIT} guest trainings used</span>
+              </div>
+              <p style={{ fontSize: 11, color: guestModelLimitReached ? '#9E2524' : 'var(--color-text-secondary)', margin: '6px 0 0' }}>
+                Guest mode includes up to {GUEST_MODEL_LIMIT} total model trainings for this temporary session. Deleting models will not reset the limit. {guestModelLimitReached ? 'Guest training limit reached. Create an account to remove guest training restrictions.' : `${guestModelsRemaining} training attempt${guestModelsRemaining === 1 ? '' : 's'} remaining.`}
+              </p>
+            </div>
+          )}
           {visibleAlgos.map((a) => (
             <label
               key={a.key}
               className="ax-card"
               style={{
                 padding: '10px 12px',
-                cursor: 'pointer',
+                cursor: auth.isGuest && !chosenAlgos.includes(a.key) && guestModelsRemaining <= selectedAlgos.length ? 'not-allowed' : 'pointer',
+                opacity: auth.isGuest && !chosenAlgos.includes(a.key) && guestModelsRemaining <= selectedAlgos.length ? 0.55 : 1,
                 background: chosenAlgos.includes(a.key) ? 'var(--color-accent-light)' : undefined,
                 borderColor: chosenAlgos.includes(a.key) ? 'var(--color-accent)' : undefined,
               }}
@@ -622,6 +704,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                   <input
                     type="checkbox"
                     checked={chosenAlgos.includes(a.key)}
+                    disabled={auth.isGuest && !chosenAlgos.includes(a.key) && guestModelsRemaining <= selectedAlgos.length}
                     onChange={() => toggleAlgo(a.key)}
                   />
                   <div>
@@ -646,7 +729,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       <div className="ax-row" style={{ margin: '8px 0 16px', justifyContent: 'flex-end' }}>
         <button
           className="ax-btn prim"
-          disabled={training || !plan || selectedAlgos.length === 0 || (plan.validation_checks || []).some((c) => c.status === 'block')}
+          disabled={training || !plan || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit || (plan.validation_checks || []).some((c) => c.status === 'block')}
           onClick={train}
           type="button"
         >
@@ -683,7 +766,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                 setModelParams={setModelParams}
               />
               <div style={{ textAlign: 'right', marginTop: 10 }}>
-                <button className="ax-btn prim" disabled={training || selectedAlgos.length === 0} onClick={train}>
+                <button className="ax-btn prim" disabled={training || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit} onClick={train}>
                   {training ? <InlineSpinner label="Training tuned model..." /> : 'Train again with tuned settings'}
                 </button>
               </div>
@@ -1736,12 +1819,13 @@ function algoLabelForTask(algo, task) {
   return algoLabel(algo)
 }
 
-function targetOptions(mode, positiveClass, testSize, validationMethod, stratify, classWeight, numericPreprocessing) {
+function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
   options.test_size = testSize
   options.validation_method = validationMethod || 'standard_split'
+  if (options.validation_method === 'cross_validation') options.cv_folds = cvFolds || 5
   options.stratify = stratify
   if (classWeight) options.class_weight = 'balanced'
   options.numeric_preprocessing = numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] }
@@ -1817,3 +1901,4 @@ function highlightSection(section) {
   el.classList.add('ax-fix-highlight')
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
+

@@ -12,6 +12,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
   const [inputs, setInputs] = useState({})
   const [pred, setPred] = useState(null)
   const [baseline, setBaseline] = useState(null)
+  const [baselineInputs, setBaselineInputs] = useState(null)
   const [scenarioName, setScenarioName] = useState('')
   const [scenarios, setScenarios] = useState([])
   const [selectedScenarioName, setSelectedScenarioName] = useState('')
@@ -41,6 +42,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
       setInputs(init)
       setPred(null)
       setBaseline(null)
+      setBaselineInputs(null)
       setScenarios([])
     })
   }, [selectedModel?.id, dataset?.current_stage_id])
@@ -49,7 +51,10 @@ export default function WhatIfPage({ dataset, activeModel }) {
     if (!modelFull || !Object.keys(inputs).length) return
     api.predict(modelFull.id, inputs).then((p) => {
       setPred(p)
-      setBaseline((current) => current || p)
+      setBaseline((current) => {
+        if (!current) setBaselineInputs({ ...inputs })
+        return current || p
+      })
     }).catch(console.error)
   }, [inputs, modelFull?.id])
 
@@ -109,6 +114,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
     for (const f of features) init[f.name] = f.kind === 'categorical' ? (f.default || f.values?.[0] || '') : f.mean
     setInputs(init)
     setBaseline(null)
+    setBaselineInputs(null)
   }
 
   const saveScenario = async () => {
@@ -308,7 +314,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
             />
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-            {baseline && <ScenarioCard name="Baseline" prediction={baseline} inputs={baseline.inputs} />}
+            {baseline && <ScenarioCard name="Baseline" prediction={baseline} inputs={baselineInputs} />}
             {pred && <ScenarioCard name="Current inputs" prediction={pred} baseline={baseline} extrapolation={extrapolation} inputs={inputs} active />}
             {scenarios.map((s, i) => (
               <ScenarioCard

@@ -28,7 +28,7 @@ export default function ReportPage({ dataset }) {
 
   const build = async () => {
     if (auth.isGuest) {
-      auth.requireAccountForAI()
+      auth.requireAccountForReports()
       return
     }
     setLoading(true)

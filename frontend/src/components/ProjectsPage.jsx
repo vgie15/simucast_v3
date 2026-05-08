@@ -64,7 +64,7 @@ export default function ProjectsPage() {
       </div>
       {guestAtLimit && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
-          Guest accounts are limited to 1 project. Sign up to keep your work and create more.
+          Guest mode is limited to 1 temporary project. Sign up or log in to create saved projects.
         </p>
       )}
 
