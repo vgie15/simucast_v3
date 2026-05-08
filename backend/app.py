@@ -5235,12 +5235,14 @@ def ai_recommend(ds_id):
                 'Respond as JSON: {"method": "bootstrap|synthetic", "target_rows": int, "rationale": str, "warnings": [str]}'
             ),
             "describe": (
-                "Write a 2–4 sentence narrative summary of this dataset that a "
-                "non-statistician would understand: what it appears to be about, "
-                "the most notable distributions or skews, and any obvious data "
-                "quality concerns. Then list up to 4 specific findings worth "
-                "highlighting (outliers, skewed columns, suspicious zeros, etc). "
-                'Respond as JSON: {"summary": str, "recommendations": [{"title": str, "rationale": str, "category": "distribution|outlier|quality|relationship"}]}'
+                "Describe this dataset in plain text. Write one sentence about "
+                "the apparent subject/domain (what the data is about). Then list "
+                "3–6 short bullets naming the notable feature groups present (use "
+                "exact column-name groupings or topical clusters). Then one short "
+                "data-quality note (imbalance, missing %, suspicious values). "
+                "Total 50–80 words across all fields. No markdown, headings, "
+                "tables, code fences, bold or italic. "
+                'Respond as JSON: {"subject": str, "feature_groups": [str], "quality_note": str}'
             ),
             "clean": (
                 "Recommend up to 5 cleaning actions, ordered by impact. For each: "
@@ -5711,18 +5713,21 @@ def _rule_based_recommend(context, df, variables):
                 "target_rows": max(500, 2 * len(df)), "rationale": "Bootstrap is fast and assumption-free.",
                 "warnings": ["Bootstrap rows are duplicates of originals — don't use for held-out evaluation."]}
     if context == "describe":
-        recs = []
-        for col in nums[:2]:
-            recs.append({"title": f"Inspect distribution of '{col}'",
-                         "rationale": "Numeric column — check for skew or outliers.",
-                         "category": "distribution"})
-        for col in cats[:1]:
-            recs.append({"title": f"Check cardinality of '{col}'",
-                         "rationale": "Categorical column — verify it isn't near-unique.",
-                         "category": "quality"})
+        groups = []
+        if nums:
+            groups.append(f"Numeric measures ({len(nums)} columns)")
+        if cats:
+            groups.append(f"Categorical attributes ({len(cats)} columns)")
+        if bins:
+            groups.append(f"Binary flags ({len(bins)} columns)")
+        if missing_cols:
+            quality = f"{len(missing_cols)} of {len(variables)} columns have missing values."
+        else:
+            quality = "No missing values detected."
         return {"context": "describe", "ai": False,
-                "summary": f"{len(df)} rows × {len(variables)} columns ({len(nums)} numeric, {len(cats)} categorical).",
-                "recommendations": recs}
+                "subject": f"Dataset with {len(df)} rows and {len(variables)} columns.",
+                "feature_groups": groups,
+                "quality_note": quality}
     if context == "clean":
         recs = []
         for col in missing_cols[:3]:
