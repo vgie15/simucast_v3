@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { BusyOverlay, SkeletonCards } from './LoadingStates'
+import { SkeletonCards } from './LoadingStates'
 import HelpButton from './HelpButton'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
@@ -51,6 +51,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     return saved
   })
   const [plan, setPlan] = useState(null)
+  const [planDatasetId, setPlanDatasetId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState([])
@@ -69,15 +70,21 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     }
   }
 
+  const cacheKeyFor = (targetMode = mode, targetStage = stageKey) => {
+    const scope = targetMode === 'auto' ? 'latest' : targetStage
+    return `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${scope}.${targetMode}`
+  }
+
   const load = async (force = false) => {
     if (!datasetId) return
-    const cacheKey = `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${stageKey}.${mode}`
+    const cacheKey = cacheKeyFor(mode, stageKey)
     if (!force) {
       const cached = window.localStorage.getItem(cacheKey)
       if (cached) {
         try {
           const cachedPlan = JSON.parse(cached)
           setPlan(cachedPlan)
+          setPlanDatasetId(datasetId)
           loadActivity()
           return
         } catch {
@@ -87,17 +94,21 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     }
     setLoading(true)
     setError('')
+    if (force || !plan) setPlan(null)
     try {
       const r = await api.aiProjectPlan(datasetId, mode)
       setPlan(r)
+      setPlanDatasetId(datasetId)
       window.localStorage.setItem(cacheKey, JSON.stringify(r))
     } catch {
       setError('AI plan unavailable. Using built-in guided workflow.')
       try {
         const fallback = await api.aiProjectPlan(datasetId, 'system')
         setPlan({ ...fallback, error: 'AI plan unavailable. Using built-in guided workflow.' })
+        setPlanDatasetId(datasetId)
       } catch {
         setPlan(null)
+        setPlanDatasetId(null)
       }
     } finally {
       setLoading(false)
@@ -135,6 +146,17 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   }, [collapseKey])
 
   useEffect(() => {
+    if (mode === 'system') return
+    if (mode === 'auto' && plan && planDatasetId === datasetId) {
+      loadActivity()
+      return
+    }
+    load(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId, mode])
+
+  useEffect(() => {
+    if (mode !== 'system') return
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId, stageKey, mode])
@@ -193,17 +215,20 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const handleModeChange = (nextMode) => {
     if (nextMode === mode) return
     if (modeKey) window.localStorage.setItem(modeKey, nextMode)
-    const nextCacheKey = `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${stageKey}.${nextMode}`
+    const nextCacheKey = cacheKeyFor(nextMode, stageKey)
     const cached = window.localStorage.getItem(nextCacheKey)
     if (cached) {
       try {
         setPlan(JSON.parse(cached))
+        setPlanDatasetId(datasetId)
       } catch {
         window.localStorage.removeItem(nextCacheKey)
         setPlan(null)
+        setPlanDatasetId(null)
       }
     } else {
       setPlan(null)
+      setPlanDatasetId(null)
     }
     setError('')
     setMode(nextMode)
@@ -226,20 +251,9 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
   return (
     <section
-      className={`ax-card ax-plan-panel ax-busy-host${collapsed ? ' ax-plan-collapsed' : ''} ${loading ? 'is-busy' : ''}`}
+      className={`ax-card ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}
       style={!collapsed && planH ? { height: planH, maxHeight: 'none' } : undefined}
     >
-      <BusyOverlay
-        active={loading && !!plan}
-        title={mode === 'auto' ? 'Generating guided plan...' : 'Preparing system workflow...'}
-        detail={mode === 'auto'
-          ? 'Building a dataset profile and preparing workflow recommendations.'
-          : 'Reviewing dataset issues and ordering the recommended steps.'}
-        steps={mode === 'auto'
-          ? ['Building dataset profile', 'Generating recommendations', 'Preparing guided plan']
-          : ['Checking data quality', 'Mapping fixes to pages', 'Preparing guided plan']}
-      />
-
       <div className="ax-panel-sticky-header">
         <div className="ax-plan-panel-head" style={{ marginBottom: collapsed ? 0 : 8 }}>
           <div className="ax-plan-title-wrap">
@@ -293,6 +307,12 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           )}
 
           {loading && !plan && <SkeletonCards count={3} />}
+
+          {loading && plan && (
+            <div className="ax-plan-loading-note">
+              {mode === 'auto' ? 'Updating AI guided plan...' : 'Updating built-in workflow...'}
+            </div>
+          )}
 
           {plan?.summary && (
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>

@@ -2543,6 +2543,15 @@ a.ax-btn {
   color: var(--color-text-secondary);
   line-height: 1.35;
 }
+.ax-plan-loading-note {
+  margin: 8px 14px 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
 .ax-plan-step {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
