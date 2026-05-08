@@ -105,25 +105,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="demo" className="ax-demo-section">
-        <p className="ax-section-pill">Product walkthrough</p>
-        <h2>See SimuCast in Action</h2>
-        <p>Follow the path from uploaded data to analysis, scenarios, and a report.</p>
-        <div className="ax-demo-video">
-          <button type="button" aria-label="Open workflow walkthrough" onClick={() => jumpTo('workflow')}>
-            <svg width="38" height="38" viewBox="0 0 24 24" fill="none">
-              <path d="M8 5v14l11-7L8 5z" fill="currentColor" />
-            </svg>
-          </button>
-          <span>SimuCast Platform Demo</span>
-        </div>
-        <div className="ax-demo-benefits">
-          <Benefit icon="settings" title="Quick Setup" body="Upload data and start analysing in under 2 minutes." />
-          <Benefit icon="hand" title="No Coding Required" body="Point-and-click interface for all analytics operations." />
-          <Benefit icon="bulb" title="Instant Insights" body="AI or system-powered recommendations in real time." />
-        </div>
-      </section>
-
       <section id="workflow" className="ax-workflow-band">
         <h2>Simple 5-Step Workflow</h2>
         <p>From data upload to accountable insights in one guided workspace.</p>
@@ -194,7 +175,7 @@ export default function LandingPage() {
 
       <section className="ax-final-cta">
         <h2>Ready to Transform Your Analytics?</h2>
-        <p>Start with guest mode, then sign up when you want to keep projects and continue training.</p>
+        <p>Start with a temporary guest demo, then sign up when you want saved projects and AI features.</p>
         <button className="ax-btn" onClick={openSignup} type="button">
           Try SimuCast Now -&gt;
         </button>

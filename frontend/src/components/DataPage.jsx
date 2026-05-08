@@ -9,6 +9,7 @@ import { useDialog } from './DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 import HelpButton from './HelpButton'
 import { SparkleIcon } from './AIExplainers'
+import { useAuth } from './AuthProvider'
 
 export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const dialog = useDialog()
@@ -386,6 +387,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 }
 
 function CleanGroupCard({ datasetId, stageId, group, kind, title, description, applying, onApply }) {
+  const auth = useAuth()
   const items = group?.columns || []
   const [selected, setSelected] = useState(() => items.map((item) => item.variable).filter(Boolean))
   const [action, setAction] = useState(() => recommendedGroupAction(kind, group, items).action)
@@ -430,6 +432,10 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
 
   const askAiForRecommendation = async () => {
     if (aiLoading || !datasetId) return
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     setAiLoading(true)
     setAiSuggestion(null)
     try {
@@ -1044,6 +1050,7 @@ function FeatureRecommendationCard({ recommendation }) {
 }
 
 function FeatureEngineeringCard({ dataset, onApplied }) {
+  const auth = useAuth()
   const [open, setOpen] = useState(false)
   const [tool, setTool] = useState('bins') // 'bins' | 'format'
   const [busy, setBusy] = useState(false)
@@ -1090,6 +1097,10 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
 
   const askAiForFeatureRecommendation = async () => {
     if (!dataset?.id || aiLoading) return
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     setAiLoading(true)
     setAiSuggestion(null)
     try {

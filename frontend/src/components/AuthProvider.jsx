@@ -32,6 +32,8 @@ export function AuthProvider({ children }) {
           key?.startsWith('simucast.aiPlan.') ||
           key?.startsWith('simucast.aiPlan.done.') ||
           key?.startsWith('simucast.aiPlan.collapsed.') ||
+          key?.startsWith('simucast.aiPlan.mode.') ||
+          key?.startsWith('simucast.aiPlan.skipped.') ||
           key?.startsWith('simucast.activeProject') ||
           key?.startsWith('simucast.selectedProject') ||
           key?.startsWith('simucast.currentDataset')
@@ -142,10 +144,11 @@ export function AuthProvider({ children }) {
 
   const resetGuestSession = useCallback(async () => {
     api.setSessionToken('')
+    clearProjectState()
     const r = await api.authGuest()
     saveSession(r)
     return r.session
-  }, [saveSession])
+  }, [clearProjectState, saveSession])
 
   const refreshSession = useCallback(async () => {
     try {
@@ -173,6 +176,7 @@ export function AuthProvider({ children }) {
     refreshSession,
     updateSession: saveSession,
     showAuthModal: (mode = 'login') => setModalMode(mode),
+    requireAccountForAI: () => setModalMode('ai'),
   }), [session, loading, login, signup, logout, ensureGuest, resetGuestSession, refreshSession, saveSession])
 
   return (
@@ -199,10 +203,9 @@ function AuthModal({ initialMode, onClose }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [transferred, setTransferred] = useState(false)
+  const isAIPrompt = initialMode === 'ai'
 
   const wasGuest = auth.isGuest
-  // Show transfer notice only if guest has actually used their project slot
   const hasGuestData = auth.guestAtLimit
 
   const submit = async (event) => {
@@ -244,20 +247,6 @@ function AuthModal({ initialMode, onClose }) {
     }
   }
 
-  if (transferred) {
-    return (
-      <div className="ax-dialog-backdrop" role="presentation">
-        <div className="ax-auth-modal" style={{ textAlign: 'center', padding: '40px 32px' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
-          <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 8px' }}>Account created!</h2>
-          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: 0 }}>
-            Your guest session and projects have been saved to your new account.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="ax-dialog-backdrop" role="presentation" onMouseDown={onClose}>
       <form className="ax-auth-modal" onSubmit={submit} onMouseDown={(e) => e.stopPropagation()}>
@@ -276,14 +265,22 @@ function AuthModal({ initialMode, onClose }) {
         <div className="ax-dialog-body">
           <h2 className="ax-auth-title">{mode === 'signup' ? 'Create Account' : 'Welcome Back'}</h2>
           <p className="ax-auth-subtitle">
-            {mode === 'signup'
-              ? 'Sign up to save your projects, scenarios, and documentation.'
-              : 'Sign in to access your saved scenarios and analysis.'}
+            {isAIPrompt
+              ? 'Create an account or log in to use AI recommendations, explanations, and guided insights.'
+              : mode === 'signup'
+                ? 'Sign up to create saved projects. Guest demo projects stay temporary and are not transferred.'
+                : 'Sign in to access your saved scenarios and analysis.'}
           </p>
+          {isAIPrompt && (
+            <div className="ax-auth-guest-notice">
+              <span>!</span>
+              <span>AI features require an account.</span>
+            </div>
+          )}
           {mode === 'signup' && wasGuest && hasGuestData && (
             <div className="ax-auth-guest-notice">
-              <span>✓</span>
-              <span>Your guest session and any projects you&apos;ve created will be saved to your new account.</span>
+              <span>!</span>
+              <span>Guest demo projects are temporary and will not be moved into your account.</span>
             </div>
           )}
           {mode === 'signup' && (
@@ -347,7 +344,7 @@ function AuthModal({ initialMode, onClose }) {
           </button>
           <div className="ax-auth-divider"><span>OR</span></div>
           <button className="ax-btn ax-auth-guest" type="button" onClick={continueGuest} disabled={busy}>
-            Continue as Guest
+            {isAIPrompt ? 'Continue without AI' : 'Continue as Guest'}
           </button>
           <p>
             {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { SkeletonCards } from './LoadingStates'
 import HelpButton from './HelpButton'
+import { useAuth } from './AuthProvider'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
 const PLAN_CACHE_VERSION = 'v4'
@@ -38,6 +39,7 @@ const DATA_CHANGE_ACTIONS = new Set([
 
 export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollapsedChange }) {
   const navigate = useNavigate()
+  const auth = useAuth()
   const datasetId = dataset?.id
   const stageKey = dataset?.current_stage_id || 'original'
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
@@ -45,6 +47,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
   const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
   const [mode, setMode] = useState(() => {
+    if (window.localStorage.getItem('simucast.sessionToken') && window.localStorage.getItem('simucast.guestSlot.used') === '1') return 'system'
     if (!modeKey) return 'system'
     const saved = window.localStorage.getItem(modeKey)
     if (!saved || saved === 'off') return 'system'
@@ -118,6 +121,11 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
   useEffect(() => {
     if (!modeKey) return
+    if (auth.isGuest) {
+      setMode('system')
+      window.localStorage.setItem(modeKey, 'system')
+      return
+    }
     const saved = window.localStorage.getItem(modeKey)
     setMode(!saved || saved === 'off' ? 'system' : saved)
   }, [modeKey])
@@ -214,6 +222,10 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
   const handleModeChange = (nextMode) => {
     if (nextMode === mode) return
+    if (nextMode === 'auto' && auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     if (modeKey) window.localStorage.setItem(modeKey, nextMode)
     const nextCacheKey = cacheKeyFor(nextMode, stageKey)
     const cached = window.localStorage.getItem(nextCacheKey)
@@ -288,7 +300,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
         {!collapsed && (
           <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 0 }}>
             <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => handleModeChange('auto')}>
-              AI guided
+              AI guided{auth.isGuest ? ' 🔒' : ''}
             </button>
             <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => handleModeChange('system')}>
               System only
@@ -315,14 +327,16 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           )}
 
           {plan?.summary && (
-            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+            <p className="ax-plan-summary">
               {plan.summary}
             </p>
           )}
 
           {mode === 'system' && plan && (
-            <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '-4px 0 10px' }}>
-              Built-in workflow updates automatically with project changes.
+            <p className="ax-plan-helper">
+              {auth.isGuest
+                ? 'AI Guided Plan is available after signing up. System Guided Plan still works normally.'
+                : 'Built-in workflow updates automatically with project changes.'}
             </p>
           )}
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
+import { useAuth } from './AuthProvider'
 
 /**
  * AIAssistantPanel
@@ -15,12 +16,19 @@ import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
  *   title:     optional override for the section title
  */
 export default function AIAssistantPanel({ datasetId, context = 'data', title }) {
+  const auth = useAuth()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [collapsed, setCollapsed] = useState(false)
 
   const load = async () => {
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      setData(null)
+      setError('AI features require an account.')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -34,8 +42,12 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
   }
 
   useEffect(() => {
-    load()
-  }, [datasetId, context])
+    if (!auth.isGuest) load()
+    else {
+      setData(null)
+      setError('AI features require an account.')
+    }
+  }, [datasetId, context, auth.isGuest])
 
   const recommendations = (data?.recommendations || []).filter(hasRecommendationContent)
   const sectionTitle = title || titleForContext(context)
@@ -72,7 +84,7 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
         </button>
         {!collapsed && (
           <button className="ax-btn" onClick={load} disabled={loading} type="button">
-            {loading ? <InlineSpinner label="Thinking..." /> : 'Re-analyze'}
+            {loading ? <InlineSpinner label="Thinking..." /> : auth.isGuest ? 'Re-analyze 🔒' : 'Re-analyze'}
           </button>
         )}
       </div>
@@ -108,6 +120,7 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
             rec={r}
             datasetId={datasetId}
             context={context}
+            auth={auth}
           />
         ))}
       </div>
@@ -117,12 +130,16 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
   )
 }
 
-function RecommendationCard({ rec, datasetId, context }) {
+function RecommendationCard({ rec, datasetId, context, auth }) {
   const [expanded, setExpanded] = useState(false)
   const [explanation, setExplanation] = useState(null)
   const [loading, setLoading] = useState(false)
 
   const toggle = async () => {
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     const next = !expanded
     setExpanded(next)
     if (next && !explanation && !loading) {

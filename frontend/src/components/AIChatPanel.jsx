@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { useAuth } from './AuthProvider'
 
 export default function AIChatPanel({ datasetId, activeTab }) {
+  const auth = useAuth()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -13,6 +15,12 @@ export default function AIChatPanel({ datasetId, activeTab }) {
   useEffect(() => {
     let cancelled = false
     if (!datasetId) return
+    if (auth.isGuest) {
+      setMessages([])
+      setError('AI features require an account.')
+      setLoading(false)
+      return
+    }
     setLoading(true)
     api
       .aiChatHistory(datasetId)
@@ -30,7 +38,7 @@ export default function AIChatPanel({ datasetId, activeTab }) {
     return () => {
       cancelled = true
     }
-  }, [datasetId])
+  }, [datasetId, auth.isGuest])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -52,6 +60,10 @@ export default function AIChatPanel({ datasetId, activeTab }) {
   const send = async () => {
     const text = input.trim()
     if (!text || sending) return
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     setInput('')
     setError('')
     setSending(true)
@@ -79,6 +91,10 @@ export default function AIChatPanel({ datasetId, activeTab }) {
 
   const clear = async () => {
     if (!messages.length) return
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     if (!window.confirm('Clear the chat history for this project?')) return
     try {
       await api.aiChatClear(datasetId)
@@ -145,13 +161,16 @@ export default function AIChatPanel({ datasetId, activeTab }) {
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onFocus={() => {
+              if (auth.isGuest) auth.requireAccountForAI()
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 send()
               }
             }}
-            placeholder="Message Claude…"
+            placeholder={auth.isGuest ? 'AI chat requires an account…' : 'Message Claude…'}
             disabled={sending}
           />
           <button
@@ -160,7 +179,7 @@ export default function AIChatPanel({ datasetId, activeTab }) {
             type="button"
             disabled={!input.trim() || sending}
             aria-label="Send message"
-            title="Send (Enter)"
+            title={auth.isGuest ? 'AI features require an account.' : 'Send (Enter)'}
           >
             <SendIcon />
           </button>

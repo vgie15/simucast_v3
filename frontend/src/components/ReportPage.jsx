@@ -3,6 +3,7 @@ import { api } from '../api'
 import { AIInsightCard } from './AIExplainers'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
 import HelpButton from './HelpButton'
+import { useAuth } from './AuthProvider'
 
 const SECTIONS = [
   { key: 'summary', label: 'Executive summary' },
@@ -14,6 +15,7 @@ const SECTIONS = [
 ]
 
 export default function ReportPage({ dataset }) {
+  const auth = useAuth()
   const [selected, setSelected] = useState(SECTIONS.map((s) => s.key))
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -25,6 +27,10 @@ export default function ReportPage({ dataset }) {
   }
 
   const build = async () => {
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     setLoading(true)
     try {
       const r = await api.buildReport(dataset.id, selected)

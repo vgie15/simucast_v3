@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { InlineSpinner, SkeletonCards } from './LoadingStates'
 import HelpButton from './HelpButton'
+import { useAuth } from './AuthProvider'
 
 // Lightweight in-memory cache so navigating back to a page that already
 // rendered an explanation doesn't re-bill. Keyed by datasetId+step+payload-hash.
@@ -75,6 +76,7 @@ export function ExplainButton({
   label = 'Explain',
   size = 'mini',
 }) {
+  const auth = useAuth()
   const [open, setOpen] = useState(false)
   const [text, setText] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -84,6 +86,10 @@ export function ExplainButton({
 
   const fetchExplanation = async ({ force = false } = {}) => {
     if (!datasetId || loading) return
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     const requestParams = force ? { ...params, _retry_at: Date.now() } : params
     const k = keyOf(datasetId, step, requestParams, result, question)
     const cached = !force ? cacheGet(k) : null
@@ -127,6 +133,10 @@ export function ExplainButton({
   }, [open])
 
   const toggle = async () => {
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     const next = !open
     setOpen(next)
     if (!next || text || loading) return
@@ -232,6 +242,7 @@ export function AIInsightCard({
   suggestedNextStep,
 }) {
   const navigate = useNavigate()
+  const auth = useAuth()
   const [text, setText] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -240,6 +251,10 @@ export function AIInsightCard({
 
   const load = async () => {
     if (!datasetId) return
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     setLoading(true)
     setError(null)
     const k = keyOf(datasetId, step, params, result, question)
@@ -285,9 +300,9 @@ export function AIInsightCard({
   }
 
   useEffect(() => {
-    if (autoLoad) load()
+    if (autoLoad && !auth.isGuest) load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, step, refreshKey])
+  }, [datasetId, step, refreshKey, auth.isGuest])
 
   return (
     <div
@@ -331,6 +346,7 @@ export function AIInsightCard({
           className="ax-btn ax-ai-explain-btn mini"
           onClick={load}
           disabled={loading}
+          title={auth.isGuest ? 'AI features require an account.' : undefined}
         >
           {loading ? <InlineSpinner label="Generating..." /> : <><SparkleIcon size={11} /> {text ? 'Refresh' : 'AI explain'}</>}
         </button>

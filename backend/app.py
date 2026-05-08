@@ -324,13 +324,6 @@ def _attach_owner(ds, session):
     ds.session_id = sess.id
     ds.user_id = user.id if user else None
 
-def _claim_guest_projects(session, guest_session, user_id):
-    if not guest_session or not guest_session.is_guest:
-        return
-    for ds in session.query(Dataset).filter_by(session_id=guest_session.id).all():
-        ds.user_id = user_id
-        ds.session_id = None
-
 def _client_guest_slot_used():
     header = (request.headers.get("X-SimuCast-Guest-Used") or "").strip().lower()
     if header in {"1", "true", "yes"}:
@@ -341,10 +334,20 @@ def _client_guest_slot_used():
 def _guest_limit_response(sess):
     if sess and sess.is_guest and int(sess.guest_usage_count or 0) >= 1:
         return {
-            "error": "Guest limit reached. Sign up or log in to continue training models and saving work.",
+            "error": "Guest mode is limited to one temporary project. Sign up or log in to create saved projects.",
             "auth_required": True,
             "guest_limit": True,
             "session": _session_payload(sess),
+        }, 403
+    return None
+
+def _ai_account_required_response(session):
+    sess, user = _auth_from_request(session)
+    if not sess or sess.is_guest or not user:
+        return {
+            "error": "AI features require an account.",
+            "auth_required": True,
+            "ai_account_required": True,
         }, 403
     return None
 
@@ -1040,7 +1043,6 @@ def signup():
         existing = s.query(User).filter_by(email=email).first()
         if existing:
             return {"error": "email already registered"}, 409
-        old_sess, _ = _auth_from_request(s)
         user = User(
             id=str(uuid.uuid4()),
             email=email,
@@ -1057,8 +1059,6 @@ def signup():
         )
         s.add(user)
         s.add(sess)
-        # Guest work is claimed only when the user explicitly signs up from guest mode.
-        _claim_guest_projects(s, old_sess, user.id)
         s.commit()
         return jsonify({"session": _session_payload(sess, user)})
     finally:
@@ -4956,6 +4956,9 @@ def ai_project_plan(ds_id):
         profile = _plan_prompt_profile(ds, df, variables, s)
         if mode == "system":
             return jsonify(_rule_based_project_plan(df, variables))
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
 
         cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "project_plan", {"mode": mode, "plan_version": 3})
         cached = _AI_CACHE.get(cache_key) or _ai_db_get(s, cache_key)
@@ -5181,6 +5184,9 @@ def ai_recommend(ds_id):
     context = (body.get("context") or "data").lower()
     s = db()
     try:
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
@@ -5384,6 +5390,9 @@ def ai_explain(ds_id):
     question = body.get("question") or "Explain what this step does and what to look out for."
     s = db()
     try:
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
@@ -5498,6 +5507,9 @@ def set_ai_explanation_report(ds_id, analysis_id):
     include = bool(body.get("include", True))
     s = db()
     try:
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
         row = s.query(Analysis).filter_by(id=analysis_id, dataset_id=ds_id, kind="ai_explanation").first()
         if not row:
             return {"error": "AI explanation not found"}, 404
@@ -5516,6 +5528,9 @@ _CHAT_HISTORY_LIMIT = 20
 def ai_chat_history(ds_id):
     s = db()
     try:
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
         ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
@@ -5551,6 +5566,9 @@ def ai_chat_send(ds_id):
         return {"error": "empty message"}, 400
     s = db()
     try:
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
         ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
@@ -5647,6 +5665,9 @@ def ai_chat_send(ds_id):
 def ai_chat_clear(ds_id):
     s = db()
     try:
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
         ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
@@ -6041,6 +6062,9 @@ def ai_suggest(ds_id):
     prompt = (body.get("prompt") or "").lower()
     s = db()
     try:
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404

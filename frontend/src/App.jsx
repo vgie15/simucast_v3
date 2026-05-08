@@ -30,7 +30,7 @@ function GuestBanner() {
   if (!auth.isGuest || dismissed) return null
   return (
     <div className="ax-guest-banner">
-      <span>👤 <strong>Guest Mode</strong> — your projects are temporary. Sign up to save your work permanently.</span>
+      <span>👤 <strong>Guest Mode</strong> — temporary demo projects do not transfer to accounts. Sign up to create saved projects and use AI.</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         <button type="button" className="ax-btn-signup" onClick={() => auth.showAuthModal('signup')}>
           Sign up to add more

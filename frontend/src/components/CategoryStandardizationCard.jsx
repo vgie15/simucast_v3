@@ -4,9 +4,11 @@ import { useDialog } from './DialogProvider'
 import { InlineSpinner } from './LoadingStates'
 import HelpButton from './HelpButton'
 import { SparkleIcon } from './AIExplainers'
+import { useAuth } from './AuthProvider'
 
 export default function CategoryStandardizationCard({ dataset, onApplied }) {
   const dialog = useDialog()
+  const auth = useAuth()
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading] = useState(false)
   const [selectedColumn, setSelectedColumn] = useState('')
@@ -114,6 +116,10 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
 
   const askAiForRecommendation = async () => {
     if (!dataset?.id || !current || aiLoading) return
+    if (auth.isGuest) {
+      auth.requireAccountForAI()
+      return
+    }
     setAiLoading(true)
     setAiSuggestion(null)
     try {

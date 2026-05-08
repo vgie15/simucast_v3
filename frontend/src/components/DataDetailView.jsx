@@ -3,6 +3,7 @@ import { api } from '../api'
 import ColumnSummary from './ColumnSummary'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { BusyOverlay } from './LoadingStates'
+import { useAuth } from './AuthProvider'
 
 const PAGE_SIZE = 100
 const TYPE_ICON = {
@@ -64,6 +65,7 @@ export default function DataDetailView({
 
   const [headerEdit, setHeaderEdit] = useState(null)
   const [savingHeader, setSavingHeader] = useState(false)
+  const auth = useAuth()
 
   const [expanded, setExpanded] = useState(false)
 
@@ -77,6 +79,11 @@ export default function DataDetailView({
   // load AI describe
   useEffect(() => {
     if (!datasetId) return
+    if (auth.isGuest) {
+      setAboutData(null)
+      setAboutLoading(false)
+      return
+    }
     let cancelled = false
     setAboutLoading(true)
     api
@@ -93,7 +100,7 @@ export default function DataDetailView({
     return () => {
       cancelled = true
     }
-  }, [datasetId, dataset?.current_stage_id])
+  }, [datasetId, dataset?.current_stage_id, auth.isGuest])
 
   // reset on stage / refresh
   useEffect(() => {
