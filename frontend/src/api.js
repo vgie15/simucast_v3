@@ -184,6 +184,13 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ include }),
     }),
+  aiChatHistory: (id) => request(`/api/datasets/${id}/ai/chat`),
+  aiChatSend: (id, message, context) =>
+    request(`/api/datasets/${id}/ai/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message, context }),
+    }),
+  aiChatClear: (id) => request(`/api/datasets/${id}/ai/chat`, { method: 'DELETE' }),
   uploadDataset: async (file, name, description) => {
     const fd = new FormData()
     fd.append('file', file)

@@ -198,6 +198,27 @@ class ActivityLog(Base):
     ref_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class AIResponse(Base):
+    """Persistent store for every AI call.
+
+    Doubles as a cross-restart cache (kind in {recommend, explain, project_plan}
+    keyed by cache_key) and as the chat-history transcript (kind='chat',
+    role in {user, assistant}, cache_key=NULL).
+    """
+    __tablename__ = "ai_responses"
+    id = Column(String, primary_key=True)
+    dataset_id = Column(String, nullable=False, index=True)
+    stage_id = Column(String, nullable=True)
+    user_id = Column(String, nullable=True, index=True)
+    kind = Column(String, nullable=False)            # 'recommend'|'explain'|'project_plan'|'chat'
+    role = Column(String, nullable=True)             # 'user'|'assistant' (chat only)
+    context = Column(String, nullable=True)
+    cache_key = Column(String, nullable=True, index=True)
+    request = _json_col()
+    response = _json_col()
+    model = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
 # DB initialization is deferred to the first request so gunicorn can bind
 # to its port immediately even when Postgres is still provisioning. Free-tier
 # Render Postgres can take several minutes to start accepting connections.
@@ -388,6 +409,53 @@ def _df_cache_invalidate(ds_id):
         _DF_CACHE.pop(key, None)
     for key in [k for k in _AI_CACHE if k[0] == ds_id]:
         _AI_CACHE.pop(key, None)
+
+def _ai_cache_hex(cache_key):
+    """_ai_cache_key returns a (ds_id, sha1_hex) tuple; the DB column stores
+    just the hex. Accept either form."""
+    if isinstance(cache_key, tuple):
+        return cache_key[1]
+    return cache_key
+
+def _ai_db_get(session, cache_key):
+    """Look up a previously persisted AI response by cache_key. Returns the
+    response payload (dict) or None. Also warms _AI_CACHE on hit so subsequent
+    requests in this process skip the DB roundtrip."""
+    hex_key = _ai_cache_hex(cache_key)
+    if not hex_key:
+        return None
+    row = (
+        session.query(AIResponse)
+        .filter_by(cache_key=hex_key)
+        .order_by(AIResponse.created_at.desc())
+        .first()
+    )
+    if not row:
+        return None
+    payload = jload(row.response) if isinstance(row.response, str) else row.response
+    if payload is not None:
+        _AI_CACHE[cache_key] = payload
+    return payload
+
+def _ai_db_put(session, *, dataset_id, stage_id, user_id, kind, context, cache_key, request, response, model):
+    """Persist an AI response. Safe to call inside a request handler."""
+    try:
+        session.add(AIResponse(
+            id=str(uuid.uuid4()),
+            dataset_id=dataset_id,
+            stage_id=stage_id,
+            user_id=user_id,
+            kind=kind,
+            context=context,
+            cache_key=_ai_cache_hex(cache_key) if cache_key else None,
+            request=clean_json(request) if request is not None else None,
+            response=clean_json(response) if response is not None else None,
+            model=model,
+        ))
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"AI persist failed ({kind}): {e}", flush=True)
 
 def _ai_cache_key(ds_id, stage_id, kind, payload):
     """Build a stable cache key for an AI request.
@@ -1362,6 +1430,7 @@ def delete_dataset(ds_id):
             "analyses": s.query(Analysis).filter_by(dataset_id=ds_id).delete(synchronize_session=False),
             "models": s.query(Model).filter_by(dataset_id=ds_id).delete(synchronize_session=False),
             "activity": s.query(ActivityLog).filter_by(dataset_id=ds_id).delete(synchronize_session=False),
+            "ai_responses": s.query(AIResponse).filter_by(dataset_id=ds_id).delete(synchronize_session=False),
         }
         name = ds.name
         filename = ds.filename
@@ -4889,7 +4958,7 @@ def ai_project_plan(ds_id):
             return jsonify(_rule_based_project_plan(df, variables))
 
         cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "project_plan", {"mode": mode, "plan_version": 3})
-        cached = _AI_CACHE.get(cache_key)
+        cached = _AI_CACHE.get(cache_key) or _ai_db_get(s, cache_key)
         if cached is not None:
             return jsonify(cached)
 
@@ -4976,6 +5045,11 @@ def ai_project_plan(ds_id):
                 print("AI project plan raw response:", (text or "")[:4000], flush=True)
                 raise ValueError("AI project plan returned no usable steps")
             _cache_put(_AI_CACHE, cache_key, response)
+            _, user = _auth_from_request(s)
+            _ai_db_put(s, dataset_id=ds_id, stage_id=ds.current_stage_id,
+                       user_id=user.id if user else None, kind="project_plan",
+                       context=mode, cache_key=cache_key,
+                       request={"mode": mode}, response=response, model=_AI_MODEL_FAST)
             return jsonify(clean_json(response))
         except Exception as e:
             print(f"AI project plan failed: {e}", flush=True)
@@ -5114,7 +5188,7 @@ def ai_recommend(ds_id):
         # Cache lookup: same dataset stage + same context = same answer.
         # Skips a paid AI call when the user revisits the same page.
         cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "recommend", {"context": context})
-        cached = _AI_CACHE.get(cache_key)
+        cached = _AI_CACHE.get(cache_key) or _ai_db_get(s, cache_key)
         if cached is not None:
             return jsonify(cached)
 
@@ -5195,6 +5269,11 @@ def ai_recommend(ds_id):
             payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=1500)
             response = {"context": context, "ai": True, **payload}
             _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
+            _, user = _auth_from_request(s)
+            _ai_db_put(s, dataset_id=ds_id, stage_id=ds.current_stage_id,
+                       user_id=user.id if user else None, kind="recommend",
+                       context=context, cache_key=cache_key,
+                       request={"context": context}, response=response, model=_AI_MODEL_FAST)
             return jsonify(response)
         except Exception as e:
             print(f"AI recommend failed: {e}", flush=True)
@@ -5427,6 +5506,172 @@ def set_ai_explanation_report(ds_id, analysis_id):
         return jsonify({"analysis_id": analysis_id, "include_in_report": include})
     finally:
         s.close()
+
+
+_CHAT_HISTORY_LIMIT = 20
+
+@app.route("/api/datasets/<ds_id>/ai/chat", methods=["GET"])
+def ai_chat_history(ds_id):
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        rows = (
+            s.query(AIResponse)
+            .filter_by(dataset_id=ds_id, kind="chat")
+            .order_by(AIResponse.created_at.asc())
+            .all()
+        )
+        messages = []
+        for r in rows:
+            payload = jload(r.response) if isinstance(r.response, str) else r.response
+            req = jload(r.request) if isinstance(r.request, str) else r.request
+            content = (payload or {}).get("content") if r.role == "assistant" else (req or {}).get("content")
+            messages.append({
+                "id": r.id,
+                "role": r.role,
+                "content": content or "",
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            })
+        return jsonify({"messages": messages})
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/ai/chat", methods=["POST"])
+def ai_chat_send(ds_id):
+    """Send one chat turn. Persists the user message, calls Claude with the
+    last N turns + dataset profile, persists the assistant reply, returns it."""
+    body = request.get_json() or {}
+    message = (body.get("message") or "").strip()
+    active_tab = (body.get("context") or "data").lower()
+    if not message:
+        return {"error": "empty message"}, 400
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+
+        _, user = _auth_from_request(s)
+        user_id = user.id if user else None
+
+        user_row = AIResponse(
+            id=str(uuid.uuid4()),
+            dataset_id=ds_id,
+            stage_id=ds.current_stage_id,
+            user_id=user_id,
+            kind="chat",
+            role="user",
+            context=active_tab,
+            request=clean_json({"content": message}),
+            response=None,
+            model=None,
+        )
+        s.add(user_row)
+        s.commit()
+
+        client = _ai_client()
+        if client is None:
+            assistant_text = "AI chat needs ANTHROPIC_API_KEY set on the server."
+        else:
+            history = (
+                s.query(AIResponse)
+                .filter_by(dataset_id=ds_id, kind="chat")
+                .order_by(AIResponse.created_at.asc())
+                .all()
+            )
+            history = history[-(_CHAT_HISTORY_LIMIT + 1):]
+            messages = []
+            for r in history:
+                if r.role not in ("user", "assistant"):
+                    continue
+                payload = jload(r.response) if isinstance(r.response, str) else r.response
+                req = jload(r.request) if isinstance(r.request, str) else r.request
+                content = (payload or {}).get("content") if r.role == "assistant" else (req or {}).get("content")
+                if content:
+                    messages.append({"role": r.role, "content": content})
+
+            df = df_from_dataset(ds, s)
+            variables = _current_variables(ds, s)
+            profile = _dataset_profile(ds, df, variables)
+            chat_system = (
+                "You are SimuCast's data-analysis chat assistant. Reply in plain "
+                "text only — no markdown headings, tables, code fences, or "
+                "bold/italic. Be concise. Reference exact column names from the "
+                "dataset profile. If past messages referenced columns that no "
+                "longer exist in the current profile, update your guidance "
+                f"accordingly. The user is currently on the '{active_tab}' tab."
+            )
+            try:
+                assistant_text = _ai_chat_call(client, messages, system=chat_system, profile=profile)
+            except Exception as e:
+                print(f"AI chat failed: {e}", flush=True)
+                assistant_text = f"AI call failed: {e.__class__.__name__}"
+
+        assistant_row = AIResponse(
+            id=str(uuid.uuid4()),
+            dataset_id=ds_id,
+            stage_id=ds.current_stage_id,
+            user_id=user_id,
+            kind="chat",
+            role="assistant",
+            context=active_tab,
+            request=None,
+            response=clean_json({"content": assistant_text}),
+            model=_AI_MODEL_FAST,
+        )
+        s.add(assistant_row)
+        s.commit()
+
+        return jsonify({
+            "user": {
+                "id": user_row.id,
+                "role": "user",
+                "content": message,
+                "created_at": user_row.created_at.isoformat() if user_row.created_at else None,
+            },
+            "assistant": {
+                "id": assistant_row.id,
+                "role": "assistant",
+                "content": assistant_text,
+                "created_at": assistant_row.created_at.isoformat() if assistant_row.created_at else None,
+            },
+        })
+    finally:
+        s.close()
+
+@app.route("/api/datasets/<ds_id>/ai/chat", methods=["DELETE"])
+def ai_chat_clear(ds_id):
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        s.query(AIResponse).filter_by(dataset_id=ds_id, kind="chat").delete(synchronize_session=False)
+        s.commit()
+        return jsonify({"ok": True})
+    finally:
+        s.close()
+
+
+def _ai_chat_call(client, messages, *, system, profile, model=None, max_tokens=400):
+    """Multi-turn chat call. messages = [{role, content}, ...] ending with a user turn."""
+    sys_blocks = [
+        {"type": "text", "text": system},
+        {
+            "type": "text",
+            "text": "Dataset profile (use as the source of truth):\n" + json.dumps(profile, default=str),
+            "cache_control": {"type": "ephemeral"},
+        },
+    ]
+    msg = client.messages.create(
+        model=model or _AI_MODEL_FAST,
+        max_tokens=max_tokens,
+        system=sys_blocks,
+        messages=messages or [{"role": "user", "content": "(empty)"}],
+    )
+    return "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
 
 
 def _rule_based_recommend(context, df, variables):
