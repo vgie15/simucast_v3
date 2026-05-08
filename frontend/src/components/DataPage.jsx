@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import ColumnValuesModal from './ColumnValuesModal'
 import ManualTransformsCard from './ManualTransformsCard'
-import DataGridViewer from './DataGridViewer'
+import DataDetailView from './DataDetailView'
 import CategoryStandardizationCard from './CategoryStandardizationCard'
 import { useDialog } from './DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from './LoadingStates'
@@ -247,56 +247,30 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         </div>
       )}
 
-      <div id="data-section-raw_data" className="ax-card" style={{ marginBottom: 16 }}>
-        <div className="ax-row">
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Raw data
-              <HelpButton
-                title="Raw data"
-                text="Use this card to confirm which dataset stage you are viewing and export the current cleaned data as CSV. This is the handoff point for checking or sharing the prepared dataset."
-              />
-            </p>
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-              Browse, inspect, and export the active dataset.
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <a
-              className="ax-btn"
-              href={api.exportCsvUrl(dataset.id)}
-              download
-              style={{ textDecoration: 'none' }}
-            >
-              Export cleaned CSV
-            </a>
-            {viewStageId !== 'current' && (
-              <button
-                className="ax-btn prim"
-                onClick={() => {
-                  setViewStageId('current')
-                  setViewStageLabel(null)
-                }}
-              >
-                Show current stage
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <DataGridViewer
+      <div id="data-section-raw_data" style={{ marginBottom: 16 }}>
+        <DataDetailView
           key={`${dataset.id}:${dataset.current_stage_id}:${historyKey}`}
-          datasetId={dataset.id}
+          dataset={dataset}
           variables={dataset.variables || []}
           stageId={viewStageId === 'current' ? null : viewStageId}
           currentStageId={dataset.current_stage_id}
           stageLabel={viewStageLabel}
           refreshKey={historyKey}
-          onVariableClick={setActiveVar}
           onDataChanged={handleApplied}
         />
+        {viewStageId !== 'current' && (
+          <div style={{ marginTop: 8, textAlign: 'right' }}>
+            <button
+              className="ax-btn prim"
+              onClick={() => {
+                setViewStageId('current')
+                setViewStageLabel(null)
+              }}
+            >
+              Show current stage
+            </button>
+          </div>
+        )}
       </div>
 
       <div id="data-section-manual_transforms">
