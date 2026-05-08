@@ -357,25 +357,6 @@ export default function DataDetailView({
         </div>
       </nav>
 
-      <section className="ax-dd-about">
-        <h4>About this file</h4>
-        {aboutLoading && !aboutData && (
-          <p className="ax-dd-about-loading">Generating description…</p>
-        )}
-        {aboutData?.subject && <p>{aboutData.subject}</p>}
-        {aboutData?.feature_groups?.length > 0 && (
-          <ul>
-            {aboutData.feature_groups.map((g, i) => (
-              <li key={i}>{g}</li>
-            ))}
-          </ul>
-        )}
-        {aboutData?.quality_note && <p className="ax-dd-quality">{aboutData.quality_note}</p>}
-        {aboutData?.error && (
-          <p className="ax-dd-quality">{aboutData.error}</p>
-        )}
-      </section>
-
       {(pendingCount > 0 || cellError) && (
         <div className="ax-dd-pending">
           {pendingCount > 0 && (
@@ -394,6 +375,25 @@ export default function DataDetailView({
       )}
 
       <div className="ax-dd-table-wrap" ref={scrollRef}>
+        <section className="ax-dd-about">
+          <h4>About this file</h4>
+          {aboutLoading && !aboutData && (
+            <p className="ax-dd-about-loading">Generating description…</p>
+          )}
+          {aboutData?.subject && <p>{aboutData.subject}</p>}
+          {aboutData?.feature_groups?.length > 0 && (
+            <ul>
+              {aboutData.feature_groups.map((g, i) => (
+                <li key={i}>{g}</li>
+              ))}
+            </ul>
+          )}
+          {aboutData?.quality_note && <p className="ax-dd-quality">{aboutData.quality_note}</p>}
+          {aboutData?.error && (
+            <p className="ax-dd-quality">{aboutData.error}</p>
+          )}
+        </section>
+
         <table className="ax-dd-table">
           <thead>
             <tr className="ax-dd-colhead">
