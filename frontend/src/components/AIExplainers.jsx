@@ -59,6 +59,34 @@ export function ExplainButton({
   const [isSaved, setIsSaved] = useState(false)
   const [isAI, setIsAI] = useState(true)
 
+  const fetchExplanation = async ({ force = false } = {}) => {
+    if (!datasetId || loading) return
+    const requestParams = force ? { ...params, _retry_at: Date.now() } : params
+    const k = keyOf(datasetId, step, requestParams, result, question)
+    const cached = !force ? cacheGet(k) : null
+    if (cached) {
+      setText(cached.explanation || cached)
+      setIsSaved(cached.saved !== false)
+      setIsAI(cached.ai !== false)
+      return
+    }
+    setLoading(true)
+    try {
+      const r = await api.aiExplain(datasetId, step, requestParams, question, result, true)
+      const explanation = r?.explanation || 'No explanation returned.'
+      cacheSet(k, { explanation, saved: r?.saved !== false, ai: r?.ai !== false, include_in_report: true })
+      setText(explanation)
+      setIsSaved(r?.saved !== false)
+      setIsAI(r?.ai !== false)
+    } catch (err) {
+      setText('The explanation could not be generated right now. You can continue using the built-in system guidance.')
+      setIsSaved(false)
+      setIsAI(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!open) return
     const onKey = (e) => {
@@ -74,30 +102,13 @@ export function ExplainButton({
     const next = !open
     setOpen(next)
     if (!next || text || loading) return
-    const k = keyOf(datasetId, step, params, result, question)
-    const cached = cacheGet(k)
-    if (cached) {
-      setText(cached.explanation || cached)
-      setIsSaved(cached.saved !== false)
-      setIsAI(cached.ai !== false)
-      return
-    }
-    setLoading(true)
-    try {
-      const r = await api.aiExplain(datasetId, step, params, question, result)
-      const explanation = r?.explanation || 'No explanation returned.'
-      cacheSet(k, { explanation, saved: r?.saved !== false, ai: r?.ai !== false })
-      setText(explanation)
-      setIsSaved(r?.saved !== false)
-      setIsAI(r?.ai !== false)
-    } catch (err) {
-      setText('The explanation could not be generated right now. You can continue using the built-in system guidance.')
-      setIsSaved(false)
-      setIsAI(false)
-    } finally {
-      setLoading(false)
-    }
+    fetchExplanation()
   }
+
+  const paragraphs = String(text || '')
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean)
 
   return (
     <span className="ax-ai-explain-wrap">
@@ -130,11 +141,30 @@ export function ExplainButton({
                         ? 'Generated explanation.'
                         : 'Built-in fallback explanation.'}
                 </p>
+                <p className="ax-ai-explain-meta">Generated from current dataset state.</p>
               </div>
-              <button type="button" className="ax-btn mini" onClick={() => setOpen(false)}>Close</button>
             </div>
-            <div className="ax-ai-explain-body">
-              {loading ? <InlineSpinner label="Generating explanation..." /> : text}
+            <div className="ax-ai-explain-scroll">
+              <div className="ax-ai-explain-body">
+                {loading ? (
+                  <InlineSpinner label="Generating explanation..." />
+                ) : (
+                  paragraphs.map((paragraph, index) => (
+                    <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="ax-ai-explain-foot">
+              <button
+                type="button"
+                className="ax-btn mini"
+                onClick={() => fetchExplanation({ force: true })}
+                disabled={loading}
+              >
+                {loading ? 'Retrying...' : 'Retry AI'}
+              </button>
+              <button type="button" className="ax-btn mini" onClick={() => setOpen(false)}>Close</button>
             </div>
           </div>
         </div>
@@ -150,7 +180,7 @@ export function ExplainButton({
  * Props:
  *   datasetId, step, params, result, question?
  *   title?      — heading text (default: "AI insight")
- *   autoLoad    — fetch on mount (default true)
+ *   autoLoad    — fetch on mount (default false)
  *   compact     — slimmer layout
  *   refreshKey  — change this to force a refetch (e.g. when result changes)
  */
@@ -161,7 +191,7 @@ export function AIInsightCard({
   result,
   question,
   title = 'AI insight',
-  autoLoad = true,
+  autoLoad = false,
   compact = false,
   refreshKey,
   suggestedNextStep,
@@ -184,9 +214,14 @@ export function AIInsightCard({
       return
     }
     try {
-      const r = await api.aiExplain(datasetId, step, params, question, result)
+      const r = await api.aiExplain(datasetId, step, params, question, result, true)
       const explanation = r?.explanation || 'No explanation returned.'
-      cacheSet(k, { explanation, saved: r?.saved !== false, ai: r?.ai !== false })
+      cacheSet(k, {
+        explanation,
+        saved: r?.saved !== false,
+        ai: r?.ai !== false,
+        include_in_report: true,
+      })
       setText(explanation)
       setIsAI(r?.ai !== false)
     } catch (err) {
@@ -234,7 +269,7 @@ export function AIInsightCard({
           <span style={{ fontSize: 12, fontWeight: 500 }}>{title}</span>
           <HelpButton
             title={title}
-            text="This AI card gives a plain-language interpretation for the result beside it. Generated explanations are saved with the project so they can be reused later, including in reports."
+            text="Click AI explain to generate a plain-language interpretation for the result beside it. Generated explanations are saved with the project so they can be reused later, including in reports."
           />
           {!isAI && text && (
             <span
@@ -265,17 +300,17 @@ export function AIInsightCard({
         </p>
       )}
       {text && (
-        <p
-          style={{
-            fontSize: 12,
-            color: 'var(--color-text-primary)',
-            margin: 0,
-            whiteSpace: 'pre-wrap',
-            lineHeight: 1.5,
-          }}
-        >
-          {text}
-        </p>
+        <div className="ax-ai-insight-scroll">
+          <div className="ax-ai-insight-body">
+            {String(text)
+              .split(/\n{2,}/)
+              .map((part) => part.trim())
+              .filter(Boolean)
+              .map((paragraph, index) => (
+                <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
+              ))}
+          </div>
+        </div>
       )}
       {suggestedNextStep?.page && suggestedNextStep?.section && (
         <button className="ax-btn mini" type="button" onClick={goToSuggestedStep} style={{ marginTop: 8 }}>

@@ -312,6 +312,14 @@ export default function DescribePage({ dataset }) {
             </>
           )}
 
+          <DescribeRunSummary
+            selected={selected}
+            numericStats={numericStats}
+            categoricalStats={categoricalStats}
+            histograms={histograms}
+            corrResult={corrResult}
+          />
+
           <div className="ax-card" style={{ padding: 14 }}>
             <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
               Next step recommendation
@@ -327,6 +335,41 @@ export default function DescribePage({ dataset }) {
         </>
       )}
     </>
+  )
+}
+
+function DescribeRunSummary({ selected, numericStats, categoricalStats, histograms, corrResult }) {
+  const histogramCount = Object.keys(histograms || {}).length
+  const strongest = corrResult?.strongest_pair
+  return (
+    <div className="ax-card" style={{ padding: 14, marginBottom: 14 }}>
+      <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>Describe run summary</p>
+      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 12px' }}>
+        These are the descriptive outputs currently saved for this dataset stage.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+        <SummaryStat label="Variables analyzed" value={selected.length || numericStats.length + categoricalStats.length} />
+        <SummaryStat label="Numeric summaries" value={numericStats.length} />
+        <SummaryStat label="Categorical summaries" value={categoricalStats.length} />
+        <SummaryStat label="Distribution charts" value={histogramCount} />
+      </div>
+      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
+          {corrResult?.variables?.length >= 2
+            ? `Correlation overview was generated for ${corrResult.variables.length} numeric variables${strongest ? `; strongest pair is ${strongest.var_a} and ${strongest.var_b} (r = ${fmt(strongest.r)}).` : '.'}`
+            : 'Correlation overview was not generated because fewer than two numeric variables were included.'}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function SummaryStat({ label, value }) {
+  return (
+    <div style={{ background: 'var(--color-background-secondary)', borderRadius: 8, padding: '10px 12px' }}>
+      <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 18, fontWeight: 850, margin: '2px 0 0' }}>{value}</p>
+    </div>
   )
 }
 

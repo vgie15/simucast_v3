@@ -464,7 +464,7 @@ input[type="range"]::-moz-range-thumb {
 
 .ax-ai-explain-modal {
   width: min(720px, 100%);
-  max-height: min(720px, calc(100vh - 40px));
+  max-height: min(780px, calc(100vh - 40px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -499,14 +499,82 @@ input[type="range"]::-moz-range-thumb {
   color: var(--color-text-secondary);
 }
 
+.ax-ai-explain-scroll {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.ax-ai-explain-scroll::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--color-background-primary));
+  box-shadow: inset 0 -10px 18px rgba(17, 24, 39, 0.03);
+}
+
 .ax-ai-explain-body {
-  overflow: auto;
-  max-height: calc(100vh - 170px);
+  overflow-y: auto;
+  max-height: 72vh;
   padding: 18px 20px 22px;
-  white-space: pre-wrap;
   color: var(--color-text-primary);
   font-size: 13px;
+  line-height: 1.72;
+}
+
+.ax-ai-explain-body p {
+  margin: 0 0 18px;
+}
+
+.ax-ai-explain-body p:last-child {
+  margin-bottom: 28px;
+}
+
+.ax-ai-explain-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+}
+
+.ax-ai-insight-scroll {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.ax-ai-insight-scroll::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--color-background-secondary));
+}
+
+.ax-ai-insight-body {
+  max-height: 230px;
+  overflow-y: auto;
+  padding-right: 8px;
+  color: var(--color-text-primary);
+  font-size: 12px;
   line-height: 1.65;
+}
+
+.ax-ai-insight-body p {
+  margin: 0 0 14px;
+}
+
+.ax-ai-insight-body p:last-child {
+  margin-bottom: 28px;
 }
 
 /* --- async/loading states --- */

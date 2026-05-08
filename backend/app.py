@@ -5065,13 +5065,21 @@ def _saved_ai_explanation(session, ds_id, cache_key):
                 "analysis_id": row.id,
                 "ai": result.get("ai", True),
                 "explanation": result.get("explanation") or "",
+                "include_in_report": bool(result.get("include_in_report")),
             }
     return None
 
 
-def _store_ai_explanation(session, ds_id, cache_key, step, params, question, source_result, explanation, is_ai, stage_id):
+def _store_ai_explanation(session, ds_id, cache_key, step, params, question, source_result, explanation, is_ai, stage_id, include_in_report=False):
     existing = _saved_ai_explanation(session, ds_id, cache_key)
     if existing:
+        if include_in_report and not existing.get("include_in_report"):
+            row = session.query(Analysis).filter_by(id=existing.get("analysis_id"), dataset_id=ds_id, kind="ai_explanation").first()
+            if row:
+                result = jload(row.result) or {}
+                result["include_in_report"] = True
+                row.result = jdump(clean_json(result))
+                session.commit()
         return existing.get("analysis_id")
     analysis_id = str(uuid.uuid4())
     session.add(Analysis(
@@ -5089,6 +5097,7 @@ def _store_ai_explanation(session, ds_id, cache_key, step, params, question, sou
             "ai": bool(is_ai),
             "explanation": explanation,
             "source_result": source_result,
+            "include_in_report": bool(include_in_report),
         }),
     ))
     session.commit()
@@ -5108,6 +5117,7 @@ def ai_explain(ds_id):
     step = body.get("step") or "step"
     params = body.get("params") or {}
     result = body.get("result")
+    include_in_report = bool(body.get("include_in_report"))
     question = body.get("question") or "Explain what this step does and what to look out for."
     s = db()
     try:
@@ -5128,11 +5138,20 @@ def ai_explain(ds_id):
 
         saved = _saved_ai_explanation(s, ds_id, cache_key)
         if saved is not None:
+            if include_in_report and not saved.get("include_in_report"):
+                row = s.query(Analysis).filter_by(id=saved.get("analysis_id"), dataset_id=ds_id, kind="ai_explanation").first()
+                if row:
+                    saved_result = jload(row.result) or {}
+                    saved_result["include_in_report"] = True
+                    row.result = jdump(clean_json(saved_result))
+                    s.commit()
+                    saved["include_in_report"] = True
             response = {
                 "ai": bool(saved.get("ai", True)),
                 "explanation": saved.get("explanation") or "",
                 "saved": True,
                 "analysis_id": saved.get("analysis_id"),
+                "include_in_report": bool(saved.get("include_in_report")),
             }
             _cache_put(_AI_CACHE, cache_key, response)
             return jsonify(response)
@@ -5176,13 +5195,38 @@ def ai_explain(ds_id):
                 text,
                 True,
                 ds.current_stage_id,
+                include_in_report,
             )
-            response = {"ai": True, "explanation": text, "saved": True, "analysis_id": analysis_id}
+            response = {
+                "ai": True,
+                "explanation": text,
+                "saved": True,
+                "analysis_id": analysis_id,
+                "include_in_report": bool(include_in_report),
+            }
             _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
             return jsonify(response)
         except Exception as e:
             print(f"AI explain failed: {e}", flush=True)
             return jsonify({"ai": False, "explanation": "AI explanation unavailable right now. You can continue with the built-in interpretation and try again later."})
+    finally:
+        s.close()
+
+
+@app.route("/api/datasets/<ds_id>/ai/explanations/<analysis_id>/report", methods=["PATCH"])
+def set_ai_explanation_report(ds_id, analysis_id):
+    body = request.get_json() or {}
+    include = bool(body.get("include", True))
+    s = db()
+    try:
+        row = s.query(Analysis).filter_by(id=analysis_id, dataset_id=ds_id, kind="ai_explanation").first()
+        if not row:
+            return {"error": "AI explanation not found"}, 404
+        result = jload(row.result) or {}
+        result["include_in_report"] = include
+        row.result = jdump(clean_json(result))
+        s.commit()
+        return jsonify({"analysis_id": analysis_id, "include_in_report": include})
     finally:
         s.close()
 
@@ -5730,7 +5774,7 @@ def _ai_explanations_report_section(explanations):
         cfg = jload(item.config) or {}
         result = jload(item.result) or {}
         text = (result.get("explanation") or "").strip()
-        if not text:
+        if not text or not result.get("include_in_report"):
             continue
         saved.append({
             "kind": cfg.get("step") or "AI explanation",

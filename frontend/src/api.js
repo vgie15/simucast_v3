@@ -174,10 +174,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ mode }),
     }),
-  aiExplain: (id, step, params, question, result) =>
+  aiExplain: (id, step, params, question, result, includeInReport = false) =>
     request(`/api/datasets/${id}/ai/explain`, {
       method: 'POST',
-      body: JSON.stringify({ step, params, question, result }),
+      body: JSON.stringify({ step, params, question, result, include_in_report: includeInReport }),
+    }),
+  setAIExplanationReport: (id, analysisId, include = true) =>
+    request(`/api/datasets/${id}/ai/explanations/${analysisId}/report`, {
+      method: 'PATCH',
+      body: JSON.stringify({ include }),
     }),
   uploadDataset: async (file, name, description) => {
     const fd = new FormData()
