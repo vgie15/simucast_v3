@@ -87,11 +87,13 @@ export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, c
                 {!isCurrent && (
                   <button
                     type="button"
-                    className="ax-btn mini"
+                    className="ax-history-restore"
                     onClick={() => handleRestore(stage.id)}
                     disabled={restoring === stage.id}
+                    aria-label="Restore this stage"
+                    title="Restore this stage"
                   >
-                    {restoring === stage.id ? '…' : 'Restore'}
+                    {restoring === stage.id ? '…' : <RestoreIcon />}
                   </button>
                 )}
               </li>
@@ -110,5 +112,23 @@ export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, c
         />
       )}
     </aside>
+  )
+}
+
+function RestoreIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 7C2 4.5 4.2 2.5 7 2.5C9.8 2.5 12 4.5 12 7C12 9.5 9.8 11.5 7 11.5" />
+      <path d="M2 4V7H5" />
+    </svg>
   )
 }

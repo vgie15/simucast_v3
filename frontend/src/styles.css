@@ -2683,6 +2683,30 @@ a.ax-btn {
   font-size: 11px;
   font-weight: 600;
 }
+.ax-history-restore {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  align-self: center;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.ax-history-restore:hover:not(:disabled) {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: var(--color-accent-light);
+}
+.ax-history-restore:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .ax-history-label {
   display: flex;
   flex-direction: column;
