@@ -212,11 +212,6 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 
   return (
     <>
-      <h1 className="ax-page-title">{dataset.name}</h1>
-      <p className="ax-page-sub">
-        {dataset.row_count?.toLocaleString()} rows · {dataset.col_count} variables
-      </p>
-
       {(dataset.sheets || []).length > 1 && (
         <div className="ax-card" style={{ marginBottom: 16 }}>
           <div className="ax-row" style={{ alignItems: 'center' }}>
