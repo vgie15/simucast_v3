@@ -32,7 +32,40 @@ export default function ProjectWorkspace() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [historyCollapsed, setHistoryCollapsed] = useState(true)
+  const [aiCollapsed, setAiCollapsed] = useState(false)
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
+
+  const historyKey = id ? `simucast.historyRail.collapsed.${id}` : ''
+  const aiKey = id ? `simucast.aiRail.collapsed.${id}` : ''
+
+  useEffect(() => {
+    if (!historyKey) return
+    const saved = window.localStorage.getItem(historyKey)
+    setHistoryCollapsed(saved === null ? true : saved === '1')
+  }, [historyKey])
+
+  useEffect(() => {
+    if (!aiKey) return
+    const saved = window.localStorage.getItem(aiKey)
+    setAiCollapsed(saved === null ? false : saved === '1')
+  }, [aiKey])
+
+  const toggleHistory = () => {
+    setHistoryCollapsed((c) => {
+      const next = !c
+      if (historyKey) window.localStorage.setItem(historyKey, next ? '1' : '0')
+      return next
+    })
+  }
+
+  const toggleAI = () => {
+    setAiCollapsed((c) => {
+      const next = !c
+      if (aiKey) window.localStorage.setItem(aiKey, next ? '1' : '0')
+      return next
+    })
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -91,9 +124,12 @@ export default function ProjectWorkspace() {
   const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey })
 
   return (
-    <div className="ax-workspace-grid">
+    <div
+      className={`ax-workspace-grid ${historyCollapsed ? 'history-closed' : ''} ${aiCollapsed ? 'ai-closed' : ''}`}
+    >
       <ProjectHistoryRail
         dataset={dataset}
+        collapsed={historyCollapsed}
         onViewStage={(stageId) => {
           setViewStageRequest({ stageId, nonce: Date.now() })
           navigate(`/projects/${id}/data`)
@@ -108,6 +144,16 @@ export default function ProjectWorkspace() {
         </div>
         <div className="ax-workflow-header">
           <div className="ax-subnav">
+            <button
+              type="button"
+              className={`ax-rail-toggle ${historyCollapsed ? '' : 'active'}`}
+              onClick={toggleHistory}
+              aria-pressed={!historyCollapsed}
+              aria-label={historyCollapsed ? 'Open history rail' : 'Close history rail'}
+              title={historyCollapsed ? 'Open history' : 'Close history'}
+            >
+              <HistoryIcon />
+            </button>
             {TABS.map((t, index) => {
               const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
               const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
@@ -122,6 +168,16 @@ export default function ProjectWorkspace() {
                 </NavLink>
               )
             })}
+            <button
+              type="button"
+              className={`ax-rail-toggle ax-rail-toggle-ai ${aiCollapsed ? '' : 'active'}`}
+              onClick={toggleAI}
+              aria-pressed={!aiCollapsed}
+              aria-label={aiCollapsed ? 'Open assistant rail' : 'Close assistant rail'}
+              title={aiCollapsed ? 'Open assistant' : 'Close assistant'}
+            >
+              <SparkleIcon />
+            </button>
           </div>
           <p className="ax-flow-context">{activeTabMeta.subtitle}</p>
         </div>
@@ -130,8 +186,28 @@ export default function ProjectWorkspace() {
           <NextPagePrompt activeTab={activeTab} datasetId={id} />
         </div>
       </div>
-      <ProjectAIRail dataset={dataset} activeTab={activeTab} />
+      <ProjectAIRail dataset={dataset} activeTab={activeTab} collapsed={aiCollapsed} />
     </div>
+  )
+}
+
+function HistoryIcon() {
+  // Clock with counter-clockwise (rewind) arrow.
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 5.5V2.5" />
+      <path d="M2.5 5.5H5.5" />
+      <path d="M2.7 9.4a5.5 5.5 0 1 0 0.6-3.9" />
+      <path d="M8 4.5V8L10.5 9.5" />
+    </svg>
+  )
+}
+
+function SparkleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor">
+      <path d="M7 1L8.3 5.1L12.5 6L8.3 8.2L7 13L5.7 8.2L1.5 6L5.7 5.1L7 1Z" />
+    </svg>
   )
 }
 
