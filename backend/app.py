@@ -634,6 +634,62 @@ def friendly_error_message(err, fallback="The operation could not be completed. 
         return fallback
     return text or fallback
 
+
+def _model_health_diagnostics(metrics):
+    """Persist a compact train/test health summary with every new model run."""
+    task = metrics.get("task")
+    gap = metrics.get("generalization_gap")
+    if task == "classification":
+        train = metrics.get("train_accuracy")
+        test = metrics.get("accuracy")
+        if train is None or test is None or gap is None:
+            return {"status": "unavailable", "label": "Diagnostics unavailable"}
+        overfit = gap >= 0.15 or (train >= 0.95 and test < 0.85)
+        weak = test < 0.6
+        if overfit:
+            return {
+                "status": "warning",
+                "label": "Possible overfitting",
+                "summary": "Training accuracy is much higher than test accuracy.",
+            }
+        if weak:
+            return {
+                "status": "warning",
+                "label": "Weak test performance",
+                "summary": "Test accuracy is low, so the model may not generalize well.",
+            }
+        return {
+            "status": "ok",
+            "label": "No major overfitting signal",
+            "summary": "Training and test performance are reasonably close for this split.",
+        }
+    if task == "regression":
+        train = metrics.get("train_r2")
+        test = metrics.get("r2")
+        if train is None or test is None or gap is None:
+            return {"status": "unavailable", "label": "Diagnostics unavailable"}
+        overfit = gap >= 0.15 or (train >= 0.9 and test < 0.65)
+        weak = test < 0.2
+        if overfit:
+            return {
+                "status": "warning",
+                "label": "Possible overfitting",
+                "summary": "Training R2 is much higher than test R2.",
+            }
+        if weak:
+            return {
+                "status": "warning",
+                "label": "Weak test performance",
+                "summary": "Test R2 is low, so the model explains little variation on held-out rows.",
+            }
+        return {
+            "status": "ok",
+            "label": "No major overfitting signal",
+            "summary": "Training and test R2 are reasonably close for this split.",
+        }
+    return {"status": "unavailable", "label": "Diagnostics unavailable"}
+
+
 def log_activity(session, dataset_id, kind, summary, detail=None, ref_type=None, ref_id=None, commit=True, dedupe_key=None):
     detail = clean_json(detail or {})
     if dedupe_key:
@@ -3798,6 +3854,7 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             "model_params": params,
         }
         metrics["generalization_gap"] = float(metrics["train_accuracy"] - metrics["accuracy"])
+        metrics["health_diagnostics"] = _model_health_diagnostics(metrics)
         if len(np.unique(y)) == 2 and hasattr(clf, "predict_proba"):
             try:
                 y_proba = clf.predict_proba(X_test)[:, 1]
@@ -3830,6 +3887,7 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             "model_params": params,
         }
         metrics["generalization_gap"] = float(metrics["train_r2"] - metrics["r2"])
+        metrics["health_diagnostics"] = _model_health_diagnostics(metrics)
 
     influence = _feature_influence_from_model(clf, X.columns.tolist(), features, algo)
 

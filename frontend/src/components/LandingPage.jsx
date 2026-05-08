@@ -32,10 +32,7 @@ export default function LandingPage() {
       <nav className="ax-landing-nav">
         <div className="ax-landing-brand">
           <div className="ax-brand-mark">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M5 19V7M10 19V4M15 19v-8M20 19v-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-              <path d="M4 19h17" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
+            <img src="/simucast-logo.png" alt="SimuCast logo" />
           </div>
           <div>
             <strong>SimuCast</strong>
@@ -205,7 +202,7 @@ export default function LandingPage() {
 
       <footer className="ax-landing-footer">
         <div>
-          <span>SC</span>
+          <span className="ax-footer-logo"><img src="/simucast-logo.png" alt="SimuCast logo" /></span>
           <strong>SimuCast Platform</strong>
         </div>
         <p>2026 SimuCast Platform</p>

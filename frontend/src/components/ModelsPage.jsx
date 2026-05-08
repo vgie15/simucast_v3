@@ -1433,10 +1433,10 @@ function assessModelHealth(model) {
     if (!Number.isFinite(train) || !Number.isFinite(test)) {
       return {
         tone: 'warn',
-        label: 'Needs review',
-        summary: 'This saved model does not include train-vs-test health metrics. Re-train it to check for overfitting.',
+        label: 'Diagnostics unavailable',
+        summary: 'Health metrics are unavailable for this saved model. New training runs include train/test diagnostics automatically.',
         metrics: [{ label: 'Test accuracy', value: pct(test) }],
-        actions: ['Re-train the model so SimuCast can compare training and test performance.'],
+        actions: ['Train a new comparison run only if you need diagnostics for this older saved model.'],
       }
     }
     const overfit = Number.isFinite(gap) && (gap >= 0.15 || (train >= 0.95 && test < 0.85))
@@ -1462,10 +1462,10 @@ function assessModelHealth(model) {
   if (!Number.isFinite(train) || !Number.isFinite(test)) {
     return {
       tone: 'warn',
-      label: 'Needs review',
-      summary: 'This saved model does not include train-vs-test health metrics. Re-train it to check for overfitting.',
+      label: 'Diagnostics unavailable',
+      summary: 'Health metrics are unavailable for this saved model. New training runs include train/test diagnostics automatically.',
       metrics: [{ label: 'Test R2', value: num(test) }],
-      actions: ['Re-train the model so SimuCast can compare training and test performance.'],
+      actions: ['Train a new comparison run only if you need diagnostics for this older saved model.'],
     }
   }
   const overfit = Number.isFinite(gap) && (gap >= 0.15 || (train >= 0.9 && test < 0.65))
