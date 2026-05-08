@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import AIAssistantPanel from './AIAssistantPanel'
 import AIChatPanel from './AIChatPanel'
 
-export default function ProjectAIRail({ dataset, activeTab, collapsed }) {
+export default function ProjectAIRail({ dataset, activeTab, collapsed, onStartResize }) {
   const datasetId = dataset?.id
   const tabKey = datasetId ? `simucast.aiRail.tab.${datasetId}` : ''
   const [innerTab, setInnerTab] = useState('guide')
@@ -43,13 +43,23 @@ export default function ProjectAIRail({ dataset, activeTab, collapsed }) {
         </button>
       </div>
 
-      <div className="ax-rail-body">
-        {innerTab === 'guide' ? (
+      {innerTab === 'guide' ? (
+        <div className="ax-rail-body">
           <AIAssistantPanel datasetId={dataset.id} context={activeTab} />
-        ) : (
-          <AIChatPanel datasetId={dataset.id} activeTab={activeTab} />
-        )}
-      </div>
+        </div>
+      ) : (
+        <AIChatPanel datasetId={dataset.id} activeTab={activeTab} />
+      )}
+      {onStartResize && (
+        <div
+          className="ax-rail-resize-handle left"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            onStartResize()
+          }}
+          aria-hidden
+        />
+      )}
     </aside>
   )
 }

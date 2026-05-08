@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 
-export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, collapsed }) {
+export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, collapsed, onStartResize }) {
   const datasetId = dataset?.id
   const [stages, setStages] = useState([])
   const [currentStageId, setCurrentStageId] = useState('original')
@@ -63,7 +63,6 @@ export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, c
         <ol className="ax-history-list">
           <li className={`ax-history-item ${currentStageId === 'original' || !currentStageId ? 'current' : ''}`}>
             <button type="button" onClick={() => onViewStage && onViewStage('original')}>
-              <span className="ax-history-step">0</span>
               <span className="ax-history-label">
                 <strong>Original upload</strong>
                 <small>
@@ -77,7 +76,6 @@ export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, c
             return (
               <li key={stage.id} className={`ax-history-item ${isCurrent ? 'current' : ''}`}>
                 <button type="button" onClick={() => onViewStage && onViewStage(stage.id)}>
-                  <span className="ax-history-step">{stage.step_index}</span>
                   <span className="ax-history-label">
                     <strong>{stage.op_type || 'Transform'}</strong>
                     {stage.summary && <small>{stage.summary}</small>}
@@ -101,6 +99,16 @@ export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, c
           })}
         </ol>
       </div>
+      {onStartResize && (
+        <div
+          className="ax-rail-resize-handle right"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            onStartResize()
+          }}
+          aria-hidden
+        />
+      )}
     </aside>
   )
 }
