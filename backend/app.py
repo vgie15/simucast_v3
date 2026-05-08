@@ -5641,7 +5641,11 @@ def build_report(ds_id):
         ds = s.query(Dataset).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
-        analyses = s.query(Analysis).filter_by(dataset_id=ds_id).order_by(Analysis.created_at).all()
+        current_stage_id = ds.current_stage_id or "original"
+        analyses = [
+            a for a in s.query(Analysis).filter_by(dataset_id=ds_id).order_by(Analysis.created_at).all()
+            if (jload(a.config) or {}).get("stage_id") == current_stage_id
+        ]
         models = s.query(Model).filter_by(dataset_id=ds_id).order_by(Model.created_at).all()
         activity = [
             a for a in s.query(ActivityLog).filter_by(dataset_id=ds_id).order_by(ActivityLog.created_at).all()
@@ -5987,12 +5991,16 @@ def _old_auto_summary(ds, analyses, models):
 
 # --- helper to save analysis rows ---
 def _save_analysis(session, ds_id, kind, config, result):
+    ds = session.query(Dataset).filter_by(id=ds_id).first()
+    stage_id = (ds.current_stage_id if ds else None) or "original"
+    config_payload = {**clean_json(config or {}), "stage_id": stage_id}
+    result_payload = {**clean_json(result or {}), "stage_id": stage_id}
     a = Analysis(
         id=str(uuid.uuid4()),
         dataset_id=ds_id,
         kind=kind,
-        config=jdump(clean_json(config)),
-        result=jdump(clean_json(result)),
+        config=jdump(config_payload),
+        result=jdump(result_payload),
     )
     session.add(a)
     log_activity(
@@ -6000,7 +6008,7 @@ def _save_analysis(session, ds_id, kind, config, result):
         ds_id,
         "analysis",
         f"Ran {kind.replace('_', ' ')}",
-        detail={"category": "analysis", "action_type": kind, "config": clean_json(config)},
+        detail={"category": "analysis", "action_type": kind, "config": config_payload, "stage_id": stage_id},
         ref_type="analysis",
         ref_id=a.id,
         commit=False,
@@ -6014,22 +6022,34 @@ def list_analyses(ds_id):
     """Return saved analysis artifacts so workflow pages can restore prior output."""
     kind = (request.args.get("kind") or "").strip()
     limit = min(max(_parse_num(request.args.get("limit"), 20, int), 1), 100)
+    all_stages = str(request.args.get("all_stages") or "").lower() in {"1", "true", "yes"}
     s = db()
     try:
         ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
         if not ds:
             return {"error": "not found"}, 404
+        current_stage_id = ds.current_stage_id or "original"
         q = s.query(Analysis).filter_by(dataset_id=ds_id)
         if kind:
             q = q.filter_by(kind=kind)
-        analyses = q.order_by(Analysis.created_at.desc()).limit(limit).all()
+        rows = q.order_by(Analysis.created_at.desc()).limit(max(limit * 4, limit)).all()
+        analyses = []
+        for row in rows:
+            cfg = jload(row.config) or {}
+            if all_stages or cfg.get("stage_id") == current_stage_id:
+                analyses.append(row)
+            if len(analyses) >= limit:
+                break
         return jsonify({
+            "current_stage_id": current_stage_id,
             "analyses": [
                 {
                     "id": a.id,
                     "kind": a.kind,
                     "config": jload(a.config) or {},
                     "result": jload(a.result) or {},
+                    "stage_id": (jload(a.config) or {}).get("stage_id"),
+                    "current_stage": ((jload(a.config) or {}).get("stage_id") == current_stage_id),
                     "created_at": a.created_at.isoformat() if a.created_at else None,
                 }
                 for a in analyses

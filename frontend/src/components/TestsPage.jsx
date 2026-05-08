@@ -84,7 +84,7 @@ export default function TestsPage({ dataset }) {
     return () => {
       alive = false
     }
-  }, [dataset?.id])
+  }, [dataset?.id, dataset?.current_stage_id])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')

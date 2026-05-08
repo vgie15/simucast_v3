@@ -36,7 +36,7 @@ export default function AdvancedPage({ dataset, embedded = false }) {
     return () => {
       alive = false
     }
-  }, [dataset?.id])
+  }, [dataset?.id, dataset?.current_stage_id])
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
 
