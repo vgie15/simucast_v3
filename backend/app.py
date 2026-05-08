@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text, func
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.dialects.postgresql import JSONB
@@ -374,8 +374,17 @@ def _guest_model_limit_response(session, sess, ds_id, requested_count=1):
     if not sess or not sess.is_guest:
         return None
     used = int(getattr(sess, "guest_model_usage_count", 0) or 0)
+    synced = False
+    if used < GUEST_MODEL_LIMIT:
+        total_models = session.query(func.count(Model.id)).join(Dataset, Model.dataset_id == Dataset.id).filter(Dataset.session_id == sess.id).scalar() or 0
+        if total_models > used:
+            used = total_models
+            sess.guest_model_usage_count = used
+            synced = True
     remaining = max(GUEST_MODEL_LIMIT - used, 0)
     if remaining <= 0:
+        if synced:
+            session.commit()
         return {
             "error": f"Guest mode includes up to {GUEST_MODEL_LIMIT} total model trainings for this temporary session. Deleting models will not reset the limit. Sign up or log in to train more models.",
             "auth_required": True,
@@ -385,6 +394,8 @@ def _guest_model_limit_response(session, sess, ds_id, requested_count=1):
             "models_remaining": 0,
         }, 403
     if requested_count > remaining:
+        if synced:
+            session.commit()
         return {
             "error": f"Guest mode has {remaining} training attempt{'s' if remaining != 1 else ''} remaining. Select {remaining} or fewer algorithm{'s' if remaining != 1 else ''}, or create an account to train more.",
             "auth_required": True,
@@ -393,6 +404,8 @@ def _guest_model_limit_response(session, sess, ds_id, requested_count=1):
             "models_used": used,
             "models_remaining": remaining,
         }, 403
+    if synced:
+        session.commit()
     return None
 
 def jload(v):
@@ -3378,6 +3391,11 @@ ALGORITHM_CATALOG = {
     "linear":   {"label": "Linear regression",   "task": "regression",    "needs_scaling": True,  "interpretable": True},
 }
 
+AVAILABLE_ALGOS_BY_TASK = {
+    "classification": [k for k, v in ALGORITHM_CATALOG.items() if v["task"] in ("classification", "both")],
+    "regression": [k for k, v in ALGORITHM_CATALOG.items() if v["task"] in ("regression", "both")],
+}
+
 MODEL_PARAM_DEFAULTS = {
     "logistic": {"C": 1.0, "max_iter": 1000},
     "rf": {"n_estimators": 100, "max_depth": None, "min_samples_leaf": 1},
@@ -3491,6 +3509,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         a for a in algorithms or []
         if ALGORITHM_CATALOG.get(a) and (ALGORITHM_CATALOG[a]["task"] == "both" or ALGORITHM_CATALOG[a]["task"] == task)
     ]
+    available_algorithms = AVAILABLE_ALGOS_BY_TASK.get(task, [])
     target_classes = [str(x) for x in y.dropna().astype(str).value_counts().index.tolist()] if task == "classification" else []
     target_mode = target_options.get("mode") or ("binary" if task == "classification" and len(target_classes) == 2 else "multiclass")
     positive_class = target_options.get("positive_class") or (target_classes[0] if target_classes else None)
@@ -3656,7 +3675,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
                         "severity": "high" if val >= 0.95 else "medium",
                     })
         if multicollinearity:
-            warnings.append(f"Multicollinearity detected in {len(multicollinearity)} feature pair(s). Linear models may be unstable.")
+            warnings.append(f"Detected {len(multicollinearity)} highly correlated feature pair(s). Linear-style models may be unstable.")
 
     # ---- enriched validation checks ----
 
@@ -3739,17 +3758,102 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     }
 
     # 4. Multicollinearity
+    severity_level = None
+    severity_message = None
+    plan_feature_pairs = []
+    fixes = []
+    detail_text = "No highly correlated numeric feature pairs detected."
+    selected_labels = [_algo_label_for_task(a, task) for a in algorithms]
+
+    if multicollinearity:
+        severity_counts = {"low": 0, "medium": 0, "high": 0}
+        for pair in multicollinearity:
+            severity_counts[pair.get("severity") or "medium"] += 1
+
+        if severity_counts["high"]:
+            severity_level = "high"
+            severity_message = "High severity — recommended to address before training."
+        elif severity_counts["medium"]:
+            severity_level = "medium"
+            severity_message = "Medium severity — monitor linear models carefully."
+        else:
+            severity_level = "low"
+            severity_message = "Low severity — usually safe to ignore."
+
+        linear_options = [a for a in available_algorithms if a in ("linear", "logistic")]
+        tree_options = [a for a in available_algorithms if a in ("rf", "tree")]
+        linear_selected = [a for a in algorithms if a in ("linear", "logistic")]
+        tree_selected = [a for a in algorithms if a in ("rf", "tree")]
+
+        linear_labels = [_algo_label_for_task(a, task) for a in linear_selected]
+        tree_labels = [_algo_label_for_task(a, task) for a in tree_selected]
+        tree_option_labels = [_algo_label_for_task(a, task) for a in tree_options]
+
+        detail_lines = [
+            f"Detected {len(multicollinearity)} pair{'s' if len(multicollinearity) == 1 else 's'} of features sharing very similar information.",
+            "Linear-style models can struggle to tell which feature matters when inputs overlap this much.",
+        ]
+        if tree_selected:
+            detail_lines.append(f"Tree-based models such as {', '.join(tree_labels)} are naturally resilient to this overlap.")
+        elif tree_option_labels:
+            detail_lines.append(f"Tree-based models like {', '.join(tree_option_labels)} are resilient to this overlap.")
+        if linear_labels:
+            detail_lines.append(f"Linear models like {', '.join(linear_labels)} may become unstable — consider simplifying inputs or using regularization.")
+
+        detail_text = " ".join(detail_lines)
+
+        plan_feature_pairs = [
+            {
+                "feature_a": pair["feature_a"],
+                "feature_b": pair["feature_b"],
+                "correlation": float(pair.get("correlation", 0.0)),
+                "severity": pair.get("severity", "medium"),
+            }
+            for pair in multicollinearity
+        ]
+
+        fixes.append({
+            "label": "Remove overlapping features",
+            "description": "Recommended — drop one column from each highly correlated pair before training.",
+            "route": "data",
+            "section": "manual_transforms",
+            "category": "recommended",
+        })
+
+        if tree_selected or tree_option_labels:
+            fixes.append({
+                "label": "Use tree-based models",
+                "description": "Decision trees and Random Forests are much less sensitive to correlated inputs.",
+                "route": "models",
+                "section": "algorithms",
+                "category": "alternative",
+            })
+
+        if linear_options:
+            fixes.append({
+                "label": "Use regularized linear models",
+                "description": "Apply Ridge or Lasso-style regularization to stabilize overlapping features.",
+                "route": "models",
+                "section": "algorithms",
+                "category": "advanced",
+            })
+
     vc_multicollinearity = {
         "key": "multicollinearity",
-        "label": "Multicollinearity",
+        "label": "Highly overlapping features",
         "status": "warning" if multicollinearity else "ok",
-        "detail": f"{len(multicollinearity)} highly correlated feature pair(s) detected — linear models may be unstable." if multicollinearity else "No high numeric feature correlations detected.",
+        "detail": detail_text,
         "type": "data",
-        "causes": ["redundant features", "derived columns from same source"] if multicollinearity else [],
-        "fixes": [
-            {"label": "Drop correlated features", "description": "Data → Manual Transforms — remove one column from each correlated pair", "route": "data", "section": "manual_transforms"},
-            {"label": "Use Logistic Regression", "description": "Models → Algorithms — regularized models tolerate collinearity better", "route": "models", "section": "algorithms"},
+        "causes": [
+            "Multiple columns were derived from the same source",
+            "Variables capture nearly the same measurement",
         ] if multicollinearity else [],
+        "fixes": fixes,
+        "severity": severity_level,
+        "severity_message": severity_message,
+        "correlated_pairs": plan_feature_pairs,
+        "selected_algorithms": selected_labels,
+        "available_algorithms": available_algorithms,
     }
 
     # 5. Train/test split (always ok)
@@ -3804,6 +3908,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         "class_weight": class_weight if task == "classification" else None,
         "model_params": {a: _model_default_params(a) for a in algorithms or [] if a in ALGORITHM_CATALOG},
         "multicollinearity": multicollinearity,
+        "available_algorithms": available_algorithms,
         "validation_checks": validation_checks,
         "hard_blocks": hard_blocks,
         "warnings": warnings,

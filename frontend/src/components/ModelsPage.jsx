@@ -1049,6 +1049,7 @@ function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck 
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const checks = plan.validation_checks || []
+  const correlatedPairs = plan.correlated_pairs || plan.multicollinearity || []
   const issueCount = checks.filter((c) => {
     const dismissed = (dismissedChecks || []).includes(c.key)
     const effective = dismissed && c.status === 'warning' ? 'ok' : c.status
@@ -1165,6 +1166,11 @@ function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck 
               const badgeBg = isBlock ? '#FEE2E2' : isWarning ? '#FEF3C7' : '#DCFCE7'
               const badgeColor = isBlock ? '#DC2626' : isWarning ? '#D97706' : '#16A34A'
               const textColor = isBlock ? '#7F1D1D' : isWarning ? '#78350F' : 'var(--color-text-secondary)'
+              const fixOptions = (check.fixes || []).map((fix) => {
+                if (!fix.category) return fix
+                const tag = fix.category === 'recommended' ? 'Recommended' : fix.category === 'alternative' ? 'Alternative' : 'Advanced'
+                return { ...fix, label: `${fix.label} · ${tag}` }
+              })
               return (
                 <div
                   key={check.key ?? i}
@@ -1177,18 +1183,77 @@ function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck 
                     {isBlock ? 'BLOCK' : isWarning ? 'WARNING' : 'OK'}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, margin: 0, color: isOk ? 'var(--color-text-primary)' : (isBlock ? '#991B1B' : '#92400E') }}>
-                      {check.label}
-                    </p>
-                    {!isOk && (
-                      <p style={{ fontSize: 11, color: textColor, margin: '3px 0 0', lineHeight: 1.5 }}>
-                        {dismissed ? 'Warning ignored.' : check.detail}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, margin: 0, color: isOk ? 'var(--color-text-primary)' : (isBlock ? '#991B1B' : '#92400E') }}>
+                        {check.key === 'multicollinearity' ? 'Highly overlapping features' : check.label}
                       </p>
+                      {check.key === 'multicollinearity' && check.severity_message && (
+                        <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#E0E7FF', color: '#312E81' }}>
+                          Do I need to fix this? {check.severity_message}
+                        </span>
+                      )}
+                    </div>
+                    {!isOk && (
+                      <>
+                        <p style={{ fontSize: 11, color: textColor, margin: '3px 0 6px', lineHeight: 1.5 }}>
+                          {dismissed ? 'Warning ignored.' : check.detail}
+                        </p>
+                        {check.key === 'multicollinearity' && correlatedPairs.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                            <p style={{ fontSize: 11, color: '#334155', margin: 0 }}>Most overlapping feature pairs:</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {correlatedPairs.slice(0, 4).map((pair, idx) => (
+                                <button
+                                  key={`${pair.feature_a}-${pair.feature_b}-${idx}`}
+                                  type="button"
+                                  className="ax-btn"
+                                  style={{
+                                    textAlign: 'left',
+                                    padding: '6px 10px',
+                                    background: '#F8FAFC',
+                                    borderColor: '#CBD5F5',
+                                    fontSize: 11,
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                  }}
+                                  onClick={() => {
+                                    window.sessionStorage.setItem('simucast.correlationInspect', JSON.stringify({ feature_a: pair.feature_a, feature_b: pair.feature_b, ts: Date.now() }))
+                                    onFixAction?.({ route: 'tests.correlation' })
+                                  }}
+                                >
+                                  <span style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <strong>{pair.feature_a}</strong>
+                                    <span style={{ fontWeight: 500 }}>↔ {pair.feature_b}</span>
+                                  </span>
+                                  <span style={{ fontSize: 11, color: '#475569', fontFamily: 'var(--font-mono)' }}>r = {Number(pair.correlation).toFixed(2)}</span>
+                                </button>
+                              ))}
+                            </div>
+                            {correlatedPairs.length > 4 && (
+                              <span style={{ fontSize: 11, color: '#64748B' }}>+{correlatedPairs.length - 4} more pairs detected</span>
+                            )}
+                          </div>
+                        )}
+                        {check.key === 'multicollinearity' && (
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <ExplainButton
+                              title="Why overlapping features matter"
+                              text="Highly correlated inputs can confuse linear models because they see the same information twice. Tree models split on one feature at a time, so they tolerate overlap better."
+                            />
+                            {plan.selected_algorithms?.length > 0 && (
+                              <span style={{ fontSize: 11, color: '#475569' }}>
+                                Currently selected: {plan.selected_algorithms.join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
-                  {!isOk && (check.fixes || []).length > 0 && (
+                  {!isOk && fixOptions.length > 0 && (
                     <FixOptionsDropdown
-                      fixes={check.fixes}
+                      fixes={fixOptions}
                       onAction={onFixAction}
                       canDismiss={isWarning}
                       onDismiss={() => onDismissCheck?.(check.key)}

@@ -86,14 +86,16 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
           : await api.createFromDataset(selectedId, name.trim(), description.trim())
       // Mark the guest slot used immediately — persists even if project is later deleted
       if (auth.isGuest) markGuestSlotUsed(auth.session?.token)
-      await auth.refreshSession?.()
       reset()
       onCreated(result)
+      auth.refreshSession?.().catch(() => {})
     } catch (err) {
       if (err.guest_limit || err.auth_required) {
         auth.showAuthModal('signup')
       }
       setError(err.message || 'Failed to create project')
+      setBusy(false)
+    } finally {
       setBusy(false)
     }
   }
