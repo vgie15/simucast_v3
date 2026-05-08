@@ -48,11 +48,15 @@ function NumericMiniHistogram({ nums, bins = 10 }) {
   }
   const peak = Math.max(...counts) || 1
   const bw = 100 / bins
+  const total = nums.length
   return (
     <div className="ax-cs-numeric">
       <svg className="ax-cs-hist" viewBox="0 0 100 30" preserveAspectRatio="none">
         {counts.map((c, i) => {
           const h = (c / peak) * 28
+          const lo = min + (range * i) / bins
+          const hi = min + (range * (i + 1)) / bins
+          const pct = total ? Math.round((c / total) * 100) : 0
           return (
             <rect
               key={i}
@@ -61,7 +65,9 @@ function NumericMiniHistogram({ nums, bins = 10 }) {
               width={bw - 0.8}
               height={h}
               fill="currentColor"
-            />
+            >
+              <title>{`${formatNumber(lo)}–${formatNumber(hi)}: ${c.toLocaleString()} (${pct}%)`}</title>
+            </rect>
           )
         })}
       </svg>
@@ -87,8 +93,12 @@ function CategoryBars({ values, maxRows = 2 }) {
       {sorted.map(([key, count]) => {
         const pct = Math.round((count / total) * 100)
         return (
-          <div key={key} className="ax-cs-cat-row">
-            <span className="ax-cs-cat-label" title={key}>{key}</span>
+          <div
+            key={key}
+            className="ax-cs-cat-row"
+            title={`${key}: ${count.toLocaleString()} (${pct}%)`}
+          >
+            <span className="ax-cs-cat-label">{key}</span>
             <span className="ax-cs-cat-pct">{pct}%</span>
           </div>
         )

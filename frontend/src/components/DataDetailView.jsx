@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import ColumnSummary from './ColumnSummary'
+import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { BusyOverlay } from './LoadingStates'
 
 const PAGE_SIZE = 100
@@ -44,7 +45,17 @@ export default function DataDetailView({
   const [aboutData, setAboutData] = useState(null)
   const [aboutLoading, setAboutLoading] = useState(false)
 
-  const [visibleCount, setVisibleCount] = useState(() => Math.min(10, allColumns.length || 10))
+  const [visibleColumns, setVisibleColumns] = useState(() => allColumns.slice(0, Math.min(10, allColumns.length)))
+
+  useEffect(() => {
+    setVisibleColumns((prev) => {
+      const filtered = prev.filter((name) => allColumns.includes(name))
+      if (filtered.length === 0 && allColumns.length > 0) {
+        return allColumns.slice(0, Math.min(10, allColumns.length))
+      }
+      return filtered
+    })
+  }, [allColumns])
 
   const [editing, setEditing] = useState(null)
   const [pendingEdits, setPendingEdits] = useState({})
@@ -56,10 +67,6 @@ export default function DataDetailView({
 
   const [expanded, setExpanded] = useState(false)
 
-  const visibleColumns = useMemo(
-    () => allColumns.slice(0, visibleCount),
-    [allColumns, visibleCount],
-  )
   const visibleVariables = useMemo(
     () => visibleColumns.map((name) => (variables || []).find((v) => v.name === name)).filter(Boolean),
     [visibleColumns, variables],
@@ -341,19 +348,11 @@ export default function DataDetailView({
           <button type="button" disabled title="Coming soon">Column</button>
         </div>
         <div className="ax-dd-tabs-right">
-          <select
-            value={visibleCount}
-            onChange={(e) => setVisibleCount(Number(e.target.value))}
-            className="ax-dd-colcount"
-          >
-            {[5, 10, 20, 50, 100, allColumns.length]
-              .filter((n, i, arr) => n > 0 && n <= allColumns.length && arr.indexOf(n) === i)
-              .map((n) => (
-                <option key={n} value={n}>
-                  {n} of {allColumns.length} columns
-                </option>
-              ))}
-          </select>
+          <ColumnVisibilityMenu
+            allColumns={allColumns}
+            selected={visibleColumns}
+            onApply={setVisibleColumns}
+          />
         </div>
       </nav>
 
