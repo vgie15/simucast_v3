@@ -20,10 +20,6 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
   const [error, setError] = useState(null)
   const [collapsed, setCollapsed] = useState(false)
 
-  const [followQ, setFollowQ] = useState('')
-  const [followAnswer, setFollowAnswer] = useState(null)
-  const [followLoading, setFollowLoading] = useState(false)
-
   const load = async () => {
     setLoading(true)
     setError(null)
@@ -40,21 +36,6 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
   useEffect(() => {
     load()
   }, [datasetId, context])
-
-  const askFollowup = async () => {
-    const q = followQ.trim()
-    if (!q) return
-    setFollowLoading(true)
-    setFollowAnswer(null)
-    try {
-      const r = await api.aiExplain(datasetId, `${context}-followup`, { context }, q)
-      setFollowAnswer(r)
-    } catch (err) {
-      setFollowAnswer({ ai: false, explanation: 'The assistant could not answer right now. You can continue with the built-in recommendations and try again later.' })
-    } finally {
-      setFollowLoading(false)
-    }
-  }
 
   const recommendations = (data?.recommendations || []).filter(hasRecommendationContent)
   const sectionTitle = title || titleForContext(context)
@@ -131,48 +112,6 @@ export default function AIAssistantPanel({ datasetId, context = 'data', title })
         ))}
       </div>
 
-      <div
-        style={{
-          marginTop: 12,
-          paddingTop: 10,
-          borderTop: '0.5px solid var(--color-border-tertiary)',
-        }}
-      >
-        <p className="ax-lbl" style={{ margin: '0 0 6px' }}>Ask a follow-up</p>
-        <div className="ax-prompt-row">
-          <input
-            type="text"
-            value={followQ}
-            onChange={(e) => setFollowQ(e.target.value)}
-            placeholder={followupPlaceholder(context)}
-            style={{ flex: 1, minWidth: 0 }}
-            disabled={followLoading}
-            onKeyDown={(e) => e.key === 'Enter' && askFollowup()}
-          />
-          <button
-            className="ax-btn prim"
-            onClick={askFollowup}
-            disabled={followLoading || !followQ.trim()}
-            type="button"
-          >
-            {followLoading ? <InlineSpinner label="Asking..." /> : 'Ask'}
-          </button>
-        </div>
-        {followAnswer && (
-          <div
-            style={{
-              marginTop: 8,
-              padding: '8px 10px',
-              background: 'var(--color-background-secondary)',
-              borderRadius: 6,
-              fontSize: 12,
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {followAnswer.explanation}
-          </div>
-        )}
-      </div>
       </>}
     </div>
   )
@@ -346,15 +285,3 @@ function titleForContext(context) {
   }
 }
 
-function followupPlaceholder(context) {
-  switch (context) {
-    case 'tests':
-      return 'Which test should I run for…?'
-    case 'models':
-      return 'Which target column would be the best predictor?'
-    case 'expand':
-      return 'Is bootstrap or synthetic better for my dataset?'
-    default:
-      return 'Ask anything about your dataset…'
-  }
-}

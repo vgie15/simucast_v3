@@ -34,10 +34,15 @@ export default function ProjectWorkspace() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [historyCollapsed, setHistoryCollapsed] = useState(true)
   const [aiCollapsed, setAiCollapsed] = useState(false)
+  const [historyWidth, setHistoryWidth] = useState(240)
+  const [aiWidth, setAiWidth] = useState(360)
+  const [resizing, setResizing] = useState(null) // 'history' | 'ai' | null
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
 
   const historyKey = id ? `simucast.historyRail.collapsed.${id}` : ''
   const aiKey = id ? `simucast.aiRail.collapsed.${id}` : ''
+  const historyWidthKey = id ? `simucast.historyRail.width.${id}` : ''
+  const aiWidthKey = id ? `simucast.aiRail.width.${id}` : ''
 
   useEffect(() => {
     if (!historyKey) return
@@ -50,6 +55,53 @@ export default function ProjectWorkspace() {
     const saved = window.localStorage.getItem(aiKey)
     setAiCollapsed(saved === null ? false : saved === '1')
   }, [aiKey])
+
+  useEffect(() => {
+    if (!historyWidthKey) return
+    const saved = Number(window.localStorage.getItem(historyWidthKey))
+    if (Number.isFinite(saved) && saved > 0) setHistoryWidth(saved)
+  }, [historyWidthKey])
+
+  useEffect(() => {
+    if (!aiWidthKey) return
+    const saved = Number(window.localStorage.getItem(aiWidthKey))
+    if (Number.isFinite(saved) && saved > 0) setAiWidth(saved)
+  }, [aiWidthKey])
+
+  useEffect(() => {
+    if (!resizing) return
+    const onMove = (e) => {
+      e.preventDefault()
+      if (resizing === 'history') {
+        const next = Math.max(160, Math.min(480, e.clientX - 0))
+        setHistoryWidth(next)
+      } else if (resizing === 'ai') {
+        const next = Math.max(240, Math.min(640, window.innerWidth - e.clientX))
+        setAiWidth(next)
+      }
+    }
+    const onUp = () => setResizing(null)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+  }, [resizing])
+
+  useEffect(() => {
+    if (resizing || !historyWidthKey) return
+    window.localStorage.setItem(historyWidthKey, String(Math.round(historyWidth)))
+  }, [historyWidth, resizing, historyWidthKey])
+
+  useEffect(() => {
+    if (resizing || !aiWidthKey) return
+    window.localStorage.setItem(aiWidthKey, String(Math.round(aiWidth)))
+  }, [aiWidth, resizing, aiWidthKey])
 
   const toggleHistory = () => {
     setHistoryCollapsed((c) => {
@@ -126,10 +178,12 @@ export default function ProjectWorkspace() {
   return (
     <div
       className={`ax-workspace-grid ${historyCollapsed ? 'history-closed' : ''} ${aiCollapsed ? 'ai-closed' : ''}`}
+      style={{ '--history-w': `${historyWidth}px`, '--ai-w': `${aiWidth}px` }}
     >
       <ProjectHistoryRail
         dataset={dataset}
         collapsed={historyCollapsed}
+        onStartResize={() => setResizing('history')}
         onViewStage={(stageId) => {
           setViewStageRequest({ stageId, nonce: Date.now() })
           navigate(`/projects/${id}/data`)
@@ -152,7 +206,7 @@ export default function ProjectWorkspace() {
               aria-label={historyCollapsed ? 'Open history rail' : 'Close history rail'}
               title={historyCollapsed ? 'Open history' : 'Close history'}
             >
-              <HistoryIcon />
+              <ToggleChevron direction={historyCollapsed ? 'right' : 'left'} />
             </button>
             {TABS.map((t, index) => {
               const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
@@ -176,7 +230,7 @@ export default function ProjectWorkspace() {
               aria-label={aiCollapsed ? 'Open assistant rail' : 'Close assistant rail'}
               title={aiCollapsed ? 'Open assistant' : 'Close assistant'}
             >
-              <SparkleIcon />
+              <ToggleChevron direction={aiCollapsed ? 'left' : 'right'} />
             </button>
           </div>
           <p className="ax-flow-context">{activeTabMeta.subtitle}</p>
@@ -186,27 +240,31 @@ export default function ProjectWorkspace() {
           <NextPagePrompt activeTab={activeTab} datasetId={id} />
         </div>
       </div>
-      <ProjectAIRail dataset={dataset} activeTab={activeTab} collapsed={aiCollapsed} />
+      <ProjectAIRail
+        dataset={dataset}
+        activeTab={activeTab}
+        collapsed={aiCollapsed}
+        onStartResize={() => setResizing('ai')}
+      />
     </div>
   )
 }
 
-function HistoryIcon() {
-  // Clock with counter-clockwise (rewind) arrow.
+function ToggleChevron({ direction }) {
+  // direction: 'left' or 'right'
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.5 5.5V2.5" />
-      <path d="M2.5 5.5H5.5" />
-      <path d="M2.7 9.4a5.5 5.5 0 1 0 0.6-3.9" />
-      <path d="M8 4.5V8L10.5 9.5" />
-    </svg>
-  )
-}
-
-function SparkleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor">
-      <path d="M7 1L8.3 5.1L12.5 6L8.3 8.2L7 13L5.7 8.2L1.5 6L5.7 5.1L7 1Z" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ transform: direction === 'left' ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+    >
+      <path d="M4 2L8 6L4 10" />
     </svg>
   )
 }
