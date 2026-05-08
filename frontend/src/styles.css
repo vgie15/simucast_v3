@@ -2641,61 +2641,65 @@ a.ax-btn {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 .ax-history-item {
   display: flex;
-  align-items: stretch;
-  gap: 6px;
-}
-.ax-history-item > button {
-  flex: 1;
-  text-align: left;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px 10px;
   background: var(--color-background-secondary);
   border: 0.5px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  font: inherit;
-  color: inherit;
-  min-width: 0;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
 }
-.ax-history-item > button:hover {
+.ax-history-item:hover {
   border-color: var(--color-border-tertiary);
 }
-.ax-history-item.current > button {
+.ax-history-item:focus-visible {
+  border-color: var(--color-accent);
+}
+.ax-history-item.current {
   border-color: var(--color-accent);
   background: var(--color-accent-light);
 }
-.ax-history-step {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--color-background-primary);
-  border: 0.5px solid var(--color-border-tertiary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
+.ax-history-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: var(--color-text-primary);
+}
+.ax-history-card-summary {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  margin: 0;
+  word-break: break-word;
+}
+.ax-history-card-meta {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ax-history-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 .ax-history-restore {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
   border-radius: 6px;
   border: 0.5px solid var(--color-border-tertiary);
   background: var(--color-background-primary);
   color: var(--color-text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
-  align-self: center;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .ax-history-restore:hover:not(:disabled) {
@@ -2706,24 +2710,6 @@ a.ax-btn {
 .ax-history-restore:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-.ax-history-label {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-.ax-history-label strong {
-  font-size: 12px;
-  text-transform: capitalize;
-}
-.ax-history-label small {
-  font-size: 10px;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .ax-plan-panel {
   padding: 14px;
