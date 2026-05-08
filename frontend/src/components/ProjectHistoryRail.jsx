@@ -46,6 +46,10 @@ export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, c
 
   if (!datasetId || collapsed) return null
 
+  const originalIsCurrent = currentStageId === 'original' || !currentStageId
+  const rowCount = dataset?.row_count?.toLocaleString?.() || dataset?.row_count
+  const colCount = dataset?.col_count
+
   return (
     <aside className="ax-history-rail">
       <div className="ax-rail-header">
@@ -55,48 +59,35 @@ export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, c
       <div className="ax-rail-body">
         {loading && <p className="ax-rail-meta">Loading…</p>}
         {error && <p className="ax-rail-meta ax-rail-error">{error}</p>}
-        {!loading && !error && stages.length === 0 && (
+        {!loading && !error && stages.length === 0 && !originalIsCurrent && null}
+        {!loading && !error && stages.length === 0 && originalIsCurrent && (
           <p className="ax-rail-meta">
             No transforms yet — clean or expand the dataset to start the timeline.
           </p>
         )}
         <ol className="ax-history-list">
-          <li className={`ax-history-item ${currentStageId === 'original' || !currentStageId ? 'current' : ''}`}>
-            <button type="button" onClick={() => onViewStage && onViewStage('original')}>
-              <span className="ax-history-label">
-                <strong>Original upload</strong>
-                <small>
-                  {dataset?.row_count?.toLocaleString?.() || dataset?.row_count} rows · {dataset?.col_count} cols
-                </small>
-              </span>
-            </button>
-          </li>
+          <HistoryCard
+            isCurrent={originalIsCurrent}
+            title="Original upload"
+            summary={null}
+            meta={`${rowCount} rows · ${colCount} cols`}
+            onView={() => onViewStage && onViewStage('original')}
+            onRestore={originalIsCurrent ? null : () => handleRestore('original')}
+            restoring={restoring === 'original'}
+          />
           {stages.map((stage) => {
             const isCurrent = stage.id === currentStageId
             return (
-              <li key={stage.id} className={`ax-history-item ${isCurrent ? 'current' : ''}`}>
-                <button type="button" onClick={() => onViewStage && onViewStage(stage.id)}>
-                  <span className="ax-history-label">
-                    <strong>{stage.op_type || 'Transform'}</strong>
-                    {stage.summary && <small>{stage.summary}</small>}
-                    <small>
-                      {stage.row_count?.toLocaleString?.() || stage.row_count} rows · {stage.col_count} cols
-                    </small>
-                  </span>
-                </button>
-                {!isCurrent && (
-                  <button
-                    type="button"
-                    className="ax-history-restore"
-                    onClick={() => handleRestore(stage.id)}
-                    disabled={restoring === stage.id}
-                    aria-label="Restore this stage"
-                    title="Restore this stage"
-                  >
-                    {restoring === stage.id ? '…' : <RestoreIcon />}
-                  </button>
-                )}
-              </li>
+              <HistoryCard
+                key={stage.id}
+                isCurrent={isCurrent}
+                title={stage.op_type || 'Transform'}
+                summary={stage.summary || null}
+                meta={`${stage.row_count?.toLocaleString?.() || stage.row_count} rows · ${stage.col_count} cols`}
+                onView={() => onViewStage && onViewStage(stage.id)}
+                onRestore={isCurrent ? null : () => handleRestore(stage.id)}
+                restoring={restoring === stage.id}
+              />
             )
           })}
         </ol>
@@ -115,20 +106,38 @@ export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, c
   )
 }
 
-function RestoreIcon() {
+function HistoryCard({ isCurrent, title, summary, meta, onView, onRestore, restoring }) {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <li
+      className={`ax-history-item ${isCurrent ? 'current' : ''}`}
+      onClick={onView}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onView && onView()
+        }
+      }}
     >
-      <path d="M2 7C2 4.5 4.2 2.5 7 2.5C9.8 2.5 12 4.5 12 7C12 9.5 9.8 11.5 7 11.5" />
-      <path d="M2 4V7H5" />
-    </svg>
+      <strong className="ax-history-card-title">{title}</strong>
+      {summary && <p className="ax-history-card-summary">{summary}</p>}
+      <small className="ax-history-card-meta">{meta}</small>
+      {onRestore && (
+        <div className="ax-history-card-actions">
+          <button
+            type="button"
+            className="ax-history-restore"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRestore()
+            }}
+            disabled={restoring}
+          >
+            {restoring ? 'Restoring…' : 'Restore'}
+          </button>
+        </div>
+      )}
+    </li>
   )
 }
