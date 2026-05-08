@@ -3780,25 +3780,32 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
             severity_level = "low"
             severity_message = "Low severity — usually safe to ignore."
 
-        linear_options = [a for a in available_algorithms if a in ("linear", "logistic")]
-        tree_options = [a for a in available_algorithms if a in ("rf", "tree")]
+        is_regression = task == "regression"
+        is_classification = task == "classification"
+        available_set = set(available_algorithms)
+        tree_options = [a for a in available_set if a in ("rf", "tree")]
         linear_selected = [a for a in algorithms if a in ("linear", "logistic")]
         tree_selected = [a for a in algorithms if a in ("rf", "tree")]
+        logistic_available = is_classification and "logistic" in available_set
 
         linear_labels = [_algo_label_for_task(a, task) for a in linear_selected]
         tree_labels = [_algo_label_for_task(a, task) for a in tree_selected]
         tree_option_labels = [_algo_label_for_task(a, task) for a in tree_options]
+        logistic_label = _algo_label_for_task("logistic", task) if logistic_available else None
 
         detail_lines = [
             f"Detected {len(multicollinearity)} pair{'s' if len(multicollinearity) == 1 else 's'} of features sharing very similar information.",
-            "Linear-style models can struggle to tell which feature matters when inputs overlap this much.",
         ]
+        if is_regression:
+            detail_lines.append("Linear Regression can become unstable when features overlap this much.")
+        else:
+            linear_note_names = ", ".join(linear_labels or ([logistic_label] if logistic_label and not linear_labels else []))
+            if linear_note_names:
+                detail_lines.append(f"Linear classifiers like {linear_note_names} can become harder to interpret when features overlap too much.")
         if tree_selected:
             detail_lines.append(f"Tree-based models such as {', '.join(tree_labels)} are naturally resilient to this overlap.")
         elif tree_option_labels:
             detail_lines.append(f"Tree-based models like {', '.join(tree_option_labels)} are resilient to this overlap.")
-        if linear_labels:
-            detail_lines.append(f"Linear models like {', '.join(linear_labels)} may become unstable — consider simplifying inputs or using regularization.")
 
         detail_text = " ".join(detail_lines)
 
@@ -3822,20 +3829,20 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
 
         if tree_selected or tree_option_labels:
             fixes.append({
-                "label": "Use tree-based models",
-                "description": "Decision trees and Random Forests are much less sensitive to correlated inputs.",
+                "label": "Use tree-based regressors" if is_regression else "Use tree-based classifiers",
+                "description": "Decision Trees and Random Forests are less sensitive to overlapping inputs.",
                 "route": "models",
                 "section": "algorithms",
                 "category": "alternative",
             })
 
-        if linear_options:
+        if logistic_available:
             fixes.append({
-                "label": "Use regularized linear models",
-                "description": "Apply Ridge or Lasso-style regularization to stabilize overlapping features.",
+                "label": "Use Logistic Regression mindfully",
+                "description": "Logistic Regression can work, but highly correlated features make coefficients harder to interpret.",
                 "route": "models",
                 "section": "algorithms",
-                "category": "advanced",
+                "category": "alternative",
             })
 
     vc_multicollinearity = {
