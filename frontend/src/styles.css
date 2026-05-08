@@ -2509,7 +2509,7 @@ a.ax-btn {
 .ax-ai-rail {
   position: sticky;
   top: 16px;
-  max-height: calc(100vh - 32px);
+  height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
   background: var(--color-background-primary);
@@ -2517,10 +2517,6 @@ a.ax-btn {
   border-radius: 8px;
   overflow: hidden;
   align-self: start;
-}
-.ax-history-rail.collapsed,
-.ax-ai-rail.collapsed {
-  max-height: 60px;
 }
 .ax-rail-header {
   display: flex;

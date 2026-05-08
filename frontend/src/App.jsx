@@ -56,7 +56,7 @@ function AppRoutes() {
   }
   return (
     <div className="ax-app">
-      <Sidebar />
+      {!isProjectWorkspace && <Sidebar />}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <GuestBanner />
         <main className={`ax-main${isProjectWorkspace ? ' ax-main-project' : ''}`} style={{ flex: 1 }}>
