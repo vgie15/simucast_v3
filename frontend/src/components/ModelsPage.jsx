@@ -1153,6 +1153,11 @@ function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck 
                 Ready to train
               </span>
             )}
+            <HelpButton
+              title="What do these tags mean?"
+              text="Each issue is labelled with a status tag: OK means the check passed. WARNING means you can continue, but results may be less reliable until the fix is applied. BLOCK means you should resolve the issue before training."
+              style={{ marginLeft: 'auto' }}
+            />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {checks.map((check, i) => {
