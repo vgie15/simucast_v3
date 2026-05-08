@@ -3438,6 +3438,9 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     target_options = target_options or {}
     test_size = min(max(_parse_num(target_options.get("test_size"), 0.2, float), 0.05), 0.5)
     validation_method = target_options.get("validation_method") if target_options.get("validation_method") in ("standard_split", "cross_validation") else "standard_split"
+    cv_folds = 5
+    if validation_method == "cross_validation":
+        test_size = 1 / cv_folds
     stratify_split = bool(target_options.get("stratify", True))
     class_weight = target_options.get("class_weight") if target_options.get("class_weight") in ("balanced", None) else None
     y = sub_clean[target]
@@ -3707,16 +3710,19 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         ] if multicollinearity else [],
     }
 
-    # 5. Train/test split (always ok)
+    # 5. Validation method (always ok)
+    split_detail = (
+        f"{cv_folds}-fold cross-validation: each fold tests about {int((1 / cv_folds) * 100)}% of the data once, then averages performance across all runs."
+        if validation_method == "cross_validation"
+        else f"Train {int((1 - test_size) * 100)}% / test {int(test_size * 100)}"
+        + (" with stratification" if task == "classification" and stratify_split else "")
+        + "."
+    )
     vc_split = {
         "key": "train_test_split",
         "label": "Validation configured",
         "status": "ok",
-        "detail": (
-            f"Train {int((1 - test_size) * 100)}% / test {int(test_size * 100)}"
-            + (" with stratification" if task == "classification" and stratify_split else "")
-            + (" plus 5-fold cross-validation." if validation_method == "cross_validation" else ".")
-        ),
+        "detail": split_detail,
         "type": "modeling",
         "causes": [],
         "fixes": [],
@@ -3750,6 +3756,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         "split": {
             "train_size": 1 - test_size,
             "test_size": test_size,
+            "folds": cv_folds,
             "stratified": bool(task == "classification" and stratify_split),
             "validation_method": validation_method,
         },
@@ -3918,18 +3925,19 @@ def _cross_validation_metrics(algo, X, y, is_classification, params, plan):
         if n_rows < 10:
             return {"enabled": True, "available": False, "reason": "At least 10 complete rows are needed for cross-validation."}
         estimator = _build_model_estimator(algo, is_classification, params, plan.get("class_weight") if is_classification else None)
+        requested_folds = int((plan.get("split") or {}).get("folds") or 5)
         if is_classification:
             counts = pd.Series(y).value_counts()
             if len(counts) < 2:
                 return {"enabled": True, "available": False, "reason": "At least two classes are needed for cross-validation."}
-            folds = int(min(5, counts.min(), n_rows))
+            folds = int(min(requested_folds, counts.min(), n_rows))
             if folds < 2:
                 return {"enabled": True, "available": False, "reason": "Each class needs at least two examples for cross-validation."}
             cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
             scoring = "accuracy"
             label = "accuracy"
         else:
-            folds = int(min(5, n_rows))
+            folds = int(min(requested_folds, n_rows))
             if folds < 2:
                 return {"enabled": True, "available": False, "reason": "At least two complete rows are needed for cross-validation."}
             cv = KFold(n_splits=folds, shuffle=True, random_state=42)
@@ -4196,6 +4204,7 @@ def train_model(ds_id):
             return {"error": str(e)}, 400
         if plan.get("hard_blocks"):
             return {"error": plan["hard_blocks"][0]["message"], "hard_blocks": plan["hard_blocks"], "preprocessing_plan": plan}, 400
+        test_size = float((plan.get("split") or {}).get("test_size", test_size))
         try:
             result = _train_one(df, target, plan["features"], algo, test_size, plan, model_params.get(algo, model_params))
         except ValueError as e:
@@ -4274,6 +4283,7 @@ def train_many_models(ds_id):
             return {"error": str(e)}, 400
         if plan.get("hard_blocks"):
             return {"error": plan["hard_blocks"][0]["message"], "hard_blocks": plan["hard_blocks"], "preprocessing_plan": plan}, 400
+        test_size = float((plan.get("split") or {}).get("test_size", test_size))
 
         # task→algorithm filter so we don't try regression algos on a classification target
         valid = []

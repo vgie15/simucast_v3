@@ -563,32 +563,52 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
               5-fold cross-validation
             </label>
           </div>
-          <span />
-          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-            Cross-validation trains and tests the model multiple times using different splits, which is helpful when the dataset is small or results feel unstable.
-          </p>
-          <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
-          <div>
-            <input
-              type="range"
-              min="0.05"
-              max="0.5"
-              step="0.05"
-              value={testSize}
-              onChange={(e) => setTestSize(Number(e.target.value))}
-              style={{ width: 'min(280px, 100%)' }}
-            />
-            <span style={{ marginLeft: 10, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-              Train {Math.round((1 - testSize) * 100)}% / Test {Math.round(testSize * 100)}%
-            </span>
-          </div>
+          {validationMethod === 'standard_split' ? (
+            <>
+              <span />
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                Standard split trains once and tests once on a held-out test set.
+              </p>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
+              <div>
+                <input
+                  type="range"
+                  min="0.05"
+                  max="0.5"
+                  step="0.05"
+                  value={testSize}
+                  onChange={(e) => setTestSize(Number(e.target.value))}
+                  style={{ width: 'min(280px, 100%)' }}
+                />
+                <span style={{ marginLeft: 10, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                  Train {Math.round((1 - testSize) * 100)}% / Test {Math.round(testSize * 100)}%
+                </span>
+              </div>
+              {plan?.task === 'classification' && (
+                <>
+                  <label style={{ color: 'var(--color-text-secondary)' }}>Classification split</label>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input type="checkbox" checked={stratify} onChange={(e) => setStratify(e.target.checked)} />
+                    Keep class proportions in train and test sets
+                  </label>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Cross-validation folds</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <select disabled defaultValue="5" style={{ width: 'min(200px, 100%)' }}>
+                  <option value="5">5 folds (recommended)</option>
+                </select>
+                <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, maxWidth: 620 }}>
+                  The dataset is split into 5 groups. Each group becomes the test set once while the others are used for training. Final performance is averaged across all runs.
+                </p>
+              </div>
+            </>
+          )}
           {plan?.task === 'classification' && (
             <>
-              <label style={{ color: 'var(--color-text-secondary)' }}>Classification split</label>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={stratify} onChange={(e) => setStratify(e.target.checked)} />
-                Keep class proportions in train and test sets
-              </label>
               <label style={{ color: 'var(--color-text-secondary)' }}>Imbalance handling</label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input type="checkbox" checked={classWeight} onChange={(e) => setClassWeight(e.target.checked)} />
@@ -988,7 +1008,9 @@ function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck 
     plan.scaling.length > 0 && { label: 'Scaling', value: 'StandardScaler on numeric features' },
     plan.split && {
       label: 'Split',
-      value: `${Math.round((plan.split.train_size || 0.8) * 100)}% train / ${Math.round((plan.split.test_size || 0.2) * 100)}% test${plan.split.stratified ? ' (stratified)' : ''}`,
+      value: plan.split.validation_method === 'cross_validation'
+        ? `${plan.split.folds || 5}-fold cross-validation`
+        : `${Math.round((plan.split.train_size || 0.8) * 100)}% train / ${Math.round((plan.split.test_size || 0.2) * 100)}% test${plan.split.stratified ? ' (stratified)' : ''}`,
     },
   ].filter(Boolean)
 
@@ -1738,11 +1760,14 @@ function algoLabelForTask(algo, task) {
 
 function targetOptions(mode, positiveClass, testSize, validationMethod, stratify, classWeight, numericPreprocessing) {
   const options = {}
+  const method = validationMethod || 'standard_split'
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
-  options.test_size = testSize
-  options.validation_method = validationMethod || 'standard_split'
-  options.stratify = stratify
+  options.validation_method = method
+  if (method === 'standard_split') {
+    options.test_size = testSize
+    options.stratify = stratify
+  }
   if (classWeight) options.class_weight = 'balanced'
   options.numeric_preprocessing = numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] }
   return options
