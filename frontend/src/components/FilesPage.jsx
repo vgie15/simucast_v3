@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth, markGuestSlotUsed } from './AuthProvider'
 import { useDialog } from './DialogProvider'
-import HelpButton from './HelpButton'
 
 export default function FilesPage() {
   const [datasets, setDatasets] = useState([])
@@ -102,10 +101,6 @@ export default function FilesPage() {
         <div className="ax-card" style={{ padding: 0, overflow: 'hidden', marginTop: 12 }}>
           <p className="ax-lbl" style={{ margin: '14px 16px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
             Uploaded files
-            <HelpButton
-              title="Uploaded files"
-              text="This table lists the source files attached to projects. Deleting a file also deletes the project and its generated analyses, models, scenarios, and documentation."
-            />
           </p>
           <table className="ax-tbl">
             <thead>

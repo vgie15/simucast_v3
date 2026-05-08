@@ -1832,7 +1832,7 @@ a.ax-btn {
 }
 
 .ax-main-project {
-  padding-top: 0;
+  padding: 0 8px 14px;
 }
 
 .ax-flow-context {
@@ -2457,7 +2457,7 @@ a.ax-btn {
 
 .ax-workspace-grid {
   display: grid;
-  grid-template-columns: var(--history-w, 240px) minmax(0, 1fr) var(--ai-w, 360px);
+  grid-template-columns: var(--history-w, 320px) minmax(0, 1fr) var(--ai-w, 360px);
   gap: 14px;
   align-items: start;
 }
@@ -2465,7 +2465,7 @@ a.ax-btn {
   grid-template-columns: minmax(0, 1fr) var(--ai-w, 360px);
 }
 .ax-workspace-grid.ai-closed {
-  grid-template-columns: var(--history-w, 240px) minmax(0, 1fr);
+  grid-template-columns: var(--history-w, 320px) minmax(0, 1fr);
 }
 .ax-workspace-grid.history-closed.ai-closed {
   grid-template-columns: minmax(0, 1fr);
@@ -2519,7 +2519,10 @@ a.ax-btn {
   border-radius: 8px;
   border: 0.5px solid var(--color-border-tertiary);
   box-shadow: none;
-  position: static;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--color-background-primary);
 }
 .ax-workspace-main .ax-subnav {
   padding: 0 14px;
@@ -2615,7 +2618,7 @@ a.ax-btn {
 }
 .ax-rail-body {
   overflow: auto;
-  padding: 10px 12px;
+  padding: 8px;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -3085,12 +3088,12 @@ a.ax-btn {
 .ax-activity-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .ax-activity-filters {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
   margin-top: 8px;
   margin-bottom: 0;
 }
@@ -3101,7 +3104,7 @@ a.ax-btn {
 .ax-activity-item {
   border: 0.5px solid var(--color-border-tertiary);
   border-radius: var(--border-radius-lg);
-  padding: 12px;
+  padding: 14px;
   background: var(--color-background-primary);
   box-shadow: 0 6px 18px rgba(17, 24, 39, 0.04);
 }
@@ -3413,7 +3416,7 @@ a.ax-btn {
     padding: 18px;
   }
   .ax-main-project {
-    padding-top: 0;
+    padding: 0 8px 12px;
   }
   .ax-subnav {
     margin: 0;

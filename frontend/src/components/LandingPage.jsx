@@ -73,7 +73,7 @@ export default function LandingPage() {
           </p>
           <div className="ax-landing-cta">
             <button className="ax-btn prim" onClick={openSignup} type="button">
-              Get Started Free -&gt;
+              Get Started -&gt;
             </button>
             <a className="ax-btn" href="/sample-dataset.csv" download="students-performance.csv">
               ↓ Sample Dataset

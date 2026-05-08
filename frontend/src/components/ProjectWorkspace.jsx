@@ -34,7 +34,7 @@ export default function ProjectWorkspace() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [historyCollapsed, setHistoryCollapsed] = useState(true)
   const [aiCollapsed, setAiCollapsed] = useState(false)
-  const [historyWidth, setHistoryWidth] = useState(240)
+  const [historyWidth, setHistoryWidth] = useState(320)
   const [aiWidth, setAiWidth] = useState(360)
   const [resizing, setResizing] = useState(null) // 'history' | 'ai' | null
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
@@ -59,7 +59,7 @@ export default function ProjectWorkspace() {
   useEffect(() => {
     if (!historyWidthKey) return
     const saved = Number(window.localStorage.getItem(historyWidthKey))
-    if (Number.isFinite(saved) && saved > 0) setHistoryWidth(saved)
+    if (Number.isFinite(saved) && saved > 0) setHistoryWidth(Math.max(280, saved))
   }, [historyWidthKey])
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function ProjectWorkspace() {
     const onMove = (e) => {
       e.preventDefault()
       if (resizing === 'history') {
-        const next = Math.max(160, Math.min(480, e.clientX - 0))
+        const next = Math.max(280, Math.min(520, e.clientX - 0))
         setHistoryWidth(next)
       } else if (resizing === 'ai') {
         const next = Math.max(240, Math.min(640, window.innerWidth - e.clientX))

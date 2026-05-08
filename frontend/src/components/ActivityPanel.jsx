@@ -12,7 +12,7 @@ const FILTERS = [
   { key: 'report', label: 'Report' },
 ]
 
-export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
+export default function ActivityPanel({ datasetId, onViewStage, onRestored, title = 'Documentation', subtitle = 'Project actions for methods, audit trail, and reports.' }) {
   const dialog = useDialog()
   const [activity, setActivity] = useState([])
   const [stages, setStages] = useState([])
@@ -174,22 +174,22 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored }) {
   return (
     <div className="ax-card ax-activity-panel">
       <div className="ax-panel-sticky-header">
-        <div className="ax-row" style={{ marginBottom: 8 }}>
-          <div>
+        <div className="ax-row" style={{ marginBottom: 8, alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ minWidth: 0, flex: '1 1 160px' }}>
             <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Documentation
+              {title}
               <HelpButton
-                title="Documentation"
+                title={title}
                 text="This card records the project audit trail: data preparation steps, analyses, model runs, scenarios, reports, notes, and undo/restore actions. These entries are used in reports and help explain what was done."
               />
             </p>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-              Project actions for methods, audit trail, and reports.
+              {subtitle}
             </p>
           </div>
           <button
             className="ax-btn"
-            style={{ background: 'rgba(220, 38, 38, 0.08)', borderColor: 'rgba(220, 38, 38, 0.35)', color: '#DC2626', flexShrink: 0 }}
+            style={{ background: 'rgba(220, 38, 38, 0.08)', borderColor: 'rgba(220, 38, 38, 0.35)', color: '#DC2626', flexShrink: 0, minWidth: 112 }}
             onClick={resetProject}
             disabled={busy}
           >
@@ -432,4 +432,3 @@ function badgeClassFor(kind) {
   if (label.includes('note')) return 'ax-badge-note'
   return 'ax-badge-default'
 }
-
