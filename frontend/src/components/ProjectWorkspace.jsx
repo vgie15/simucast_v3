@@ -10,6 +10,7 @@ import WhatIfPage from './WhatIfPage'
 import ReportPage from './ReportPage'
 import ActivityPanel from './ActivityPanel'
 import AIProjectPlanPanel from './AIProjectPlanPanel'
+import AIChatPanel from './AIChatPanel'
 import { useAuth } from './AuthProvider'
 
 const TABS = [
@@ -209,6 +210,40 @@ function RightRail({ dataset, activeTab, onViewStage, onRestored }) {
         onViewStage={onViewStage}
         onRestored={onRestored}
       />
+      <ChatPanelBlock dataset={dataset} activeTab={activeTab} />
+    </div>
+  )
+}
+
+function ChatPanelBlock({ dataset, activeTab }) {
+  const key = dataset?.id ? `simucast.chat.collapsed.${dataset.id}` : ''
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => {
+    if (!key) return
+    setCollapsed(window.localStorage.getItem(key) === '1')
+  }, [key])
+  const toggle = () => {
+    setCollapsed((c) => {
+      const next = !c
+      if (key) window.localStorage.setItem(key, next ? '1' : '0')
+      return next
+    })
+  }
+  if (!dataset) return null
+  return (
+    <div className="ax-card ax-chat-card">
+      <button
+        type="button"
+        className="ax-chat-toggle"
+        onClick={toggle}
+        aria-expanded={!collapsed}
+      >
+        <span style={{ fontSize: 13, fontWeight: 700 }}>AI assistant</span>
+        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+          {collapsed ? 'Open' : 'Collapse'}
+        </span>
+      </button>
+      {!collapsed && <AIChatPanel datasetId={dataset.id} activeTab={activeTab} />}
     </div>
   )
 }
