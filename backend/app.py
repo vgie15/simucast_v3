@@ -30,7 +30,7 @@ from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score, train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, precision_score, recall_score,
@@ -635,59 +635,97 @@ def friendly_error_message(err, fallback="The operation could not be completed. 
     return text or fallback
 
 
-def _model_health_diagnostics(metrics):
-    """Persist a compact train/test health summary with every new model run."""
+def _model_health_diagnostics(metrics, plan=None, algo=None):
+    """Persist a beginner-friendly train/test health summary with every new model run."""
+    plan = plan or {}
     task = metrics.get("task")
-    gap = metrics.get("generalization_gap")
+    gap = abs(float(metrics.get("generalization_gap") or 0))
+    rows = metrics.get("split_rows") or {}
+    rows_total = int((rows.get("train") or 0) + (rows.get("test") or 0))
+    feature_count = len(plan.get("features") or [])
+    complexity = "complex" if algo in ("rf",) else "moderate" if algo == "tree" else "simple"
+    small_data = rows_total and rows_total < 100
+    feature_heavy = rows_total and feature_count >= max(10, rows_total // 4)
+    cv = metrics.get("cross_validation") or {}
+    cv_unstable = cv.get("std") is not None and float(cv.get("std") or 0) >= 0.12
+
+    def base_causes():
+        causes = []
+        if small_data:
+            causes.append(f"Only {rows_total} usable rows were available, so validation can be unstable.")
+        if feature_heavy:
+            causes.append(f"{feature_count} selected features is high for this sample size.")
+        if complexity == "complex":
+            causes.append("Random Forest is more flexible and can memorize small or noisy datasets.")
+        elif complexity == "moderate":
+            causes.append("Decision trees can overfit when depth is not constrained.")
+        if plan.get("multicollinearity"):
+            causes.append("Highly correlated features may make model behavior less stable.")
+        if cv_unstable:
+            causes.append("Cross-validation scores vary across folds, suggesting unstable performance.")
+        return causes
+
+    def fixes(overfit=False, underfit=False):
+        actions = []
+        if overfit:
+            actions.extend([
+                {"label": "Review feature selection", "why": "Fewer, cleaner features can reduce memorization.", "route": "models.features"},
+                {"label": "Try a simpler model", "why": "A simpler baseline is less likely to memorize small datasets.", "route": "models.algorithms"},
+                {"label": "Tune complexity", "why": "Lower max depth or increase minimum samples per leaf for tree models.", "route": "models.tuning"},
+            ])
+            if plan.get("multicollinearity"):
+                actions.append({"label": "Check correlations", "why": "Removing redundant features can stabilize the model.", "route": "tests.correlation"})
+        if underfit:
+            actions.extend([
+                {"label": "Review selected features", "why": "The model may not have enough useful predictors.", "route": "models.features"},
+                {"label": "Try a stronger model", "why": "A more flexible model may capture patterns a simple model misses.", "route": "models.algorithms"},
+            ])
+        if small_data:
+            actions.append({"label": "Consider expansion", "why": "More rows can make validation more reliable for small datasets.", "route": "expand.recommendation"})
+        actions.append({"label": "Use cross-validation", "why": "Multiple validation splits give a steadier generalization estimate.", "route": "models.validation_split"})
+        return actions[:5]
+
+    def build(status, label, color, summary, causes=None, actions=None, confidence="normal"):
+        return {
+            "status": status,
+            "label": label,
+            "color": color,
+            "summary": summary,
+            "confidence": "low" if small_data else confidence,
+            "causes": causes or [],
+            "recommended_fixes": actions or [],
+            "validation_method": metrics.get("validation_method", "standard_split"),
+        }
+
     if task == "classification":
         train = metrics.get("train_accuracy")
         test = metrics.get("accuracy")
-        if train is None or test is None or gap is None:
-            return {"status": "unavailable", "label": "Diagnostics unavailable"}
-        overfit = gap >= 0.15 or (train >= 0.95 and test < 0.85)
-        weak = test < 0.6
-        if overfit:
-            return {
-                "status": "warning",
-                "label": "Possible overfitting",
-                "summary": "Training accuracy is much higher than test accuracy.",
-            }
-        if weak:
-            return {
-                "status": "warning",
-                "label": "Weak test performance",
-                "summary": "Test accuracy is low, so the model may not generalize well.",
-            }
-        return {
-            "status": "ok",
-            "label": "No major overfitting signal",
-            "summary": "Training and test performance are reasonably close for this split.",
-        }
+        if train is None or test is None:
+            return build("insufficient_data", "Diagnostics unavailable", "gray", "Train/test health metrics are unavailable for this saved model.")
+        if train < 0.65 and test < 0.65:
+            return build("underfitting", "Possible underfitting", "blue", "Both training and test accuracy are low, so the model may be too simple or the selected features are not predictive.", base_causes(), fixes(underfit=True))
+        if gap > 0.20:
+            return build("severe_overfitting", "Severe overfitting risk", "red", "Training accuracy is far higher than test accuracy, which suggests the model may be memorizing training rows.", base_causes(), fixes(overfit=True))
+        if gap > 0.10:
+            return build("moderate_overfitting", "Moderate overfitting risk", "orange", "The train/test gap is large enough to review model complexity and selected features.", base_causes(), fixes(overfit=True))
+        if gap > 0.05:
+            return build("mild_overfitting", "Mild overfitting signal", "yellow", "The model performs slightly better on training data than test data. This is common, but worth monitoring.", base_causes(), fixes(overfit=True)[:3])
+        return build("healthy", "Healthy", "green", "Training and test performance are close, so there is no major overfitting signal from this split.", base_causes(), [{"label": "Validate before reporting", "why": "Use another split or fresh data before treating results as final.", "route": "models.validation_split"}])
     if task == "regression":
         train = metrics.get("train_r2")
         test = metrics.get("r2")
-        if train is None or test is None or gap is None:
-            return {"status": "unavailable", "label": "Diagnostics unavailable"}
-        overfit = gap >= 0.15 or (train >= 0.9 and test < 0.65)
-        weak = test < 0.2
-        if overfit:
-            return {
-                "status": "warning",
-                "label": "Possible overfitting",
-                "summary": "Training R2 is much higher than test R2.",
-            }
-        if weak:
-            return {
-                "status": "warning",
-                "label": "Weak test performance",
-                "summary": "Test R2 is low, so the model explains little variation on held-out rows.",
-            }
-        return {
-            "status": "ok",
-            "label": "No major overfitting signal",
-            "summary": "Training and test R2 are reasonably close for this split.",
-        }
-    return {"status": "unavailable", "label": "Diagnostics unavailable"}
+        if train is None or test is None:
+            return build("insufficient_data", "Diagnostics unavailable", "gray", "Train/test health metrics are unavailable for this saved model.")
+        if train < 0.3 and test < 0.2:
+            return build("underfitting", "Possible underfitting", "blue", "Both training and test R2 are low, so the model explains little of the target variation.", base_causes(), fixes(underfit=True))
+        if gap > 0.20:
+            return build("severe_overfitting", "Severe overfitting risk", "red", "Training R2 is far higher than test R2, which suggests weak generalization.", base_causes(), fixes(overfit=True))
+        if gap > 0.10:
+            return build("moderate_overfitting", "Moderate overfitting risk", "orange", "The train/test R2 gap is large enough to review model complexity and selected features.", base_causes(), fixes(overfit=True))
+        if gap > 0.05:
+            return build("mild_overfitting", "Mild overfitting signal", "yellow", "The model explains training rows somewhat better than test rows. This is worth monitoring.", base_causes(), fixes(overfit=True)[:3])
+        return build("healthy", "Healthy", "green", "Training and test R2 are close, so there is no major overfitting signal from this split.", base_causes(), [{"label": "Validate before reporting", "why": "Use another split or fresh data before treating results as final.", "route": "models.validation_split"}])
+    return build("insufficient_data", "Diagnostics unavailable", "gray", "Model health could not be classified for this saved model.")
 
 
 def log_activity(session, dataset_id, kind, summary, detail=None, ref_type=None, ref_id=None, commit=True, dedupe_key=None):
@@ -3330,6 +3368,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
 
     target_options = target_options or {}
     test_size = min(max(_parse_num(target_options.get("test_size"), 0.2, float), 0.05), 0.5)
+    validation_method = target_options.get("validation_method") if target_options.get("validation_method") in ("standard_split", "cross_validation") else "standard_split"
     stratify_split = bool(target_options.get("stratify", True))
     class_weight = target_options.get("class_weight") if target_options.get("class_weight") in ("balanced", None) else None
     y = sub_clean[target]
@@ -3602,9 +3641,13 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     # 5. Train/test split (always ok)
     vc_split = {
         "key": "train_test_split",
-        "label": "Train/test split configured",
+        "label": "Validation configured",
         "status": "ok",
-        "detail": f"Train {int((1 - test_size) * 100)}% / test {int(test_size * 100)}%" + (" with stratification." if task == "classification" and stratify_split else "."),
+        "detail": (
+            f"Train {int((1 - test_size) * 100)}% / test {int(test_size * 100)}"
+            + (" with stratification" if task == "classification" and stratify_split else "")
+            + (" plus 5-fold cross-validation." if validation_method == "cross_validation" else ".")
+        ),
         "type": "modeling",
         "causes": [],
         "fixes": [],
@@ -3639,7 +3682,9 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
             "train_size": 1 - test_size,
             "test_size": test_size,
             "stratified": bool(task == "classification" and stratify_split),
+            "validation_method": validation_method,
         },
+        "validation_method": validation_method,
         "class_weight": class_weight if task == "classification" else None,
         "model_params": {a: _model_default_params(a) for a in algorithms or [] if a in ALGORITHM_CATALOG},
         "multicollinearity": multicollinearity,
@@ -3777,6 +3822,64 @@ def _whatif_input_matrix(bundle, inputs):
     return X
 
 
+def _build_model_estimator(algo, is_classification, params, class_weight=None):
+    if is_classification:
+        if algo == "rf":
+            return RandomForestClassifier(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42, class_weight=class_weight)
+        if algo == "tree":
+            return DecisionTreeClassifier(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42, class_weight=class_weight)
+        if algo == "logistic":
+            return LogisticRegression(C=params["C"], max_iter=params["max_iter"], class_weight=class_weight)
+        raise ValueError(f"algorithm '{algo}' not supported for classification")
+    if algo == "rf":
+        return RandomForestRegressor(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42)
+    if algo == "tree":
+        return DecisionTreeRegressor(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42)
+    if algo == "linear":
+        return LinearRegression(fit_intercept=params["fit_intercept"])
+    raise ValueError(f"algorithm '{algo}' not supported for regression")
+
+
+def _cross_validation_metrics(algo, X, y, is_classification, params, plan):
+    validation_method = (plan.get("validation_method") or (plan.get("split") or {}).get("validation_method") or "standard_split")
+    if validation_method != "cross_validation":
+        return None
+    try:
+        n_rows = len(X)
+        if n_rows < 10:
+            return {"enabled": True, "available": False, "reason": "At least 10 complete rows are needed for cross-validation."}
+        estimator = _build_model_estimator(algo, is_classification, params, plan.get("class_weight") if is_classification else None)
+        if is_classification:
+            counts = pd.Series(y).value_counts()
+            if len(counts) < 2:
+                return {"enabled": True, "available": False, "reason": "At least two classes are needed for cross-validation."}
+            folds = int(min(5, counts.min(), n_rows))
+            if folds < 2:
+                return {"enabled": True, "available": False, "reason": "Each class needs at least two examples for cross-validation."}
+            cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
+            scoring = "accuracy"
+            label = "accuracy"
+        else:
+            folds = int(min(5, n_rows))
+            if folds < 2:
+                return {"enabled": True, "available": False, "reason": "At least two complete rows are needed for cross-validation."}
+            cv = KFold(n_splits=folds, shuffle=True, random_state=42)
+            scoring = "r2"
+            label = "r2"
+        scores = cross_val_score(estimator, X, y, cv=cv, scoring=scoring)
+        return {
+            "enabled": True,
+            "available": True,
+            "method": f"{folds}-fold cross-validation",
+            "metric": label,
+            "mean": float(np.mean(scores)),
+            "std": float(np.std(scores)),
+            "fold_scores": [float(x) for x in scores.tolist()],
+        }
+    except Exception as exc:
+        return {"enabled": True, "available": False, "reason": friendly_error_message(exc, "Cross-validation could not be computed for this setup.")}
+
+
 def _train_one(df, target, features, algo, test_size, plan, model_params=None):
     """Train a single model. Returns a dict with metrics + importance.
 
@@ -3827,14 +3930,7 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
     )
 
     if is_classification:
-        if algo == "rf":
-            clf = RandomForestClassifier(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42, class_weight=plan.get("class_weight"))
-        elif algo == "tree":
-            clf = DecisionTreeClassifier(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42, class_weight=plan.get("class_weight"))
-        elif algo == "logistic":
-            clf = LogisticRegression(C=params["C"], max_iter=params["max_iter"], class_weight=plan.get("class_weight"))
-        else:
-            raise ValueError(f"algorithm '{algo}' not supported for classification")
+        clf = _build_model_estimator(algo, True, params, plan.get("class_weight"))
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
         y_train_pred = clf.predict(X_train)
@@ -3852,9 +3948,13 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             "split_rows": {"train": int(len(X_train)), "test": int(len(X_test))},
             "class_weight": plan.get("class_weight"),
             "model_params": params,
+            "validation_method": plan.get("validation_method", "standard_split"),
         }
         metrics["generalization_gap"] = float(metrics["train_accuracy"] - metrics["accuracy"])
-        metrics["health_diagnostics"] = _model_health_diagnostics(metrics)
+        cv = _cross_validation_metrics(algo, X_scaled, y, True, params, plan)
+        if cv:
+            metrics["cross_validation"] = cv
+        metrics["health_diagnostics"] = _model_health_diagnostics(metrics, plan, algo)
         if len(np.unique(y)) == 2 and hasattr(clf, "predict_proba"):
             try:
                 y_proba = clf.predict_proba(X_test)[:, 1]
@@ -3863,14 +3963,7 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
                 pass
         metrics["confusion_matrix"] = confusion_matrix(y_test, y_pred).tolist()
     else:
-        if algo == "rf":
-            clf = RandomForestRegressor(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42)
-        elif algo == "tree":
-            clf = DecisionTreeRegressor(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42)
-        elif algo == "linear":
-            clf = LinearRegression(fit_intercept=params["fit_intercept"])
-        else:
-            raise ValueError(f"algorithm '{algo}' not supported for regression")
+        clf = _build_model_estimator(algo, False, params)
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
         y_train_pred = clf.predict(X_train)
@@ -3885,9 +3978,13 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             "split": plan.get("split"),
             "split_rows": {"train": int(len(X_train)), "test": int(len(X_test))},
             "model_params": params,
+            "validation_method": plan.get("validation_method", "standard_split"),
         }
         metrics["generalization_gap"] = float(metrics["train_r2"] - metrics["r2"])
-        metrics["health_diagnostics"] = _model_health_diagnostics(metrics)
+        cv = _cross_validation_metrics(algo, X_scaled, y, False, params, plan)
+        if cv:
+            metrics["cross_validation"] = cv
+        metrics["health_diagnostics"] = _model_health_diagnostics(metrics, plan, algo)
 
     influence = _feature_influence_from_model(clf, X.columns.tolist(), features, algo)
 
@@ -4238,6 +4335,7 @@ def prepare_model_for_whatif(model_id):
         target_options = {
             "test_size": (metrics.get("split") or {}).get("test_size", 0.2),
             "stratify": (metrics.get("split") or {}).get("stratified", True),
+            "validation_method": metrics.get("validation_method") or (metrics.get("split") or {}).get("validation_method", "standard_split"),
         }
         if metrics.get("class_weight"):
             target_options["class_weight"] = metrics.get("class_weight")
@@ -5989,24 +6087,51 @@ def _predictive_insights_text(tests):
 def _models_report_text(models):
     best = _best_model(models)
     metrics = jload(best.metrics) or {}
+    health = metrics.get("health_diagnostics") or {}
     lines = [f"{len(models)} model run(s) are included in this report."]
     if metrics.get("task") == "classification":
         auc = f" and AUC={_fmt(metrics.get('auc'))}" if metrics.get("auc") is not None else ""
         lines.append(f"Best recorded model: {best.algorithm} predicting {best.target}, with accuracy={_pct_float(metrics.get('accuracy'))}{auc}.")
+        if metrics.get("train_accuracy") is not None:
+            lines.append(
+                f"Train/test comparison: train accuracy={_pct_float(metrics.get('train_accuracy'))}, "
+                f"test accuracy={_pct_float(metrics.get('accuracy'))}, gap={_pct_float(abs(float(metrics.get('generalization_gap') or 0)))}."
+            )
     elif metrics.get("task") == "regression":
         lines.append(f"Best recorded model: {best.algorithm} predicting {best.target}, with R2={_fmt(metrics.get('r2'))} and RMSE={_fmt(metrics.get('rmse'))}.")
+        if metrics.get("train_r2") is not None:
+            lines.append(
+                f"Train/test comparison: train R2={_fmt(metrics.get('train_r2'))}, "
+                f"test R2={_fmt(metrics.get('r2'))}, gap={_fmt(abs(float(metrics.get('generalization_gap') or 0)))}."
+            )
+    if health:
+        lines.append(f"Model health: {health.get('label', 'Reviewed')} - {health.get('summary', 'Train/test health was evaluated.')}")
+        fixes = [f.get("label") for f in (health.get("recommended_fixes") or []) if isinstance(f, dict) and f.get("label")]
+        if fixes:
+            lines.append("Recommended follow-up actions: " + ", ".join(fixes[:4]) + ".")
+    cv = metrics.get("cross_validation") or {}
+    if cv.get("enabled"):
+        if cv.get("available"):
+            label = "accuracy" if cv.get("metric") == "accuracy" else "R2"
+            score = _pct_float(cv.get("mean")) if cv.get("metric") == "accuracy" else _fmt(cv.get("mean"))
+            spread = _pct_float(cv.get("std")) if cv.get("metric") == "accuracy" else _fmt(cv.get("std"))
+            lines.append(f"Cross-validation: mean {label}={score} with fold variation of {spread}.")
+        else:
+            lines.append(f"Cross-validation was requested but unavailable: {cv.get('reason', 'not enough data for stable folds')}.")
     lines.append("Model metrics should be interpreted together with data preparation, target cleanliness, and test-set size.")
     return "\n".join(f"- {line}" for line in lines)
 
 
 def _model_report_line(model):
     metrics = jload(model.metrics) or {}
+    health = metrics.get("health_diagnostics") or {}
+    health_text = f" Model health: {health.get('label')}." if health.get("label") else ""
     if metrics.get("task") == "classification":
         auc = f" and AUC={_fmt(metrics.get('auc'))}" if metrics.get("auc") is not None else ""
-        return f"{model.algorithm} predicted {model.target} with accuracy={_pct_float(metrics.get('accuracy'))}{auc}."
+        return f"{model.algorithm} predicted {model.target} with accuracy={_pct_float(metrics.get('accuracy'))}{auc}.{health_text}"
     if metrics.get("task") == "regression":
-        return f"{model.algorithm} predicted {model.target} with R2={_fmt(metrics.get('r2'))} and RMSE={_fmt(metrics.get('rmse'))}."
-    return f"{model.algorithm} model for {model.target}."
+        return f"{model.algorithm} predicted {model.target} with R2={_fmt(metrics.get('r2'))} and RMSE={_fmt(metrics.get('rmse'))}.{health_text}"
+    return f"{model.algorithm} model for {model.target}.{health_text}"
 
 
 def _feature_influence_report_text(models):

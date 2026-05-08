@@ -46,6 +46,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [targetMode, setTargetMode] = useState('auto')
   const [positiveClass, setPositiveClass] = useState('')
   const [testSize, setTestSize] = useState(0.2)
+  const [validationMethod, setValidationMethod] = useState('standard_split')
   const [stratify, setStratify] = useState(true)
   const [classWeight, setClassWeight] = useState(false)
   const [numericPreprocessing, setNumericPreprocessing] = useState({
@@ -111,6 +112,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       setTargetMode(saved.targetMode || 'auto')
       setPositiveClass(saved.positiveClass || '')
       setTestSize(saved.testSize ?? 0.2)
+      setValidationMethod(saved.validationMethod || 'standard_split')
       setStratify(saved.stratify ?? true)
       setClassWeight(saved.classWeight ?? false)
       setFeatures(saved.features || [])
@@ -131,6 +133,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       targetMode,
       positiveClass,
       testSize,
+      validationMethod,
       stratify,
       classWeight,
       features,
@@ -138,7 +141,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       modelParams,
       numericPreprocessing,
     }))
-  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing)])
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing)])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -170,7 +173,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           target,
           features,
           algorithms: chosenAlgos,
-          target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight, numericPreprocessing),
+          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, stratify, classWeight, numericPreprocessing),
         })
         if (!cancelled) {
           setPlan(r)
@@ -191,7 +194,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, stratify, classWeight, JSON.stringify(numericPreprocessing)])
+  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, stratify, classWeight, JSON.stringify(numericPreprocessing)])
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -223,7 +226,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         target,
         features,
         algorithms: selectedAlgos,
-        target_options: targetOptions(targetMode, positiveClass, testSize, stratify, classWeight, numericPreprocessing),
+        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, stratify, classWeight, numericPreprocessing),
         model_params: modelParams,
       })
       if (r.session) auth.updateSession(r.session)
@@ -335,6 +338,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     setFeatures(model.features || [])
     setChosenAlgos([model.algorithm].filter(Boolean))
     setTestSize(metrics.split?.test_size ?? 0.2)
+    setValidationMethod(metrics.validation_method || metrics.split?.validation_method || 'standard_split')
     setStratify(metrics.split?.stratified ?? true)
     setClassWeight(metrics.class_weight === 'balanced')
     setNumericPreprocessing(model.preprocessing_pipeline?.numeric_preprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] })
@@ -536,6 +540,33 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       {/* Step 4 — algorithms */}
       <Step n={4} id="models-step-4" title="Configure validation split" disabled={!plan}>
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
+          <label style={{ color: 'var(--color-text-secondary)' }}>Validation method</label>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="radio"
+                name="validation-method"
+                value="standard_split"
+                checked={validationMethod === 'standard_split'}
+                onChange={() => setValidationMethod('standard_split')}
+              />
+              Standard train/test split
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="radio"
+                name="validation-method"
+                value="cross_validation"
+                checked={validationMethod === 'cross_validation'}
+                onChange={() => setValidationMethod('cross_validation')}
+              />
+              5-fold cross-validation
+            </label>
+          </div>
+          <span />
+          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+            Cross-validation trains and tests the model multiple times using different splits, which is helpful when the dataset is small or results feel unstable.
+          </p>
           <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
           <div>
             <input
@@ -632,9 +663,10 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             setActiveIdx={setActiveResultIdx}
             onUseInWhatIf={useInWhatIf}
             datasetId={dataset.id}
+            onFixAction={handleFixAction}
           />
           {(results.models || []).length > 0 && (
-            <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
+            <div id="models-tuning" className="ax-card" style={{ padding: 14, marginTop: 12 }}>
               <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                 Tune parameters
                 <HelpButton
@@ -1136,7 +1168,7 @@ function IssueActionMenu({ check, onResolveIssue, onExecuteAction }) {
   )
 }
 
-function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, datasetId }) {
+function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, datasetId, onFixAction }) {
   const dialog = useDialog()
   const { models, skipped } = results
   if (!models || models.length === 0) {
@@ -1176,7 +1208,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
           Skipped: {skipped.map((s) => `${s.algorithm} (${s.reason})`).join(' · ')}
         </p>
       )}
-      <ModelHealthCard model={active} />
+      <ModelHealthCard model={active} datasetId={datasetId} onFixAction={onFixAction} />
 
       <div className="ax-card" style={{ padding: 14, marginTop: 8 }}>
         <div className="ax-row" style={{ marginBottom: 10 }}>
@@ -1224,6 +1256,7 @@ function ComparisonTable({ models, activeIdx, onPick }) {
         <thead>
           <tr>
             <th>Algorithm</th>
+            <th>Health</th>
             {task === 'classification' ? (
               <>
                 <th>Accuracy</th>
@@ -1245,6 +1278,8 @@ function ComparisonTable({ models, activeIdx, onPick }) {
         <tbody>
           {models.map((m, i) => {
             const mt = m.metrics
+            const health = assessModelHealth(m)
+            const healthStyle = healthTone(health?.color)
             const isBest = (() => {
               if (task === 'classification') {
                 const best = Math.max(...models.map((x) => x.metrics.accuracy ?? 0))
@@ -1271,6 +1306,15 @@ function ComparisonTable({ models, activeIdx, onPick }) {
                     >
                       best
                     </span>
+                  )}
+                </td>
+                <td>
+                  {health ? (
+                    <span className="ax-chip" style={{ background: healthStyle.chipBg, color: healthStyle.text }}>
+                      {health.label}
+                    </span>
+                  ) : (
+                    'n/a'
                   )}
                 </td>
                 {task === 'classification' ? (
@@ -1309,19 +1353,33 @@ function ComparisonTable({ models, activeIdx, onPick }) {
   )
 }
 
-function ModelHealthCard({ model }) {
+function healthTone(color) {
+  const tones = {
+    green: { bg: '#F0FDF4', chipBg: '#DCFCE7', text: '#15803D', border: '#22C55E' },
+    yellow: { bg: '#FEFCE8', chipBg: '#FEF3C7', text: '#A16207', border: '#EAB308' },
+    orange: { bg: '#FFF7ED', chipBg: '#FFEDD5', text: '#C2410C', border: '#F97316' },
+    red: { bg: '#FEF2F2', chipBg: '#FEE2E2', text: '#B91C1C', border: '#EF4444' },
+    blue: { bg: '#EFF6FF', chipBg: '#DBEAFE', text: '#1D4ED8', border: '#3B82F6' },
+    gray: { bg: 'var(--color-background-primary)', chipBg: 'var(--color-background-secondary)', text: 'var(--color-text-secondary)', border: 'var(--color-border-tertiary)' },
+  }
+  return tones[color] || tones.gray
+}
+
+function ModelHealthCard({ model, datasetId, onFixAction }) {
   const health = assessModelHealth(model)
   if (!health) return null
+  const tone = healthTone(health.color)
   return (
     <div
       className="ax-card"
       style={{
         padding: 14,
         margin: '10px 0',
-        borderLeft: `3px solid ${health.tone === 'warn' ? 'var(--color-text-warning)' : 'var(--color-text-success)'}`,
+        borderLeft: `4px solid ${tone.border}`,
+        background: tone.bg,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <p style={{ fontSize: 13, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
           Model health
           <HelpButton
@@ -1329,15 +1387,19 @@ function ModelHealthCard({ model }) {
             text="This card checks whether a trained model looks reliable. It flags possible overfitting, underfitting, class imbalance, weak test performance, or small-sample risk and suggests next actions."
           />
         </p>
-        <span
-          className="ax-chip"
-          style={{
-            background: health.tone === 'warn' ? '#FEF3C7' : '#DCFCE7',
-            color: health.tone === 'warn' ? '#D97706' : '#16A34A',
-          }}
-        >
-          {health.label}
-        </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="ax-chip" style={{ background: tone.chipBg, color: tone.text }}>
+            {health.label}
+          </span>
+          <ExplainButton
+            datasetId={datasetId}
+            step="model-health"
+            params={{ algorithm: model.algorithm, target: model.target, health: health.status }}
+            result={{ metrics: model.metrics, health }}
+            question="Explain this model health result in plain English. Say whether overfitting or underfitting is likely, why it matters, and which SimuCast fixes make sense next."
+            label="AI explain"
+          />
+        </div>
       </div>
       <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
         {health.summary}
@@ -1345,18 +1407,46 @@ function ModelHealthCard({ model }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 6, marginBottom: 8 }}>
         {health.metrics.map((item) => (
           <div key={item.label} style={{ background: 'var(--color-background-secondary)', borderRadius: 6, padding: '7px 9px' }}>
-            <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: 0 }}>{item.label}</p>
+            <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {item.label}
+              {item.help && <HelpButton title={item.label} text={item.help} />}
+            </p>
             <p style={{ fontSize: 13, fontWeight: 650, margin: '2px 0 0' }}>{item.value}</p>
           </div>
         ))}
       </div>
+      <div style={{ background: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, margin: '0 0 3px' }}>Why this matters</p>
+        <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+          Overfitting means a model memorizes training rows too closely and may struggle on new data. Underfitting means the model is too weak or missing useful predictors.
+        </p>
+      </div>
+      {health.causes.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, margin: '0 0 4px' }}>Possible causes</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {health.causes.map((cause) => (
+              <p key={cause} style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>- {cause}</p>
+            ))}
+          </div>
+        </div>
+      )}
       {health.actions.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {health.actions.map((action) => (
-            <p key={action} style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-              - {action}
-            </p>
-          ))}
+        <div>
+          <p style={{ fontSize: 11, fontWeight: 700, margin: '0 0 6px' }}>Recommended fixes</p>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {health.actions.map((action) => (
+              <button
+                key={action.label || action}
+                className="ax-btn mini"
+                type="button"
+                title={action.why || ''}
+                onClick={() => onFixAction?.({ route: action.route, section: action.section })}
+              >
+                {action.label || action}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1425,65 +1515,111 @@ function ModelDetail({ model }) {
 function assessModelHealth(model) {
   const m = model?.metrics
   if (!m) return null
+  const stored = m.health_diagnostics || {}
   const gap = Number(m.generalization_gap)
   const rows = m.split_rows || {}
+  const task = m.task
+  const isClassification = task === 'classification'
+  const metricRows = []
+  if (isClassification) {
+    metricRows.push(
+      { label: 'Train accuracy', value: pct(m.train_accuracy), help: 'How often the model was correct on rows it learned from.' },
+      { label: 'Test accuracy', value: pct(m.accuracy), help: 'How often the model was correct on held-out rows it did not learn from.' },
+      { label: 'Train-test gap', value: Number.isFinite(gap) ? pct(Math.abs(gap)) : 'n/a', help: 'A large gap means the model may perform much better on familiar rows than new rows.' }
+    )
+  } else {
+    metricRows.push(
+      { label: 'Train R2', value: num(m.train_r2), help: 'How much target variation the model explains on rows it learned from.' },
+      { label: 'Test R2', value: num(m.r2), help: 'How much target variation the model explains on held-out rows.' },
+      { label: 'Train-test gap', value: Number.isFinite(gap) ? num(Math.abs(gap)) : 'n/a', help: 'A large R2 gap means the model may not generalize well.' }
+    )
+  }
+  if (rows.test) {
+    metricRows.push({ label: 'Test rows', value: rows.test.toLocaleString(), help: 'Number of rows used to estimate unseen-data performance.' })
+  }
+  const cv = m.cross_validation
+  if (cv?.enabled) {
+    const mean = cv.available ? (cv.metric === 'accuracy' ? pct(cv.mean) : num(cv.mean)) : 'Unavailable'
+    const std = cv.available ? (cv.metric === 'accuracy' ? pct(cv.std) : num(cv.std)) : cv.reason
+    metricRows.push({
+      label: cv.metric === 'accuracy' ? 'CV accuracy' : 'CV R2',
+      value: cv.available ? `${mean} +/- ${std}` : mean,
+      help: cv.available
+        ? 'Cross-validation averages performance across several train/test splits.'
+        : (cv.reason || 'Cross-validation could not be computed for this setup.'),
+    })
+  }
+  const fallbackActions = [
+    { label: 'Review feature selection', why: 'Cleaner features can improve generalization.', route: 'models.features' },
+    { label: 'Use cross-validation', why: 'Multiple splits give a steadier health estimate.', route: 'models.validation_split' },
+  ]
+  if (stored.status) {
+    return {
+      status: stored.status,
+      color: stored.color || 'gray',
+      label: stored.label || 'Model health',
+      summary: stored.summary || 'SimuCast checked train and test performance for this model.',
+      metrics: metricRows,
+      causes: Array.isArray(stored.causes) ? stored.causes : [],
+      actions: Array.isArray(stored.recommended_fixes) ? stored.recommended_fixes : fallbackActions,
+      confidence: stored.confidence || 'normal',
+    }
+  }
   if (m.task === 'classification') {
     const train = Number(m.train_accuracy)
     const test = Number(m.accuracy)
     if (!Number.isFinite(train) || !Number.isFinite(test)) {
       return {
-        tone: 'warn',
+        status: 'insufficient_data',
+        color: 'gray',
         label: 'Diagnostics unavailable',
         summary: 'Health metrics are unavailable for this saved model. New training runs include train/test diagnostics automatically.',
-        metrics: [{ label: 'Test accuracy', value: pct(test) }],
-        actions: ['Train a new comparison run only if you need diagnostics for this older saved model.'],
+        metrics: metricRows.filter((item) => item.value !== 'n/a'),
+        causes: ['This looks like an older saved model or an incomplete training artifact.'],
+        actions: [{ label: 'Train a fresh comparison', why: 'New model runs automatically store train/test health metrics.', route: 'models.algorithms' }],
       }
     }
     const overfit = Number.isFinite(gap) && (gap >= 0.15 || (train >= 0.95 && test < 0.85))
     return {
-      tone: overfit ? 'warn' : 'good',
+      status: overfit ? 'moderate_overfitting' : 'healthy',
+      color: overfit ? 'orange' : 'green',
       label: overfit ? 'Possible overfitting' : 'No major overfitting signal',
       summary: overfit
         ? 'The model performs much better on training rows than test rows, so it may be memorizing patterns that do not generalize.'
         : 'Training and test performance are close enough that there is no obvious overfitting signal from this split.',
-      metrics: [
-        { label: 'Train accuracy', value: pct(train) },
-        { label: 'Test accuracy', value: pct(test) },
-        { label: 'Gap', value: pct(Math.max(gap, 0)) },
-        rows.test ? { label: 'Test rows', value: rows.test.toLocaleString() } : null,
-      ].filter(Boolean),
+      metrics: metricRows,
+      causes: overfit ? ['Training performance is noticeably higher than test performance.'] : [],
       actions: overfit
-        ? ['Try a smaller tree depth or higher minimum samples per leaf.', 'Use fewer weak or duplicate features.', 'Keep the stratified split on for classification targets.']
-        : ['Still validate with another split or fresh data before treating this as final.'],
+        ? fallbackActions
+        : [{ label: 'Validate before reporting', why: 'A second split or cross-validation makes the result more trustworthy.', route: 'models.validation_split' }],
     }
   }
   const train = Number(m.train_r2)
   const test = Number(m.r2)
   if (!Number.isFinite(train) || !Number.isFinite(test)) {
     return {
-      tone: 'warn',
+      status: 'insufficient_data',
+      color: 'gray',
       label: 'Diagnostics unavailable',
       summary: 'Health metrics are unavailable for this saved model. New training runs include train/test diagnostics automatically.',
-      metrics: [{ label: 'Test R2', value: num(test) }],
-      actions: ['Train a new comparison run only if you need diagnostics for this older saved model.'],
+      metrics: metricRows.filter((item) => item.value !== 'n/a'),
+      causes: ['This looks like an older saved model or an incomplete training artifact.'],
+      actions: [{ label: 'Train a fresh comparison', why: 'New model runs automatically store train/test health metrics.', route: 'models.algorithms' }],
     }
   }
   const overfit = Number.isFinite(gap) && (gap >= 0.15 || (train >= 0.9 && test < 0.65))
   return {
-    tone: overfit ? 'warn' : 'good',
+    status: overfit ? 'moderate_overfitting' : 'healthy',
+    color: overfit ? 'orange' : 'green',
     label: overfit ? 'Possible overfitting' : 'No major overfitting signal',
     summary: overfit
       ? 'The model explains training rows much better than test rows, which suggests weak generalization.'
       : 'Training and test R2 are close enough that this split does not show a strong overfitting warning.',
-    metrics: [
-      { label: 'Train R2', value: num(train) },
-      { label: 'Test R2', value: num(test) },
-      { label: 'Gap', value: num(Math.max(gap, 0)) },
-      rows.test ? { label: 'Test rows', value: rows.test.toLocaleString() } : null,
-    ].filter(Boolean),
+    metrics: metricRows,
+    causes: overfit ? ['Training R2 is noticeably higher than test R2.'] : [],
     actions: overfit
-      ? ['Reduce tree depth or increase minimum samples per leaf.', 'Remove redundant features or address multicollinearity.', 'Compare against a simpler baseline model.']
-      : ['Check residuals and validate on fresh data before final reporting.'],
+      ? fallbackActions
+      : [{ label: 'Validate before reporting', why: 'A second split or cross-validation makes the result more trustworthy.', route: 'models.validation_split' }],
   }
 }
 
@@ -1600,11 +1736,12 @@ function algoLabelForTask(algo, task) {
   return algoLabel(algo)
 }
 
-function targetOptions(mode, positiveClass, testSize, stratify, classWeight, numericPreprocessing) {
+function targetOptions(mode, positiveClass, testSize, validationMethod, stratify, classWeight, numericPreprocessing) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
   options.test_size = testSize
+  options.validation_method = validationMethod || 'standard_split'
   options.stratify = stratify
   if (classWeight) options.class_weight = 'balanced'
   options.numeric_preprocessing = numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] }
@@ -1623,10 +1760,12 @@ function routeToFixTarget(route) {
     'models.validation_split': { page: 'models', section: 'models-step-4' },
     'models.class_weight': { page: 'models', section: 'models-step-4' },
     'models.algorithms': { page: 'models', section: 'models-step-5' },
+    'models.tuning': { page: 'models', section: 'models-tuning' },
     'models.scaling': { page: 'models', section: 'fix-numeric-preprocessing' },
     'models.numeric_preprocessing': { page: 'models', section: 'fix-numeric-preprocessing' },
     'models.features': { page: 'models', section: 'fix-feature-selection' },
     'tests.correlation': { page: 'tests', section: 'fix-correlation-test' },
+    'expand.recommendation': { page: 'expand', section: 'expand-section-controls' },
   }
   return map[route]
 }
@@ -1653,6 +1792,7 @@ function fixTargetFromBackendFix(fix) {
     validation_split: { page: 'models', section: 'models-step-4' },
     class_weight: { page: 'models', section: 'models-step-4' },
     algorithms: { page: 'models', section: 'models-step-5' },
+    tuning: { page: 'models', section: 'models-tuning' },
     correlation: { page: 'tests', section: 'fix-correlation-test' },
   }
   const mapped = sectionMap[fix.section]
