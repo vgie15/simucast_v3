@@ -5065,12 +5065,37 @@ def _saved_ai_explanation(session, ds_id, cache_key):
                 "analysis_id": row.id,
                 "ai": result.get("ai", True),
                 "explanation": result.get("explanation") or "",
+                "incomplete": bool(result.get("incomplete")),
                 "include_in_report": bool(result.get("include_in_report")),
             }
     return None
 
 
-def _store_ai_explanation(session, ds_id, cache_key, step, params, question, source_result, explanation, is_ai, stage_id, include_in_report=False):
+def _ai_text_looks_incomplete(text):
+    """Best-effort guard for AI text that stopped mid-sentence."""
+    value = str(text or "").strip()
+    if len(value) < 40:
+        return False
+    last = value[-1]
+    if last in ".!?)]}\"'":
+        return False
+    if last in ",;:-":
+        return True
+    tail = re.sub(r"[^A-Za-z ]+", " ", value[-120:]).strip().lower().split()
+    if not tail:
+        return False
+    dangling = {
+        "a", "an", "and", "are", "as", "at", "because", "but", "by", "for",
+        "from", "if", "in", "into", "is", "like", "look", "of", "on", "or",
+        "since", "that", "the", "then", "to", "when", "where", "while", "with",
+    }
+    if tail[-1] in dangling:
+        return True
+    starters = ("first", "second", "third", "next", "finally")
+    return len(tail) <= 8 and tail[0].rstrip(",") in starters
+
+
+def _store_ai_explanation(session, ds_id, cache_key, step, params, question, source_result, explanation, is_ai, stage_id, include_in_report=False, incomplete=False):
     existing = _saved_ai_explanation(session, ds_id, cache_key)
     if existing:
         if include_in_report and not existing.get("include_in_report"):
@@ -5097,6 +5122,7 @@ def _store_ai_explanation(session, ds_id, cache_key, step, params, question, sou
             "ai": bool(is_ai),
             "explanation": explanation,
             "source_result": source_result,
+            "incomplete": bool(incomplete),
             "include_in_report": bool(include_in_report),
         }),
     ))
@@ -5134,6 +5160,7 @@ def ai_explain(ds_id):
         )
         cached = _AI_CACHE.get(cache_key)
         if cached is not None:
+            cached["incomplete"] = bool(cached.get("incomplete")) or _ai_text_looks_incomplete(cached.get("explanation"))
             return jsonify(cached)
 
         saved = _saved_ai_explanation(s, ds_id, cache_key)
@@ -5151,6 +5178,7 @@ def ai_explain(ds_id):
                 "explanation": saved.get("explanation") or "",
                 "saved": True,
                 "analysis_id": saved.get("analysis_id"),
+                "incomplete": bool(saved.get("incomplete")) or _ai_text_looks_incomplete(saved.get("explanation")),
                 "include_in_report": bool(saved.get("include_in_report")),
             }
             _cache_put(_AI_CACHE, cache_key, response)
@@ -5168,6 +5196,7 @@ def ai_explain(ds_id):
                     f"AI explanations require an ANTHROPIC_API_KEY on the server. "
                     f"Step: {step}. Params: {json.dumps(params, default=str)}."
                 ),
+                "incomplete": False,
             })
 
         system = (
@@ -5175,15 +5204,26 @@ def ai_explain(ds_id):
             "only — no markdown headings, tables, code fences, or bold/italic. "
             "Be concise. Reference exact column names from the dataset profile. "
             "When a result is provided, interpret the actual numbers — say what "
-            "the values mean and what the user should do next."
+            "the values mean and what the user should do next. Keep the answer "
+            "concise and complete. Do not exceed 4 short paragraphs. Prefer this "
+            "plain structure: What it means, Why it matters, What to do next. "
+            "Finish every sentence; do not start a point you cannot complete."
         )
         parts = [f"User is on step '{step}' with params {json.dumps(params, default=str)}."]
         if result is not None:
             parts.append(f"Computed result the UI is showing: {json.dumps(result, default=str)}")
         parts.append(f"Question: {question}")
+        parts.append("Keep the explanation under 180 words, complete, and easy for a beginner to read.")
         prompt = "\n".join(parts)
         try:
-            text = ai_call(profile, prompt, system=system, max_tokens=300)
+            text = ai_call(profile, prompt, system=system, max_tokens=450)
+            incomplete = _ai_text_looks_incomplete(text)
+            if incomplete:
+                print(
+                    f"AI explain may be incomplete: ds={ds_id} stage={ds.current_stage_id} "
+                    f"step={step} chars={len(str(text or ''))} tail={str(text or '')[-120:]!r}",
+                    flush=True,
+                )
             analysis_id = _store_ai_explanation(
                 s,
                 ds_id,
@@ -5196,19 +5236,21 @@ def ai_explain(ds_id):
                 True,
                 ds.current_stage_id,
                 include_in_report,
+                incomplete,
             )
             response = {
                 "ai": True,
                 "explanation": text,
                 "saved": True,
                 "analysis_id": analysis_id,
+                "incomplete": bool(incomplete),
                 "include_in_report": bool(include_in_report),
             }
             _cache_put(_AI_CACHE, cache_key, response)  # only cache successful AI calls
             return jsonify(response)
         except Exception as e:
             print(f"AI explain failed: {e}", flush=True)
-            return jsonify({"ai": False, "explanation": "AI explanation unavailable right now. You can continue with the built-in interpretation and try again later."})
+            return jsonify({"ai": False, "explanation": "AI explanation unavailable right now. You can continue with the built-in interpretation and try again later.", "incomplete": False})
     finally:
         s.close()
 

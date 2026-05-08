@@ -29,6 +29,28 @@ function cacheSet(k, v) {
   _cache.set(k, v)
 }
 
+function looksIncomplete(text) {
+  const value = String(text || '').trim()
+  if (value.length < 40) return false
+  if (/[.!?)]["']?$/.test(value)) return false
+  if (/[,;:\-–—]$/.test(value)) return true
+  const words = value
+    .slice(-120)
+    .replace(/[^A-Za-z ]+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!words.length) return false
+  const dangling = new Set([
+    'a', 'an', 'and', 'are', 'as', 'at', 'because', 'but', 'by', 'for',
+    'from', 'if', 'in', 'into', 'is', 'like', 'look', 'of', 'on', 'or',
+    'since', 'that', 'the', 'then', 'to', 'when', 'where', 'while', 'with',
+  ])
+  if (dangling.has(words[words.length - 1])) return true
+  return words.length <= 8 && ['first', 'second', 'third', 'next', 'finally'].includes(words[0])
+}
+
 export function SparkleIcon({ size = 12 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
@@ -58,6 +80,7 @@ export function ExplainButton({
   const [loading, setLoading] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [isAI, setIsAI] = useState(true)
+  const [isIncomplete, setIsIncomplete] = useState(false)
 
   const fetchExplanation = async ({ force = false } = {}) => {
     if (!datasetId || loading) return
@@ -65,23 +88,28 @@ export function ExplainButton({
     const k = keyOf(datasetId, step, requestParams, result, question)
     const cached = !force ? cacheGet(k) : null
     if (cached) {
-      setText(cached.explanation || cached)
+      const explanation = cached.explanation || cached
+      setText(explanation)
       setIsSaved(cached.saved !== false)
       setIsAI(cached.ai !== false)
+      setIsIncomplete(!!cached.incomplete || looksIncomplete(explanation))
       return
     }
     setLoading(true)
     try {
       const r = await api.aiExplain(datasetId, step, requestParams, question, result, true)
       const explanation = r?.explanation || 'No explanation returned.'
-      cacheSet(k, { explanation, saved: r?.saved !== false, ai: r?.ai !== false, include_in_report: true })
+      const incomplete = !!r?.incomplete || looksIncomplete(explanation)
+      cacheSet(k, { explanation, saved: r?.saved !== false, ai: r?.ai !== false, incomplete, include_in_report: true })
       setText(explanation)
       setIsSaved(r?.saved !== false)
       setIsAI(r?.ai !== false)
+      setIsIncomplete(incomplete)
     } catch (err) {
       setText('The explanation could not be generated right now. You can continue using the built-in system guidance.')
       setIsSaved(false)
       setIsAI(false)
+      setIsIncomplete(false)
     } finally {
       setLoading(false)
     }
@@ -149,9 +177,16 @@ export function ExplainButton({
                 {loading ? (
                   <InlineSpinner label="Generating explanation..." />
                 ) : (
-                  paragraphs.map((paragraph, index) => (
-                    <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
-                  ))
+                  <>
+                    {isIncomplete && (
+                      <p className="ax-ai-incomplete-note">
+                        This explanation may be incomplete. Use Retry AI to generate a shorter complete version.
+                      </p>
+                    )}
+                    {paragraphs.map((paragraph, index) => (
+                      <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
+                    ))}
+                  </>
                 )}
               </div>
             </div>
@@ -201,6 +236,7 @@ export function AIInsightCard({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [isAI, setIsAI] = useState(true)
+  const [isIncomplete, setIsIncomplete] = useState(false)
 
   const load = async () => {
     if (!datasetId) return
@@ -209,21 +245,27 @@ export function AIInsightCard({
     const k = keyOf(datasetId, step, params, result, question)
     const cached = cacheGet(k)
     if (cached) {
-      setText(cached.explanation || cached)
+      const explanation = cached.explanation || cached
+      setText(explanation)
+      setIsAI(cached.ai !== false)
+      setIsIncomplete(!!cached.incomplete || looksIncomplete(explanation))
       setLoading(false)
       return
     }
     try {
       const r = await api.aiExplain(datasetId, step, params, question, result, true)
       const explanation = r?.explanation || 'No explanation returned.'
+      const incomplete = !!r?.incomplete || looksIncomplete(explanation)
       cacheSet(k, {
         explanation,
         saved: r?.saved !== false,
         ai: r?.ai !== false,
+        incomplete,
         include_in_report: true,
       })
       setText(explanation)
       setIsAI(r?.ai !== false)
+      setIsIncomplete(incomplete)
     } catch (err) {
       setError(err.message || 'Failed to load insight')
     } finally {
@@ -302,6 +344,11 @@ export function AIInsightCard({
       {text && (
         <div className="ax-ai-insight-scroll">
           <div className="ax-ai-insight-body">
+            {isIncomplete && (
+              <p className="ax-ai-incomplete-note">
+                This explanation may be incomplete. Retry AI to generate a shorter complete version.
+              </p>
+            )}
             {String(text)
               .split(/\n{2,}/)
               .map((part) => part.trim())

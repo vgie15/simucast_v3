@@ -530,6 +530,16 @@ input[type="range"]::-moz-range-thumb {
   margin: 0 0 18px;
 }
 
+.ax-ai-incomplete-note {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .ax-ai-explain-body p:last-child {
   margin-bottom: 28px;
 }

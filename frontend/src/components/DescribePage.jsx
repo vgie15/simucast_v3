@@ -319,6 +319,7 @@ export default function DescribePage({ dataset }) {
           )}
 
           <DescribeRunSummary
+            datasetId={dataset.id}
             selected={selected}
             numericStats={numericStats}
             categoricalStats={categoricalStats}
@@ -344,15 +345,39 @@ export default function DescribePage({ dataset }) {
   )
 }
 
-function DescribeRunSummary({ selected, numericStats, categoricalStats, histograms, corrResult }) {
+function DescribeRunSummary({ datasetId, selected, numericStats, categoricalStats, histograms, corrResult }) {
   const histogramCount = Object.keys(histograms || {}).length
   const strongest = corrResult?.strongest_pair
+  const summaryPayload = {
+    variables_analyzed: selected.length || numericStats.length + categoricalStats.length,
+    numeric_summaries: numericStats.length,
+    categorical_summaries: categoricalStats.length,
+    distribution_charts: histogramCount,
+    correlation_overview: corrResult?.variables?.length >= 2
+      ? {
+          variables: corrResult.variables,
+          strongest_pair: strongest || null,
+        }
+      : null,
+  }
   return (
     <div className="ax-card" style={{ padding: 14, marginBottom: 14 }}>
-      <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>Describe run summary</p>
-      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 12px' }}>
-        These are the descriptive outputs currently saved for this dataset stage.
-      </p>
+      <div className="ax-row" style={{ alignItems: 'flex-start', marginBottom: 4 }}>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>Describe run summary</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+            These are the descriptive outputs currently saved for this dataset stage.
+          </p>
+        </div>
+        <ExplainButton
+          datasetId={datasetId}
+          step="describe-run-summary"
+          params={{ section: 'describe-run-summary' }}
+          result={summaryPayload}
+          question="Explain what this descriptive run summary means, what was generated, and what the user should inspect next."
+          label="AI explain"
+        />
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
         <SummaryStat label="Variables analyzed" value={selected.length || numericStats.length + categoricalStats.length} />
         <SummaryStat label="Numeric summaries" value={numericStats.length} />
