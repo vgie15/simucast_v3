@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import DataPage from './DataPage'
@@ -8,9 +8,8 @@ import TestsPage from './TestsPage'
 import ModelsPage from './ModelsPage'
 import WhatIfPage from './WhatIfPage'
 import ReportPage from './ReportPage'
-import ActivityPanel from './ActivityPanel'
-import AIProjectPlanPanel from './AIProjectPlanPanel'
-import AIChatPanel from './AIChatPanel'
+import ProjectHistoryRail from './ProjectHistoryRail'
+import ProjectAIRail from './ProjectAIRail'
 import { useAuth } from './AuthProvider'
 
 const TABS = [
@@ -92,50 +91,47 @@ export default function ProjectWorkspace() {
   const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey })
 
   return (
-    <>
-      <div className="ax-workflow-header">
-        <div className="ax-subnav">
-          {TABS.map((t, index) => {
-            const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
-            const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
-            return (
-            <NavLink
-              key={t.key}
-              to={`/projects/${id}/${t.key}`}
-              className={() => `ax-subnav-item ${state}`}
-              end
-            >
-              {t.label}
-            </NavLink>
-          )})}
+    <div className="ax-workspace-grid">
+      <ProjectHistoryRail
+        dataset={dataset}
+        onViewStage={(stageId) => {
+          setViewStageRequest({ stageId, nonce: Date.now() })
+          navigate(`/projects/${id}/data`)
+        }}
+        onRestored={refreshDataset}
+      />
+      <div className="ax-workspace-main">
+        <div className="ax-workspace-breadcrumb">
+          <Link to="/projects">← Projects</Link>
+          <span className="sep">/</span>
+          <span>{dataset.name}</span>
         </div>
-        <p className="ax-flow-context">{activeTabMeta.subtitle}</p>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <Link to="/projects" style={{ fontSize: 11, color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
-          ← Projects
-        </Link>
-        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '0 6px' }}>/</span>
-        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{dataset.name}</span>
-      </div>
-
-      <div className="ax-workspace-grid">
-        <div style={{ minWidth: 0 }}>
+        <div className="ax-workflow-header">
+          <div className="ax-subnav">
+            {TABS.map((t, index) => {
+              const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
+              const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
+              return (
+                <NavLink
+                  key={t.key}
+                  to={`/projects/${id}/${t.key}`}
+                  className={() => `ax-subnav-item ${state}`}
+                  end
+                >
+                  {t.label}
+                </NavLink>
+              )
+            })}
+          </div>
+          <p className="ax-flow-context">{activeTabMeta.subtitle}</p>
+        </div>
+        <div className="ax-workspace-content">
           {page}
           <NextPagePrompt activeTab={activeTab} datasetId={id} />
         </div>
-        <RightRail
-          dataset={dataset}
-          activeTab={activeTab}
-          onViewStage={(stageId) => {
-            setViewStageRequest({ stageId, nonce: Date.now() })
-            navigate(`/projects/${id}/data`)
-          }}
-          onRestored={refreshDataset}
-        />
       </div>
-    </>
+      <ProjectAIRail dataset={dataset} activeTab={activeTab} />
+    </div>
   )
 }
 
@@ -147,106 +143,6 @@ function highlightSection(section) {
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
 
-const PLAN_H_KEY = 'simucast.railPlanHeight'
-const PLAN_H_MIN = 100
-const PLAN_H_MAX_RATIO = 0.78
-const PLAN_H_DEFAULT = 300
-
-function RightRail({ dataset, activeTab, onViewStage, onRestored }) {
-  const railRef = useRef(null)
-  const [planH, setPlanH] = useState(() => {
-    const v = Number(localStorage.getItem(PLAN_H_KEY))
-    return Number.isFinite(v) && v >= PLAN_H_MIN ? v : PLAN_H_DEFAULT
-  })
-  const [planCollapsed, setPlanCollapsed] = useState(false)
-  const [dragging, setDragging] = useState(false)
-
-  useEffect(() => {
-    if (!dragging) return
-    const onMove = (e) => {
-      if (!railRef.current) return
-      const rect = railRef.current.getBoundingClientRect()
-      const maxH = rect.height * PLAN_H_MAX_RATIO
-      const next = Math.min(maxH, Math.max(PLAN_H_MIN, e.clientY - rect.top - 6))
-      setPlanH(next)
-    }
-    const onUp = () => setDragging(false)
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'row-resize'
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-    }
-  }, [dragging])
-
-  useEffect(() => {
-    localStorage.setItem(PLAN_H_KEY, String(Math.round(planH)))
-  }, [planH])
-
-  const maxPlanHeight = Math.max(PLAN_H_MIN, Math.round((typeof window !== 'undefined' ? window.innerHeight - 132 : 640) * PLAN_H_MAX_RATIO))
-  const effectivePlanH = Math.min(planH, maxPlanHeight)
-
-  return (
-    <div className="ax-right-rail" ref={railRef}>
-      <AIProjectPlanPanel
-        dataset={dataset}
-        activeTab={activeTab}
-        planH={planCollapsed ? undefined : effectivePlanH}
-        onCollapsedChange={setPlanCollapsed}
-      />
-      {!planCollapsed && (
-        <div
-          className={`ax-rail-resize ${dragging ? 'dragging' : ''}`}
-          onMouseDown={(e) => { e.preventDefault(); setDragging(true) }}
-          title="Drag to resize"
-        />
-      )}
-      <ActivityPanel
-        datasetId={dataset.id}
-        onViewStage={onViewStage}
-        onRestored={onRestored}
-      />
-      <ChatPanelBlock dataset={dataset} activeTab={activeTab} />
-    </div>
-  )
-}
-
-function ChatPanelBlock({ dataset, activeTab }) {
-  const key = dataset?.id ? `simucast.chat.collapsed.${dataset.id}` : ''
-  const [collapsed, setCollapsed] = useState(false)
-  useEffect(() => {
-    if (!key) return
-    setCollapsed(window.localStorage.getItem(key) === '1')
-  }, [key])
-  const toggle = () => {
-    setCollapsed((c) => {
-      const next = !c
-      if (key) window.localStorage.setItem(key, next ? '1' : '0')
-      return next
-    })
-  }
-  if (!dataset) return null
-  return (
-    <div className="ax-card ax-chat-card">
-      <button
-        type="button"
-        className="ax-chat-toggle"
-        onClick={toggle}
-        aria-expanded={!collapsed}
-      >
-        <span style={{ fontSize: 13, fontWeight: 700 }}>AI assistant</span>
-        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-          {collapsed ? 'Open' : 'Collapse'}
-        </span>
-      </button>
-      {!collapsed && <AIChatPanel datasetId={dataset.id} activeTab={activeTab} />}
-    </div>
-  )
-}
 
 function NextPagePrompt({ activeTab, datasetId }) {
   const idx = TABS.findIndex((t) => t.key === activeTab)
