@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import AIProjectPlanPanel from './AIProjectPlanPanel'
+import AIAssistantPanel from './AIAssistantPanel'
 import AIChatPanel from './AIChatPanel'
 
 export default function ProjectAIRail({ dataset, activeTab }) {
@@ -71,7 +71,7 @@ export default function ProjectAIRail({ dataset, activeTab }) {
 
           <div className="ax-rail-body">
             {innerTab === 'guide' ? (
-              <AIProjectPlanPanel dataset={dataset} activeTab={activeTab} />
+              <AIAssistantPanel datasetId={dataset.id} context={activeTab} />
             ) : (
               <AIChatPanel datasetId={dataset.id} activeTab={activeTab} />
             )}
