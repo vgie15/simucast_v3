@@ -5765,7 +5765,121 @@ def ai_chat_send(ds_id):
         _, user = _auth_from_request(s)
         user_id = user.id if user else None
 
-        user_row = AIResponse(
+        user_row = _chat_response_row(
+            ds,
+            user_id=user_id,
+            role="user",
+            context=active_tab,
+            content=message,
+        )
+        user_created_at = datetime.utcnow()
+        user_row.created_at = user_created_at
+
+        assistant_text = "I could not reach the project assistant service right now. Your message was received, but the server could not finish the AI turn. Please try again in a moment."
+        assistant_is_persisted = False
+
+        try:
+            s.add(user_row)
+            s.commit()
+        except Exception as e:
+            s.rollback()
+            print(f"AI chat user-message persist failed: {e}", flush=True)
+
+        try:
+            client = _ai_client()
+            if client is None:
+                assistant_text = "AI chat needs ANTHROPIC_API_KEY set on the server."
+            else:
+                history = (
+                    s.query(AIResponse)
+                    .filter_by(dataset_id=ds_id, kind="chat")
+                    .order_by(AIResponse.created_at.asc())
+                    .all()
+                )
+                history = history[-(_CHAT_HISTORY_LIMIT + 1):]
+                messages = []
+                for r in history:
+                    if r.role not in ("user", "assistant"):
+                        continue
+                    payload = jload(r.response) if isinstance(r.response, str) else r.response
+                    req = jload(r.request) if isinstance(r.request, str) else r.request
+                    content = (payload or {}).get("content") if r.role == "assistant" else (req or {}).get("content")
+                    if content:
+                        messages.append({"role": r.role, "content": content})
+                if not messages or messages[-1].get("role") != "user":
+                    messages.append({"role": "user", "content": message})
+
+                df = df_from_dataset(ds, s)
+                variables = _current_variables(ds, s)
+                profile = _dataset_profile(ds, df, variables)
+                chat_system = (
+                    "You are SimuCast's data-analysis chat assistant. Reply in plain "
+                    "text only - no markdown headings, tables, code fences, or "
+                    "bold/italic. Be concise. Reference exact column names from the "
+                    "dataset profile. If past messages referenced columns that no "
+                    "longer exist in the current profile, update your guidance "
+                    f"accordingly. The user is currently on the '{active_tab}' tab."
+                )
+                assistant_text = _ai_chat_call(client, messages, system=chat_system, profile=profile)
+        except Exception as e:
+            s.rollback()
+            print(f"AI chat turn failed: {e}", flush=True)
+            assistant_text = f"The assistant could not finish this turn ({e.__class__.__name__}). Please try again, or continue using the project tools while I recover."
+
+        assistant_row = _chat_response_row(
+            ds,
+            user_id=user_id,
+            role="assistant",
+            context=active_tab,
+            content=assistant_text,
+        )
+        try:
+            s.add(assistant_row)
+            s.commit()
+            assistant_is_persisted = True
+        except Exception as e:
+            s.rollback()
+            print(f"AI chat assistant persist failed: {e}", flush=True)
+
+        return jsonify({
+            "user": {
+                "id": user_row.id,
+                "role": "user",
+                "content": message,
+                "created_at": user_row.created_at.isoformat() if user_row.created_at else user_created_at.isoformat(),
+            },
+            "assistant": {
+                "id": assistant_row.id,
+                "role": "assistant",
+                "content": assistant_text,
+                "created_at": assistant_row.created_at.isoformat() if assistant_row.created_at else datetime.utcnow().isoformat(),
+            },
+            "persisted": assistant_is_persisted,
+        })
+    except Exception as e:
+        s.rollback()
+        print(f"AI chat request failed: {e}", flush=True)
+        return jsonify({"error": "The assistant could not process this project chat request.", "detail": e.__class__.__name__}), 500
+    finally:
+        s.close()
+
+def _chat_response_row(ds, *, user_id, role, context, content):
+    return AIResponse(
+        id=str(uuid.uuid4()),
+        dataset_id=ds.id,
+        stage_id=ds.current_stage_id,
+        user_id=user_id,
+        kind="chat",
+        role=role,
+        context=context,
+        request=clean_json({"content": content}) if role == "user" else None,
+        response=clean_json({"content": content}) if role == "assistant" else None,
+        model=_AI_MODEL_FAST if role == "assistant" else None,
+    )
+
+def _unused_ai_chat_send_old_impl():
+    """
+    user_row = AIResponse(
             id=str(uuid.uuid4()),
             dataset_id=ds_id,
             stage_id=ds.current_stage_id,
@@ -5849,6 +5963,9 @@ def ai_chat_send(ds_id):
         })
     finally:
         s.close()
+
+    """
+    pass
 
 @app.route("/api/datasets/<ds_id>/ai/chat", methods=["DELETE"])
 def ai_chat_clear(ds_id):

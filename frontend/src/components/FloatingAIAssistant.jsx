@@ -29,13 +29,13 @@ export default function FloatingAIAssistant() {
   const datasetId = projectContext?.datasetId
   const activeTab = projectContext?.tab || 'data'
   const hasProject = Boolean(datasetId)
-  const canUseAI = hasProject && !auth.isGuest
+  const canUseAI = hasProject && auth.isAuthenticated && !auth.loading
 
   useEffect(() => {
     setError('')
     setMessages([])
     setInput('')
-    if (!datasetId || auth.isGuest) return
+    if (!datasetId || !auth.isAuthenticated || auth.loading) return
 
     let cancelled = false
     setLoading(true)
@@ -53,7 +53,7 @@ export default function FloatingAIAssistant() {
     return () => {
       cancelled = true
     }
-  }, [datasetId, auth.isGuest])
+  }, [datasetId, auth.isAuthenticated, auth.loading])
 
   useEffect(() => {
     if (!scrollRef.current) return
@@ -67,7 +67,8 @@ export default function FloatingAIAssistant() {
   }, [input])
 
   const openAssistant = () => {
-    if (auth.isGuest) {
+    if (auth.loading) return
+    if (!auth.isAuthenticated) {
       auth.requireAccountForAI()
       return
     }
@@ -77,7 +78,7 @@ export default function FloatingAIAssistant() {
   const sendMessage = async () => {
     const text = input.trim()
     if (!text || sending) return
-    if (auth.isGuest) {
+    if (!auth.isAuthenticated) {
       auth.requireAccountForAI()
       return
     }
@@ -189,10 +190,10 @@ export default function FloatingAIAssistant() {
                 rows={1}
                 value={input}
                 placeholder={getPlaceholder({ auth, hasProject })}
-                disabled={sending || auth.isGuest}
+                disabled={sending || !auth.isAuthenticated || auth.loading}
                 onChange={(event) => setInput(event.target.value)}
                 onFocus={() => {
-                  if (auth.isGuest) auth.requireAccountForAI()
+                  if (!auth.loading && !auth.isAuthenticated) auth.requireAccountForAI()
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
@@ -221,7 +222,7 @@ export default function FloatingAIAssistant() {
           className="ax-floating-ai-launcher"
           onClick={openAssistant}
           aria-label="Open AI assistant"
-          title={auth.isGuest ? 'AI requires an account' : 'Open AI assistant'}
+          title={!auth.isAuthenticated ? 'AI requires an account' : 'Open AI assistant'}
         >
           <SparkIcon />
           <span>{hasProject ? 'Ask AI' : 'AI'}</span>
@@ -233,7 +234,8 @@ export default function FloatingAIAssistant() {
 
 function WelcomeMessage({ auth, hasProject, activeTab }) {
   let copy = `Ask me about this ${TAB_LABELS[activeTab] || activeTab} step. I can help interpret results, suggest the next move, or sanity-check your workflow.`
-  if (auth.isGuest) copy = 'AI chat requires an account. Sign up or log in to use the assistant.'
+  if (auth.loading) copy = 'Checking your account before starting AI chat.'
+  else if (!auth.isAuthenticated) copy = 'AI chat requires an account. Sign up or log in to use the assistant.'
   else if (!hasProject) copy = 'Open a project and I can help with the dataset, analysis, models, and report.'
 
   return (
@@ -270,7 +272,8 @@ function getProjectContext(pathname) {
 }
 
 function getStatus({ auth, hasProject, loading, sending }) {
-  if (auth.isGuest) return 'Account required'
+  if (auth.loading) return 'Checking account'
+  if (!auth.isAuthenticated) return 'Account required'
   if (!hasProject) return 'Open a project to start'
   if (loading) return 'Loading context'
   if (sending) return 'Thinking'
@@ -278,7 +281,8 @@ function getStatus({ auth, hasProject, loading, sending }) {
 }
 
 function getPlaceholder({ auth, hasProject }) {
-  if (auth.isGuest) return 'AI chat requires an account...'
+  if (auth.loading) return 'Checking account...'
+  if (!auth.isAuthenticated) return 'AI chat requires an account...'
   if (!hasProject) return 'Open a project to ask about your data...'
   return 'Ask about this project...'
 }
