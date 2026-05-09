@@ -12,7 +12,7 @@ SPSS-style analysis tool with AI assistance, modeling, and what-if simulation.
 ## Project layout
 
 ```
-axion/
+simucast_v3/
 ├── backend/
 │   ├── app.py            # all Flask routes + SQLAlchemy models
 │   └── requirements.txt
@@ -64,10 +64,10 @@ Runs on `http://localhost:5173`, proxying `/api` to the backend.
 1. Push this repo to GitHub.
 2. In Render dashboard, click **New → Blueprint**, select the repo.
 3. Render reads `render.yaml` and provisions:
-   - `axion-db` — PostgreSQL (free tier)
-   - `axion-api` — Python web service
-   - `axion-web` — static site (React build)
-4. After the API deploys, copy its URL (e.g. `https://axion-api.onrender.com`) and set `VITE_API_URL` on the `axion-web` service → Environment. Redeploy the static site.
+   - `simu-cast-db` — PostgreSQL (free tier)
+   - `simu-cast-api` — Python web service
+   - `simucast-front` — static site (React build)
+4. After the API deploys, copy its URL (e.g. `https://simu-cast-api.onrender.com`) and set `VITE_API_URL` on the `simucast-front` service → Environment. Redeploy the static site.
 5. Lock down `CORS_ORIGINS` on the API to your web URL for production.
 
 ## API overview
