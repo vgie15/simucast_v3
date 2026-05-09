@@ -6647,7 +6647,7 @@ def _ai_explanations_report_section(explanations):
             continue
         saved.append({
             "kind": cfg.get("step") or "AI explanation",
-            "summary": _shorten(text, 360),
+            "summary": text,
             "result": {"interpretation": text},
             "created_at": item.created_at.isoformat() if item.created_at else None,
         })
