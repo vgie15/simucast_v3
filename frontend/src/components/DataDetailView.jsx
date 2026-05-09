@@ -59,9 +59,9 @@ export default function DataDetailView({
   }, [allColumns])
 
   const [editing, setEditing] = useState(null)
-  const [pendingEdits, setPendingEdits] = useState({})
   const [savingEdits, setSavingEdits] = useState(false)
   const [cellError, setCellError] = useState(null)
+  const cancelBlurRef = useRef(false)
 
   const [headerEdit, setHeaderEdit] = useState(null)
   const [savingHeader, setSavingHeader] = useState(false)
@@ -108,7 +108,6 @@ export default function DataDetailView({
     setPage(1)
     setHasMore(true)
     setEditing(null)
-    setPendingEdits({})
     setHeaderEdit(null)
     setCellError(null)
   }, [datasetId, stageId, refreshKey])
@@ -154,48 +153,15 @@ export default function DataDetailView({
     return () => observer.disconnect()
   }, [hasMore, loading, rows.length])
 
-  // cell edit helpers (mirror DataGridViewer logic)
-  const editKey = (rowIndex, column) => `${rowIndex}::${column}`
-  const editingKey = editing ? editKey(editing.rowIndex, editing.column) : null
-  const editingDirty = !!editing && editing.value !== editing.original
-  const pendingCount = Object.keys(pendingEdits).length + (editingDirty && !pendingEdits[editingKey] ? 1 : 0)
-
-  const applyEditToPending = (current, edit) => {
-    if (!edit) return current
-    const key = editKey(edit.rowIndex, edit.column)
-    const next = { ...current }
-    if (edit.value === edit.original) {
-      delete next[key]
-    } else {
-      next[key] = { row_index: edit.rowIndex, column: edit.column, value: edit.value, original: edit.original }
-    }
-    return next
-  }
-
-  const commitEditingLocally = () => {
-    if (!editing) return pendingEdits
-    const next = applyEditToPending(pendingEdits, editing)
-    setPendingEdits(next)
-    setEditing(null)
-    setCellError(null)
-    return next
-  }
-
+  // cell edit helpers
   const startEdit = (row, column, value) => {
-    if (readOnly) return
-    let nextPending = pendingEdits
-    if (editing) {
-      nextPending = applyEditToPending(pendingEdits, editing)
-      setPendingEdits(nextPending)
-    }
-    const key = editKey(row.__row_index, column)
+    if (readOnly || savingEdits) return
     const original = value === null || value === undefined ? '' : String(value)
-    const pending = nextPending[key]
     setCellError(null)
     setEditing({
       rowIndex: row.__row_index,
       column,
-      value: pending ? pending.value : original,
+      value: original,
       original,
     })
   }
@@ -205,25 +171,34 @@ export default function DataDetailView({
     setCellError(null)
   }
 
-  const discardAllEdits = () => {
-    setEditing(null)
-    setPendingEdits({})
-    setCellError(null)
-  }
-
-  const saveAllEdits = async () => {
-    if (savingEdits) return
-    const next = commitEditingLocally()
-    const edits = Object.values(next).map(({ row_index, column, value }) => ({ row_index, column, value }))
-    if (!edits.length) return
+  const saveEditing = async (edit) => {
+    if (!edit || savingEdits) return
+    if (cancelBlurRef.current) {
+      cancelBlurRef.current = false
+      return
+    }
+    if (edit.value === edit.original) {
+      setEditing(null)
+      setCellError(null)
+      return
+    }
     setSavingEdits(true)
     setCellError(null)
     try {
-      await api.updateCells(datasetId, edits)
-      setPendingEdits({})
+      await api.updateCell(datasetId, {
+        row_index: edit.rowIndex,
+        column: edit.column,
+        value: edit.value,
+      })
+      setRows((current) =>
+        current.map((row) =>
+          row.__row_index === edit.rowIndex ? { ...row, [edit.column]: edit.value === '' ? null : edit.value } : row,
+        ),
+      )
+      setEditing(null)
       await onDataChanged?.()
     } catch (err) {
-      setCellError(err.message || 'Cell updates failed')
+      setCellError(err.message || 'Cell update failed')
     } finally {
       setSavingEdits(false)
     }
@@ -231,9 +206,7 @@ export default function DataDetailView({
 
   const renderCellValue = useCallback(
     (row, column) => {
-      const key = editKey(row.__row_index, column)
       const isEditing = editing && editing.rowIndex === row.__row_index && editing.column === column
-      const pending = pendingEdits[key]
       if (isEditing) {
         return (
           <input
@@ -242,25 +215,26 @@ export default function DataDetailView({
             onChange={(e) => setEditing({ ...editing, value: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                commitEditingLocally()
+                e.preventDefault()
+                e.currentTarget.blur()
               } else if (e.key === 'Escape') {
+                cancelBlurRef.current = true
                 cancelEdit()
               }
             }}
-            onBlur={commitEditingLocally}
+            onBlur={() => saveEditing(editing)}
             className="ax-dd-cell-input"
+            disabled={savingEdits}
           />
         )
       }
-      const display = pending ? pending.value : row[column]
-      const dirty = !!pending
       return (
-        <span className={`ax-dd-cell-value ${dirty ? 'dirty' : ''}`}>
-          {display === null || display === undefined || display === '' ? <em className="ax-dd-cell-empty">—</em> : String(display)}
+        <span className="ax-dd-cell-value">
+          {row[column] === null || row[column] === undefined || row[column] === '' ? <em className="ax-dd-cell-empty">—</em> : String(row[column])}
         </span>
       )
     },
-    [editing, pendingEdits],
+    [editing, savingEdits],
   )
 
   // header edit
@@ -363,19 +337,9 @@ export default function DataDetailView({
         </div>
       </nav>
 
-      {(pendingCount > 0 || cellError) && (
+      {(savingEdits || cellError) && (
         <div className="ax-dd-pending">
-          {pendingCount > 0 && (
-            <>
-              <span>{pendingCount} unsaved edit{pendingCount === 1 ? '' : 's'}</span>
-              <button type="button" className="ax-btn mini" onClick={discardAllEdits} disabled={savingEdits}>
-                Discard
-              </button>
-              <button type="button" className="ax-btn prim mini" onClick={saveAllEdits} disabled={savingEdits}>
-                {savingEdits ? 'Saving…' : 'Save edits'}
-              </button>
-            </>
-          )}
+          {savingEdits && <span>Saving cell edit...</span>}
           {cellError && <span className="ax-dd-error">{cellError}</span>}
         </div>
       )}
