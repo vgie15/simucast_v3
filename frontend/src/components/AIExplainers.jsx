@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: AI EXPLAIN CARDS
+ * Keywords: ai, explain, claude, insight card, interpretation
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'

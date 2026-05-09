@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: PROJECT HISTORY RAIL
+ * Keywords: stages, history, snapshots, versions, restore
+ * ============================================================ */
 import React from 'react'
 import ActivityPanel from './ActivityPanel'
 

@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: FILES / RECENT UPLOADS
+ * Keywords: files, recent, uploads
+ * ============================================================ */
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'

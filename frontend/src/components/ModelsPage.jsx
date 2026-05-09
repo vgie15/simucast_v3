@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: ML MODELS (TRAIN, COMPARE)
+ * Keywords: models, train, machine learning, regression, classification, linear, logistic, tree, random forest, feature importance
+ * ============================================================ */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'

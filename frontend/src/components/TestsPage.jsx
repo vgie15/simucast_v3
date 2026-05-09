@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: STATISTICAL TESTS
+ * Keywords: tests, t-test, anova, chi-square, correlation, pearson, scatter
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { Scatter } from 'react-chartjs-2'
 import { api } from '../api'

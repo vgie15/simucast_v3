@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: NEW PROJECT MODAL
+ * Keywords: new project, modal, upload, create
+ * ============================================================ */
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { useAuth, markGuestSlotUsed } from './AuthProvider'

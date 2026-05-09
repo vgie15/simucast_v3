@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: DASHBOARD
+ * Keywords: dashboard, overview, quick actions
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'

@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: REPORT (BUILD & EXPORT)
+ * Keywords: report, build report, export, pdf, html, sections, summary
+ * ============================================================ */
 import React, { useState } from 'react'
 import { Chart } from 'chart.js'
 import { api } from '../api'

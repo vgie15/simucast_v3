@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: WHAT-IF / PREDICTION
+ * Keywords: whatif, what-if, predict, prediction, scenario, simulation
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'

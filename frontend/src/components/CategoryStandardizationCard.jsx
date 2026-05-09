@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: CATEGORY STANDARDIZATION CARD
+ * Keywords: category, standardize, fuzzy, suggestions
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'

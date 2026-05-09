@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: MANUAL TRANSFORMS CARD
+ * Keywords: transform, manual, column, edit
+ * ============================================================ */
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import HelpButton from './HelpButton'

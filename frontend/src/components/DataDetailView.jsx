@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: DATA DETAIL VIEW
+ * Keywords: data detail, inspect
+ * ============================================================ */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import ColumnSummary from './ColumnSummary'

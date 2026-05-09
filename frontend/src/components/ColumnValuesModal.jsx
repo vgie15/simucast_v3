@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: COLUMN VALUES MODAL
+ * Keywords: column values, distinct, list
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 

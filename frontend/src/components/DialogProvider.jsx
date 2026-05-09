@@ -1,3 +1,7 @@
+/* ============================================================
+ * CONTEXT: MODAL / DIALOG STATE
+ * Keywords: dialog, modal, confirm, alert
+ * ============================================================ */
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
 const DialogContext = createContext(null)

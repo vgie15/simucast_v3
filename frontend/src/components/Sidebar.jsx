@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: SIDEBAR NAVIGATION
+ * Keywords: sidebar, navigation, menu, links
+ * ============================================================ */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useTheme } from '../theme'
