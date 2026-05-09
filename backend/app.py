@@ -91,7 +91,7 @@ def _api_server_error(e):
         return jsonify({"error": "The server hit an internal error. Please try again.", "detail": detail}), 500
     return e
 
-@app.route("/api/health")
+@app.route("/api/ping")
 def home():
     return "API is running 🚀"
 
@@ -100,10 +100,13 @@ _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 CORS(app, origins=_cors_origins)
 
 _DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simucast.db")
+_DATABASE_URL_FROM_ENV = bool(os.environ.get("DATABASE_URL"))
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     f"sqlite:///{_DB_PATH}"  # absolute path so db location never depends on cwd
 )
+if os.environ.get("RENDER") and not _DATABASE_URL_FROM_ENV:
+    raise RuntimeError("DATABASE_URL is required on Render. SQLite files on Render are ephemeral and will lose accounts.")
 # Render gives postgres:// but SQLAlchemy needs postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -1075,7 +1078,14 @@ def _parse_ai_json(text):
 
 @app.route("/api/health")
 def health():
-    return {"status": "ok", "db_ready": _db_ready, "time": datetime.utcnow().isoformat()}
+    return {
+        "status": "ok",
+        "db_ready": _db_ready,
+        "database": "postgresql" if "postgresql" in DATABASE_URL else "sqlite",
+        "database_url_configured": _DATABASE_URL_FROM_ENV,
+        "persistent_storage": "postgresql" in DATABASE_URL,
+        "time": datetime.utcnow().isoformat(),
+    }
 
 @app.before_request
 def _schema_guard():
