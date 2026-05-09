@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: PROJECTS LIST
+ * Keywords: projects, list, my projects, datasets
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'

@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: COLUMN VISIBILITY MENU
+ * Keywords: columns, show, hide, visibility
+ * ============================================================ */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 export default function ColumnVisibilityMenu({ allColumns, selected, onApply }) {

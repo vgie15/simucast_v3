@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: LOADING STATES
+ * Keywords: loading, spinner, skeleton, busy
+ * ============================================================ */
 import React from 'react'
 
 export function BusyOverlay({ active, title = 'Working...', detail, steps = [] }) {

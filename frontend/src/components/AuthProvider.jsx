@@ -1,3 +1,7 @@
+/* ============================================================
+ * CONTEXT: AUTHENTICATION STATE
+ * Keywords: auth, login, logout, signup, guest, session, account
+ * ============================================================ */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'

@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: ACTIVITY LOG PANEL
+ * Keywords: activity, log, history, audit, undo
+ * ============================================================ */
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'

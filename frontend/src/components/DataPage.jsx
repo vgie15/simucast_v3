@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: DATA VIEW (UPLOAD, GRID, EDIT)
+ * Keywords: data view, upload, grid, edit cell, variable view, columns
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'

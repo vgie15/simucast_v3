@@ -91,6 +91,12 @@ def _api_server_error(e):
         return jsonify({"error": "The server hit an internal error. Please try again.", "detail": detail}), 500
     return e
 
+
+# ===========================================================================
+# SECTION: HEALTH CHECK
+# Keywords: ping, health, status, alive
+# ===========================================================================
+# ANCHOR: Health Check / Ping
 @app.route("/api/ping")
 def home():
     return "API is running 🚀"
@@ -1076,6 +1082,7 @@ def _parse_ai_json(text):
 #  Routes
 # ========================================================================
 
+# ANCHOR: Health Check / Status
 @app.route("/api/health")
 def health():
     return {
@@ -1100,6 +1107,12 @@ def _schema_guard():
 
 # --- Auth / sessions ---
 
+
+# ===========================================================================
+# SECTION: AUTHENTICATION
+# Keywords: auth, login, signup, logout, account, password, guest, session, user
+# ===========================================================================
+# ANCHOR: Auth: Guest Session (Temporary Account)
 @app.route("/api/auth/guest", methods=["POST"])
 def create_guest_session():
     s = db()
@@ -1124,6 +1137,7 @@ def create_guest_session():
     finally:
         s.close()
 
+# ANCHOR: Auth: Signup / Create Account
 @app.route("/api/auth/signup", methods=["POST"])
 def signup():
     body = request.get_json() or {}
@@ -1160,6 +1174,7 @@ def signup():
     finally:
         s.close()
 
+# ANCHOR: Auth: Login
 @app.route("/api/auth/login", methods=["POST"])
 def login():
     body = request.get_json() or {}
@@ -1184,6 +1199,7 @@ def login():
     finally:
         s.close()
 
+# ANCHOR: Auth: Current User Info
 @app.route("/api/auth/me", methods=["GET"])
 def auth_me():
     s = db()
@@ -1195,6 +1211,7 @@ def auth_me():
     finally:
         s.close()
 
+# ANCHOR: Auth: Logout
 @app.route("/api/auth/logout", methods=["POST"])
 def logout():
     s = db()
@@ -1207,6 +1224,7 @@ def logout():
     finally:
         s.close()
 
+# ANCHOR: Auth: Update Account Details
 @app.route("/api/account", methods=["PATCH"])
 def update_account():
     body = request.get_json() or {}
@@ -1229,6 +1247,7 @@ def update_account():
     finally:
         s.close()
 
+# ANCHOR: Auth: Change Password
 @app.route("/api/account/password", methods=["POST"])
 def change_account_password():
     body = request.get_json() or {}
@@ -1251,6 +1270,7 @@ def change_account_password():
     finally:
         s.close()
 
+# ANCHOR: Auth: Delete Account
 @app.route("/api/account", methods=["DELETE"])
 def delete_account():
     body = request.get_json() or {}
@@ -1283,6 +1303,12 @@ def _delete_account_artifacts(session, user_id, dataset_ids):
 
 # --- Datasets ---
 
+
+# ===========================================================================
+# SECTION: DATASETS - LIST & UPLOAD
+# Keywords: dataset, project, list, upload, csv, excel, file, create
+# ===========================================================================
+# ANCHOR: Dataset: List Projects
 @app.route("/api/datasets", methods=["GET"])
 def list_datasets():
     s = db()
@@ -1357,6 +1383,7 @@ def _validate_upload_file(f):
     return True, None, kind
 
 
+# ANCHOR: Dataset: Upload File (CSV/Excel)
 @app.route("/api/datasets/upload", methods=["POST"])
 def upload_dataset():
     """Create a Dataset from either an uploaded file or an existing Dataset.
@@ -1502,6 +1529,12 @@ def upload_dataset():
     finally:
         s.close()
 
+
+# ===========================================================================
+# SECTION: DATASETS - DETAIL
+# Keywords: dataset, get, detail, sheet, delete
+# ===========================================================================
+# ANCHOR: Dataset: Get Detail
 @app.route("/api/datasets/<ds_id>", methods=["GET"])
 def get_dataset(ds_id):
     """Returns dataset metadata + variables for the active stage."""
@@ -1527,6 +1560,7 @@ def get_dataset(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Dataset: Select Excel Sheet
 @app.route("/api/datasets/<ds_id>/sheet", methods=["POST"])
 def select_dataset_sheet(ds_id):
     body = request.get_json() or {}
@@ -1588,6 +1622,8 @@ def select_dataset_sheet(ds_id):
     finally:
         s.close()
 
+
+# ANCHOR: Dataset: Delete Project
 @app.route("/api/datasets/<ds_id>", methods=["DELETE"])
 def delete_dataset(ds_id):
     s = db()
@@ -1611,6 +1647,12 @@ def delete_dataset(ds_id):
     finally:
         s.close()
 
+
+# ===========================================================================
+# SECTION: DATA VIEW - ROWS & CELL EDITING
+# Keywords: rows, paginated, cell, edit, bulk, data view, grid
+# ===========================================================================
+# ANCHOR: Dataset: Get Paginated Rows (Data View)
 @app.route("/api/datasets/<ds_id>/rows", methods=["GET"])
 def get_rows(ds_id):
     """Paginated row data for the Excel-like grid.
@@ -1643,6 +1685,7 @@ def get_rows(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Dataset: Edit Single Cell
 @app.route("/api/datasets/<ds_id>/cell", methods=["PATCH"])
 def update_cell(ds_id):
     body = request.get_json() or {}
@@ -1682,6 +1725,7 @@ def update_cell(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Dataset: Edit Multiple Cells (Bulk Edit)
 @app.route("/api/datasets/<ds_id>/cells", methods=["PATCH"])
 def update_cells(ds_id):
     body = request.get_json() or {}
@@ -1880,6 +1924,12 @@ def _category_groups(values, column_name="", threshold=0.88):
         merged.append(group)
     return merged
 
+
+# ===========================================================================
+# SECTION: CATEGORY STANDARDIZATION
+# Keywords: category, standardize, suggestions, similar, fuzzy
+# ===========================================================================
+# ANCHOR: Cleaning: Category Standardization Suggestions
 @app.route("/api/datasets/<ds_id>/categories/suggestions", methods=["GET"])
 def category_suggestions(ds_id):
     s = db()
@@ -1913,6 +1963,7 @@ def category_suggestions(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Cleaning: Apply Category Standardization
 @app.route("/api/datasets/<ds_id>/categories/apply", methods=["POST"])
 def apply_category_standardization(ds_id):
     body = request.get_json() or {}
@@ -1961,6 +2012,12 @@ def apply_category_standardization(ds_id):
     finally:
         s.close()
 
+
+# ===========================================================================
+# SECTION: ACTIVITY LOG
+# Keywords: activity, log, history, note, audit, undo
+# ===========================================================================
+# ANCHOR: Activity: List Project Actions
 @app.route("/api/datasets/<ds_id>/activity", methods=["GET"])
 def list_activity(ds_id):
     order = (request.args.get("order") or "desc").lower()
@@ -1973,6 +2030,8 @@ def list_activity(ds_id):
     finally:
         s.close()
 
+
+# ANCHOR: Activity: Add Note
 @app.route("/api/datasets/<ds_id>/activity", methods=["POST"])
 def create_activity_note(ds_id):
     body = request.get_json() or {}
@@ -2027,6 +2086,7 @@ def create_activity_note(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Activity: Delete or Undo Action
 @app.route("/api/datasets/<ds_id>/activity/<activity_id>", methods=["DELETE"])
 def delete_or_undo_activity(ds_id, activity_id):
     """Remove a documentation entry. If it is the current data-stage step, undo by restoring its parent stage first."""
@@ -2099,6 +2159,12 @@ def delete_or_undo_activity(ds_id, activity_id):
 
 # --- Stages (data versioning) ---
 
+
+# ===========================================================================
+# SECTION: STAGES - SNAPSHOTS & VERSIONING
+# Keywords: stage, snapshot, version, restore, revert, reset, history
+# ===========================================================================
+# ANCHOR: Stages: List Snapshots / Versions
 @app.route("/api/datasets/<ds_id>/stages", methods=["GET"])
 def list_stages(ds_id):
     """Return all stages plus the implicit 'original' so the UI can render
@@ -2147,6 +2213,7 @@ def list_stages(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Stages: Restore Snapshot / Revert
 @app.route("/api/datasets/<ds_id>/stages/<stage_id>/restore", methods=["POST"])
 def restore_stage(ds_id, stage_id):
     """Set a previous stage as the current one (revert)."""
@@ -2204,6 +2271,7 @@ def restore_stage(ds_id, stage_id):
     finally:
         s.close()
 
+# ANCHOR: Stages: Reset Project to Original
 @app.route("/api/datasets/<ds_id>/reset", methods=["POST"])
 def reset_project(ds_id):
     """Reset a project to its original uploaded state, removing all derived data."""
@@ -2243,6 +2311,12 @@ def reset_project(ds_id):
     finally:
         s.close()
 
+
+# ===========================================================================
+# SECTION: EXPORT
+# Keywords: export, download, csv
+# ===========================================================================
+# ANCHOR: Dataset: Export CSV (Download)
 @app.route("/api/datasets/<ds_id>/export.csv", methods=["GET"])
 def export_csv(ds_id):
     """Stream the active stage (or any stage selected via ?stage_id=) as CSV."""
@@ -2272,6 +2346,12 @@ def export_csv(ds_id):
         s.close()
 
 
+
+# ===========================================================================
+# SECTION: COLUMNS & VARIABLES
+# Keywords: column, variable, distinct values, dtype, type, label, variable view
+# ===========================================================================
+# ANCHOR: Column: List Distinct Values
 @app.route("/api/datasets/<ds_id>/columns/<col_name>/values", methods=["GET"])
 def get_column_values(ds_id, col_name):
     """Paginated single-column entries with their row index."""
@@ -2302,6 +2382,7 @@ def get_column_values(ds_id, col_name):
     finally:
         s.close()
 
+# ANCHOR: Variable: Update Type/Label (Variable View)
 @app.route("/api/datasets/<ds_id>/variables/<var_name>", methods=["PATCH"])
 def update_variable(ds_id, var_name):
     """Update variable dtype."""
@@ -2325,6 +2406,7 @@ def update_variable(ds_id, var_name):
 
 # --- Cleaning ---
 
+# ANCHOR: Column: Get Stats (Mean/Min/Max)
 @app.route("/api/datasets/<ds_id>/columns/<col_name>/stats", methods=["GET"])
 def column_stats(ds_id, col_name):
     """Per-column profiling stats: dtype, missing, errors, zeros, value counts, etc."""
@@ -2429,6 +2511,12 @@ def _json_safe(v):
     return str(v)
 
 
+
+# ===========================================================================
+# SECTION: DATA CLEANING
+# Keywords: clean, fix, suggestion, missing, outlier, duplicate, invalid, AI cleaning
+# ===========================================================================
+# ANCHOR: Cleaning: AI-Suggested Fixes
 @app.route("/api/datasets/<ds_id>/clean/suggestions", methods=["GET"])
 def clean_suggestions(ds_id):
     """AI-style suggestions: missing, outliers, type issues, engineering."""
@@ -2600,6 +2688,7 @@ def clean_suggestions(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Cleaning: Apply Group of Fixes
 @app.route("/api/datasets/<ds_id>/clean/apply_group", methods=["POST"])
 def clean_apply_group(ds_id):
     body = request.get_json() or {}
@@ -2798,6 +2887,7 @@ def clean_apply_group(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Cleaning: Apply Single Fix
 @app.route("/api/datasets/<ds_id>/clean/apply", methods=["POST"])
 def clean_apply(ds_id):
     """Apply a cleaning operation: impute, winsorize, convert, drop.
@@ -2890,6 +2980,12 @@ def clean_apply(ds_id):
 
 # --- Manual transforms (merge / rename / drop / cast) ---
 
+
+# ===========================================================================
+# SECTION: TRANSFORM & EXPAND - FEATURE ENGINEERING
+# Keywords: transform, expand, derived, feature engineering, manual transform
+# ===========================================================================
+# ANCHOR: Transform: Manual Column Transformation
 @app.route("/api/datasets/<ds_id>/transform", methods=["POST"])
 def transform(ds_id):
     """Apply a manual schema transform — merge columns, rename, drop, cast.
@@ -3085,6 +3181,7 @@ def _coerce_num(v):
 
 # --- Expand (synthesize rows for small datasets) ---
 
+# ANCHOR: Expand: Add Derived Features (Feature Engineering)
 @app.route("/api/datasets/<ds_id>/expand", methods=["POST"])
 def expand_dataset(ds_id):
     """Grow a small dataset by bootstrap resample or synthetic generation.
@@ -3237,6 +3334,12 @@ def _pct_change(a, b):
 
 # --- Descriptive stats ---
 
+
+# ===========================================================================
+# SECTION: DESCRIPTIVE STATISTICS & STATISTICAL TESTS
+# Keywords: describe, descriptives, summary, histogram, mean, t-test, anova, chi-square, correlation, pearson
+# ===========================================================================
+# ANCHOR: Describe: Run Descriptive Statistics
 @app.route("/api/datasets/<ds_id>/describe", methods=["POST"])
 def describe(ds_id):
     body = request.get_json() or {}
@@ -3309,6 +3412,7 @@ def describe(ds_id):
 
 # --- Hypothesis tests ---
 
+# ANCHOR: Test: Run Statistical Test (t-test/ANOVA/Chi-square/Correlation)
 @app.route("/api/datasets/<ds_id>/test", methods=["POST"])
 def run_test(ds_id):
     body = request.get_json() or {}
@@ -3429,6 +3533,12 @@ def _chi_interpret(chi2, p, a, b):
 
 # --- Advanced stats ---
 
+
+# ===========================================================================
+# SECTION: ADVANCED ANALYSIS - CLUSTERING & PCA
+# Keywords: advanced, cluster, k-means, kmeans, pca, principal component, dimensionality
+# ===========================================================================
+# ANCHOR: Advanced: K-Means Clustering
 @app.route("/api/datasets/<ds_id>/advanced/cluster", methods=["POST"])
 def do_cluster(ds_id):
     body = request.get_json() or {}
@@ -3463,6 +3573,7 @@ def do_cluster(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Advanced: PCA (Principal Component Analysis)
 @app.route("/api/datasets/<ds_id>/advanced/pca", methods=["POST"])
 def do_pca(ds_id):
     body = request.get_json() or {}
@@ -4416,6 +4527,12 @@ def _whatif_raw_features(X_raw):
     return features
 
 
+
+# ===========================================================================
+# SECTION: MACHINE LEARNING - MODEL TRAINING
+# Keywords: model, train, training, preprocessing, plan, regression, classification, linear, logistic, tree, random forest, rf, decision tree, sklearn
+# ===========================================================================
+# ANCHOR: Model: Preview Preprocessing Plan
 @app.route("/api/datasets/<ds_id>/models/preprocessing_plan", methods=["POST"])
 def preprocessing_plan(ds_id):
     """Return the preprocessing plan for a target+features+algos config without training."""
@@ -4439,6 +4556,7 @@ def preprocessing_plan(ds_id):
         s.close()
 
 
+# ANCHOR: Model: Train Single Model
 @app.route("/api/datasets/<ds_id>/models/train", methods=["POST"])
 def train_model(ds_id):
     """Train a single model. Kept for backward compat — train_many is preferred."""
@@ -4517,6 +4635,7 @@ def train_model(ds_id):
         s.close()
 
 
+# ANCHOR: Model: Train Multiple Models (Compare)
 @app.route("/api/datasets/<ds_id>/models/train_many", methods=["POST"])
 def train_many_models(ds_id):
     """Train multiple algorithms on the same target+features config and return
@@ -4619,6 +4738,7 @@ def train_many_models(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Model: List Saved Models
 @app.route("/api/datasets/<ds_id>/models", methods=["GET"])
 def list_models(ds_id):
     s = db()
@@ -4638,6 +4758,7 @@ def list_models(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Model: Delete Model
 @app.route("/api/models/<model_id>", methods=["DELETE"])
 def delete_model(model_id):
     s = db()
@@ -4656,6 +4777,12 @@ def delete_model(model_id):
     finally:
         s.close()
 
+
+# ===========================================================================
+# SECTION: WHAT-IF / PREDICTION
+# Keywords: whatif, what-if, predict, prediction, scenario, simulation, extrapolation
+# ===========================================================================
+# ANCHOR: What-If: Prepare Model for Prediction
 @app.route("/api/models/<model_id>/prepare_whatif", methods=["POST"])
 def prepare_model_for_whatif(model_id):
     """Backfill prediction metadata for older models so What-if can use them."""
@@ -4760,6 +4887,7 @@ def _whatif_extrapolation_risk(inputs, raw_features):
         "message": "Some inputs exceed dataset boundaries. Predictions may be unreliable." if out_of_range else None,
     }
 
+# ANCHOR: What-If: Run Prediction
 @app.route("/api/models/<model_id>/predict", methods=["POST"])
 def whatif_predict(model_id):
     """Make a live prediction from any trained model using user-supplied values."""
@@ -4905,6 +5033,7 @@ def whatif_predict(model_id):
     finally:
         s.close()
 
+# ANCHOR: What-If: Save Scenario
 @app.route("/api/models/<model_id>/scenarios", methods=["POST"])
 def save_whatif_scenario(model_id):
     body = request.get_json() or {}
@@ -4942,6 +5071,7 @@ def save_whatif_scenario(model_id):
     finally:
         s.close()
 
+# ANCHOR: Model: Get Detail
 @app.route("/api/models/<model_id>", methods=["GET"])
 def get_model(model_id):
     s = db()
@@ -5214,6 +5344,12 @@ def _parse_ai_plan_text(text):
         })
     return parsed
 
+
+# ===========================================================================
+# SECTION: AI FEATURES - PLAN, RECOMMEND, EXPLAIN, CHAT, SUGGEST
+# Keywords: ai, claude, anthropic, project plan, recommend, explain, chat, suggest, llm
+# ===========================================================================
+# ANCHOR: AI: Generate Project Plan
 @app.route("/api/datasets/<ds_id>/ai/project_plan", methods=["POST"])
 def ai_project_plan(ds_id):
     """Generate an end-to-end guided workflow plan for the current dataset stage."""
@@ -5338,6 +5474,7 @@ def ai_project_plan(ds_id):
     finally:
         s.close()
 
+# ANCHOR: Expand: AI Feature Engineering Suggestions
 @app.route("/api/datasets/<ds_id>/feature_engineer", methods=["POST"])
 def feature_engineer(ds_id):
     """Apply a feature engineering operation to the active dataset."""
@@ -5445,6 +5582,7 @@ def feature_engineer(ds_id):
         s.close()
 
 
+# ANCHOR: AI: Recommend Next Step
 @app.route("/api/datasets/<ds_id>/ai/recommend", methods=["POST"])
 def ai_recommend(ds_id):
     """Context-aware AI recommendations for a page (data / tests / models / expand).
@@ -5646,6 +5784,7 @@ def _store_ai_explanation(session, ds_id, cache_key, step, params, question, sou
     return analysis_id
 
 
+# ANCHOR: AI: Explain Result
 @app.route("/api/datasets/<ds_id>/ai/explain", methods=["POST"])
 def ai_explain(ds_id):
     """Free-form 'explain this' for a step the UI is showing the user.
@@ -5774,6 +5913,7 @@ def ai_explain(ds_id):
         s.close()
 
 
+# ANCHOR: AI: Toggle 'Include in Report'
 @app.route("/api/datasets/<ds_id>/ai/explanations/<analysis_id>/report", methods=["PATCH"])
 def set_ai_explanation_report(ds_id, analysis_id):
     body = request.get_json() or {}
@@ -5797,6 +5937,7 @@ def set_ai_explanation_report(ds_id, analysis_id):
 
 _CHAT_HISTORY_LIMIT = 20
 
+# ANCHOR: AI: Get Chat History
 @app.route("/api/datasets/<ds_id>/ai/chat", methods=["GET"])
 def ai_chat_history(ds_id):
     s = db()
@@ -5828,6 +5969,7 @@ def ai_chat_history(ds_id):
     finally:
         s.close()
 
+# ANCHOR: AI: Send Chat Message
 @app.route("/api/datasets/<ds_id>/ai/chat", methods=["POST"])
 def ai_chat_send(ds_id):
     """Send one chat turn. Persists the user message, calls Claude with the
@@ -6051,6 +6193,7 @@ def _unused_ai_chat_send_old_impl():
     """
     pass
 
+# ANCHOR: AI: Clear Chat History
 @app.route("/api/datasets/<ds_id>/ai/chat", methods=["DELETE"])
 def ai_chat_clear(ds_id):
     s = db()
@@ -6446,6 +6589,7 @@ def _rule_based_project_plan(df, variables):
     }
 
 
+# ANCHOR: AI: Suggest Action
 @app.route("/api/datasets/<ds_id>/ai/suggest", methods=["POST"])
 def ai_suggest(ds_id):
     body = request.get_json() or {}
@@ -6492,6 +6636,12 @@ def ai_suggest(ds_id):
 
 # --- Reports ---
 
+
+# ===========================================================================
+# SECTION: REPORT GENERATION
+# Keywords: report, build report, generate report, export, pdf, html, summary, sections
+# ===========================================================================
+# ANCHOR: Report: Generate Report (Build Report)
 @app.route("/api/datasets/<ds_id>/report", methods=["POST"])
 def build_report(ds_id):
     """Assemble analyses into a report JSON the frontend can render/export."""
@@ -6909,6 +7059,12 @@ def _save_analysis(session, ds_id, kind, config, result):
     return a
 
 
+
+# ===========================================================================
+# SECTION: ANALYSES LISTING
+# Keywords: analyses, list saved, analysis history
+# ===========================================================================
+# ANCHOR: Analyses: List Saved Analyses
 @app.route("/api/datasets/<ds_id>/analyses", methods=["GET"])
 def list_analyses(ds_id):
     """Return saved analysis artifacts so workflow pages can restore prior output."""
@@ -6956,7 +7112,9 @@ FRONTEND_DIST_PATH = os.environ.get(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")),
 )
 
+# ANCHOR: GET /
 @app.route("/", defaults={"path": ""})
+# ANCHOR: GET /<path:path>
 @app.route("/<path:path>")
 def serve_react_app(path):
     """Serve the React SPA and fall back to index.html for client-side routes."""

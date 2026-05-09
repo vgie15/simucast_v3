@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: AI PROJECT PLAN PANEL
+ * Keywords: ai, project plan, suggested workflow, recommend
+ * ============================================================ */
 import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'

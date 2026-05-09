@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: DESCRIBE / DESCRIPTIVE STATISTICS
+ * Keywords: describe, descriptives, summary, histogram, mean, std, distribution
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'

@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: EXPAND / FEATURE ENGINEERING
+ * Keywords: expand, feature engineering, derived features, transform
+ * ============================================================ */
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useDialog } from './DialogProvider'

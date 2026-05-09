@@ -1,3 +1,7 @@
+/* ============================================================
+ * PAGE: LANDING / HOME
+ * Keywords: landing, home, hero, marketing
+ * ============================================================ */
 import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthProvider'

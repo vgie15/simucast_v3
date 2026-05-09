@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: COLUMN SUMMARY
+ * Keywords: column, summary, stats
+ * ============================================================ */
 import React, { useMemo } from 'react'
 
 export default function ColumnSummary({ variable, rows }) {

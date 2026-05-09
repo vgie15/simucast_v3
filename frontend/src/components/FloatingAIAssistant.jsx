@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: FLOATING AI CHAT WIDGET
+ * Keywords: ai, chat, assistant, floating, claude, conversation
+ * ============================================================ */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api } from '../api'

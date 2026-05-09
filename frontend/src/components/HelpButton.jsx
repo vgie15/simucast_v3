@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: HELP (?) BUTTON
+ * Keywords: help, info, tooltip
+ * ============================================================ */
 import React from 'react'
 import { useDialog } from './DialogProvider'
 

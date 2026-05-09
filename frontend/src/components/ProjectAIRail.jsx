@@ -1,3 +1,7 @@
+/* ============================================================
+ * COMPONENT: AI RAIL (PROJECT-LEVEL)
+ * Keywords: ai rail, suggestions, project ai sidebar
+ * ============================================================ */
 import React from 'react'
 import AIProjectPlanPanel from './AIProjectPlanPanel'
 
