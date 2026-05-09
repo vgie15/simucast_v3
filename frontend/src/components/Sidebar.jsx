@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useTheme } from '../theme'
 import { useDialog } from './DialogProvider'
 import { useAuth } from './AuthProvider'
@@ -45,6 +45,7 @@ export default function Sidebar() {
   const { isDark, toggle } = useTheme()
   const dialog = useDialog()
   const auth = useAuth()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!dragging) return
@@ -80,8 +81,8 @@ export default function Sidebar() {
 
   const handleSettings = useCallback(() => {
     setMenuOpen(false)
-    dialog.alert({ title: 'Settings', message: 'Settings are coming soon.' })
-  }, [dialog])
+    navigate('/settings')
+  }, [navigate])
 
   const handleLogout = useCallback(async () => {
     setMenuOpen(false)

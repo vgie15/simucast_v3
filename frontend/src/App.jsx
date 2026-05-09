@@ -6,6 +6,7 @@ import DashboardPage from './components/DashboardPage'
 import ProjectsPage from './components/ProjectsPage'
 import FilesPage from './components/FilesPage'
 import ProjectWorkspace from './components/ProjectWorkspace'
+import SettingsPage from './components/SettingsPage'
 import { DialogProvider } from './components/DialogProvider'
 import { AuthProvider, useAuth } from './components/AuthProvider'
 import { ThemeProvider } from './theme'
@@ -67,6 +68,7 @@ function AppRoutes() {
             <Route path="/projects/:id" element={<Navigate to="data" replace />} />
             <Route path="/projects/:id/:tab" element={<ProjectWorkspace />} />
             <Route path="/files" element={<FilesPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -119,6 +119,21 @@ export const api = {
     }),
   authMe: () => request('/api/auth/me'),
   authLogout: () => request('/api/auth/logout', { method: 'POST' }),
+  accountUpdate: (body) =>
+    request('/api/account', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  accountChangePassword: (body) =>
+    request('/api/account/password', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  accountDelete: (password) =>
+    request('/api/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    }),
 
   // datasets
   listDatasets: () => request('/api/datasets'),

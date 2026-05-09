@@ -2264,6 +2264,134 @@ a.ax-btn {
   font-weight: 650;
 }
 
+.ax-settings-page {
+  max-width: 1080px;
+}
+
+.ax-settings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ax-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.ax-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ax-settings-card.danger {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: linear-gradient(0deg, rgba(220, 38, 38, 0.04), rgba(220, 38, 38, 0.04)), var(--color-background-primary);
+}
+
+.ax-settings-card-head h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.ax-settings-card-head p,
+.ax-settings-copy {
+  margin: 5px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.ax-settings-card .ax-field span {
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.ax-settings-card .ax-field input {
+  width: 100%;
+  min-height: 38px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 6px;
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.ax-settings-card .ax-field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-light);
+}
+
+.ax-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ax-settings-message {
+  margin: 0;
+  color: var(--color-text-success);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.ax-settings-message.danger,
+.ax-settings-card.danger .ax-settings-message {
+  color: var(--color-text-danger);
+}
+
+.ax-settings-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  background: var(--color-background-secondary);
+}
+
+.ax-settings-account div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ax-settings-account strong,
+.ax-settings-account span:not(.ax-avatar) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ax-settings-account strong {
+  font-size: 13px;
+}
+
+.ax-settings-account span:not(.ax-avatar) {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+@media (max-width: 860px) {
+  .ax-settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .ax-prompt-row {
   display: flex;
   align-items: stretch;

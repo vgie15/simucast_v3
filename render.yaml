@@ -5,8 +5,6 @@ services:
     env: python
     plan: free
     rootDir: backend
-
-    # 👇 FORCE correct Python version (this is the key fix)
     pythonVersion: 3.10.13
 
     buildCommand: |

@@ -1207,6 +1207,80 @@ def logout():
     finally:
         s.close()
 
+@app.route("/api/account", methods=["PATCH"])
+def update_account():
+    body = request.get_json() or {}
+    full_name = (body.get("full_name") or "").strip()
+    email = (body.get("email") or "").strip().lower()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return {"error": "enter a valid email address"}, 400
+    s = db()
+    try:
+        sess, user = _auth_from_request(s)
+        if not sess or sess.is_guest or not user:
+            return {"error": "account required", "auth_required": True}, 403
+        existing = s.query(User).filter(User.email == email, User.id != user.id).first()
+        if existing:
+            return {"error": "email already registered"}, 409
+        user.email = email
+        user.full_name = full_name or None
+        s.commit()
+        return jsonify({"session": _session_payload(sess, user)})
+    finally:
+        s.close()
+
+@app.route("/api/account/password", methods=["POST"])
+def change_account_password():
+    body = request.get_json() or {}
+    current_password = body.get("current_password") or ""
+    new_password = body.get("new_password") or ""
+    if len(new_password) < 8:
+        return {"error": "new password must be at least 8 characters"}, 400
+    s = db()
+    try:
+        sess, user = _auth_from_request(s)
+        if not sess or sess.is_guest or not user:
+            return {"error": "account required", "auth_required": True}, 403
+        if not check_password_hash(user.password_hash, current_password):
+            return {"error": "current password is incorrect"}, 400
+        user.password_hash = generate_password_hash(new_password)
+        # Invalidate other sessions after a password change.
+        s.query(UserSession).filter(UserSession.user_id == user.id, UserSession.id != sess.id).delete(synchronize_session=False)
+        s.commit()
+        return jsonify({"ok": True, "session": _session_payload(sess, user)})
+    finally:
+        s.close()
+
+@app.route("/api/account", methods=["DELETE"])
+def delete_account():
+    body = request.get_json() or {}
+    password = body.get("password") or ""
+    s = db()
+    try:
+        sess, user = _auth_from_request(s)
+        if not sess or sess.is_guest or not user:
+            return {"error": "account required", "auth_required": True}, 403
+        if not check_password_hash(user.password_hash, password):
+            return {"error": "password is incorrect"}, 400
+        dataset_ids = [row.id for row in s.query(Dataset.id).filter_by(user_id=user.id).all()]
+        _delete_account_artifacts(s, user.id, dataset_ids)
+        s.delete(user)
+        s.commit()
+        return jsonify({"ok": True})
+    finally:
+        s.close()
+
+def _delete_account_artifacts(session, user_id, dataset_ids):
+    if dataset_ids:
+        session.query(DatasetStage).filter(DatasetStage.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+        session.query(Analysis).filter(Analysis.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+        session.query(Model).filter(Model.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+        session.query(ActivityLog).filter(ActivityLog.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+        session.query(AIResponse).filter(AIResponse.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+        session.query(Dataset).filter(Dataset.id.in_(dataset_ids)).delete(synchronize_session=False)
+    session.query(AIResponse).filter_by(user_id=user_id).delete(synchronize_session=False)
+    session.query(UserSession).filter_by(user_id=user_id).delete(synchronize_session=False)
+
 # --- Datasets ---
 
 @app.route("/api/datasets", methods=["GET"])
