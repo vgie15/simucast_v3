@@ -34,6 +34,10 @@ async function throwApiError(res) {
     throw err
   }
   const msg = await res.text()
+  const looksLikeHtml = /^\s*<!doctype html|^\s*<html[\s>]/i.test(msg)
+  if (looksLikeHtml) {
+    throw new Error(`${res.status} ${res.statusText || 'Server Error'}: the API returned an HTML error page.`)
+  }
   throw new Error(msg || `${res.status} ${res.statusText}`)
 }
 

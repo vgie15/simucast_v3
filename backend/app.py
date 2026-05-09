@@ -82,6 +82,15 @@ def _too_large(_e):
     mb_limit = MAX_UPLOAD_BYTES // (1024 * 1024)
     return jsonify({"error": f"File is too large. Maximum allowed is {mb_limit} MB."}), 413
 
+@app.errorhandler(500)
+def _api_server_error(e):
+    if request.path.startswith("/api/"):
+        original = getattr(e, "original_exception", None)
+        detail = original.__class__.__name__ if original else e.__class__.__name__
+        print(f"API server error on {request.path}: {detail}", flush=True)
+        return jsonify({"error": "The server hit an internal error. Please try again.", "detail": detail}), 500
+    return e
+
 @app.route("/api/health")
 def home():
     return "API is running 🚀"
@@ -251,6 +260,26 @@ def _migrate_add_columns():
         with engine.begin() as conn:
             if "guest_model_usage_count" not in session_cols:
                 conn.execute(text("ALTER TABLE sessions ADD COLUMN guest_model_usage_count INTEGER DEFAULT 0"))
+    if "ai_responses" in tables:
+        ai_cols = {c["name"] for c in insp.get_columns("ai_responses")}
+        json_type = "JSONB" if "postgresql" in DATABASE_URL else "TEXT"
+        datetime_type = "TIMESTAMP" if "postgresql" in DATABASE_URL else "DATETIME"
+        ai_column_defs = {
+            "stage_id": "VARCHAR",
+            "user_id": "VARCHAR",
+            "kind": "VARCHAR",
+            "role": "VARCHAR",
+            "context": "VARCHAR",
+            "cache_key": "VARCHAR",
+            "request": json_type,
+            "response": json_type,
+            "model": "VARCHAR",
+            "created_at": datetime_type,
+        }
+        with engine.begin() as conn:
+            for col, col_type in ai_column_defs.items():
+                if col not in ai_cols:
+                    conn.execute(text(f"ALTER TABLE ai_responses ADD COLUMN {col} {col_type}"))
     if "datasets" not in tables:
         return
     cols = {c["name"] for c in insp.get_columns("datasets")}
