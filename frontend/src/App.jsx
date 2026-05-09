@@ -9,6 +9,7 @@ import ProjectWorkspace from './components/ProjectWorkspace'
 import { DialogProvider } from './components/DialogProvider'
 import { AuthProvider, useAuth } from './components/AuthProvider'
 import { ThemeProvider } from './theme'
+import FloatingAIAssistant from './components/FloatingAIAssistant'
 
 export default function App() {
   return (
@@ -69,6 +70,7 @@ function AppRoutes() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+        <FloatingAIAssistant />
       </div>
     </div>
   )
