@@ -131,9 +131,10 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       window.localStorage.setItem(modeKey, 'system')
       return
     }
-    const saved = window.localStorage.getItem(modeKey)
-    setMode(!saved || saved === 'off' ? 'system' : saved)
-  }, [modeKey])
+    // Signed-in users always get the AI plan; rule-based mode is guest-only.
+    setMode('auto')
+    window.localStorage.setItem(modeKey, 'auto')
+  }, [modeKey, auth.isGuest])
 
   useEffect(() => {
     if (!doneKey) return
@@ -302,10 +303,10 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           )}
         </div>
 
-        {!collapsed && (
+        {!collapsed && auth.isGuest && (
           <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 0 }}>
             <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => handleModeChange('auto')}>
-              AI guided{auth.isGuest ? ' 🔒' : ''}
+              AI guided 🔒
             </button>
             <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => handleModeChange('system')}>
               System only

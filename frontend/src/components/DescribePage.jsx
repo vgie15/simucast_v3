@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
 import { api } from '../api'
 import { ExplainButton } from './AIExplainers'
+import { useAuth } from './AuthProvider'
 import { InlineSpinner, SkeletonCards } from './LoadingStates'
 import HelpButton from './HelpButton'
 
@@ -468,6 +469,8 @@ function InfoIcon({ text }) {
 
 // Card displaying summary metrics, tags, and distribution preview for a single variable.
 function VariableCard({ title, type, tags, metrics, insight, distribution, expanded, onExplain, datasetId, resultPayload }) {
+  const auth = useAuth()
+  const showRule = auth.isGuest
   return (
     <div className="ax-card" style={{ padding: 12 }}>
       <div className="ax-row" style={{ alignItems: 'flex-start', marginBottom: 8 }}>
@@ -502,11 +505,15 @@ function VariableCard({ title, type, tags, metrics, insight, distribution, expan
           ))}
         </div>
       )}
-      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{insight}</p>
+      {showRule && (
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{insight}</p>
+      )}
       <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-        <button className="ax-btn" onClick={onExplain}>
-          {expanded ? 'Hide rule explanation' : 'Explain terms'}
-        </button>
+        {showRule && (
+          <button className="ax-btn" onClick={onExplain}>
+            {expanded ? 'Hide rule explanation' : 'Explain terms'}
+          </button>
+        )}
         <ExplainButton
           datasetId={datasetId}
           step={`describe-variable-${type}`}
@@ -516,7 +523,7 @@ function VariableCard({ title, type, tags, metrics, insight, distribution, expan
           label="AI explain"
         />
       </div>
-      {expanded && (
+      {showRule && expanded && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0', borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 8 }}>
           {insight} This explanation is rule-based and remains available even without an AI key.
         </p>
