@@ -10,8 +10,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from backend.config import DATABASE_URL
-
 
 def jload(v):
     """Safely load a JSON column value (dict, list, str, or None)."""
@@ -26,10 +24,8 @@ def jload(v):
 
 
 def jdump(v):
-    """Dump a value to a JSON-compatible form for storage."""
-    if "postgresql" in DATABASE_URL:
-        return v  # JSONB handles dicts/lists natively
-    return json.dumps(v, default=str)
+    """Pass through a value for storage in a JSONB column (dicts/lists are accepted natively)."""
+    return v
 
 
 def clean_json(obj):
