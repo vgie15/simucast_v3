@@ -905,7 +905,7 @@ function recommendTargets(variables = []) {
       const name = String(v.name || '').toLowerCase()
       let score = 0
       if (['category', 'binary', 'int', 'float', 'numeric'].includes(v.dtype)) score += 1
-      if (Number(v.unique || 0) > 1) score += 1
+      if (Number(v.unique || 0) > 1) score += 2
       return { ...v, score, why: 'This column looks like a meaningful prediction outcome.' }
     })
     .sort((a, b) => b.score - a.score)
