@@ -11,7 +11,6 @@ from flask import Blueprint, request
 from sqlalchemy.exc import OperationalError
 
 from backend import database
-from backend.config import DATABASE_URL, _DATABASE_URL_FROM_ENV
 
 
 bp = Blueprint("health", __name__)
@@ -35,9 +34,7 @@ def health():
     return {
         "status": "ok",
         "db_ready": database._db_ready,
-        "database": "postgresql" if "postgresql" in DATABASE_URL else "sqlite",
-        "database_url_configured": _DATABASE_URL_FROM_ENV,
-        "persistent_storage": "postgresql" in DATABASE_URL,
+        "database": "postgresql",
         "time": datetime.utcnow().isoformat(),
     }
 

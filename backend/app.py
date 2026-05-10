@@ -44,8 +44,6 @@ from backend.config import (
     _AI_MODEL_DEEP,
     _AI_MODEL_FAST,
     _CACHE_MAX,
-    _DATABASE_URL_FROM_ENV,
-    _DB_PATH,
     _cors_origins,
     _cors_raw,
     _load_local_env,
