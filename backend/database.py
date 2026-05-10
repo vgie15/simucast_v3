@@ -1,12 +1,3 @@
-"""
-Database layer for the Axion / SimuCast backend.
-
-Defines the SQLAlchemy engine, session factory, declarative ``Base``, all ORM
-models, and the schema-init / migration helpers. ``_try_init_at_startup`` is
-declared here but invoked from ``backend/app.py`` after the orchestrator has
-imported everything else, so the engine and ``SessionLocal`` are created
-exactly once and shared by the rest of the package.
-"""
 import time
 from datetime import datetime
 
