@@ -15,6 +15,7 @@ import HelpButton from './HelpButton'
 import { SparkleIcon } from './AIExplainers'
 import { useAuth } from './AuthProvider'
 
+// Page component for uploading, editing, cleaning, and exploring the active dataset.
 export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const dialog = useDialog()
   const location = useLocation()
@@ -390,6 +391,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   )
 }
 
+// Card that previews and applies a grouped cleaning fix for missing/outliers/duplicates/types.
 function CleanGroupCard({ datasetId, stageId, group, kind, title, description, applying, onApply }) {
   const auth = useAuth()
   const items = group?.columns || []
@@ -585,6 +587,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
   )
 }
 
+// Small tile displaying a labeled statistic with a contextual help tooltip.
 function StatCard({ label, value }) {
   const help = {
     Missing: 'Shows how many columns currently have blank or missing values that may need imputation, dropping, or review.',
@@ -602,6 +605,7 @@ function StatCard({ label, value }) {
   )
 }
 
+// Collapsible block that triggers an AI explainer and renders the returned advice.
 function AiRecommendationBlock({ loading, suggestion, onAsk }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -659,6 +663,7 @@ function AiRecommendationBlock({ loading, suggestion, onAsk }) {
   )
 }
 
+// Builds the AI explain payload describing the cleaning issue, options, and current selection.
 function buildCleaningAiPayload(kind, group, items = [], selectedItems = [], recommendation, overrides = {}, keep = 'first') {
   const compactItem = (item) => {
     const rec = recommendedColumnAction(kind, item)
@@ -689,6 +694,7 @@ function buildCleaningAiPayload(kind, group, items = [], selectedItems = [], rec
   }
 }
 
+// Returns the help-tooltip copy describing how to use a given cleaning card.
 function helpTextForCleanCard(kind) {
   const help = {
     missing: 'Use this card to fill or remove blank values. SimuCast recommends safer methods per column type, then lets you apply one grouped cleanup step or override columns individually.',
@@ -699,6 +705,7 @@ function helpTextForCleanCard(kind) {
   return help[kind] || 'Use this card to review and apply a recommended data preparation step.'
 }
 
+// Small colored badge labeling the cleaning issue kind (missing/outliers/type/duplicates/expand).
 function KindBadge({ kind }) {
   const map = {
     missing: { bg: '#FAEEDA', fg: '#854F0B', label: 'Missing' },
@@ -715,10 +722,12 @@ function KindBadge({ kind }) {
   )
 }
 
+// Returns a human-readable label for a cleaning action identifier.
 function cleanActionLabel(action) {
   return String(action || 'applied').replace(/_/g, ' ')
 }
 
+// Returns the default grouped cleaning action identifier for the given issue kind.
 function defaultGroupAction(kind) {
   if (kind === 'outliers') return 'winsorize'
   if (kind === 'type') return 'convert_date'
@@ -726,10 +735,12 @@ function defaultGroupAction(kind) {
   return 'impute_mean'
 }
 
+// Returns true if any item exposes the given cleaning action as an option.
 function optionExists(items, action) {
   return items.some((item) => (item.options || []).some((opt) => opt.action === action))
 }
 
+// Computes the recommended grouped action plus a label and rationale for the cleaning kind.
 function recommendedGroupAction(kind, group, items = [], currentAction, keep = 'first') {
   if (kind === 'duplicates') {
     return {
@@ -771,6 +782,7 @@ function recommendedGroupAction(kind, group, items = [], currentAction, keep = '
   }
 }
 
+// Renders per-method recommendation panels listing the columns each fix applies to.
 function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoading, aiSuggestion, onAskAi }) {
   if (!items.length || kind === 'duplicates') return null
   const selectedSet = new Set(selected)
@@ -835,6 +847,7 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
   )
 }
 
+// Groups columns by their per-column recommended action and attaches a summary rationale.
 function groupColumnRecommendations(kind, items = []) {
   const grouped = new Map()
   items.forEach((item) => {
@@ -856,6 +869,7 @@ function groupColumnRecommendations(kind, items = []) {
   }))
 }
 
+// Returns a one-sentence rationale for a recommended cleaning action and kind.
 function summarizeRecommendationReason(kind, rec) {
   if (kind === 'missing') {
     if (rec.action === 'impute_median') return 'Median is safer for numeric columns with skew or outliers.'
@@ -867,6 +881,7 @@ function summarizeRecommendationReason(kind, rec) {
   return rec.why || 'This method matches the detected issue and available SimuCast fixes.'
 }
 
+// Returns a sentence summarizing why a group of columns shares the same recommended fix.
 function summarizeRecommendationGroup(kind, group) {
   const names = group.items.map((item) => item.variable)
   const count = group.items.reduce((sum, item) => sum + Number(item.count || 0), 0)
@@ -887,6 +902,7 @@ function summarizeRecommendationGroup(kind, group) {
   return group.why
 }
 
+// Panel describing the recommended duplicate-row removal action with an AI explainer.
 function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
   const count = group?.count || 0
   if (!count) return null
@@ -926,10 +942,12 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
   )
 }
 
+// Tiny help icon that opens a tooltip explaining a recommendation.
 function InfoDot({ text }) {
   return <HelpButton title="Recommendation help" text={text} />
 }
 
+// Computes a per-column recommended cleaning action with label and rationale.
 function recommendedColumnAction(kind, item) {
   const options = item.options || []
   const has = (action) => options.some((opt) => opt.action === action)
@@ -976,6 +994,7 @@ function recommendedColumnAction(kind, item) {
   return { action: item.action, label: cleanActionLabel(item.action), why: item.description || 'Recommended by the current dataset profile.' }
 }
 
+// Returns per-column override map for items whose recommended action differs from the group default.
 function defaultOverrides(kind, items = [], groupAction) {
   if (kind !== 'missing') return {}
   return Object.fromEntries(
@@ -985,6 +1004,7 @@ function defaultOverrides(kind, items = [], groupAction) {
   )
 }
 
+// Picks a numeric variable suitable for binning and returns a recommendation object.
 function recommendBinning(numericVariables = []) {
   const candidates = numericVariables.filter((v) => {
     const name = String(v.name || '').toLowerCase()
@@ -1000,6 +1020,7 @@ function recommendBinning(numericVariables = []) {
   }
 }
 
+// Picks a float column likely to benefit from rounding and returns a formatting recommendation.
 function recommendNumericFormatting(numericVariables = []) {
   const candidate = numericVariables.find((v) => {
     const name = String(v.name || '').toLowerCase()
@@ -1013,6 +1034,7 @@ function recommendNumericFormatting(numericVariables = []) {
   }
 }
 
+// Header row for a feature engineering recommendation with an AI explain button.
 function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
@@ -1033,6 +1055,7 @@ function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
   )
 }
 
+// Card highlighting a single system-recommended feature engineering action.
 function FeatureRecommendationCard({ recommendation }) {
   if (!recommendation) return null
   return (
@@ -1053,6 +1076,7 @@ function FeatureRecommendationCard({ recommendation }) {
   )
 }
 
+// Card offering binning and numeric formatting tools for creating new feature columns.
 function FeatureEngineeringCard({ dataset, onApplied }) {
   const auth = useAuth()
   const [open, setOpen] = useState(false)
@@ -1316,6 +1340,7 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
   )
 }
 
+// Scrolls to a section element and briefly applies a highlight class for emphasis.
 function highlightSection(section) {
   const el = document.getElementById(section)
   if (!el) return

@@ -8,6 +8,7 @@ import { api } from '../api'
 import { useAuth } from './AuthProvider'
 import NewProjectModal from './NewProjectModal'
 
+// Dashboard landing page summarizing project counts, total rows, and recent projects and files.
 export default function DashboardPage() {
   const [datasets, setDatasets] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
@@ -138,6 +139,7 @@ export default function DashboardPage() {
   )
 }
 
+// Card that displays a labeled summary statistic value with optional smaller text styling.
 function StatCard({ label, value, small }) {
   return (
     <div className="ax-card">

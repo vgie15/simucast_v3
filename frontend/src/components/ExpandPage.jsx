@@ -290,6 +290,7 @@ export default function ExpandPage({ dataset, setDataset }) {
   )
 }
 
+// Selectable card button used to pick an expansion method with title and description.
 function MethodCard({ active, onClick, title, desc }) {
   return (
     <button
@@ -311,15 +312,18 @@ function MethodCard({ active, onClick, title, desc }) {
   )
 }
 
+// Formats a numeric value for display, using locale and fallback dash for null.
 function fmt(v) {
   if (v === null || v === undefined) return '—'
   if (Number.isInteger(v)) return v.toLocaleString()
   return Number(v).toLocaleString(undefined, { maximumFractionDigits: 4 })
 }
+// Formats a percent change with explicit sign and dash placeholder for null.
 function fmtPct(v) {
   if (v === null || v === undefined) return '—'
   return `${v > 0 ? '+' : ''}${v}%`
 }
+// Returns a CSS color token for a percent delta based on absolute magnitude.
 function pctColor(v) {
   if (v === null || v === undefined) return 'inherit'
   const abs = Math.abs(v)

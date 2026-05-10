@@ -12,14 +12,17 @@ const AuthContext = createContext(null)
 // Never cleared by delete, signup, login, migration, or logout.
 const GUEST_SLOT_KEY = 'simucast.guestSlot.used'
 
+// Returns true when this device has already used its single guest project slot.
 function isGuestSlotUsed() {
   return localStorage.getItem(GUEST_SLOT_KEY) === '1'
 }
 
+// Persists a flag indicating the guest project slot has been consumed on this device.
 export function markGuestSlotUsed() {
   localStorage.setItem(GUEST_SLOT_KEY, '1')
 }
 
+// Context provider managing session, login, signup, logout and guest auth state.
 export function AuthProvider({ children }) {
   const navigate = useNavigate()
   const [session, setSession] = useState(null)
@@ -192,12 +195,14 @@ export function AuthProvider({ children }) {
   )
 }
 
+// Hook that returns the current auth context, throwing if used outside the provider.
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
   return ctx
 }
 
+// Modal dialog handling login, signup and guest-upgrade flows for authentication.
 function AuthModal({ initialMode, onClose }) {
   const auth = useAuth()
   const navigate = useNavigate()

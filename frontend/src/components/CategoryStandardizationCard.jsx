@@ -10,6 +10,7 @@ import HelpButton from './HelpButton'
 import { SparkleIcon } from './AIExplainers'
 import { useAuth } from './AuthProvider'
 
+// Card that suggests fuzzy category groupings per column and lets users review and apply standardizations.
 export default function CategoryStandardizationCard({ dataset, onApplied }) {
   const dialog = useDialog()
   const auth = useAuth()
@@ -368,10 +369,12 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   )
 }
 
+// Tiny help-button wrapper that shows a recommendation explanation in a dialog.
 function InfoDot({ text }) {
   return <HelpButton title="Recommendation help" text={text} />
 }
 
+// Collapsible box that displays an AI-generated suggestion message styled by ok/error state.
 function AiSuggestionBox({ suggestion }) {
   const [collapsed, setCollapsed] = useState(false)
   useEffect(() => {

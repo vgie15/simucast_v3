@@ -185,6 +185,7 @@ export default function ManualTransformsCard({ dataset, onApplied }) {
   )
 }
 
+// Renders the parameter form for the active manual transform tab.
 function Form({ tab, params, setParams, variables }) {
   const set = (patch) => setParams({ ...params, ...patch })
   const colNames = variables.map((v) => v.name)
@@ -298,6 +299,7 @@ function Form({ tab, params, setParams, variables }) {
   return null
 }
 
+// Returns the initial parameter object for the given transform tab.
 function defaultParams(tab, dataset) {
   if (tab === 'merge') return { columns: [], separator: ' ', new_name: '', drop_originals: true }
   if (tab === 'rename') return { column: '', new_name: '' }
@@ -308,6 +310,7 @@ function defaultParams(tab, dataset) {
   return {}
 }
 
+// Maps a UI tab key to the backend operation name used by the manual transforms API.
 function opForTab(tab) {
   return {
     merge: 'merge_columns',
@@ -319,6 +322,7 @@ function opForTab(tab) {
   }[tab]
 }
 
+// Validates that the manual transform operation has all required parameters set.
 function isValid(op, p, cols) {
   if (op === 'merge_columns') return (p.columns || []).length >= 2 && !!(p.new_name || '').trim()
   if (op === 'rename_column') return !!p.column && !!(p.new_name || '').trim()
@@ -333,9 +337,11 @@ function isValid(op, p, cols) {
   return false
 }
 
+// Layout helper that arranges its children horizontally with a small gap.
 function Row({ children }) {
   return <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>{children}</div>
 }
+// Labelled text input control used inside the manual transform forms.
 function TextField({ label, value, onChange }) {
   return (
     <label style={{ flex: 1, display: 'block' }}>
@@ -344,6 +350,7 @@ function TextField({ label, value, onChange }) {
     </label>
   )
 }
+// Labelled select input that renders the supplied option list.
 function SelectField({ label, value, onChange, options }) {
   return (
     <label style={{ flex: 1, display: 'block' }}>
@@ -356,6 +363,7 @@ function SelectField({ label, value, onChange, options }) {
     </label>
   )
 }
+// Single-column dropdown selector backed by the provided column name list.
 function ColumnSelect({ label, colNames, value, onChange }) {
   return (
     <label style={{ flex: 1, display: 'block' }}>
@@ -367,6 +375,7 @@ function ColumnSelect({ label, colNames, value, onChange }) {
     </label>
   )
 }
+// Multi-select chip list for picking several columns in a chosen order.
 function ColumnMultiSelect({ label, variables, value, onChange }) {
   const toggle = (name) => {
     if (value.includes(name)) onChange(value.filter((v) => v !== name))
@@ -414,6 +423,7 @@ function ColumnMultiSelect({ label, variables, value, onChange }) {
     </div>
   )
 }
+// Labelled checkbox control used by the manual transform forms.
 function Checkbox({ label, value, onChange }) {
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 4 }}>

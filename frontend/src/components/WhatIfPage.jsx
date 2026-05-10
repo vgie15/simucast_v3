@@ -8,6 +8,7 @@ import { useDialog } from './DialogProvider'
 import { AIInsightCard, ExplainButton } from './AIExplainers'
 import HelpButton from './HelpButton'
 
+// What-if simulation page that runs predictions on a model and saves scenarios.
 export default function WhatIfPage({ dataset, activeModel }) {
   const dialog = useDialog()
   const [fallbackModel, setFallbackModel] = useState(null)
@@ -343,6 +344,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
   )
 }
 
+// Card displaying a saved scenario's prediction, delta from baseline and risk badge.
 function ScenarioCard({ name, prediction, baseline, extrapolation, inputs, active, onClick }) {
   const isProb = prediction.kind === 'probability'
   const delta = baseline ? prediction.prediction - baseline.prediction : null
@@ -385,6 +387,7 @@ function ScenarioCard({ name, prediction, baseline, extrapolation, inputs, activ
   )
 }
 
+// Picks a status color for a probability prediction based on target sentiment and value.
 function probabilityColor(prediction, model) {
   const target = String(prediction?.positive_class || prediction?.predicted_class || model?.target || '').toLowerCase()
   const negativeTarget = /fail|risk|drop|churn|default|bad|loss|no|not|negative/.test(target)
@@ -417,6 +420,7 @@ async function hydrateCurrentCategoryValues(datasetId, features) {
   return hydrated
 }
 
+// Computes per-feature extrapolation distance, direction and overall risk for inputs.
 function computeExtrapolation(inputs, features) {
   const details = []
   for (const f of features || []) {
@@ -461,28 +465,33 @@ function computeExtrapolation(inputs, features) {
   }
 }
 
+// Returns background, foreground and border colors corresponding to a risk level.
 function riskStyle(risk) {
   if (risk === 'high') return { bg: '#FFF1F1', fg: '#9E2524', border: '#E24B4A' }
   if (risk === 'medium') return { bg: '#FFF8EA', fg: '#7A4B00', border: '#EF9F27' }
   return { bg: '#F0FAF6', fg: '#18765B', border: '#1D9E75' }
 }
 
+// Formats an extrapolation entry as a short distance, direction and boundary string.
 function distanceText(risk) {
   if (!risk) return ''
   return `${fmt(risk.distance)} ${risk.direction} ${fmt(risk.boundary)}`
 }
 
+// Clamps a numeric value into the inclusive min and max range.
 function clamp(value, min, max) {
   if (!Number.isFinite(value)) return min
   return Math.min(Math.max(value, min), max)
 }
 
+// Formats a numeric value with one or two decimals depending on magnitude.
 function fmt(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
   return Math.abs(n) >= 100 ? n.toFixed(1) : n.toFixed(2)
 }
 
+// Formats a prediction as either a percentage probability or a fixed-decimal value.
 function formatPrediction(prediction) {
   if (!prediction) return '-'
   return prediction.kind === 'probability'
@@ -490,12 +499,14 @@ function formatPrediction(prediction) {
     : prediction.prediction.toFixed(3)
 }
 
+// Formats the delta between two predictions, using points for probabilities.
 function formatDelta(delta, isProb) {
   if (delta === null || delta === undefined || !Number.isFinite(delta)) return '-'
   const sign = delta > 0 ? '+' : ''
   return isProb ? `${sign}${Math.round(delta * 100)} pts` : `${sign}${delta.toFixed(3)}`
 }
 
+// Returns a warning message when a regression prediction lies outside the dataset range.
 function rangeWarning(prediction, targetContext) {
   if (!prediction || prediction.kind === 'probability' || !targetContext) return null
   const lo = Number(targetContext.min)

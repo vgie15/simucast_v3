@@ -5,6 +5,7 @@
 import React from 'react'
 import AIProjectPlanPanel from './AIProjectPlanPanel'
 
+// Right-rail aside that hosts the AI project plan panel with an optional resize handle.
 export default function ProjectAIRail({ dataset, activeTab, collapsed, onStartResize }) {
   if (!dataset || collapsed) return null
 

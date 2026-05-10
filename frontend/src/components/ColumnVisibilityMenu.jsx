@@ -4,6 +4,7 @@
  * ============================================================ */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
+// Dropdown menu that lets users filter and toggle which dataset columns are visible.
 export default function ColumnVisibilityMenu({ allColumns, selected, onApply }) {
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(selected)
@@ -134,6 +135,7 @@ export default function ColumnVisibilityMenu({ allColumns, selected, onApply }) 
   )
 }
 
+// Renders a small chevron SVG that rotates 180 degrees when the menu is open.
 function Chevron({ open }) {
   return (
     <svg

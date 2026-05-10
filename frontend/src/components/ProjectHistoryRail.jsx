@@ -5,6 +5,7 @@
 import React from 'react'
 import ActivityPanel from './ActivityPanel'
 
+// Right-rail aside that renders the dataset's activity timeline with stage navigation and restore.
 export default function ProjectHistoryRail({ dataset, onViewStage, onRestored, collapsed, onStartResize }) {
   if (!dataset?.id || collapsed) return null
 

@@ -9,6 +9,7 @@ import { useDialog } from './DialogProvider'
 import { useAuth } from './AuthProvider'
 import NewProjectModal from './NewProjectModal'
 
+// Page that lists the user's projects with create and delete actions plus guest signup prompts.
 export default function ProjectsPage() {
   const [datasets, setDatasets] = useState([])
   const [modalOpen, setModalOpen] = useState(false)

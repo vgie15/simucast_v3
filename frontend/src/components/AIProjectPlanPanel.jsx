@@ -41,6 +41,7 @@ const DATA_CHANGE_ACTIONS = new Set([
   'undo_step',
 ])
 
+// Sidebar panel that renders the AI or system guided project plan and tracks progress.
 export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollapsedChange }) {
   const navigate = useNavigate()
   const auth = useAuth()
@@ -441,6 +442,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   )
 }
 
+// Aggregates activity events into per-step completion and invalidation timestamps for plan progress.
 function deriveProgress(activity) {
   const progress = {
     completedAt: {},
@@ -484,14 +486,17 @@ function deriveProgress(activity) {
   return progress
 }
 
+// Records the latest completion timestamp for a given progress page key.
 function mark(progress, page, at) {
   progress.completedAt[page] = Math.max(progress.completedAt[page] || 0, at)
 }
 
+// Records the latest invalidation timestamp for a given progress key.
 function invalidate(progress, key, at) {
   progress.invalidatedAt[key] = Math.max(progress.invalidatedAt[key] || 0, at)
 }
 
+// Returns true if the action mutates dataset content and should refresh latestDataChange.
 function isDataChangingAction(action) {
   if (DATA_CHANGE_ACTIONS.has(action)) return true
   return action.startsWith('clean')
@@ -503,6 +508,7 @@ function isDataChangingAction(action) {
     || action.startsWith('split')
 }
 
+// Returns true if the activity entry represents an undo, restore, or reset action.
 function isReversalAction(action, kind, summary) {
   const text = `${action || ''} ${kind || ''} ${summary || ''}`.toLowerCase()
   return text.includes('undo')
@@ -512,11 +518,13 @@ function isReversalAction(action, kind, summary) {
     || text.includes('reset dataset')
 }
 
+// Returns a data progress key for non-reversal activity entries, or empty string otherwise.
 function dataCompletionKey(action, summary) {
   if (isReversalAction(action, '', summary)) return ''
   return dataKeyFromText(action, summary)
 }
 
+// Maps activity action and summary text to a specific data:* progress key.
 function dataKeyFromText(action, summary) {
   const text = `${action || ''} ${summary || ''}`.toLowerCase()
   const actionText = String(action || '').toLowerCase()
@@ -533,6 +541,7 @@ function dataKeyFromText(action, summary) {
   return ''
 }
 
+// Returns the progress key used to determine whether a plan step is complete.
 function completionKeyForStep(step) {
   const page = step?.page || 'data'
   if (page !== 'data') return page
@@ -546,6 +555,7 @@ function completionKeyForStep(step) {
   return page
 }
 
+// Computes the display status of a plan step based on progress, data changes, and overrides.
 function getStepState(step, progress, latestDataChange, doneSet, skippedSet) {
   const page = step.page || 'data'
   if (skippedSet.has(step.id)) return { step, status: 'skipped' }
@@ -566,6 +576,7 @@ function getStepState(step, progress, latestDataChange, doneSet, skippedSet) {
   return { step, status: 'pending' }
 }
 
+// Classifies a step as required, recommended, or optional based on its id and priority text.
 function requirementForStep(step) {
   const text = `${step?.id || ''} ${step?.title || ''} ${step?.priority || ''}`.toLowerCase()
   if (text.includes('optional') || step?.priority === 'low') return 'optional'
@@ -573,12 +584,14 @@ function requirementForStep(step) {
   return 'recommended'
 }
 
+// Computes a sort weight that orders steps by page, section rank, and original index.
 function workflowSort(step, originalIndex = 0) {
   const pageScore = PAGE_ORDER[step?.page || 'data'] ?? 99
   const sectionScore = sectionRank(step)
   return pageScore * 1000 + sectionScore * 10 + originalIndex / 100
 }
 
+// Returns a numeric rank used to order steps within a page by typical workflow sequence.
 function sectionRank(step) {
   const text = `${step?.section || ''} ${step?.id || ''} ${step?.title || ''}`.toLowerCase()
   if (text.includes('raw') || text.includes('review dataset') || text.includes('export')) return 0
@@ -592,6 +605,7 @@ function sectionRank(step) {
   return 5
 }
 
+// Maps an internal step status code to a user-facing label string.
 function statusLabel(status) {
   const labels = {
     pending: 'pending',
@@ -605,6 +619,7 @@ function statusLabel(status) {
   return labels[status] || status
 }
 
+// Component with a toggle button that reveals expanded explanation text for a step.
 function WhyThisMatters({ text }) {
   const [open, setOpen] = useState(false)
   return (
@@ -621,6 +636,7 @@ function WhyThisMatters({ text }) {
   )
 }
 
+// Modal dialog that displays the full guided plan with all steps and their statuses.
 function GuidedPlanModal({ isAI, mode, error, summary, items, nextStepId, onClose, onGo }) {
   return (
     <div className="ax-plan-modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -694,6 +710,7 @@ function GuidedPlanModal({ isAI, mode, error, summary, items, nextStepId, onClos
   )
 }
 
+// Small SVG chevron icon that rotates between pointing right and down based on open state.
 function Chevron({ open }) {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
@@ -702,6 +719,7 @@ function Chevron({ open }) {
   )
 }
 
+// Returns the user-facing display label for a workflow page identifier.
 function labelForPage(page) {
   const labels = {
     data: 'Data',
@@ -715,10 +733,12 @@ function labelForPage(page) {
   return labels[page] || page
 }
 
+// Returns just the DOM section id that a given plan step should scroll to.
 function sectionForStep(step) {
   return targetForStep(step).section
 }
 
+// Returns routing info (section id, label, hint) describing where a plan step should open.
 function targetForStep(step) {
   if (step.section) {
     return {
@@ -825,6 +845,7 @@ function targetForStep(step) {
   }
 }
 
+// Scrolls to a section by id and briefly applies a highlight class for emphasis.
 function highlightSection(section) {
   if (!section) return
   const el = document.getElementById(section)

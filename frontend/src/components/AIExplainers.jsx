@@ -14,6 +14,7 @@ import { useAuth } from './AuthProvider'
 const _cache = new Map()
 const _MAX = 50
 
+// Builds a stable cache key from dataset, step, params, result and question.
 function keyOf(datasetId, step, params, result, question) {
   try {
     return `${datasetId}::${step}::${JSON.stringify({ params, result, question })}`
@@ -22,10 +23,12 @@ function keyOf(datasetId, step, params, result, question) {
   }
 }
 
+// Returns the cached explanation for the given key if present.
 function cacheGet(k) {
   return _cache.get(k)
 }
 
+// Stores an explanation under the key, evicting the oldest entry when full.
 function cacheSet(k, v) {
   if (_cache.size >= _MAX) {
     const first = _cache.keys().next().value
@@ -34,6 +37,7 @@ function cacheSet(k, v) {
   _cache.set(k, v)
 }
 
+// Heuristic check for whether an AI response appears truncated mid-sentence.
 function looksIncomplete(text) {
   const value = String(text || '').trim()
   if (value.length < 40) return false
@@ -56,6 +60,7 @@ function looksIncomplete(text) {
   return words.length <= 8 && ['first', 'second', 'third', 'next', 'finally'].includes(words[0])
 }
 
+// Renders the small sparkle SVG icon used to mark AI-powered actions.
 export function SparkleIcon({ size = 12 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none">

@@ -7,6 +7,7 @@ import { api } from '../api'
 
 const PAGE_SIZE = 200
 
+// Modal that shows paginated raw values for a single dataset column with a per-page filter.
 export default function ColumnValuesModal({ datasetId, variable, onClose }) {
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
@@ -140,6 +141,7 @@ export default function ColumnValuesModal({ datasetId, variable, onClose }) {
   )
 }
 
+// Returns a display string for a cell value, formatting numbers and booleans nicely.
 function formatCell(v) {
   if (typeof v === 'number') {
     if (Number.isInteger(v)) return v.toString()
@@ -149,6 +151,7 @@ function formatCell(v) {
   return String(v)
 }
 
+// Returns background and foreground chip colors for a given column dtype, falling back to text.
 function dtypeColor(t) {
   const map = {
     numeric: { bg: '#E6F1FB', fg: '#185FA5' },

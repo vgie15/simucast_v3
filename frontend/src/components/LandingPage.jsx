@@ -6,6 +6,7 @@ import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthProvider'
 
+// Marketing landing page with hero, features and audience sections.
 export default function LandingPage() {
   const navigate = useNavigate()
   const auth = useAuth()
@@ -196,6 +197,7 @@ export default function LandingPage() {
   )
 }
 
+// Renders a small stat block with a bold value and a description label.
 function Stat({ value, label }) {
   return (
     <div>
@@ -205,6 +207,7 @@ function Stat({ value, label }) {
   )
 }
 
+// Hero metric row with a label, an animated bar width and a value.
 function Metric({ label, value, width, tone }) {
   return (
     <div className="ax-hero-metric">
@@ -215,6 +218,7 @@ function Metric({ label, value, width, tone }) {
   )
 }
 
+// Renders a single benefit item with an icon, title and short body copy.
 function Benefit({ icon, title, body }) {
   return (
     <div>
@@ -225,6 +229,7 @@ function Benefit({ icon, title, body }) {
   )
 }
 
+// Marketing feature card with icon, title, body and optional tags, checks and stats.
 function FeatureCard({ wide, tone, icon, title, body, tags, checks, stats }) {
   return (
     <article className={`ax-feature-card ${wide ? 'wide' : ''} ${tone || ''}`}>
@@ -252,6 +257,7 @@ function FeatureCard({ wide, tone, icon, title, body, tags, checks, stats }) {
   )
 }
 
+// Card describing a target audience with icon, title, body and bullet checks.
 function Audience({ icon, title, body, checks }) {
   return (
     <article className="ax-audience-card">
@@ -265,6 +271,7 @@ function Audience({ icon, title, body, checks }) {
   )
 }
 
+// Renders a named SVG icon used by the landing page benefit and audience blocks.
 function Icon({ name }) {
   const icons = {
     settings: 'M12 8a4 4 0 100 8 4 4 0 000-8zm8.5 4a7.8 7.8 0 00-.1-1l2-1.5-2-3.5-2.4 1a8 8 0 00-1.7-1L16 3h-4l-.3 3a8 8 0 00-1.7 1l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 000 2l-2 1.5 2 3.5 2.4-1a8 8 0 001.7 1l.3 3h4l.3-3a8 8 0 001.7-1l2.4 1 2-3.5-2-1.5c.1-.3.1-.7.1-1z',

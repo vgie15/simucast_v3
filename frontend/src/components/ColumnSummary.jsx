@@ -4,6 +4,7 @@
  * ============================================================ */
 import React, { useMemo } from 'react'
 
+// Cell component rendering a compact summary of a column based on its dtype.
 export default function ColumnSummary({ variable, rows }) {
   const dtype = variable?.dtype
   const name = variable?.name
@@ -37,10 +38,12 @@ export default function ColumnSummary({ variable, rows }) {
   )
 }
 
+// Renders a placeholder dash when a column has no displayable values.
 function EmptyCell() {
   return <div className="ax-cs-meta">—</div>
 }
 
+// Renders a tiny SVG histogram summarising the distribution of numeric values.
 function NumericMiniHistogram({ nums, bins = 10 }) {
   const min = Math.min(...nums)
   const max = Math.max(...nums)
@@ -83,6 +86,7 @@ function NumericMiniHistogram({ nums, bins = 10 }) {
   )
 }
 
+// Renders the top categorical values with their relative percentage shares.
 function CategoryBars({ values, maxRows = 2 }) {
   const counts = new Map()
   for (const v of values) {
@@ -111,6 +115,7 @@ function CategoryBars({ values, maxRows = 2 }) {
   )
 }
 
+// Formats a number compactly, using grouping for large values and fixed decimals otherwise.
 function formatNumber(n) {
   if (!Number.isFinite(n)) return ''
   if (Math.abs(n) >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 })
