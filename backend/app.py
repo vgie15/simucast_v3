@@ -21,6 +21,16 @@ suite included) can keep doing ``from backend import app`` and reach into
 ``app.<symbol>``.
 """
 import os
+import sys
+
+# Render runs gunicorn with cwd=backend (rootDir: backend in render.yaml), so
+# this file is loaded as the top-level module "app" and the parent directory
+# is not on sys.path. Add it so the absolute "backend.xxx" imports below
+# resolve in production. Locally (tests run from the repo root) this is a
+# no-op because the parent is already on sys.path.
+_PKG_PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PKG_PARENT not in sys.path:
+    sys.path.insert(0, _PKG_PARENT)
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
