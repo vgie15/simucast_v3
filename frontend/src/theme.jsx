@@ -4,12 +4,14 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 const ThemeCtx = createContext(null)
 const STORAGE_KEY = 'ax-theme'
 
+// Write the active theme to <html data-theme> (or clear it for 'system').
 function apply(theme) {
   const root = document.documentElement
   if (theme === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', theme)
 }
 
+// Context provider that persists the chosen theme to localStorage and exposes a toggle.
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => localStorage.getItem(STORAGE_KEY) || 'system')
 
@@ -28,6 +30,7 @@ export function ThemeProvider({ children }) {
   return <ThemeCtx.Provider value={{ theme, isDark, toggle }}>{children}</ThemeCtx.Provider>
 }
 
+// Hook accessor for the theme context; throws when used outside ThemeProvider.
 export function useTheme() {
   const ctx = useContext(ThemeCtx)
   if (!ctx) throw new Error('useTheme must be used inside ThemeProvider')

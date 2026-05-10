@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from './components/AuthProvider'
 import { ThemeProvider } from './theme'
 import FloatingAIAssistant from './components/FloatingAIAssistant'
 
+// Root component: wires the provider stack (theme, dialogs, router, auth) around the routes.
 export default function App() {
   return (
     <ThemeProvider>
@@ -26,6 +27,7 @@ export default function App() {
   )
 }
 
+// Banner shown to guest sessions prompting sign-up; dismissible per render.
 function GuestBanner() {
   const auth = useAuth()
   const [dismissed, setDismissed] = useState(false)
@@ -45,6 +47,7 @@ function GuestBanner() {
   )
 }
 
+// Top-level layout + route table; hides the global sidebar inside the project workspace.
 function AppRoutes() {
   const location = useLocation()
   const isProjectWorkspace = /^\/projects\/[^/]+/.test(location.pathname)

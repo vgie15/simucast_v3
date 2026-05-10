@@ -7,15 +7,18 @@ const LOCAL_API_BASE =
 const TOKEN_KEY = 'simucast.sessionToken'
 const GUEST_SLOT_KEY = 'simucast.guestSlot.used'
 
+// Read the persisted bearer token used for all authenticated requests.
 function getSessionToken() {
   return window.localStorage.getItem(TOKEN_KEY) || ''
 }
 
+// Persist (or clear) the bearer token in localStorage.
 function setSessionToken(token) {
   if (token) window.localStorage.setItem(TOKEN_KEY, token)
   else window.localStorage.removeItem(TOKEN_KEY)
 }
 
+// Build the auth/guest headers attached to every API request.
 function authHeaders(extra = {}) {
   const token = getSessionToken()
   return {
@@ -25,6 +28,7 @@ function authHeaders(extra = {}) {
   }
 }
 
+// Convert a non-OK fetch Response into a thrown Error, preserving JSON error fields.
 async function throwApiError(res) {
   const ct = res.headers.get('content-type') || ''
   if (ct.includes('application/json')) {
@@ -41,10 +45,12 @@ async function throwApiError(res) {
   throw new Error(msg || `${res.status} ${res.statusText}`)
 }
 
+// Bases to try in order: configured prod URL first, local dev fallback second.
 function apiBases() {
   return LOCAL_API_BASE ? [BASE, LOCAL_API_BASE] : [BASE]
 }
 
+// Generic JSON fetch wrapper that retries across api bases and merges auth headers.
 async function request(path, opts = {}) {
   let lastError = null
   for (const base of apiBases()) {
@@ -65,6 +71,7 @@ async function request(path, opts = {}) {
   throw lastError || new Error('Request failed')
 }
 
+// Multipart upload to /datasets/upload (used for both file upload and dataset cloning).
 async function _submitDataset(fd) {
   let lastError = null
   for (const base of apiBases()) {
