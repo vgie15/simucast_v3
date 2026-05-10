@@ -1036,6 +1036,7 @@ def _model_health_diagnostics(metrics, plan=None, algo=None):
     cv_unstable = cv.get("std") is not None and float(cv.get("std") or 0) >= 0.12
 
     def base_causes():
+        """Collect generic reasons that explain unstable train/test behavior."""
         causes = []
         if small_data:
             causes.append(f"Only {rows_total} usable rows were available, so validation can be unstable.")
@@ -1052,6 +1053,7 @@ def _model_health_diagnostics(metrics, plan=None, algo=None):
         return causes
 
     def fixes(overfit=False, underfit=False):
+        """Suggest actionable fixes tailored to overfit / underfit / small-data cases."""
         actions = []
         if overfit:
             actions.extend([
@@ -1072,6 +1074,7 @@ def _model_health_diagnostics(metrics, plan=None, algo=None):
         return actions[:5]
 
     def build(status, label, color, summary, causes=None, actions=None, confidence="normal"):
+        """Assemble the diagnostics dict returned for a single model evaluation."""
         return {
             "status": status,
             "label": label,
