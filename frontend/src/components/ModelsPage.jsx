@@ -904,7 +904,6 @@ function recommendTargets(variables = []) {
     .map((v) => {
       const name = String(v.name || '').toLowerCase()
       let score = 0
-      if (/target|outcome|result|score|gpa|grade|graduate|pass|fail|status|risk|churn|label/.test(name)) score += 3
       if (['category', 'binary', 'int', 'float', 'numeric'].includes(v.dtype)) score += 1
       if (Number(v.unique || 0) > 1) score += 1
       return { ...v, score, why: 'This column looks like a meaningful prediction outcome.' }
