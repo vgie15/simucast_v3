@@ -5,7 +5,6 @@ Activity-log helpers shared by every blueprint.
 a row for JSON output. Routes call these directly to keep the timeline shape
 consistent.
 """
-import uuid
 from datetime import datetime
 
 from backend.database import ActivityLog
@@ -28,7 +27,6 @@ def log_activity(session, dataset_id, kind, summary, detail=None, ref_type=None,
                 return entry
         detail["dedupe_key"] = dedupe_key
     entry = ActivityLog(
-        id=str(uuid.uuid4()),
         dataset_id=dataset_id,
         kind=kind,
         summary=summary,

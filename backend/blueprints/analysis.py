@@ -2,8 +2,6 @@
 Statistical-analysis routes: describe, t-test / ANOVA / chi-square /
 correlation, K-means + PCA, plus a helper to persist Analysis rows.
 """
-import uuid
-
 import numpy as np
 import pandas as pd
 from flask import Blueprint, jsonify, request
@@ -352,13 +350,13 @@ def _save_analysis(session, ds_id, kind, config, result):
     config_payload = {**clean_json(config or {}), "stage_id": stage_id}
     result_payload = {**clean_json(result or {}), "stage_id": stage_id}
     a = Analysis(
-        id=str(uuid.uuid4()),
         dataset_id=ds_id,
         kind=kind,
         config=jdump(config_payload),
         result=jdump(result_payload),
     )
     session.add(a)
+    session.flush()  # populate a.id before log_activity references it
     log_activity(
         session,
         ds_id,

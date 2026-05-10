@@ -4,8 +4,6 @@ Model training and listing routes.
 Wraps ``_build_preprocessing_plan`` + ``_train_one`` from ``backend.ml`` and
 persists each Model row alongside its preprocessing plan + influence summary.
 """
-import uuid
-
 import numpy as np
 from flask import Blueprint, jsonify, request
 
@@ -89,9 +87,7 @@ def train_model(ds_id):
         except ValueError as e:
             return {"error": str(e)}, 400
 
-        model_id = str(uuid.uuid4())
         m = Model(
-            id=model_id,
             dataset_id=ds_id,
             name=f"{algo}_{target}",
             algorithm=algo,
@@ -102,6 +98,8 @@ def train_model(ds_id):
             coefficients=jdump(clean_json(result["coefficients"])) if result["coefficients"] else None,
         )
         s.add(m)
+        s.flush()  # populate m.id for activity log + response payload
+        model_id = m.id
         log_activity(
             s,
             ds_id,
@@ -183,9 +181,7 @@ def train_many_models(ds_id):
         for algo in valid:
             try:
                 r = _train_one(df, target, plan["features"], algo, test_size, plan, model_params.get(algo))
-                model_id = str(uuid.uuid4())
                 m = Model(
-                    id=model_id,
                     dataset_id=ds_id,
                     name=f"{algo}_{target}",
                     algorithm=algo,
@@ -196,6 +192,8 @@ def train_many_models(ds_id):
                     coefficients=jdump(clean_json(r["coefficients"])) if r["coefficients"] else None,
                 )
                 s.add(m)
+                s.flush()  # populate m.id before activity log + response payload reference it
+                model_id = m.id
                 log_activity(
                     s,
                     ds_id,

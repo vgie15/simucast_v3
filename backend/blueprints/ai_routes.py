@@ -7,7 +7,6 @@ response so we can replay across restarts.
 """
 import json
 import re
-import uuid
 from datetime import datetime
 
 import pandas as pd
@@ -539,9 +538,7 @@ def _store_ai_explanation(session, ds_id, cache_key, step, params, question, sou
                 row.result = jdump(clean_json(result))
                 session.commit()
         return existing.get("analysis_id")
-    analysis_id = str(uuid.uuid4())
-    session.add(Analysis(
-        id=analysis_id,
+    a = Analysis(
         dataset_id=ds_id,
         kind="ai_explanation",
         config=jdump({
@@ -558,9 +555,10 @@ def _store_ai_explanation(session, ds_id, cache_key, step, params, question, sou
             "incomplete": bool(incomplete),
             "include_in_report": bool(include_in_report),
         }),
-    ))
+    )
+    session.add(a)
     session.commit()
-    return analysis_id
+    return a.id
 
 
 # ANCHOR: AI: Explain Result
@@ -871,7 +869,6 @@ def ai_chat_send(ds_id):
 def _chat_response_row(ds, *, user_id, role, context, content):
     """Build a (not-yet-persisted) AIResponse row for one chat turn."""
     return AIResponse(
-        id=str(uuid.uuid4()),
         dataset_id=ds.id,
         stage_id=ds.current_stage_id,
         user_id=user_id,

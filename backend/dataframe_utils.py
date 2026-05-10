@@ -5,7 +5,6 @@ Resolves a Dataset row into a pandas DataFrame for the active stage, persists
 new stages with ``create_stage``, and exposes the variable-inference helpers
 the routes use to keep dtype metadata in sync.
 """
-import uuid
 
 import numpy as np
 import pandas as pd
@@ -108,7 +107,6 @@ def create_stage(session, ds, df, op_type, op_params, summary):
     records = clean_json(df.where(pd.notnull(df), None).to_dict(orient="records"))
     parent_id = ds.current_stage_id  # may be None (original)
     stage = DatasetStage(
-        id=str(uuid.uuid4()),
         dataset_id=ds.id,
         parent_stage_id=parent_id,
         step_index=_stage_count(ds.id, session) + 1,
@@ -121,6 +119,7 @@ def create_stage(session, ds, df, op_type, op_params, summary):
         data=jdump(records),
     )
     session.add(stage)
+    session.flush()  # populate stage.id before referencing it
     ds.current_stage_id = stage.id
     ds.row_count = len(df)
     ds.col_count = len(df.columns)

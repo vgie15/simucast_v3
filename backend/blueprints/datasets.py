@@ -5,7 +5,6 @@ CSV export, and category-grouping helpers used by both this blueprint and
 the cleaning blueprint.
 """
 import re
-import uuid
 from difflib import SequenceMatcher
 
 import numpy as np
@@ -202,9 +201,7 @@ def upload_dataset():
             filename = f.filename
             final_name = name or f.filename
 
-        ds_id = str(uuid.uuid4())
         ds = Dataset(
-            id=ds_id,
             name=final_name,
             description=description,
             filename=filename,
@@ -217,6 +214,8 @@ def upload_dataset():
         )
         _attach_owner(ds, s)
         s.add(ds)
+        s.flush()  # populate ds.id for activity log refs
+        ds_id = ds.id
         log_activity(
             s,
             ds_id,
@@ -387,7 +386,7 @@ def delete_dataset(ds_id):
 def get_rows(ds_id):
     """Paginated row data for the Excel-like grid.
 
-    Optional ?stage_id=original|<uuid> selects a specific stage.
+    Optional ?stage_id=original|<int> selects a specific stage.
     """
     page = max(_parse_num(request.args.get("page"), 1, int), 1)
     page_size = min(max(_parse_num(request.args.get("page_size"), 100, int), 1), 1000)
