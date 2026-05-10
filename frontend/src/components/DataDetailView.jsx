@@ -4,7 +4,6 @@
  * ============================================================ */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import ColumnSummary from './ColumnSummary'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { BusyOverlay } from './LoadingStates'
 import { useAuth } from './AuthProvider'
@@ -384,13 +383,6 @@ export default function DataDetailView({
                     <span className="ax-dd-colname">{v.name}</span>
                     <small className="ax-dd-coltype">{TYPE_LABEL[v.dtype] || v.dtype}</small>
                   </button>
-                </th>
-              ))}
-            </tr>
-            <tr className="ax-dd-colsummary">
-              {visibleVariables.map((v) => (
-                <th key={v.name}>
-                  <ColumnSummary variable={v} rows={rows} />
                 </th>
               ))}
             </tr>
