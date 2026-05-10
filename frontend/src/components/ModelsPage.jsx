@@ -44,6 +44,7 @@ const PARAM_DEFS = {
   ],
 }
 
+// Page that configures targets, features, validation, algorithms, and trains predictive models.
 export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const dialog = useDialog()
   const auth = useAuth()
@@ -822,6 +823,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   )
 }
 
+// Card wrapper that displays a numbered modeling step with title, help, and content.
 function Step({ n, title, disabled, children, id }) {
   const help = modelStepHelp(title)
   return (
@@ -857,10 +859,12 @@ function Step({ n, title, disabled, children, id }) {
   )
 }
 
+// Returns the title text with HTML ampersand entities decoded back to regular ampersands.
 function plainTitle(value) {
   return String(value || '').replace(/&amp;/g, '&')
 }
 
+// Returns the contextual help text shown beside each step title based on its keyword.
 function modelStepHelp(title) {
   const text = plainTitle(title).toLowerCase()
   if (text.includes('target')) {
@@ -881,6 +885,7 @@ function modelStepHelp(title) {
   return ''
 }
 
+// Card that surfaces a system-suggested choice with a title, source chip, and content.
 function RecommendationPanel({ title, source, children }) {
   return (
     <div className="ax-card" style={{ padding: '9px 10px', marginTop: 10, background: 'var(--color-background-secondary)' }}>
@@ -898,6 +903,7 @@ function RecommendationPanel({ title, source, children }) {
   )
 }
 
+// Scores variables and returns up to four likely target columns based on dtype and uniqueness.
 function recommendTargets(variables = []) {
   const scored = variables
     .filter((v) => !isIdLike(v.name))
@@ -912,6 +918,7 @@ function recommendTargets(variables = []) {
   return scored.filter((v) => v.score >= 2).slice(0, 4)
 }
 
+// Returns up to twelve recommended feature columns by filtering ID-like names and supported dtypes.
 function recommendFeatures(variables = []) {
   return variables
     .filter((v) => !isIdLike(v.name))
@@ -919,11 +926,13 @@ function recommendFeatures(variables = []) {
     .slice(0, 12)
 }
 
+// Returns true if a column name looks like an identifier and should be excluded from modeling.
 function isIdLike(name) {
   const n = String(name || '').toLowerCase()
   return n === 'id' || n.endsWith('_id') || n.includes('student_id') || n.includes('uuid')
 }
 
+// Dropdown menu that lists available fix options for a preprocessing check and dispatches actions.
 function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
   const [open, setOpen] = useState(false)
   const ref = useRef()
@@ -996,6 +1005,7 @@ function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
   )
 }
 
+// Renders editable per-algorithm parameter inputs based on each algorithm's parameter definitions.
 function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
   if (!selectedAlgos.length) {
     return (
@@ -1048,6 +1058,7 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
   )
 }
 
+// Panel that summarizes the training preprocessing plan and lists detected validation issues.
 function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
 
@@ -1277,6 +1288,7 @@ function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck 
   )
 }
 
+// Renders a labeled row used inside the preprocessing plan summary layout.
 function PlanLine({ label, children }) {
   return (
     <div style={{ display: 'flex', gap: 10, fontSize: 12 }}>
@@ -1288,6 +1300,7 @@ function PlanLine({ label, children }) {
   )
 }
 
+// Renders the fix-options menu for a validation issue with single or multiple route choices.
 function IssueActionMenu({ check, onResolveIssue, onExecuteAction }) {
   const [open, setOpen] = useState(false)
   const actions = check.actions || []
@@ -1324,6 +1337,7 @@ function IssueActionMenu({ check, onResolveIssue, onExecuteAction }) {
   )
 }
 
+// Panel that displays trained model comparison, health card, and detailed inspection of the active model.
 function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, datasetId, onFixAction }) {
   const dialog = useDialog()
   const { models, skipped } = results
@@ -1404,6 +1418,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
   )
 }
 
+// Table that compares trained models side by side and marks the best performer per task.
 function ComparisonTable({ models, activeIdx, onPick }) {
   const task = models[0].metrics.task
   return (
@@ -1509,6 +1524,7 @@ function ComparisonTable({ models, activeIdx, onPick }) {
   )
 }
 
+// Returns background, chip, text, and border colors for a model health status color key.
 function healthTone(color) {
   const tones = {
     green: { bg: '#F0FDF4', chipBg: '#DCFCE7', text: '#15803D', border: '#22C55E' },
@@ -1521,6 +1537,7 @@ function healthTone(color) {
   return tones[color] || tones.gray
 }
 
+// Card that summarizes a trained model's health, possible causes, and recommended fix actions.
 function ModelHealthCard({ model, datasetId, onFixAction }) {
   const health = assessModelHealth(model)
   if (!health) return null
@@ -1609,6 +1626,7 @@ function ModelHealthCard({ model, datasetId, onFixAction }) {
   )
 }
 
+// Component that renders feature-influence chart and confusion matrix for the selected model.
 function ModelDetail({ model }) {
   const influence = normalizeInfluence(model.feature_influence || model.feature_importance)
   const impLabels = influence.map((item) => item.feature)
@@ -1668,6 +1686,7 @@ function ModelDetail({ model }) {
   )
 }
 
+// Builds a model-health assessment object combining stored diagnostics with computed metric rows.
 function assessModelHealth(model) {
   const m = model?.metrics
   if (!m) return null
@@ -1779,6 +1798,7 @@ function assessModelHealth(model) {
   }
 }
 
+// Renders a classification confusion matrix with cells shaded by intensity and diagonal emphasis.
 function ConfusionMatrix({ cm }) {
   const max = cm.flat().reduce((a, b) => Math.max(a, b), 0)
   return (
@@ -1828,6 +1848,7 @@ function ConfusionMatrix({ cm }) {
   )
 }
 
+// Returns a short formatted string of the headline metrics for a trained model.
 function formatMetrics(m) {
   if (!m) return ''
   if (m.task === 'classification') {
@@ -1838,6 +1859,7 @@ function formatMetrics(m) {
   return `R² ${num(m.r2)} · RMSE ${num(m.rmse)}`
 }
 
+// Normalizes a feature-influence value into an array of entries with relative strength scaled to one.
 function normalizeInfluence(value) {
   if (Array.isArray(value)) return value
   if (!value || typeof value !== 'object') return []
@@ -1851,6 +1873,7 @@ function normalizeInfluence(value) {
   }))
 }
 
+// Maps a feature-influence direction code to a human-readable label like Increases or Decreases.
 function directionLabel(direction) {
   if (direction === 'positive') return 'Increases'
   if (direction === 'negative') return 'Decreases'
@@ -1858,21 +1881,25 @@ function directionLabel(direction) {
   return 'Model-derived'
 }
 
+// Returns the CSS color variable used to style positive, negative, or neutral influence directions.
 function directionColor(direction) {
   if (direction === 'positive') return 'var(--color-text-success)'
   if (direction === 'negative') return 'var(--color-text-danger)'
   return 'var(--color-text-secondary)'
 }
 
+// Formats a fractional value as a one-decimal percentage string, or em dash when null.
 function pct(v) {
   if (v == null) return '—'
   return `${(v * 100).toFixed(1)}%`
 }
+// Formats a numeric value to three decimals, returning an em dash for null or undefined.
 function num(v) {
   if (v == null) return '—'
   return Number(v).toFixed(3)
 }
 
+// Returns an object holding the default parameter values for every supported algorithm.
 function defaultModelParams() {
   return Object.fromEntries(
     Object.entries(PARAM_DEFS).map(([algo, defs]) => [
@@ -1882,16 +1909,19 @@ function defaultModelParams() {
   )
 }
 
+// Returns the user-facing display label for an algorithm key, falling back to the key itself.
 function algoLabel(algo) {
   return ALGOS.find((a) => a.key === algo)?.label || algo
 }
 
+// Returns a task-aware algorithm label that distinguishes classifier and regressor variants.
 function algoLabelForTask(algo, task) {
   if (algo === 'rf') return task === 'classification' ? 'Random Forest Classifier' : task === 'regression' ? 'Random Forest Regressor' : 'Random Forest'
   if (algo === 'tree') return task === 'classification' ? 'Decision Tree Classifier' : task === 'regression' ? 'Decision Tree Regressor' : 'Decision Tree'
   return algoLabel(algo)
 }
 
+// Builds the training target options payload from the user's validation and class-weight choices.
 function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
@@ -1905,6 +1935,7 @@ function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds,
   return options
 }
 
+// Maps a fix-action route key to the destination page and section id used for navigation.
 function routeToFixTarget(route) {
   const map = {
     'data.missing_values': { page: 'data', section: 'fix-cleaning-suggestions' },
@@ -1927,6 +1958,7 @@ function routeToFixTarget(route) {
   return map[route]
 }
 
+// Resolves a backend-provided fix payload into a page and section navigation target.
 function fixTargetFromBackendFix(fix) {
   if (!fix) return null
   if (String(fix.route || '').includes('.')) {

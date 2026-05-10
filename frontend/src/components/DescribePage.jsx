@@ -525,6 +525,7 @@ function VariableCard({ title, type, tags, metrics, insight, distribution, expan
   )
 }
 
+// Derives up to five plain-language insights about skew, spread, and category dominance.
 function buildKeyInsights(numericStats, categoricalStats) {
   const insights = []
   const symmetric = numericStats.filter((s) => Math.abs(Number(s.skew) || 0) < 0.5)
@@ -547,6 +548,7 @@ function buildKeyInsights(numericStats, categoricalStats) {
   return insights.slice(0, 5)
 }
 
+// Returns a sentence describing a numeric variable's shape, variability, and typical range.
 function numericInsight(s) {
   const skew = Number(s.skew) || 0
   const spread = spreadScore(s)
@@ -555,6 +557,7 @@ function numericInsight(s) {
   return `${s.variable} is ${shape} and shows ${variability}. The typical value is around ${fmt(s.mean)}, with most middle values between ${fmt(s.q1)} and ${fmt(s.q3)}.`
 }
 
+// Returns a sentence describing how concentrated a categorical variable is on its top value.
 function categoricalInsight(s) {
   const share = Number(s.freq || 0) / Math.max(Number(s.n || 0), 1)
   if (share >= 0.7) return `${s.variable} is highly concentrated: ${s.top} accounts for ${pctOf(s.freq, s.n)} of valid rows.`
@@ -562,6 +565,7 @@ function categoricalInsight(s) {
   return `${s.variable} is relatively spread across categories; no single category overwhelmingly dominates.`
 }
 
+// Returns a short caption describing the peak bin of a histogram for a numeric variable.
 function describeHistogram(histogram, numericStats) {
   const stat = numericStats.find((s) => s.variable === histogram.variable)
   if (!stat) return null
@@ -572,6 +576,7 @@ function describeHistogram(histogram, numericStats) {
   return `${histogram.variable} peaks around ${fmt(lo)} to ${fmt(hi)}. ${numericInsight(stat)}`
 }
 
+// Returns short descriptive chips characterizing a numeric variable's skew and spread.
 function numericTags(s) {
   const tags = []
   const skew = Number(s.skew) || 0
@@ -581,11 +586,13 @@ function numericTags(s) {
   return tags
 }
 
+// Returns short chips indicating category dominance and the unique-value count.
 function categoricalTags(s) {
   const share = Number(s.freq || 0) / Math.max(Number(s.n || 0), 1)
   return [share >= 0.6 ? 'Dominant category' : 'Mixed categories', `${s.unique} unique`]
 }
 
+// Builds a list of top category labels with counts and percentage strings for display.
 function topDistribution(s) {
   const counts = s.value_counts || {}
   const total = Math.max(Number(s.n || 0), 1)
@@ -596,16 +603,19 @@ function topDistribution(s) {
   }))
 }
 
+// Computes a normalized spread score (std divided by range) for a numeric summary.
 function spreadScore(s) {
   const range = Math.abs(Number(s.max) - Number(s.min)) || 1
   return Math.abs(Number(s.std) || 0) / range
 }
 
+// Returns count divided by total formatted as a one-decimal percentage string.
 function pctOf(count, total) {
   if (!total) return '0.0%'
   return `${((Number(count || 0) / Number(total)) * 100).toFixed(1)}%`
 }
 
+// Formats a number with adaptive decimal precision, returning a dash for null/undefined.
 function fmt(v) {
   if (v === null || v === undefined) return '-'
   if (typeof v !== 'number') return v

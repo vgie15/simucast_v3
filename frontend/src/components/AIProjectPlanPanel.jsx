@@ -619,6 +619,7 @@ function statusLabel(status) {
   return labels[status] || status
 }
 
+// Component with a toggle button that reveals expanded explanation text for a step.
 function WhyThisMatters({ text }) {
   const [open, setOpen] = useState(false)
   return (
@@ -635,6 +636,7 @@ function WhyThisMatters({ text }) {
   )
 }
 
+// Modal dialog that displays the full guided plan with all steps and their statuses.
 function GuidedPlanModal({ isAI, mode, error, summary, items, nextStepId, onClose, onGo }) {
   return (
     <div className="ax-plan-modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -708,6 +710,7 @@ function GuidedPlanModal({ isAI, mode, error, summary, items, nextStepId, onClos
   )
 }
 
+// Small SVG chevron icon that rotates between pointing right and down based on open state.
 function Chevron({ open }) {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
@@ -716,6 +719,7 @@ function Chevron({ open }) {
   )
 }
 
+// Returns the user-facing display label for a workflow page identifier.
 function labelForPage(page) {
   const labels = {
     data: 'Data',
@@ -729,10 +733,12 @@ function labelForPage(page) {
   return labels[page] || page
 }
 
+// Returns just the DOM section id that a given plan step should scroll to.
 function sectionForStep(step) {
   return targetForStep(step).section
 }
 
+// Returns routing info (section id, label, hint) describing where a plan step should open.
 function targetForStep(step) {
   if (step.section) {
     return {
@@ -839,6 +845,7 @@ function targetForStep(step) {
   }
 }
 
+// Scrolls to a section by id and briefly applies a highlight class for emphasis.
 function highlightSection(section) {
   if (!section) return
   const el = document.getElementById(section)

@@ -19,6 +19,7 @@ const SECTIONS = [
   { key: 'documentation', label: 'Appendix actions' },
 ]
 
+// Page component for selecting report sections, building the report, and exporting HTML/PDF.
 export default function ReportPage({ dataset }) {
   const auth = useAuth()
   const [selected, setSelected] = useState(SECTIONS.map((s) => s.key))
@@ -345,6 +346,7 @@ export default function ReportPage({ dataset }) {
   )
 }
 
+// Returns an inline metrics string for a model based on its task type.
 function formatInline(m) {
   if (!m) return ''
   if (m.task === 'classification') {
@@ -358,6 +360,7 @@ function formatInline(m) {
   return ''
 }
 
+// Builds the HTML markup for one report section including tables, charts, and items.
 function sectionHtml(sec, index = 0, charts = {}) {
   const body = sec.body ? `<div class="insight-card"><p>${escapeHtml(sec.body)}</p></div>` : ''
   const stats = sec.data?.stats
@@ -394,6 +397,7 @@ function sectionHtml(sec, index = 0, charts = {}) {
   return `<section class="${sectionClass}"><h2>${escapeHtml(sec.title)}</h2>${body}${stats}${histogramImgs}${items}</section>`
 }
 
+// Builds the HTML table summarizing model algorithm, target, task, metric, and top factors.
 function modelTableHtml(items) {
   if (!items?.length) return ''
   return `<table class="model-table"><thead><tr><th>Model</th><th>Target</th><th>Task</th><th class="num">Primary metric</th><th>Notes</th></tr></thead><tbody>${
@@ -408,11 +412,13 @@ function modelTableHtml(items) {
   }</tbody></table>`
 }
 
+// Returns HTML for a notes block listing each note text inside a labeled container.
 function notesHtml(notes) {
   if (!notes?.length) return ''
   return `<div class="note"><strong>Notes:</strong>${notes.map((n) => `<div>${escapeHtml(n.text)}</div>`).join('')}</div>`
 }
 
+// Returns collapsible HTML listing category mapping pairs from original to recoded values.
 function mappingHtml(mapping) {
   if (!mapping) return ''
   return `<details style="margin-top:6px;"><summary>Category mapping</summary><ul>${
@@ -420,26 +426,31 @@ function mappingHtml(mapping) {
   }</ul></details>`
 }
 
+// Returns HTML listing the top feature influence names for an analysis item.
 function influenceHtml(value) {
   const influence = normalizeInfluence(value)
   if (!influence.length) return ''
   return `<div class="note"><span class="label">Feature influence</span><br />${escapeHtml(influence.slice(0, 5).map((x) => x.feature).join(', '))}</div>`
 }
 
+// Normalizes feature influence into an array of feature/strength objects from any input shape.
 function normalizeInfluence(value) {
   if (Array.isArray(value)) return value
   if (!value || typeof value !== 'object') return []
   return Object.entries(value).map(([feature, strength]) => ({ feature, strength }))
 }
 
+// Returns a numeric value formatted to three decimals or empty string for non-numbers.
 function fmtHtml(v) {
   return typeof v === 'number' ? v.toFixed(3) : ''
 }
 
+// Returns a numeric value formatted as a one-decimal percentage or empty string.
 function pctHtml(v) {
   return typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : ''
 }
 
+// Escapes HTML-sensitive characters in a string so it can be safely embedded into markup.
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -449,6 +460,7 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;')
 }
 
+// Renders a Chart.js config off-screen and returns a base64 PNG data URL of the chart.
 function renderChartToDataUrl(config, width = 720, height = 420) {
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -480,6 +492,7 @@ function renderChartToDataUrl(config, width = 720, height = 420) {
   return url
 }
 
+// Generates data-URL chart images for histograms, scatter plots, and feature influence bars.
 function renderChartImages(report) {
   const out = { histograms: {}, scatters: {}, influences: {} }
   if (!report || !Array.isArray(report.sections)) return out
@@ -581,11 +594,13 @@ function renderChartImages(report) {
   return out
 }
 
+// Returns the arithmetic mean of an array, or zero when the array is empty.
 function avgArr(arr) {
   if (!arr.length) return 0
   return arr.reduce((sum, v) => sum + v, 0) / arr.length
 }
 
+// Formats a finite number with adaptive decimal precision for histogram bin labels.
 function fmtNum(v) {
   if (typeof v !== 'number' || !Number.isFinite(v)) return ''
   if (Math.abs(v) >= 100) return v.toFixed(0)

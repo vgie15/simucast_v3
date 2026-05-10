@@ -17,6 +17,7 @@ const TAB_LABELS = {
   report: 'Report',
 }
 
+// Floating chat widget that lets authenticated users ask AI about the active project.
 export default function FloatingAIAssistant() {
   const auth = useAuth()
   const location = useLocation()
@@ -236,6 +237,7 @@ export default function FloatingAIAssistant() {
   )
 }
 
+// Renders the initial assistant welcome message tailored to auth and project state.
 function WelcomeMessage({ auth, hasProject, activeTab }) {
   let copy = `Ask me about this ${TAB_LABELS[activeTab] || activeTab} step. I can help interpret results, suggest the next move, or sanity-check your workflow.`
   if (auth.loading) copy = 'Checking your account before starting AI chat.'
@@ -250,6 +252,7 @@ function WelcomeMessage({ auth, hasProject, activeTab }) {
   )
 }
 
+// Renders a single chat message bubble with optional avatar and timestamp.
 function MessageBubble({ message, compact }) {
   const role = message.role === 'user' ? 'user' : 'assistant'
   return (
@@ -268,6 +271,7 @@ function MessageBubble({ message, compact }) {
   )
 }
 
+// Extracts the dataset id and tab from a project route pathname.
 function getProjectContext(pathname) {
   const match = pathname.match(/^\/projects\/([^/]+)(?:\/([^/]+))?/)
   if (!match) return null
@@ -275,6 +279,7 @@ function getProjectContext(pathname) {
   return { datasetId: decodeURIComponent(match[1]), tab }
 }
 
+// Returns the assistant header status string based on auth and request state.
 function getStatus({ auth, hasProject, loading, sending }) {
   if (auth.loading) return 'Checking account'
   if (!auth.isAuthenticated) return 'Account required'
@@ -284,6 +289,7 @@ function getStatus({ auth, hasProject, loading, sending }) {
   return 'Ready with project context'
 }
 
+// Picks the chat input placeholder text based on auth and project availability.
 function getPlaceholder({ auth, hasProject }) {
   if (auth.loading) return 'Checking account...'
   if (!auth.isAuthenticated) return 'AI chat requires an account...'
@@ -291,12 +297,14 @@ function getPlaceholder({ auth, hasProject }) {
   return 'Ask about this project...'
 }
 
+// Formats an ISO timestamp into a short locale time string for chat bubbles.
 function formatTime(iso) {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+// Renders the small sparkle SVG icon used for the assistant avatar.
 function SparkIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -305,6 +313,7 @@ function SparkIcon() {
   )
 }
 
+// Renders the paper-plane send button icon for the chat input.
 function SendIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -313,6 +322,7 @@ function SendIcon() {
   )
 }
 
+// Renders the X close icon used in the assistant header.
 function CloseIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
