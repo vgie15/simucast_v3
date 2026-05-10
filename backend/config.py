@@ -52,14 +52,10 @@ _CACHE_MAX = 32
 _cors_raw = os.environ.get("CORS_ORIGINS", "*")
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simucast.db")
-_DATABASE_URL_FROM_ENV = bool(os.environ.get("DATABASE_URL"))
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    f"sqlite:///{_DB_PATH}"  # absolute path so db location never depends on cwd
-)
-if os.environ.get("RENDER") and not _DATABASE_URL_FROM_ENV:
-    raise RuntimeError("DATABASE_URL is required on Render. SQLite files on Render are ephemeral and will lose accounts.")
+_DATABASE_URL = os.environ.get("DATABASE_URL")
+if not _DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required. Set it to a PostgreSQL connection string (postgresql://user:pass@host/db).")
 # Render gives postgres:// but SQLAlchemy needs postgresql://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if _DATABASE_URL.startswith("postgres://"):
+    _DATABASE_URL = _DATABASE_URL.replace("postgres://", "postgresql://", 1)
+DATABASE_URL = _DATABASE_URL
