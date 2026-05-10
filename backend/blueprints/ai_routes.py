@@ -1145,6 +1145,7 @@ def _normalize_project_steps(steps):
         "report": {"": "ax-report-preview"},
     }
     def normalize_section(page, raw, step):
+        """Map a step's free-form section hint to a known anchor id used by the UI."""
         section = str(raw or "").strip()
         valid = {
             "fix-cleaning-suggestions", "data-section-category_standardization",
@@ -1162,6 +1163,7 @@ def _normalize_project_steps(steps):
                 return fallback
         return section
     def sub_order(step):
+        """Sort key that groups related plan steps within a page in a sensible order."""
         text = f"{step.get('section', '')} {step.get('id', '')} {step.get('title', '')}".lower()
         if "raw" in text or "review dataset" in text or "export" in text:
             return 0
