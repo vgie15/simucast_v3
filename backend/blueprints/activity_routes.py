@@ -23,7 +23,6 @@ bp = Blueprint("activity_routes", __name__)
 # ANCHOR: Activity: List Project Actions
 @bp.route("/api/datasets/<ds_id>/activity", methods=["GET"])
 def list_activity(ds_id):
-    """Return the project activity timeline (skips raw AI/note entries)."""
     order = (request.args.get("order") or "desc").lower()
     s = db()
     try:

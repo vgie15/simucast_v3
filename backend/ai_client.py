@@ -28,12 +28,6 @@ def _ai_client():
 
 
 def _dataset_profile(ds, df, variables, max_unique=8):
-    """Compact, deterministic dataset summary for AI prompts.
-
-    Used as a cacheable prompt prefix so we're not paying for the whole row
-    payload on every call. Only metadata + small samples — never the full
-    dataset.
-    """
     cols = []
     for v in variables or []:
         col = {
