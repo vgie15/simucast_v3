@@ -37,6 +37,7 @@ const MAX_W = 420
 const DEFAULT_W = 220
 const STORAGE_KEY = 'ax-sidebar-w'
 
+// Resizable left navigation sidebar showing primary nav links, theme toggle, and the user profile menu.
 export default function Sidebar() {
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem(STORAGE_KEY))

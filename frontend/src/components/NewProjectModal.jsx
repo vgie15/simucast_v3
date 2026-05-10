@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { useAuth, markGuestSlotUsed } from './AuthProvider'
 
+// Modal that creates a new project either by uploading a file or selecting an existing dataset.
 export default function NewProjectModal({ open, onClose, onCreated }) {
   const auth = useAuth()
   const [mode, setMode] = useState('upload') // 'upload' | 'existing'

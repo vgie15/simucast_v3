@@ -28,6 +28,7 @@ const TYPE_LABEL = {
   datetime: 'DATETIME',
 }
 
+// Detail view that paginates dataset rows with column visibility controls and the about panel.
 export default function DataDetailView({
   dataset,
   variables,

@@ -8,6 +8,7 @@ import { api } from '../api'
 import { useAuth } from './AuthProvider'
 import { useDialog } from './DialogProvider'
 
+// Settings page for editing profile info, changing password, toggling theme, and deleting the account.
 export default function SettingsPage() {
   const auth = useAuth()
   const dialog = useDialog()
@@ -254,6 +255,7 @@ export default function SettingsPage() {
   )
 }
 
+// Renders an inline status message paragraph, styled as danger when flagged.
 function SettingsMessage({ text, danger = false }) {
   if (!text) return null
   return <p className={`ax-settings-message ${danger ? 'danger' : ''}`}>{text}</p>

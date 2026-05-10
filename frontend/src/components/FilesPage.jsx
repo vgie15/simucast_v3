@@ -8,6 +8,7 @@ import { api } from '../api'
 import { useAuth, markGuestSlotUsed } from './AuthProvider'
 import { useDialog } from './DialogProvider'
 
+// Page that lists uploaded source files and lets users upload new datasets or delete projects.
 export default function FilesPage() {
   const [datasets, setDatasets] = useState([])
   const [uploading, setUploading] = useState(false)

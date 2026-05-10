@@ -16,6 +16,7 @@ const FILTERS = [
   { key: 'report', label: 'Report' },
 ]
 
+// Panel showing the project audit trail with filters, notes and stage restore actions.
 export default function ActivityPanel({ datasetId, onViewStage, onRestored, title = 'Documentation', subtitle = 'Project actions for methods, audit trail, and reports.' }) {
   const dialog = useDialog()
   const [activity, setActivity] = useState([])
@@ -342,6 +343,7 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored, titl
   )
 }
 
+// Maps an activity kind to a human-readable phase label like Data Prep or Modeling.
 function labelFor(kind) {
   const labels = {
     data_prep: 'Data Prep',
@@ -372,6 +374,7 @@ function labelFor(kind) {
   return labels[kind] || kind
 }
 
+// Renders a before-and-after list summarising up to twenty category mapping entries.
 function MappingList({ mapping }) {
   const entries = Object.entries(mapping || {})
   if (!entries.length) return null
@@ -387,6 +390,7 @@ function MappingList({ mapping }) {
   )
 }
 
+// Builds a labelled rows array describing parameters and outputs for an activity entry.
 function detailsForItem(item) {
   const detail = item.detail || {}
   const rows = []
@@ -412,10 +416,12 @@ function detailsForItem(item) {
   return rows.filter((row) => row.value !== undefined && row.value !== null && String(row.value).trim() !== '')
 }
 
+// Converts a snake_case identifier into a Title Case display string.
 function humanize(value) {
   return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// Serialises a value to a compact JSON string, falling back to String coercion.
 function compactJson(value) {
   try {
     return JSON.stringify(value)
@@ -424,6 +430,7 @@ function compactJson(value) {
   }
 }
 
+// Returns the CSS badge class corresponding to the activity kind's category.
 function badgeClassFor(kind) {
   const label = labelFor(kind).toLowerCase()
   if (label.includes('data') || label.includes('restore')) return 'ax-badge-data'

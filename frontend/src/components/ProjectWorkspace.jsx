@@ -26,6 +26,7 @@ const TABS = [
   { key: 'report', label: 'Report', subtitle: 'Creating insights and documentation' },
 ]
 
+// Top-level workspace shell hosting the project tabs, history rail and AI rail.
 export default function ProjectWorkspace() {
   const { id, tab = 'data' } = useParams()
   const navigate = useNavigate()
@@ -254,6 +255,7 @@ export default function ProjectWorkspace() {
   )
 }
 
+// Renders a small chevron SVG that rotates based on the given direction.
 function ToggleChevron({ direction }) {
   // direction: 'left' or 'right'
   return (
@@ -273,6 +275,7 @@ function ToggleChevron({ direction }) {
   )
 }
 
+// Scrolls to a section by id and briefly applies a highlight class for emphasis.
 function highlightSection(section) {
   const el = document.getElementById(section)
   if (!el) return
@@ -282,6 +285,7 @@ function highlightSection(section) {
 }
 
 
+// Card prompting the user to proceed to the next workflow tab with contextual copy.
 function NextPagePrompt({ activeTab, datasetId }) {
   const idx = TABS.findIndex((t) => t.key === activeTab)
   const next = TABS[idx + 1]
@@ -309,6 +313,7 @@ function NextPagePrompt({ activeTab, datasetId }) {
   )
 }
 
+// Switch helper that selects and renders the page component for the active tab.
 function renderTab(tab, props) {
   const k = props.refreshKey
   switch (tab) {

@@ -6,6 +6,7 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 
 const DialogContext = createContext(null)
 
+// Context provider exposing alert and confirm helpers that mount a single shared dialog component.
 export function DialogProvider({ children }) {
   const [dialog, setDialog] = useState(null)
 
@@ -53,12 +54,14 @@ export function DialogProvider({ children }) {
   )
 }
 
+// Hook that returns the dialog context, throwing if used outside a DialogProvider.
 export function useDialog() {
   const ctx = useContext(DialogContext)
   if (!ctx) throw new Error('useDialog must be used inside DialogProvider')
   return ctx
 }
 
+// Modal dialog component rendering the alert or confirm UI with optional typed confirmation.
 function AppDialog({ dialog, onClose }) {
   const [typed, setTyped] = useState('')
   const isDanger = dialog.variant === 'danger'

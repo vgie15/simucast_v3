@@ -6,6 +6,7 @@ import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthProvider'
 
+// Marketing landing page with hero, features and audience sections.
 export default function LandingPage() {
   const navigate = useNavigate()
   const auth = useAuth()
@@ -196,6 +197,7 @@ export default function LandingPage() {
   )
 }
 
+// Renders a small stat block with a bold value and a description label.
 function Stat({ value, label }) {
   return (
     <div>
@@ -205,6 +207,7 @@ function Stat({ value, label }) {
   )
 }
 
+// Hero metric row with a label, an animated bar width and a value.
 function Metric({ label, value, width, tone }) {
   return (
     <div className="ax-hero-metric">

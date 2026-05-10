@@ -5,6 +5,7 @@
 import React from 'react'
 import { useDialog } from './DialogProvider'
 
+// Small "?" button that opens a dialog with explanatory help text and optional details.
 export default function HelpButton({ title = 'What this does', text, details, size = 18 }) {
   const dialog = useDialog()
   if (!text && !details) return null

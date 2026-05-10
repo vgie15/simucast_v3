@@ -4,6 +4,7 @@
  * ============================================================ */
 import React from 'react'
 
+// Full-screen busy overlay showing spinner, title, optional detail and step list.
 export function BusyOverlay({ active, title = 'Working...', detail, steps = [] }) {
   if (!active) return null
   return (
@@ -26,6 +27,7 @@ export function BusyOverlay({ active, title = 'Working...', detail, steps = [] }
   )
 }
 
+// Renders a placeholder skeleton table with configurable row and column counts.
 export function SkeletonTable({ rows = 8, columns = 6 }) {
   return (
     <div className="ax-skeleton-table" style={{ '--skel-cols': columns }} aria-hidden="true">
@@ -45,6 +47,7 @@ export function SkeletonTable({ rows = 8, columns = 6 }) {
   )
 }
 
+// Renders a row of placeholder skeleton cards while content is loading.
 export function SkeletonCards({ count = 3 }) {
   return (
     <div className="ax-skeleton-cards" aria-hidden="true">
@@ -59,6 +62,7 @@ export function SkeletonCards({ count = 3 }) {
   )
 }
 
+// Small inline spinner with label, used beside text to indicate activity.
 export function InlineSpinner({ label = 'Loading...' }) {
   return (
     <span className="ax-inline-spinner" role="status" aria-live="polite">

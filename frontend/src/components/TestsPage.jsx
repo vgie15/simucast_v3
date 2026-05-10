@@ -41,6 +41,7 @@ const TESTS = [
   },
 ]
 
+// Page that lets users configure and run statistical hypothesis tests on the dataset.
 export default function TestsPage({ dataset }) {
   const dialog = useDialog()
   const [kind, setKind] = useState('t')
@@ -279,6 +280,7 @@ export default function TestsPage({ dataset }) {
   )
 }
 
+// Scrolls to a section by id and briefly applies a highlight class for emphasis.
 function highlightSection(section) {
   const el = document.getElementById(section)
   if (!el) return
@@ -287,6 +289,7 @@ function highlightSection(section) {
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
 
+// Renders a small label/text pair used inside test setup cards.
 function InfoRow({ label, text }) {
   return (
     <div style={{ marginBottom: 8 }}>
@@ -296,6 +299,7 @@ function InfoRow({ label, text }) {
   )
 }
 
+// Returns recommended variable pairings for the given test kind based on dataset variable types.
 function recommendedTestPairs(kind, numericVars = [], categoricalVars = []) {
   const nums = numericVars.map((v) => v.name)
   const cats = categoricalVars.map((v) => v.name)
@@ -336,6 +340,7 @@ function recommendedTestPairs(kind, numericVars = [], categoricalVars = []) {
   }))).slice(0, 3)
 }
 
+// Component that renders the full result panel for a completed statistical test.
 function TestResult({ kind, result, setup, datasetId }) {
   const summary = summarizeResult(kind, result, setup)
   const stepName = `test-${kind}`
@@ -425,6 +430,7 @@ function TestResult({ kind, result, setup, datasetId }) {
   )
 }
 
+// Card that renders a scatter plot with a fitted trend line for the strongest correlated pair.
 function CorrelationScatter({ result }) {
   const pair = result.strongest_pair
   const vars = result.variables || []
@@ -495,6 +501,7 @@ function CorrelationScatter({ result }) {
   )
 }
 
+// Renders a horizontal grid of labeled metric tiles for test results.
 function Metrics({ items }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, minmax(100px, 1fr))`, gap: 6, marginBottom: 10 }}>
@@ -508,6 +515,7 @@ function Metrics({ items }) {
   )
 }
 
+// Renders a colored badge stating whether the null hypothesis is rejected.
 function Decision({ significant }) {
   return (
     <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 6, background: significant ? '#F0FAF6' : 'var(--color-background-secondary)', color: significant ? '#18765B' : 'var(--color-text-secondary)', fontSize: 12 }}>
@@ -516,6 +524,7 @@ function Decision({ significant }) {
   )
 }
 
+// Renders an accent-colored box with a title and plain-language interpretation text.
 function Interpretation({ title, text }) {
   return (
     <div style={{ background: 'var(--color-accent-light)', borderRadius: 6, padding: '8px 10px' }}>
@@ -525,6 +534,7 @@ function Interpretation({ title, text }) {
   )
 }
 
+// Card that visualizes group means as horizontal bars to compare averages across categories.
 function GroupMeanBars({ means, measure }) {
   const max = Math.max(...means.map((m) => Math.abs(Number(m.value) || 0)), 1)
   return (
@@ -552,6 +562,7 @@ function GroupMeanBars({ means, measure }) {
   )
 }
 
+// Table that displays counts and row percentages for a chi-square contingency result.
 function ContingencyTable({ result }) {
   const rows = Object.keys(result.contingency || {})
   const cols = rows.length ? Object.keys(result.contingency[rows[0]] || {}) : []
@@ -588,6 +599,7 @@ function ContingencyTable({ result }) {
   )
 }
 
+// Table that displays pairwise correlation coefficients with color shading by absolute strength.
 function CorrelationMatrix({ result }) {
   const vars = result.variables || []
   return (
@@ -621,6 +633,7 @@ function CorrelationMatrix({ result }) {
   )
 }
 
+// Builds a structured summary object with metrics, conclusion, and next-step text per test kind.
 function summarizeResult(kind, result, setup) {
   if (kind === 't') {
     const diff = Number(result.mean_group_1) - Number(result.mean_group_2)
@@ -699,6 +712,7 @@ function summarizeResult(kind, result, setup) {
   }
 }
 
+// Returns a human-readable sentence describing what the chosen test setup will examine.
 function recommendationMeaning(kind, group, measure, varA, varB, corrVars) {
   if (kind === 't' || kind === 'anova') {
     return group && measure ? `Whether ${measure} differs across ${group}.` : 'Whether a numeric measure differs across categories.'
@@ -709,6 +723,7 @@ function recommendationMeaning(kind, group, measure, varA, varB, corrVars) {
   return corrVars.length >= 2 ? `How strongly ${corrVars.join(', ')} move together.` : 'Which numeric variables move together and in what direction.'
 }
 
+// Maps an effect-size value to a qualitative label using ascending cutoff thresholds.
 function effectLabel(value, cutoffs) {
   if (value >= cutoffs[2]) return 'large'
   if (value >= cutoffs[1]) return 'moderate'
@@ -716,10 +731,12 @@ function effectLabel(value, cutoffs) {
   return 'very small'
 }
 
+// Returns the arithmetic mean of an array of numbers, guarding against empty input.
 function avg(values) {
   return values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1)
 }
 
+// Returns a qualitative label describing correlation strength from an absolute r value.
 function corrStrength(value) {
   if (value >= 0.7) return 'strong'
   if (value >= 0.4) return 'moderate'
@@ -727,6 +744,7 @@ function corrStrength(value) {
   return 'very weak'
 }
 
+// Formats a numeric value for display, using exponential notation for very small magnitudes.
 function fmt(v) {
   if (v === null || v === undefined || Number.isNaN(v)) return '-'
   if (typeof v !== 'number') return v
