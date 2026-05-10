@@ -1,11 +1,5 @@
-"""
-Database layer for the Axion / SimuCast backend.
-
-This file is the single source of truth for our database. It:
-  1. Connects to Postgres
-  2. Defines every table as a Python class (the ORM models)
-  3. Creates the tables on first run and adds new columns over time
-"""
+import time
+from datetime import datetime
 
 # Standard-library imports
 import time                       # used for retry-with-delay during DB startup
