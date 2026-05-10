@@ -77,7 +77,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       return
     }
     setViewStageId(stageId)
-    setViewStageLabel(stageId === 'original' ? 'Original upload' : `Stage ${stageId.slice(0, 8)}`)
+    setViewStageLabel(stageId === 'original' ? 'Original upload' : `Stage ${stageId}`)
   }, [viewStageRequest?.nonce, dataset?.current_stage_id])
 
   const refreshDataset = async () => {

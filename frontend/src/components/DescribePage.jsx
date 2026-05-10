@@ -90,7 +90,7 @@ export default function DescribePage({ dataset }) {
       <p className="ax-page-sub">Summarize variables, interpret distributions, and identify patterns worth testing next.</p>
       {result && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '-4px 0 12px' }}>
-          Updated from current dataset stage: <span style={{ fontFamily: 'var(--font-mono)' }}>{currentStageId === 'original' ? 'original' : currentStageId.slice(0, 8)}</span>
+          Updated from current dataset stage: <span style={{ fontFamily: 'var(--font-mono)' }}>{currentStageId === 'original' ? 'original' : String(currentStageId)}</span>
         </p>
       )}
 
