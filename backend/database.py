@@ -21,8 +21,6 @@ from backend.config import DATABASE_URL
 
 # `engine` is the connection pool to Postgres.
 # pool_pre_ping=True tells SQLAlchemy to test each connection before reusing
-# it, so a stale or dropped connection (common on free-tier hosts) is replaced
-# automatically instead of raising an error mid-request.
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 # `SessionLocal` is a factory: every request calls SessionLocal() to get a
@@ -30,8 +28,7 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
 
 # `Base` is the parent class that every table model below inherits from.
-# SQLAlchemy reads our class definitions through Base to know what tables
-# and columns exist.
+# SQLAlchemy reads our class definitions through Base to know what tables and columns exist.
 Base = declarative_base()
 
 
@@ -238,25 +235,16 @@ _db_ready = False
 
 def _ensure_schema():
     """Make sure every table exists. Safe to call as many times as you want."""
-    global _db_ready
+    global _db_ready 
     if _db_ready:
-        return  # already done in this process — skip the work
+        return # already done, no need to check again
     Base.metadata.create_all(engine)   # creates any table that doesn't exist yet
     _migrate_add_columns()             # adds any newly introduced columns to old tables
     _db_ready = True
 
 
 def _migrate_add_columns():
-    """Lightweight in-house migrations.
-
-    `create_all` only creates tables; it never modifies an existing table.
-    So when we add a new column to a model class, old deployments still have
-    the OLD column set. This function checks each table and runs an
-    `ALTER TABLE ADD COLUMN` for any column that's missing.
-
-    It's idempotent — running it on a fresh DB is a no-op because every
-    column already exists.
-    """
+    
     from sqlalchemy import inspect, text
     insp = inspect(engine)
     tables = insp.get_table_names()  # list of table names that actually exist in the DB
@@ -268,14 +256,13 @@ def _migrate_add_columns():
             if "full_name" not in user_cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN full_name VARCHAR"))
 
-    # ----- sessions: maybe add the model-usage counter -----
+  
     if "sessions" in tables:
         session_cols = {c["name"] for c in insp.get_columns("sessions")}
         with engine.begin() as conn:
             if "guest_model_usage_count" not in session_cols:
                 conn.execute(text("ALTER TABLE sessions ADD COLUMN guest_model_usage_count INTEGER DEFAULT 0"))
 
-    # ----- ai_responses: this table grew the most over time -----
     if "ai_responses" in tables:
         ai_cols = {c["name"] for c in insp.get_columns("ai_responses")}
         # Map of column-name → SQL type for every column added after the
@@ -336,14 +323,5 @@ def _try_init_at_startup(retries=6, delay=5):
 
 
 def db():
-    """Open a new database session. Callers should close it when done.
-
-    Typical usage:
-        s = db()
-        try:
-            ...do queries...
-            s.commit()
-        finally:
-            s.close()
-    """
+    
     return SessionLocal()
