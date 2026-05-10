@@ -377,11 +377,6 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
                               Re-run recommended because the dataset changed after this step.
                             </p>
                           )}
-                          {step.rationale && (
-                            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>
-                              {step.rationale}
-                            </p>
-                          )}
                           {step.columns?.length > 0 && (
                             <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>
                               {step.columns.slice(0, 4).join(', ')}
@@ -680,7 +675,6 @@ function GuidedPlanModal({ isAI, mode, error, summary, items, nextStepId, onClos
                       Re-run recommended because the dataset changed after this step.
                     </p>
                   )}
-                  {step.rationale && <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>{step.rationale}</p>}
                   {step.columns?.length > 0 && (
                     <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '6px 0 0' }}>
                       Columns: {step.columns.join(', ')}
