@@ -52,6 +52,9 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
   const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
   const [mode, setMode] = useState(() => {
+    // Account users always start in AI mode so the first load hits the AI plan,
+    // not a stale system fallback. Guests start in system since they cannot use AI.
+    if (!auth.isGuest) return 'auto'
     if (window.localStorage.getItem('simucast.sessionToken') && window.localStorage.getItem('simucast.guestSlot.used') === '1') return 'system'
     if (!modeKey) return 'system'
     const saved = window.localStorage.getItem(modeKey)
