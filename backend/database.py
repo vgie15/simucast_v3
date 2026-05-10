@@ -24,12 +24,9 @@ Base = declarative_base()
 
 
 # --- models ---
-# Use Text instead of JSONB for SQLite compatibility; Postgres auto-handles both
 def _json_col():
-    """Pick JSONB on Postgres and TEXT on SQLite for JSON-shaped columns."""
-    if "postgresql" in DATABASE_URL:
-        return Column(JSONB, nullable=True)
-    return Column(Text, nullable=True)
+    """JSONB column for JSON-shaped data — accepts dicts/lists natively."""
+    return Column(JSONB, nullable=True)
 
 
 class Dataset(Base):
@@ -191,8 +188,6 @@ def _migrate_add_columns():
                 conn.execute(text("ALTER TABLE sessions ADD COLUMN guest_model_usage_count INTEGER DEFAULT 0"))
     if "ai_responses" in tables:
         ai_cols = {c["name"] for c in insp.get_columns("ai_responses")}
-        json_type = "JSONB" if "postgresql" in DATABASE_URL else "TEXT"
-        datetime_type = "TIMESTAMP" if "postgresql" in DATABASE_URL else "DATETIME"
         ai_column_defs = {
             "stage_id": "VARCHAR",
             "user_id": "VARCHAR",
@@ -200,10 +195,10 @@ def _migrate_add_columns():
             "role": "VARCHAR",
             "context": "VARCHAR",
             "cache_key": "VARCHAR",
-            "request": json_type,
-            "response": json_type,
+            "request": "JSONB",
+            "response": "JSONB",
             "model": "VARCHAR",
-            "created_at": datetime_type,
+            "created_at": "TIMESTAMP",
         }
         with engine.begin() as conn:
             for col, col_type in ai_column_defs.items():
