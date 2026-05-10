@@ -327,11 +327,6 @@ export default function DataDetailView({
       </header>
 
       <nav className="ax-dd-tabs">
-        <div className="ax-dd-tabs-left">
-          <button type="button" className="active">Detail</button>
-          <button type="button" disabled title="Coming soon">Compact</button>
-          <button type="button" disabled title="Coming soon">Column</button>
-        </div>
         <div className="ax-dd-tabs-right">
           <ColumnVisibilityMenu
             allColumns={allColumns}
