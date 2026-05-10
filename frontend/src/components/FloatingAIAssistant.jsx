@@ -331,6 +331,7 @@ function CloseIcon() {
   )
 }
 
+// Renders the trash can icon used to clear the chat history.
 function TrashIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -339,6 +340,7 @@ function TrashIcon() {
   )
 }
 
+// Renders the user avatar icon shown beside user chat messages.
 function UserIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">

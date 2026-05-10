@@ -1992,6 +1992,7 @@ function fixTargetFromBackendFix(fix) {
   return null
 }
 
+// Returns a friendly label like "Models page" describing where a fix route would navigate.
 function routeLabel(route) {
   const target = routeToFixTarget(route)
   if (!target) return route || 'Open'
@@ -1999,6 +2000,7 @@ function routeLabel(route) {
   return `${page} page`
 }
 
+// Scrolls to a section by id and briefly applies a highlight class for emphasis.
 function highlightSection(section) {
   const el = document.getElementById(section)
   if (!el) return
