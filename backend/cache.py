@@ -7,7 +7,6 @@ or stage transition can drop only that dataset's entries. Also wraps the
 """
 import hashlib
 import json
-import uuid
 
 from backend.utils import clean_json, jload
 from backend.database import AIResponse
@@ -95,7 +94,6 @@ def _ai_db_put(session, *, dataset_id, stage_id, user_id, kind, context, cache_k
     """Persist an AI response. Safe to call inside a request handler."""
     try:
         session.add(AIResponse(
-            id=str(uuid.uuid4()),
             dataset_id=dataset_id,
             stage_id=stage_id,
             user_id=user_id,

@@ -32,7 +32,7 @@ def _json_col():
 class Dataset(Base):
     """Project dataset row plus its currently-active stage pointer."""
     __tablename__ = "datasets"
-    id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     filename = Column(String)
@@ -41,28 +41,28 @@ class Dataset(Base):
     col_count = Column(Integer, default=0)
     variables = _json_col()      # [{name, dtype, missing, unique}] of CURRENT stage
     data = _json_col()           # original (stage-0) rows; never mutated
-    current_stage_id = Column(String, nullable=True)  # null = original
+    current_stage_id = Column(Integer, nullable=True)  # null = original
     sheets = _json_col()          # Excel sheet payloads; null for CSV/single-table files
     active_sheet = Column(String, nullable=True)
-    user_id = Column(String, nullable=True, index=True)
-    session_id = Column(String, nullable=True, index=True)
+    user_id = Column(Integer, nullable=True, index=True)
+    session_id = Column(Integer, nullable=True, index=True)
 
 
 class User(Base):
     """Registered (non-guest) account."""
     __tablename__ = "users"
-    id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     email = Column(String, unique=True, nullable=False, index=True)
     full_name = Column(String, nullable=True)
-    password_hash = Column(Text, nullable=False)
+    password = Column(Text, nullable=False)  # plaintext per project requirement
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class UserSession(Base):
     """Auth/session token plus per-guest usage counters."""
     __tablename__ = "sessions"
-    id = Column(String, primary_key=True)
-    user_id = Column(String, nullable=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=True, index=True)
     token = Column(String, unique=True, nullable=False, index=True)
     is_guest = Column(Integer, default=1)
     guest_usage_count = Column(Integer, default=0)
@@ -79,9 +79,9 @@ class DatasetStage(Base):
     and is not persisted here — it lives in Dataset.data.
     """
     __tablename__ = "dataset_stages"
-    id = Column(String, primary_key=True)
-    dataset_id = Column(String, nullable=False, index=True)
-    parent_stage_id = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_id = Column(Integer, nullable=False, index=True)
+    parent_stage_id = Column(Integer, nullable=True)
     step_index = Column(Integer, default=0)
     op_type = Column(String)                  # 'clean', 'merge', 'rename', 'drop', 'expand', ...
     op_params = _json_col()                   # the payload that produced this stage
@@ -96,8 +96,8 @@ class DatasetStage(Base):
 class Analysis(Base):
     """Saved analysis artifact (describe, t-test, AI explanation, report, …)."""
     __tablename__ = "analyses"
-    id = Column(String, primary_key=True)
-    dataset_id = Column(String, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_id = Column(Integer, nullable=False)
     kind = Column(String)         # 'describe', 't_test', 'anova', etc.
     config = _json_col()
     result = _json_col()
@@ -107,8 +107,8 @@ class Analysis(Base):
 class Model(Base):
     """Trained ML model artifact with metrics and serialized estimator."""
     __tablename__ = "models"
-    id = Column(String, primary_key=True)
-    dataset_id = Column(String, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_id = Column(Integer, nullable=False)
     name = Column(String)
     algorithm = Column(String)
     target = Column(String)
@@ -122,13 +122,13 @@ class Model(Base):
 class ActivityLog(Base):
     """Append-only project activity timeline entry."""
     __tablename__ = "activity_logs"
-    id = Column(String, primary_key=True)
-    dataset_id = Column(String, nullable=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_id = Column(Integer, nullable=True, index=True)
     kind = Column(String, nullable=False)
     summary = Column(Text, nullable=False)
     detail = _json_col()
     ref_type = Column(String, nullable=True)
-    ref_id = Column(String, nullable=True)
+    ref_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -140,10 +140,10 @@ class AIResponse(Base):
     role in {user, assistant}, cache_key=NULL).
     """
     __tablename__ = "ai_responses"
-    id = Column(String, primary_key=True)
-    dataset_id = Column(String, nullable=False, index=True)
-    stage_id = Column(String, nullable=True)
-    user_id = Column(String, nullable=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_id = Column(Integer, nullable=False, index=True)
+    stage_id = Column(Integer, nullable=True)
+    user_id = Column(Integer, nullable=True, index=True)
     kind = Column(String, nullable=False)            # 'recommend'|'explain'|'project_plan'|'chat'
     role = Column(String, nullable=True)             # 'user'|'assistant' (chat only)
     context = Column(String, nullable=True)
@@ -189,8 +189,8 @@ def _migrate_add_columns():
     if "ai_responses" in tables:
         ai_cols = {c["name"] for c in insp.get_columns("ai_responses")}
         ai_column_defs = {
-            "stage_id": "VARCHAR",
-            "user_id": "VARCHAR",
+            "stage_id": "INTEGER",
+            "user_id": "INTEGER",
             "kind": "VARCHAR",
             "role": "VARCHAR",
             "context": "VARCHAR",
@@ -211,15 +211,15 @@ def _migrate_add_columns():
         if "description" not in cols:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN description TEXT"))
         if "current_stage_id" not in cols:
-            conn.execute(text("ALTER TABLE datasets ADD COLUMN current_stage_id VARCHAR"))
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN current_stage_id INTEGER"))
         if "sheets" not in cols:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN sheets TEXT"))
         if "active_sheet" not in cols:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN active_sheet VARCHAR"))
         if "user_id" not in cols:
-            conn.execute(text("ALTER TABLE datasets ADD COLUMN user_id VARCHAR"))
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN user_id INTEGER"))
         if "session_id" not in cols:
-            conn.execute(text("ALTER TABLE datasets ADD COLUMN session_id VARCHAR"))
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN session_id INTEGER"))
 
 
 def _try_init_at_startup(retries=6, delay=5):

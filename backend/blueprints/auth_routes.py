@@ -5,11 +5,9 @@ These endpoints only touch the User / UserSession tables and the Dataset
 ownership cleanup helper; they don't reach into any other domain modules.
 """
 import re
-import uuid
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request
-from werkzeug.security import check_password_hash, generate_password_hash
 
 from backend.database import (
     db, ActivityLog, AIResponse, Analysis, Dataset, DatasetStage,
@@ -42,7 +40,6 @@ def create_guest_session():
                 s.commit()
             return jsonify({"session": _session_payload(sess, user)})
         sess = UserSession(
-            id=str(uuid.uuid4()),
             token=_new_token(),
             is_guest=1,
             guest_usage_count=1 if client_used else 0,
@@ -72,20 +69,19 @@ def signup():
         if existing:
             return {"error": "email already registered"}, 409
         user = User(
-            id=str(uuid.uuid4()),
             email=email,
             full_name=full_name or None,
-            password_hash=generate_password_hash(password),
+            password=password,
         )
+        s.add(user)
+        s.flush()  # populate user.id for the session FK
         sess = UserSession(
-            id=str(uuid.uuid4()),
             user_id=user.id,
             token=_new_token(),
             is_guest=0,
             guest_usage_count=0,
             expires_at=datetime.utcnow() + timedelta(days=30),
         )
-        s.add(user)
         s.add(sess)
         s.commit()
         return jsonify({"session": _session_payload(sess, user)})
@@ -102,10 +98,9 @@ def login():
     s = db()
     try:
         user = s.query(User).filter_by(email=email).first()
-        if not user or not check_password_hash(user.password_hash, password):
+        if not user or user.password != password:
             return {"error": "invalid email or password"}, 401
         sess = UserSession(
-            id=str(uuid.uuid4()),
             user_id=user.id,
             token=_new_token(),
             is_guest=0,
@@ -183,9 +178,9 @@ def change_account_password():
         sess, user = _auth_from_request(s)
         if not sess or sess.is_guest or not user:
             return {"error": "account required", "auth_required": True}, 403
-        if not check_password_hash(user.password_hash, current_password):
+        if user.password != current_password:
             return {"error": "current password is incorrect"}, 400
-        user.password_hash = generate_password_hash(new_password)
+        user.password = new_password
         # Invalidate other sessions after a password change.
         s.query(UserSession).filter(UserSession.user_id == user.id, UserSession.id != sess.id).delete(synchronize_session=False)
         s.commit()
@@ -204,7 +199,7 @@ def delete_account():
         sess, user = _auth_from_request(s)
         if not sess or sess.is_guest or not user:
             return {"error": "account required", "auth_required": True}, 403
-        if not check_password_hash(user.password_hash, password):
+        if user.password != password:
             return {"error": "password is incorrect"}, 400
         dataset_ids = [row.id for row in s.query(Dataset.id).filter_by(user_id=user.id).all()]
         _delete_account_artifacts(s, user.id, dataset_ids)

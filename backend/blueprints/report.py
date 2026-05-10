@@ -4,7 +4,6 @@ Report builder route + every text-generation helper used by the report.
 Assembles dataset, tests, models, AI explanations, and activity documentation
 into a structured report payload the React frontend renders or exports.
 """
-import uuid
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
@@ -113,15 +112,16 @@ def build_report(ds_id):
             })
         report_artifact_id = None
         if user:
-            report_artifact_id = str(uuid.uuid4())
-            report["artifact_id"] = report_artifact_id
-            s.add(Analysis(
-                id=report_artifact_id,
+            artifact = Analysis(
                 dataset_id=ds_id,
                 kind="report",
                 config=jdump(clean_json({"sections": sections})),
                 result=jdump(clean_json(report)),
-            ))
+            )
+            s.add(artifact)
+            s.flush()  # populate artifact.id for the report payload + activity ref
+            report_artifact_id = artifact.id
+            report["artifact_id"] = report_artifact_id
         log_activity(
             s,
             ds_id,
