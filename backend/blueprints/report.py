@@ -375,6 +375,7 @@ def _documentation_summary_text(activity):
 def _best_model(models):
     """Return the highest-scoring model from a list (auc → accuracy → r2)."""
     def score(model):
+        """Pick the primary metric (auc / accuracy / r2) used to rank a model."""
         m = jload(model.metrics) or {}
         if m.get("task") == "classification":
             return m.get("auc") if m.get("auc") is not None else m.get("accuracy") or 0
