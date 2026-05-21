@@ -52,10 +52,6 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
   const modeKey = datasetId ? `simucast.aiPlan.mode.${datasetId}` : ''
   const [mode, setMode] = useState(() => {
-    // Account users always start in AI mode so the first load hits the AI plan,
-    // not a stale system fallback. Guests start in system since they cannot use AI.
-    if (!auth.isGuest) return 'auto'
-    if (window.localStorage.getItem('simucast.sessionToken') && window.localStorage.getItem('simucast.guestSlot.used') === '1') return 'system'
     if (!modeKey) return 'system'
     const saved = window.localStorage.getItem(modeKey)
     if (!saved || saved === 'off') return 'system'
@@ -134,9 +130,8 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
       window.localStorage.setItem(modeKey, 'system')
       return
     }
-    // Signed-in users always get the AI plan; rule-based mode is guest-only.
-    setMode('auto')
-    window.localStorage.setItem(modeKey, 'auto')
+    const saved = window.localStorage.getItem(modeKey)
+    setMode(saved && saved !== 'off' ? saved : 'system')
   }, [modeKey, auth.isGuest])
 
   useEffect(() => {
@@ -285,7 +280,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
               className="ax-plan-title-button"
             >
               <Chevron open={!collapsed} />
-              <span>{isAI ? 'AI Guided Plan' : 'System Guided Plan'}</span>
+              <span>Guided Workflow</span>
             </button>
             <HelpButton
               title="Guided Plan"
@@ -306,13 +301,13 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           )}
         </div>
 
-        {!collapsed && auth.isGuest && (
+        {!collapsed && (
           <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 0 }}>
             <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => handleModeChange('auto')}>
-              AI guided 🔒
+              AI assisted
             </button>
             <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => handleModeChange('system')}>
-              System only
+              Built-in
             </button>
           </div>
         )}
@@ -344,7 +339,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
           {mode === 'system' && plan && (
             <p className="ax-plan-helper">
               {auth.isGuest
-                ? 'AI Guided Plan is available after signing up. System Guided Plan still works normally.'
+                ? 'Built-in guidance works without an account. AI assistance is available after signing up.'
                 : 'Built-in workflow updates automatically with project changes.'}
             </p>
           )}

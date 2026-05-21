@@ -17,13 +17,48 @@ import ProjectAIRail from '../guided-plan/ProjectAIRail'
 import { useAuth } from '../providers/AuthProvider'
 
 const TABS = [
-  { key: 'data', label: 'Data', subtitle: 'Preparing your dataset' },
-  { key: 'expand', label: 'Expand', subtitle: 'Expanding and engineering rows' },
-  { key: 'describe', label: 'Describe', subtitle: 'Summarizing patterns and distributions' },
-  { key: 'tests', label: 'Analysis', subtitle: 'Running statistical analysis' },
-  { key: 'models', label: 'Models', subtitle: 'Building predictive models' },
-  { key: 'whatif', label: 'What-if', subtitle: 'Testing saved scenarios' },
-  { key: 'report', label: 'Report', subtitle: 'Creating insights and documentation' },
+  {
+    key: 'data',
+    label: 'Data',
+    subtitle: 'Preparing your dataset',
+    guidance: 'Inspect the data first, then clean only the issues that SimuCast detects.',
+  },
+  {
+    key: 'expand',
+    label: 'Expand',
+    subtitle: 'Expanding and engineering rows',
+    guidance: 'Use expansion only when the dataset is too small or needs careful scenario-ready rows.',
+  },
+  {
+    key: 'describe',
+    label: 'Describe',
+    subtitle: 'Summarizing patterns and distributions',
+    guidance: 'Start with summaries and charts so the numbers make sense before formal analysis.',
+  },
+  {
+    key: 'tests',
+    label: 'Analysis',
+    subtitle: 'Running statistical analysis',
+    guidance: 'Choose a recommended test pair, run it, then read the plain-language result.',
+  },
+  {
+    key: 'models',
+    label: 'Models',
+    subtitle: 'Building predictive models',
+    guidance: 'Select a target, review recommended features, train models, then check model health.',
+  },
+  {
+    key: 'whatif',
+    label: 'What-if',
+    subtitle: 'Testing saved scenarios',
+    guidance: 'Use a trained model to compare baseline values against a changed scenario.',
+  },
+  {
+    key: 'report',
+    label: 'Report',
+    subtitle: 'Creating insights and documentation',
+    guidance: 'Compile the saved outputs, explanations, history, and scenarios into a readable report.',
+  },
 ]
 
 // Top-level workspace shell hosting the project tabs, history rail and AI rail.
@@ -238,7 +273,10 @@ export default function ProjectWorkspace() {
               <ToggleChevron direction={aiCollapsed ? 'left' : 'right'} />
             </button>
           </div>
-          <p className="ax-flow-context">{activeTabMeta.subtitle}</p>
+          <div className="ax-flow-context">
+            <span>{activeTabMeta.subtitle}</span>
+            <small>{activeTabMeta.guidance}</small>
+          </div>
         </div>
         <div className="ax-workspace-content">
           {page}
@@ -291,20 +329,20 @@ function NextPagePrompt({ activeTab, datasetId }) {
   const next = TABS[idx + 1]
   if (!next) return null
   const copy = {
-    data: 'After cleaning and standardizing the dataset, expand rows or engineer more data.',
-    expand: 'Next, summarize the prepared dataset before formal testing.',
-    describe: 'Next, run statistical analysis to evaluate relationships and group differences.',
-    tests: 'Next, train models using the strongest candidate targets and features.',
-    models: 'Next, compare saved scenarios using trained interpretable models.',
-    whatif: 'Next, generate a report with documentation, notes, results, and scenarios.',
+    data: 'Move forward when the dataset has been inspected and major issues are handled.',
+    expand: 'Summarize the prepared dataset before choosing tests or models.',
+    describe: 'Use statistical analysis to check relationships and group differences.',
+    tests: 'Train models after you understand the strongest candidate variables.',
+    models: 'Try what-if scenarios using the model that best fits your goal.',
+    whatif: 'Generate a report with saved outputs, explanations, history, and scenarios.',
   }
   return (
     <div className="ax-card ax-next-card">
       <div>
-        <p style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
+        <p className="ax-next-title">
           Ready for the next step?
         </p>
-        <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+        <p className="ax-next-copy">
           {copy[activeTab] || 'Continue the workflow on the next page.'}
         </p>
       </div>

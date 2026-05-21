@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import { useAuth, markGuestSlotUsed } from '../providers/AuthProvider'
 import { useDialog } from '../common/DialogProvider'
+import PageGuide from '../common/PageGuide'
 
 // Page that lists uploaded source files and lets users upload new datasets or delete projects.
 export default function FilesPage() {
@@ -95,6 +96,14 @@ export default function FilesPage() {
           </button>
         )}
       </div>
+
+      <PageGuide
+        title="Upload once, analyze as a project"
+        meta="Files"
+        steps={['Upload file', 'Choose sheet', 'Create project']}
+      >
+        Files power projects. After upload, SimuCast detects sheets, column types, data issues, and creates a guided workflow for that dataset.
+      </PageGuide>
 
       {datasets.length === 0 ? (
         <div className="ax-card" style={{ marginTop: 12 }}>

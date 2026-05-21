@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import { useAuth } from '../providers/AuthProvider'
 import NewProjectModal from './NewProjectModal'
+import PageGuide from '../common/PageGuide'
 
 // Dashboard landing page summarizing project counts, total rows, and recent projects and files.
 export default function DashboardPage() {
@@ -45,6 +46,14 @@ export default function DashboardPage() {
           </button>
         )}
       </div>
+
+      <PageGuide
+        title="Pick up where the project left off"
+        meta={auth.isGuest ? 'Guest session' : 'Workspace'}
+        steps={['Open project', 'Follow guide', 'Export report']}
+      >
+        The dashboard shows recent projects and files. Open a project to continue the guided workflow from Data through Report.
+      </PageGuide>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, margin: '12px 0 16px' }}>
         <StatCard label="Projects" value={datasets.length} />

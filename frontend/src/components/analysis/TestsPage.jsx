@@ -9,6 +9,7 @@ import { AIInsightCard, ExplainButton } from '../ai/AIExplainers'
 import { useDialog } from '../common/DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
+import PageGuide from '../common/PageGuide'
 
 const TESTS = [
   {
@@ -133,6 +134,13 @@ export default function TestsPage({ dataset }) {
     <>
       <h1 className="ax-page-title">Statistical Analysis</h1>
       <p className="ax-page-sub">Evaluate relationships, compare groups, and turn statistical results into decisions.</p>
+      <PageGuide
+        title="Choose the test that matches your question"
+        meta="Analysis"
+        steps={['Pick test', 'Use a pair', 'Run result', 'Read decision']}
+      >
+        Recommended pairs help you avoid guessing. Each result explains the p-value, decision, and what it means in plain language.
+      </PageGuide>
 
       <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         Test type

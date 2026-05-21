@@ -9,6 +9,7 @@ import { ExplainButton } from '../ai/AIExplainers'
 import { useAuth } from '../providers/AuthProvider'
 import { InlineSpinner, SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
+import PageGuide from '../common/PageGuide'
 
 // Page component that runs descriptive statistics, distribution charts, and correlation analysis.
 export default function DescribePage({ dataset }) {
@@ -89,6 +90,13 @@ export default function DescribePage({ dataset }) {
     <>
       <h1 className="ax-page-title">Descriptive statistics</h1>
       <p className="ax-page-sub">Summarize variables, interpret distributions, and identify patterns worth testing next.</p>
+      <PageGuide
+        title="Turn columns into understandable patterns"
+        meta="Describe"
+        steps={['Select variables', 'Run summaries', 'Review charts', 'Explain findings']}
+      >
+        Start with variables that matter to your question. SimuCast saves the latest summaries for this dataset stage so you can return to them later.
+      </PageGuide>
       {result && (
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '-4px 0 12px' }}>
           Updated from current dataset stage: <span style={{ fontFamily: 'var(--font-mono)' }}>{currentStageId === 'original' ? 'original' : String(currentStageId)}</span>

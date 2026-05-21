@@ -7,6 +7,7 @@ import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
 import { AIInsightCard, ExplainButton } from '../ai/AIExplainers'
 import HelpButton from '../common/HelpButton'
+import PageGuide from '../common/PageGuide'
 
 // What-if simulation page that runs predictions on a model and saves scenarios.
 export default function WhatIfPage({ dataset, activeModel }) {
@@ -69,6 +70,13 @@ export default function WhatIfPage({ dataset, activeModel }) {
       <>
         <h1 className="ax-page-title">What-if analysis</h1>
         <p className="ax-page-sub">Train or choose a model on the Models page to enable what-if.</p>
+        <PageGuide
+          title="What-if needs a trained model first"
+          meta="What-if"
+          steps={['Choose model', 'Set values', 'Compare prediction']}
+        >
+          After a model is available, this page lets you adjust feature values and compare the prediction against a baseline.
+        </PageGuide>
         {availableModels.length > 0 && (
           <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
             <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -144,6 +152,13 @@ export default function WhatIfPage({ dataset, activeModel }) {
     <>
       <h1 className="ax-page-title">What-if analysis</h1>
       <p className="ax-page-sub">Using <code>{modelFull.name}</code>. Adjust feature values and see how changes affect the prediction.</p>
+      <PageGuide
+        title="Change one scenario at a time"
+        meta="What-if"
+        steps={['Adjust inputs', 'Read prediction', 'Save scenario', 'Compare']}
+      >
+        Start from the baseline values, change the variables you care about, then save useful scenarios for the report.
+      </PageGuide>
 
       <div id="whatif-section-controls" className="ax-card" style={{ marginBottom: 14, padding: 16 }}>
         <div className="ax-row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>

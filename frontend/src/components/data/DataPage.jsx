@@ -12,6 +12,7 @@ import CategoryStandardizationCard from './CategoryStandardizationCard'
 import { useDialog } from '../common/DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
+import PageGuide from '../common/PageGuide'
 import { SparkleIcon } from '../ai/AIExplainers'
 import { useAuth } from '../providers/AuthProvider'
 
@@ -218,6 +219,14 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 
   return (
     <>
+      <PageGuide
+        title="Start with a quick data check"
+        meta="Data preparation"
+        steps={['Inspect', 'Transform', 'Fix issues', 'Standardize']}
+      >
+        Review the table and column types first. Then use the suggested fix cards only for issues detected in the current stage.
+      </PageGuide>
+
       {(dataset.sheets || []).length > 1 && (
         <div className="ax-card" style={{ marginBottom: 16 }}>
           <div className="ax-row" style={{ alignItems: 'center' }}>

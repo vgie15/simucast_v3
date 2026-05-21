@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
 import HelpButton from '../common/HelpButton'
+import PageGuide from '../common/PageGuide'
 
 /**
  * ExpandPage
@@ -96,6 +97,13 @@ export default function ExpandPage({ dataset, setDataset }) {
       <p className="ax-page-sub">
         Grow a small dataset by resampling (preserves correlations) or synthesis (per-column independent).
       </p>
+      <PageGuide
+        title="Only expand when it helps the analysis"
+        meta={isSmall ? 'Recommended review' : 'Optional step'}
+        steps={['Check need', 'Choose method', 'Preview drift', 'Apply']}
+      >
+        Bootstrap is usually safer when relationships matter. Synthetic rows are more varied, but should be previewed carefully before using them downstream.
+      </PageGuide>
 
       <div className="ax-card" style={{ marginBottom: 12, padding: 14, background: isSmall ? 'var(--color-accent-light)' : 'var(--color-background-secondary)' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

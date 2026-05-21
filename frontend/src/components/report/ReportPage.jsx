@@ -9,6 +9,7 @@ import { AIInsightCard } from '../ai/AIExplainers'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
 import { useAuth } from '../providers/AuthProvider'
+import PageGuide from '../common/PageGuide'
 
 const SECTIONS = [
   { key: 'summary', label: 'Executive summary' },
@@ -217,6 +218,13 @@ export default function ReportPage({ dataset }) {
     <>
       <h1 className="ax-page-title">Auto-report</h1>
       <p className="ax-page-sub">Structured analysis report with interpreted findings, model results, and an appendix trail.</p>
+      <PageGuide
+        title="Build the report from saved work"
+        meta="Report"
+        steps={['Select sections', 'Generate', 'Review', 'Export']}
+      >
+        Reports are clearest when they reuse the analyses, model results, scenarios, AI explanations, and history already saved in the project.
+      </PageGuide>
 
       <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 14 }}>
         <div>

@@ -11,6 +11,7 @@ import { useDialog } from '../common/DialogProvider'
 import { useAuth } from '../providers/AuthProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
+import PageGuide from '../common/PageGuide'
 
 const ALGOS = [
   { key: 'logistic', label: 'Logistic Regression', task: 'classification', interpretable: true,
@@ -405,6 +406,13 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       <p className="ax-page-sub">
         Pick a target, select features, choose algorithms, and train them all in one click.
       </p>
+      <PageGuide
+        title="Modeling works best after a clean question"
+        meta="Models"
+        steps={['Pick target', 'Choose features', 'Set validation', 'Train and check health']}
+      >
+        SimuCast helps choose sensible targets and features, then compares train and test performance so overfitting is visible.
+      </PageGuide>
 
       {/* Step 1 — target */}
       <Step n={1} id="models-step-1" title="Pick a target — what to predict">

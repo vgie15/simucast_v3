@@ -8,6 +8,7 @@ import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
 import { useAuth } from '../providers/AuthProvider'
 import NewProjectModal from './NewProjectModal'
+import PageGuide from '../common/PageGuide'
 
 // Page that lists the user's projects with create and delete actions plus guest signup prompts.
 export default function ProjectsPage() {
@@ -72,6 +73,13 @@ export default function ProjectsPage() {
           Guest mode is limited to 1 temporary project. Sign up or log in to create saved projects.
         </p>
       )}
+      <PageGuide
+        title="Each project keeps its own workflow"
+        meta="Projects"
+        steps={['Open project', 'Continue stage', 'Export report']}
+      >
+        Projects store their cleaned stages, analyses, models, what-if scenarios, and history separately so work stays organized.
+      </PageGuide>
 
       <p className="ax-lbl" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
         All projects
