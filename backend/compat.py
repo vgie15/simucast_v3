@@ -1,0 +1,245 @@
+"""Legacy import surface for code that used to reach into ``backend.app``.
+
+The backend is now organized by product modules, but older tests/tools may
+still import private helpers through ``backend.app``. Keeping those imports in
+one file lets ``app.py`` stay focused on app assembly.
+"""
+
+from backend.config import (  # noqa: F401
+    DATABASE_URL,
+    GUEST_MODEL_LIMIT,
+    MAX_UPLOAD_BYTES,
+    MAX_UPLOAD_ROWS,
+    _AI_MODEL_DEEP,
+    _AI_MODEL_FAST,
+    _CACHE_MAX,
+    _cors_origins,
+    _cors_raw,
+    _load_local_env,
+)
+from backend.shared.utils import (  # noqa: F401
+    _json_safe,
+    _new_token,
+    _parse_num,
+    clean_json,
+    friendly_error_message,
+    jdump,
+    jload,
+)
+from backend.database import (  # noqa: F401
+    AIResponse,
+    ActivityLog,
+    Analysis,
+    Base,
+    Dataset,
+    DatasetStage,
+    Model,
+    SessionLocal,
+    User,
+    UserSession,
+    _db_ready,
+    _ensure_schema,
+    _json_col,
+    _migrate_add_columns,
+    _try_init_at_startup,
+    db,
+    engine,
+)
+from backend.core.cache import (  # noqa: F401
+    _AI_CACHE,
+    _DF_CACHE,
+    _ai_cache_hex,
+    _ai_cache_key,
+    _ai_db_get,
+    _ai_db_put,
+    _cache_put,
+    _df_cache_invalidate,
+    _df_cache_key,
+)
+from backend.modules.ai.client import (  # noqa: F401
+    _ai_client,
+    _ai_safe,
+    _dataset_profile,
+    _parse_ai_json,
+    ai_call,
+)
+from backend.core.activity import activity_payload, log_activity  # noqa: F401
+from backend.core.auth_helpers import (  # noqa: F401
+    _ai_account_required_response,
+    _attach_owner,
+    _auth_from_request,
+    _client_guest_slot_used,
+    _dataset_scope,
+    _guest_limit_response,
+    _guest_model_limit_response,
+    _report_account_required_response,
+    _session_payload,
+)
+from backend.shared.dataframe import (  # noqa: F401
+    _current_rows,
+    _current_variables,
+    _rows_for_stage,
+    _sheet_list,
+    _sheet_payload_from_df,
+    _stage_count,
+    _variables_for_stage,
+    create_stage,
+    df_from_dataset,
+    infer_variables,
+    is_numeric_meta,
+    numeric_df,
+)
+from backend.ml import (  # noqa: F401
+    ALGORITHM_CATALOG,
+    AVAILABLE_ALGOS_BY_TASK,
+    MODEL_PARAM_DEFAULTS,
+    _SIMUCAST_CAPABILITIES,
+    _algo_label_for_task,
+    _apply_numeric_preprocessing_frame,
+    _build_model_estimator,
+    _build_preprocessing_plan,
+    _capability_text,
+    _cross_validation_metrics,
+    _deserialize_estimator,
+    _detect_task,
+    _feature_influence_from_model,
+    _is_identifier_feature,
+    _issue_check,
+    _model_default_params,
+    _model_health_diagnostics,
+    _original_feature_name,
+    _sanitize_model_params,
+    _serialize_estimator,
+    _train_one,
+    _whatif_extrapolation_risk,
+    _whatif_input_matrix,
+    _whatif_raw_features,
+)
+
+from backend.modules.auth.routes import (  # noqa: F401
+    _delete_account_artifacts,
+    auth_me,
+    change_account_password,
+    create_guest_session,
+    delete_account,
+    login,
+    logout,
+    signup,
+    update_account,
+)
+from backend.modules.data.datasets import (  # noqa: F401
+    _CATEGORY_ABBREVIATIONS,
+    _NO_VALUES,
+    _YES_VALUES,
+    _apply_cell_edit,
+    _binary_category_groups,
+    _category_groups,
+    _normalize_category_value,
+    _title_category_label,
+    _validate_upload_file,
+    column_stats,
+    delete_dataset,
+    export_csv,
+    get_column_values,
+    get_dataset,
+    get_rows,
+    list_datasets,
+    select_dataset_sheet,
+    update_cell,
+    update_cells,
+    update_variable,
+    upload_dataset,
+)
+from backend.modules.data.cleaning import (  # noqa: F401
+    apply_category_standardization,
+    category_suggestions,
+    clean_apply,
+    clean_apply_group,
+    clean_suggestions,
+)
+from backend.modules.data.transforms import (  # noqa: F401
+    _apply_transform,
+    _coerce_num,
+    _col_stats,
+    _expand,
+    _pct_change,
+    expand_dataset,
+    feature_engineer,
+    transform,
+)
+from backend.modules.history.activity_routes import (  # noqa: F401
+    create_activity_note,
+    delete_or_undo_activity,
+    list_activity,
+)
+from backend.modules.history.stages_routes import (  # noqa: F401
+    list_stages,
+    reset_project,
+    restore_stage,
+)
+from backend.modules.analysis.routes import (  # noqa: F401
+    _anova_interpret,
+    _chi_interpret,
+    _save_analysis,
+    _t_interpret,
+    describe,
+    do_cluster,
+    do_pca,
+    list_analyses,
+    run_test,
+)
+from backend.modules.models.routes import (  # noqa: F401
+    delete_model,
+    get_model,
+    list_models,
+    preprocessing_plan,
+    train_many_models,
+    train_model,
+)
+from backend.modules.whatif.routes import (  # noqa: F401
+    prepare_model_for_whatif,
+    save_whatif_scenario,
+    whatif_predict,
+)
+from backend.modules.ai.routes import (  # noqa: F401
+    _CHAT_HISTORY_LIMIT,
+    _ai_chat_call,
+    _ai_text_looks_incomplete,
+    _chat_response_row,
+    _filter_project_steps_for_dataset,
+    _normalize_project_steps,
+    _parse_ai_plan_text,
+    _plan_prompt_profile,
+    _rule_based_project_plan,
+    _rule_based_recommend,
+    _saved_ai_explanation,
+    _store_ai_explanation,
+    ai_chat_clear,
+    ai_chat_history,
+    ai_chat_send,
+    ai_explain,
+    ai_project_plan,
+    ai_recommend,
+    ai_suggest,
+    set_ai_explanation_report,
+)
+from backend.modules.report.routes import (  # noqa: F401
+    _ai_explanations_report_section,
+    _auto_summary,
+    _best_model,
+    _describe_report_text,
+    _documentation_summary_text,
+    _feature_influence_report_text,
+    _fmt,
+    _model_report_line,
+    _models_report_text,
+    _pct,
+    _pct_float,
+    _predictive_insights_text,
+    _shorten,
+    _spread_score,
+    _test_report_line,
+    _tests_report_text,
+    build_report,
+)
+from backend.modules.health.routes import health, home  # noqa: F401
