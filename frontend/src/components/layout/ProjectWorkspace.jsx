@@ -327,7 +327,7 @@ export default function ProjectWorkspace() {
         activeTab={activeTab}
         onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
       />
-      <FloatingDatasetPreview dataset={dataset} />
+      <FloatingDatasetPreview dataset={dataset} activeTab={activeTab} />
       <ProjectGuidanceSetup
         dataset={dataset}
         open={guidanceSetupOpen}
