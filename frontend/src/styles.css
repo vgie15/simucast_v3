@@ -3912,6 +3912,36 @@ a.ax-btn {
   border-bottom: 0.5px solid var(--color-border-tertiary);
   flex-shrink: 0;
 }
+.ax-dd-viewmodes {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 7px;
+  background: var(--color-background-secondary);
+}
+.ax-dd-viewmodes button {
+  min-height: 30px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ax-dd-viewmodes button.active {
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
+}
+.ax-dd-viewmodes button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
 .ax-dd-tabs-left {
   display: flex;
   gap: 4px;
@@ -4044,6 +4074,46 @@ a.ax-btn {
   font-size: 12px;
   flex-shrink: 0;
 }
+.ax-dd-changebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 18px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: rgba(254, 243, 199, 0.42);
+  flex-shrink: 0;
+}
+.ax-dd-changebar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 150px;
+}
+.ax-dd-changebar-copy strong {
+  font-size: 12px;
+}
+.ax-dd-changebar-copy span {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.ax-dd-changebar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.ax-dd-changebar .ax-btn.mini {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+.ax-dd-changebar .ax-btn.mini.active {
+  border-color: rgba(249, 115, 22, 0.45);
+  color: var(--color-accent);
+  background: rgba(255, 247, 237, 0.94);
+}
 .ax-dd-error {
   color: var(--color-text-danger);
   font-size: 11px;
@@ -4055,6 +4125,74 @@ a.ax-btn {
   min-height: 0;
   overflow: auto;
   position: relative;
+}
+.ax-dd-removed-preview {
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: rgba(254, 242, 242, 0.62);
+}
+.ax-dd-removed-preview > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.ax-dd-removed-preview strong {
+  font-size: 12px;
+}
+.ax-dd-removed-preview > button span,
+.ax-dd-removed-preview small {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.ax-dd-removed-preview > button em {
+  margin-left: auto;
+  color: var(--color-text-danger);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+.ax-dd-removed-list {
+  display: grid;
+  gap: 6px;
+  padding: 0 18px 12px;
+}
+.ax-dd-removed-list article {
+  border: 0.5px solid rgba(239, 68, 68, 0.18);
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: rgba(255, 255, 255, 0.62);
+}
+.ax-dd-removed-list p {
+  margin: 0 0 5px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.ax-dd-removed-list article div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.ax-dd-removed-list article span {
+  display: inline-flex;
+  gap: 4px;
+  max-width: 220px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(254, 226, 226, 0.7);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ax-dd-removed-list article b {
+  color: var(--color-text-primary);
 }
 .ax-dd-about {
   padding: 14px 18px 8px;
@@ -4170,6 +4308,72 @@ a.ax-btn {
 }
 .ax-dd-table tbody tr:hover td {
   background: var(--color-background-secondary);
+}
+.ax-dd-table tbody td.ax-dd-changed-cell {
+  position: relative;
+  overflow: visible;
+  transition: box-shadow 180ms ease-out, background 180ms ease-out;
+}
+.ax-dd-table tbody td.ax-dd-change-missing_fill,
+.ax-dd-table tbody tr:hover td.ax-dd-change-missing_fill {
+  background: rgba(254, 240, 138, 0.48);
+}
+.ax-dd-table tbody td.ax-dd-change-outlier,
+.ax-dd-table tbody tr:hover td.ax-dd-change-outlier {
+  background: rgba(253, 186, 116, 0.42);
+}
+.ax-dd-table tbody td.ax-dd-change-converted,
+.ax-dd-table tbody tr:hover td.ax-dd-change-converted {
+  background: rgba(191, 219, 254, 0.44);
+}
+.ax-dd-table tbody td.ax-dd-change-scaled,
+.ax-dd-table tbody td.ax-dd-change-standardized,
+.ax-dd-table tbody tr:hover td.ax-dd-change-scaled,
+.ax-dd-table tbody tr:hover td.ax-dd-change-standardized {
+  background: rgba(221, 214, 254, 0.5);
+}
+.ax-dd-table thead .ax-dd-colhead th.ax-dd-new-column,
+.ax-dd-table tbody td.ax-dd-new-column-cell,
+.ax-dd-table tbody tr:hover td.ax-dd-new-column-cell {
+  background: rgba(187, 247, 208, 0.42);
+}
+.ax-dd-table tbody td.ax-dd-change-focus {
+  box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.78), 0 0 0 3px rgba(249, 115, 22, 0.14);
+}
+.ax-dd-change-tooltip {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 6px);
+  z-index: 8;
+  display: none;
+  width: min(310px, 42vw);
+  padding: 10px;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 7px;
+  background: var(--color-background-primary);
+  box-shadow: 0 13px 30px rgba(15, 23, 42, 0.16);
+  color: var(--color-text-primary);
+  white-space: normal;
+}
+.ax-dd-changed-cell:hover .ax-dd-change-tooltip,
+.ax-dd-changed-cell:focus-within .ax-dd-change-tooltip {
+  display: grid;
+  gap: 5px;
+}
+.ax-dd-change-tooltip b {
+  font-size: 12px;
+}
+.ax-dd-change-tooltip span {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 7px;
+  line-height: 1.35;
+  font-size: 11px;
+}
+.ax-dd-change-tooltip em {
+  color: var(--color-text-tertiary);
+  font-style: normal;
+  font-weight: 600;
 }
 .ax-dd-cell-value.dirty {
   background: var(--color-accent-light);

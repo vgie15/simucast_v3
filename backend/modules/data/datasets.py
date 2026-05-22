@@ -586,6 +586,75 @@ def get_rows(ds_id):
     finally:
         s.close()
 
+
+# ANCHOR: Dataset: Get Stage Table Changes
+@bp.route("/api/datasets/<ds_id>/changes", methods=["GET"])
+def get_table_changes(ds_id):
+    """Return stored table diffs for the selected active-stage chain."""
+    stage_id = request.args.get("stage_id") or "current"
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        target_stage = _target_change_stage(s, ds, stage_id)
+        if target_stage is None:
+            return {
+                "stage_id": "original",
+                "current_stage_id": ds.current_stage_id or "original",
+                "stages": [],
+            }
+
+        stages = _change_stage_chain(s, ds.id, target_stage)
+        payloads = []
+        for stage in stages:
+            params = jload(stage.op_params) or {}
+            table_changes = params.get("_table_changes") or {}
+            if not table_changes:
+                continue
+            payloads.append(clean_json({
+                "id": stage.id,
+                "step_index": stage.step_index,
+                "op_type": stage.op_type,
+                "summary": stage.summary,
+                "timestamp": stage.created_at.isoformat() if stage.created_at else None,
+                **table_changes,
+            }))
+        return {
+            "stage_id": target_stage.id,
+            "current_stage_id": ds.current_stage_id or "original",
+            "stages": payloads,
+        }
+    finally:
+        s.close()
+
+
+def _target_change_stage(session, ds, stage_id):
+    """Resolve current/original/explicit stage selectors for change reads."""
+    if stage_id == "original" or not ds.current_stage_id and stage_id in ("", "current", None):
+        return None
+    if stage_id in ("", "current", None):
+        return session.query(DatasetStage).filter_by(id=ds.current_stage_id, dataset_id=ds.id).first()
+    return session.query(DatasetStage).filter_by(id=stage_id, dataset_id=ds.id).first()
+
+
+def _change_stage_chain(session, dataset_id, target_stage):
+    """Walk the selected stage ancestry so restored branches do not leak diffs."""
+    stages = []
+    seen = set()
+    current = target_stage
+    while current and current.id not in seen:
+        seen.add(current.id)
+        stages.append(current)
+        if not current.parent_stage_id:
+            break
+        current = (
+            session.query(DatasetStage)
+            .filter_by(id=current.parent_stage_id, dataset_id=dataset_id)
+            .first()
+        )
+    return list(reversed(stages))
+
 # ANCHOR: Dataset: Edit Single Cell
 @bp.route("/api/datasets/<ds_id>/cell", methods=["PATCH"])
 def update_cell(ds_id):

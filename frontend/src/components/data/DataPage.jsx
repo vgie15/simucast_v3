@@ -36,6 +36,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const [appliedFixSummary, setAppliedFixSummary] = useState([])
   const [showChangePreview, setShowChangePreview] = useState(true)
   const [dataChangePulse, setDataChangePulse] = useState(false)
+  const [tableViewMode, setTableViewMode] = useState('cleaned')
 
   useEffect(() => {
     if (!openSection) return
@@ -77,10 +78,12 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     if (stageId === dataset?.current_stage_id) {
       setViewStageId('current')
       setViewStageLabel(null)
+      setTableViewMode('cleaned')
       return
     }
     setViewStageId(stageId)
     setViewStageLabel(stageId === 'original' ? 'Original upload' : `Stage ${stageId}`)
+    setTableViewMode(stageId === 'original' ? 'original' : 'cleaned')
   }, [viewStageRequest?.nonce, dataset?.current_stage_id])
 
   const refreshDataset = async () => {
@@ -122,6 +125,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     await loadSuggestions()
     setShowChangePreview(true)
     setDataChangePulse(true)
+    setTableViewMode('highlight')
     window.setTimeout(() => setDataChangePulse(false), 2200)
   }
 
@@ -193,6 +197,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       const fresh = await api.selectSheet(dataset.id, sheetName)
       setViewStageId('current')
       setViewStageLabel(null)
+      setTableViewMode('cleaned')
       setDataset?.(fresh)
       setHistoryKey((k) => k + 1)
       await loadSuggestions()
@@ -271,6 +276,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
           currentStageId={dataset.current_stage_id}
           stageLabel={viewStageLabel}
           refreshKey={historyKey}
+          preferredViewMode={tableViewMode}
           onDataChanged={handleApplied}
         />
         {viewStageId !== 'current' && (
@@ -280,6 +286,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
               onClick={() => {
                 setViewStageId('current')
                 setViewStageLabel(null)
+                setTableViewMode('cleaned')
               }}
             >
               Show current stage

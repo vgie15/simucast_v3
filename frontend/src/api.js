@@ -168,6 +168,10 @@ export const api = {
     const qs = `page=${page}&page_size=${pageSize}` + (stageId ? `&stage_id=${encodeURIComponent(stageId)}` : '')
     return request(`/api/datasets/${id}/rows?${qs}`)
   },
+  getTableChanges: (id, stageId) => {
+    const qs = stageId ? `?stage_id=${encodeURIComponent(stageId)}` : ''
+    return request(`/api/datasets/${id}/changes${qs}`)
+  },
   updateCell: (id, body) =>
     request(`/api/datasets/${id}/cell`, {
       method: 'PATCH',

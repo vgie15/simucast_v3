@@ -36,10 +36,25 @@ export default function DataDetailView({
   currentStageId,
   stageLabel,
   refreshKey,
+  preferredViewMode = 'cleaned',
   onDataChanged,
 }) {
   const datasetId = dataset?.id
-  const allColumns = useMemo(() => (variables || []).map((v) => v.name), [variables])
+  const [rowColumns, setRowColumns] = useState([])
+  const [viewMode, setViewMode] = useState(preferredViewMode)
+  const [changeScope, setChangeScope] = useState('last')
+  const [changeStages, setChangeStages] = useState([])
+  const [changeLoading, setChangeLoading] = useState(false)
+  const [activeChangeIndex, setActiveChangeIndex] = useState(0)
+  const variableColumns = useMemo(() => (variables || []).map((v) => v.name), [variables])
+  const allColumns = useMemo(
+    () => (viewMode === 'original' && rowColumns.length ? rowColumns : variableColumns),
+    [rowColumns, variableColumns, viewMode],
+  )
+  const tableVariables = useMemo(
+    () => allColumns.map((name) => (variables || []).find((v) => v.name === name) || { name, dtype: 'text' }),
+    [allColumns, variables],
+  )
 
   const [rows, setRows] = useState([])
   const [page, setPage] = useState(1)
@@ -74,11 +89,12 @@ export default function DataDetailView({
   const [expanded, setExpanded] = useState(false)
 
   const visibleVariables = useMemo(
-    () => visibleColumns.map((name) => (variables || []).find((v) => v.name === name)).filter(Boolean),
-    [visibleColumns, variables],
+    () => visibleColumns.map((name) => tableVariables.find((v) => v.name === name)).filter(Boolean),
+    [visibleColumns, tableVariables],
   )
 
-  const readOnly = !!stageId && stageId !== currentStageId
+  const effectiveStageId = viewMode === 'original' ? 'original' : stageId
+  const readOnly = viewMode === 'original' || (!!stageId && stageId !== currentStageId)
 
   // load AI describe
   useEffect(() => {
@@ -109,12 +125,13 @@ export default function DataDetailView({
   // reset on stage / refresh
   useEffect(() => {
     setRows([])
+    setRowColumns([])
     setPage(1)
     setHasMore(true)
     setEditing(null)
     setHeaderEdit(null)
     setCellError(null)
-  }, [datasetId, stageId, refreshKey])
+  }, [datasetId, effectiveStageId, refreshKey, viewMode])
 
   // load rows page
   useEffect(() => {
@@ -122,10 +139,13 @@ export default function DataDetailView({
     let cancelled = false
     setLoading(true)
     api
-      .getRows(datasetId, page, PAGE_SIZE, stageId)
+      .getRows(datasetId, page, PAGE_SIZE, effectiveStageId)
       .then((r) => {
         if (cancelled) return
         setRows((prev) => (page === 1 ? r.rows : [...prev, ...r.rows]))
+        if (page === 1 && r.rows?.[0]) {
+          setRowColumns(Object.keys(r.rows[0]).filter((key) => key !== '__row_index'))
+        }
         setTotal(r.total || 0)
         setHasMore(page * PAGE_SIZE < (r.total || 0))
       })
@@ -135,7 +155,84 @@ export default function DataDetailView({
     return () => {
       cancelled = true
     }
-  }, [datasetId, stageId, page, refreshKey])
+  }, [datasetId, effectiveStageId, page, refreshKey])
+
+  useEffect(() => {
+    setViewMode(preferredViewMode)
+  }, [preferredViewMode, refreshKey, datasetId])
+
+  useEffect(() => {
+    if (!datasetId || viewMode === 'original') {
+      setChangeStages([])
+      return
+    }
+    let cancelled = false
+    setChangeLoading(true)
+    api
+      .getTableChanges(datasetId, stageId || 'current')
+      .then((response) => {
+        if (!cancelled) setChangeStages(response.stages || [])
+      })
+      .catch(() => {
+        if (!cancelled) setChangeStages([])
+      })
+      .finally(() => {
+        if (!cancelled) setChangeLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [datasetId, stageId, currentStageId, refreshKey, viewMode])
+
+  const scopedChangeStages = useMemo(() => {
+    if (!changeStages.length) return []
+    return changeScope === 'last' ? [changeStages[changeStages.length - 1]] : changeStages
+  }, [changeScope, changeStages])
+  const visibleChanges = useMemo(
+    () => scopedChangeStages.flatMap((stage) => stage.changes || []),
+    [scopedChangeStages],
+  )
+  const removedRows = useMemo(
+    () => scopedChangeStages.flatMap((stage) => stage.removed_rows || []),
+    [scopedChangeStages],
+  )
+  const changedCellMap = useMemo(() => {
+    const cells = new Map()
+    for (const change of visibleChanges) {
+      cells.set(`${change.row_index}:${change.column}`, change)
+    }
+    return cells
+  }, [visibleChanges])
+  const changedColumns = useMemo(
+    () => new Set(scopedChangeStages.flatMap((stage) => stage.new_columns || [])),
+    [scopedChangeStages],
+  )
+
+  useEffect(() => {
+    setActiveChangeIndex((current) => Math.min(current, Math.max(visibleChanges.length - 1, 0)))
+  }, [visibleChanges.length])
+
+  useEffect(() => {
+    if (viewMode !== 'highlight' || !visibleChanges.length) return
+    const active = visibleChanges[activeChangeIndex]
+    if (!active) return
+    if (!visibleColumns.includes(active.column)) {
+      setVisibleColumns((current) => [...current, active.column].filter((name, index, list) => list.indexOf(name) === index))
+    }
+    const targetPage = Math.floor(Number(active.row_index || 0) / PAGE_SIZE) + 1
+    if (!rows.some((row) => row.__row_index === active.row_index)) {
+      setRows([])
+      setPage(targetPage)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      const cell = scrollRef.current?.querySelector(`[data-change-cell="${active.row_index}:${cssEscape(active.column)}"]`)
+      cell?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+      cell?.classList.add('ax-dd-change-focus')
+      window.setTimeout(() => cell?.classList.remove('ax-dd-change-focus'), 1300)
+    }, 40)
+    return () => window.clearTimeout(timer)
+  }, [activeChangeIndex, rows, viewMode, visibleChanges, visibleColumns])
 
   // infinite scroll
   const sentinelRef = useRef(null)
@@ -306,7 +403,7 @@ export default function DataDetailView({
         </div>
         <div className="ax-dd-actions">
           <a
-            href={api.exportCsvUrl(datasetId, stageId)}
+            href={api.exportCsvUrl(datasetId, effectiveStageId)}
             download={(dataset.filename || dataset.name || 'dataset').replace(/\.[^.]+$/, '') + '.csv'}
             className="ax-dd-icon-btn"
             title="Download CSV"
@@ -327,6 +424,30 @@ export default function DataDetailView({
       </header>
 
       <nav className="ax-dd-tabs">
+        <div className="ax-dd-viewmodes" role="tablist" aria-label="Dataset view">
+          <button
+            type="button"
+            className={viewMode === 'original' ? 'active' : ''}
+            onClick={() => setViewMode('original')}
+          >
+            Original
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'cleaned' ? 'active' : ''}
+            onClick={() => setViewMode('cleaned')}
+          >
+            Cleaned
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'highlight' ? 'active' : ''}
+            onClick={() => setViewMode('highlight')}
+            disabled={!changeStages.length && !changeLoading}
+          >
+            Highlight Changes
+          </button>
+        </div>
         <div className="ax-dd-tabs-right">
           <ColumnVisibilityMenu
             allColumns={allColumns}
@@ -336,6 +457,44 @@ export default function DataDetailView({
         </div>
       </nav>
 
+      {viewMode === 'highlight' && (
+        <section className="ax-dd-changebar" aria-live="polite">
+          <div className="ax-dd-changebar-copy">
+            <strong>{changeLoading ? 'Loading changes...' : `${visibleChanges.length} changed cell${visibleChanges.length === 1 ? '' : 's'}`}</strong>
+            <span>
+              {changeScope === 'last' ? 'Showing the latest data change.' : 'Showing all stored data changes for this stage.'}
+            </span>
+          </div>
+          <div className="ax-dd-changebar-actions">
+            <button type="button" className={`ax-btn mini ${changeScope === 'last' ? 'active' : ''}`} onClick={() => setChangeScope('last')}>
+              Last change
+            </button>
+            <button type="button" className={`ax-btn mini ${changeScope === 'all' ? 'active' : ''}`} onClick={() => setChangeScope('all')}>
+              All changes
+            </button>
+            <button type="button" className="ax-btn mini" onClick={() => setViewMode('cleaned')}>
+              Clear highlights
+            </button>
+            <button
+              type="button"
+              className="ax-btn mini"
+              onClick={() => setActiveChangeIndex((value) => (visibleChanges.length ? (value - 1 + visibleChanges.length) % visibleChanges.length : 0))}
+              disabled={!visibleChanges.length}
+            >
+              Previous cell
+            </button>
+            <button
+              type="button"
+              className="ax-btn mini"
+              onClick={() => setActiveChangeIndex((value) => (visibleChanges.length ? (value + 1) % visibleChanges.length : 0))}
+              disabled={!visibleChanges.length}
+            >
+              Next cell
+            </button>
+          </div>
+        </section>
+      )}
+
       {(savingEdits || cellError) && (
         <div className="ax-dd-pending">
           {savingEdits && <span>Saving cell edit...</span>}
@@ -344,6 +503,9 @@ export default function DataDetailView({
       )}
 
       <div className="ax-dd-table-wrap" ref={scrollRef}>
+        {viewMode === 'highlight' && removedRows.length > 0 && (
+          <RemovedRowsPreview rows={removedRows} visibleColumns={visibleColumns} />
+        )}
         <section className="ax-dd-about">
           <h4>About this file</h4>
           {aboutLoading && !aboutData && (
@@ -367,7 +529,7 @@ export default function DataDetailView({
           <thead>
             <tr className="ax-dd-colhead">
               {visibleVariables.map((v) => (
-                <th key={v.name}>
+                <th key={v.name} className={viewMode === 'highlight' && changedColumns.has(v.name) ? 'ax-dd-new-column' : ''}>
                   <button
                     type="button"
                     className="ax-dd-col-button"
@@ -386,15 +548,24 @@ export default function DataDetailView({
           <tbody>
             {rows.map((row) => (
               <tr key={row.__row_index}>
-                {visibleColumns.map((col) => (
-                  <td
-                    key={col}
-                    onClick={() => !readOnly && startEdit(row, col, row[col])}
-                    className={readOnly ? 'readonly' : ''}
-                  >
-                    {renderCellValue(row, col)}
-                  </td>
-                ))}
+                {visibleColumns.map((col) => {
+                  const change = viewMode === 'highlight' ? changedCellMap.get(`${row.__row_index}:${col}`) : null
+                  return (
+                    <td
+                      key={col}
+                      data-change-cell={`${row.__row_index}:${col}`}
+                      onClick={() => !readOnly && startEdit(row, col, row[col])}
+                      className={[
+                        readOnly ? 'readonly' : '',
+                        change ? `ax-dd-changed-cell ax-dd-change-${change.change_kind || 'converted'}` : '',
+                        viewMode === 'highlight' && changedColumns.has(col) ? 'ax-dd-new-column-cell' : '',
+                      ].filter(Boolean).join(' ')}
+                    >
+                      {renderCellValue(row, col)}
+                      {change && <ChangeTooltip change={change} />}
+                    </td>
+                  )
+                })}
               </tr>
             ))}
             <tr ref={sentinelRef} className="ax-dd-sentinel">
@@ -452,4 +623,58 @@ export default function DataDetailView({
   )
 
   return node
+}
+
+function RemovedRowsPreview({ rows, visibleColumns }) {
+  const [open, setOpen] = useState(true)
+  const previewColumns = visibleColumns.slice(0, 5)
+  return (
+    <section className="ax-dd-removed-preview">
+      <button type="button" onClick={() => setOpen((value) => !value)}>
+        <strong>Recently Removed Rows</strong>
+        <span>{rows.length} row{rows.length === 1 ? '' : 's'} removed in the visible change set</span>
+        <em>{open ? 'Hide' : 'Show'}</em>
+      </button>
+      {open && (
+        <div className="ax-dd-removed-list">
+          {rows.slice(0, 5).map((row) => (
+            <article key={`${row.stage_id || 'stage'}-${row.row_index}`}>
+              <p>Original row {Number(row.row_index || 0) + 1}: {row.reason}</p>
+              <div>
+                {previewColumns.map((column) => (
+                  <span key={column}>
+                    <b>{column}</b>
+                    {formatChangeValue(row.values?.[column])}
+                  </span>
+                ))}
+              </div>
+            </article>
+          ))}
+          {rows.length > 5 && <small>{rows.length - 5} more removed rows are tracked in this dataset stage.</small>}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ChangeTooltip({ change }) {
+  return (
+    <span className="ax-dd-change-tooltip" role="tooltip">
+      <b>{change.action_type || 'Changed value'}</b>
+      <span><em>Original</em>{formatChangeValue(change.original_value)}</span>
+      <span><em>Cleaned</em>{formatChangeValue(change.new_value)}</span>
+      <span><em>Method</em>{change.method || 'dataset transform'}</span>
+      <span><em>Reason</em>{change.reason || 'Updated in the current stage.'}</span>
+    </span>
+  )
+}
+
+function formatChangeValue(value) {
+  if (value === null || value === undefined || value === '') return 'Blank'
+  return String(value)
+}
+
+function cssEscape(value) {
+  if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(String(value))
+  return String(value).replace(/["\\]/g, '\\$&')
 }
