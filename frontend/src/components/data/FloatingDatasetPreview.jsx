@@ -13,10 +13,10 @@ const VIEW_MODES = [
   { id: 'highlight', label: 'Highlight Changes' },
 ]
 
-// Compact read-only dataset table shown outside the Data page.
-export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) {
+// Compact read-only dataset table available from the project workspace.
+export default function FloatingDatasetPreview({ dataset }) {
   const datasetId = dataset?.id
-  const hidden = !datasetId || activeTab === 'data'
+  const hidden = !datasetId
 
   const [open, setOpen] = useState(false)
   const [viewMode, setViewMode] = useState('cleaned')
