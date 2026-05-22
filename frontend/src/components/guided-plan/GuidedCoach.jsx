@@ -14,7 +14,11 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   const [busy, setBusy] = useState(false)
   const [anchorStyle, setAnchorStyle] = useState(null)
   const [completion, setCompletion] = useState({ checked: false, complete: false })
+  const [detailsOpen, setDetailsOpen] = useState(true)
+  const [orientationOpen, setOrientationOpen] = useState(false)
   const current = currentCoachStep(guidance, dataset) || firstCoachStep(guidance.goal, dataset)
+  const drilldown = drilldownForStep(current, dataset)
+  const orientation = pageOrientation(current?.page)
 
   useEffect(() => {
     if (!guidance.guided_mode || !current?.section) return
@@ -67,6 +71,12 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
     }
   }, [current?.id, dataset, dataset?.current_stage_id])
 
+  useEffect(() => {
+    if (!dataset?.id || !guidance.guided_mode || !current?.page || current.page !== activeTab) return
+    const key = `simucast.guidedOrientation.${dataset.id}.${current.page}`
+    setOrientationOpen(window.localStorage.getItem(key) !== '1')
+  }, [activeTab, current?.page, dataset?.id, guidance.guided_mode])
+
   if (!dataset?.id || !guidance.guided_mode || !guidance.goal || !current) return null
 
   const persist = async (body) => {
@@ -108,6 +118,36 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
       <strong>{current.title}</strong>
       {current.detected && <p><b>What SimuCast sees:</b> {current.detected}</p>}
       <p><b>Do this now:</b> {current.action}</p>
+      {orientationOpen && orientation.length > 0 && (
+        <section className="ax-guided-coach-orientation">
+          <div>
+            <strong>Quick page map</strong>
+            <button
+              className="ax-link-btn"
+              type="button"
+              onClick={() => {
+                window.localStorage.setItem(`simucast.guidedOrientation.${dataset.id}.${current.page}`, '1')
+                setOrientationOpen(false)
+              }}
+            >
+              Got it
+            </button>
+          </div>
+          <p>{orientation.join(' · ')}</p>
+        </section>
+      )}
+      {drilldown.length > 0 && (
+        <section className={`ax-guided-coach-drilldown ${detailsOpen ? 'open' : ''}`}>
+          <button className="ax-link-btn" type="button" onClick={() => setDetailsOpen((value) => !value)}>
+            {detailsOpen ? 'Hide section steps' : 'Show section steps'}
+          </button>
+          {detailsOpen && (
+            <ol>
+              {drilldown.map((item) => <li key={item}>{item}</li>)}
+            </ol>
+          )}
+        </section>
+      )}
       {current.unlocks && <p className="ax-guided-coach-unlocks">{current.unlocks}</p>}
       {current.requirement === 'required' && completion.checked && !completion.complete && (
         <p className="ax-guided-coach-lock">Complete this required task before the guide opens the next module.</p>
@@ -182,4 +222,72 @@ export async function checkCoachCompletion(dataset, step) {
     return Boolean((response?.analyses || []).some((analysis) => String(analysis.kind || '').startsWith('test_')))
   }
   return false
+}
+
+function drilldownForStep(step, dataset) {
+  if (!step) return []
+  if (step.id === 'data.suggested_fixes') {
+    const missing = (dataset?.variables || [])
+      .filter((variable) => Number(variable.missing || 0) > 0)
+      .map((variable) => variable.name)
+    return [
+      `Review the affected columns${missing.length ? `: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ', and more' : ''}.` : '.'}`,
+      'Check the recommended method inside the Missing values card and use overrides only when a column needs different handling.',
+      'Confirm the selected columns, then click Apply group.',
+      'Inspect the dataset preview and History after the new cleaned stage is created.',
+    ]
+  }
+  if (step.id === 'data.categories') {
+    return [
+      'Choose the category column SimuCast flagged for review.',
+      'Check which source labels belong under the recommended final label.',
+      'Apply the mapping only after the selected values look correct.',
+    ]
+  }
+  if (step.id === 'describe.summaries') {
+    return [
+      'Select the variables that answer your question.',
+      'Run descriptives to create summaries and charts for this dataset stage.',
+      'Read the variable cards before moving into formal analysis or modeling.',
+    ]
+  }
+  if (step.id === 'tests.setup') {
+    return [
+      'Choose a test card that matches the question you are asking.',
+      'Use the recommended variable pair when you are unsure what belongs together.',
+      'Run the test and read the result explanation before deciding what comes next.',
+    ]
+  }
+  if (step.id === 'models.target') {
+    return [
+      'Choose the target outcome you want SimuCast to predict.',
+      'Review selected features and preprocessing before training.',
+      'Train at least one model, then check metrics and model health.',
+    ]
+  }
+  if (step.id === 'whatif.controls') {
+    return [
+      'Select a saved model and review the baseline input values.',
+      'Adjust only the features you want to test.',
+      'Compare the changed prediction before saving a scenario.',
+    ]
+  }
+  if (step.id === 'report.preview') {
+    return [
+      'Review which saved analyses, model results, explanations, and scenarios are available.',
+      'Include the outputs that answer the chosen project question.',
+      'Generate the report when the project evidence is ready.',
+    ]
+  }
+  return []
+}
+
+function pageOrientation(page) {
+  if (page === 'data') return ['Dataset preview', 'Suggested fixes', 'Guided Workflow', 'History']
+  if (page === 'describe') return ['Variable selection', 'Summary cards', 'Charts', 'Guided Workflow']
+  if (page === 'tests') return ['Test cards', 'Recommended pair setup', 'Result summary', 'Guided Workflow']
+  if (page === 'models') return ['Target setup', 'Feature and preprocessing setup', 'Model results', 'Model health']
+  if (page === 'whatif') return ['Saved model', 'Feature controls', 'Prediction comparison', 'Scenarios']
+  if (page === 'report') return ['Saved outputs', 'Report preview', 'Export controls', 'History']
+  return []
 }

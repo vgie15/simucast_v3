@@ -34,6 +34,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const [applyingAll, setApplyingAll] = useState(false)
   const [applyingGroup, setApplyingGroup] = useState(null)
   const [appliedFixSummary, setAppliedFixSummary] = useState([])
+  const [showChangePreview, setShowChangePreview] = useState(true)
+  const [dataChangePulse, setDataChangePulse] = useState(false)
 
   useEffect(() => {
     if (!openSection) return
@@ -118,6 +120,9 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     setViewStageLabel(null)
     await refreshDataset()
     await loadSuggestions()
+    setShowChangePreview(true)
+    setDataChangePulse(true)
+    window.setTimeout(() => setDataChangePulse(false), 2200)
   }
 
   const actOnSuggestion = async (suggestion, accept) => {
@@ -257,7 +262,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         </div>
       )}
 
-      <div id="data-section-raw_data" style={{ marginBottom: 16 }}>
+      <div id="data-section-raw_data" className={dataChangePulse ? 'ax-data-stage-updated' : ''} style={{ marginBottom: 16 }}>
         <DataDetailView
           key={`${dataset.id}:${dataset.current_stage_id}:${historyKey}`}
           dataset={dataset}
@@ -280,6 +285,28 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
               Show current stage
             </button>
           </div>
+        )}
+        {appliedFixSummary.length > 0 && viewStageId === 'current' && (
+          <section className="ax-data-change-preview" aria-live="polite">
+            <div>
+              <strong>Current cleaned stage updated</strong>
+              <span>Review the dataset preview and History before moving on.</span>
+            </div>
+            <button className="ax-link-btn" type="button" onClick={() => setShowChangePreview((value) => !value)}>
+              {showChangePreview ? 'Hide recent changes' : 'Show recent changes'}
+            </button>
+            {showChangePreview && (
+              <ul>
+                {appliedFixSummary.slice(0, 4).map((item, idx) => (
+                  <li key={`${item.variable}-${item.action}-${idx}`}>
+                    <KindBadge kind={item.kind} />
+                    <b>{item.variable}</b>
+                    <span>{cleanActionLabel(item.action)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
       </div>
 

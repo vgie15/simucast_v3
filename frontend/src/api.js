@@ -150,6 +150,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  mapGuidanceQuestion: (id, question) =>
+    request(`/api/datasets/${id}/guidance/question_path`, {
+      method: 'POST',
+      body: JSON.stringify({ question_text: question }),
+    }),
   selectSheet: (id, sheet) =>
     request(`/api/datasets/${id}/sheet`, {
       method: 'POST',

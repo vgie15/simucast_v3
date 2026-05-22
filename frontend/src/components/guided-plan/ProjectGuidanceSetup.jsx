@@ -76,6 +76,9 @@ export default function ProjectGuidanceSetup({
   const [suggestions, setSuggestions] = useState([])
   const [suggestionsAI, setSuggestionsAI] = useState(false)
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [mappingLoading, setMappingLoading] = useState(false)
+  const [mappedIntent, setMappedIntent] = useState('')
+  const [closestIntents, setClosestIntents] = useState([])
   const [intentChoiceOpen, setIntentChoiceOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -93,6 +96,8 @@ export default function ProjectGuidanceSetup({
     setGuidedMode(Boolean(current.guided_mode))
     setQuestion(current.question_text || '')
     setSelected(restored)
+    setMappedIntent(restored?.intent || '')
+    setClosestIntents([])
     setIntentChoiceOpen(false)
     setError('')
   }, [open, current.goal, current.guided_mode, current.intent, current.question_source, current.question_text])
@@ -125,9 +130,10 @@ export default function ProjectGuidanceSetup({
   }, [auth.isGuest, dataset, open])
 
   const derivedIntent = useMemo(() => inferIntent(question), [question])
-  const picked = selected || (derivedIntent ? {
+  const supportedIntent = mappedIntent || derivedIntent
+  const picked = selected || (supportedIntent ? {
     question: question.trim(),
-    intent: derivedIntent,
+    intent: supportedIntent,
     source: 'user',
   } : null)
   const selectedIntent = INTENTS.find((item) => item.id === picked?.intent)
@@ -147,14 +153,37 @@ export default function ProjectGuidanceSetup({
     }
   }
 
-  const continueWithQuestion = () => {
-    if (!picked?.intent) {
-      setIntentChoiceOpen(true)
+  const continueWithQuestion = async () => {
+    if (selected?.intent || mappedIntent || derivedIntent || !dataset?.id) {
+      if (!picked?.intent) {
+        setIntentChoiceOpen(true)
+        return
+      }
+      setSelected(picked)
+      setIntentChoiceOpen(false)
+      setStep('guidance')
       return
     }
-    setSelected(picked)
-    setIntentChoiceOpen(false)
-    setStep('guidance')
+    setMappingLoading(true)
+    setError('')
+    try {
+      const response = await api.mapGuidanceQuestion(dataset.id, question.trim())
+      if (response?.supported && response.intent) {
+        const next = { question: question.trim(), intent: response.intent, source: 'user' }
+        setMappedIntent(response.intent)
+        setSelected(next)
+        setIntentChoiceOpen(false)
+        setStep('guidance')
+        return
+      }
+      setClosestIntents(response?.closest_intents || closestIntentChoices(question))
+      setIntentChoiceOpen(true)
+    } catch {
+      setClosestIntents(closestIntentChoices(question))
+      setIntentChoiceOpen(true)
+    } finally {
+      setMappingLoading(false)
+    }
   }
 
   const selectQuestion = (item) => {
@@ -164,6 +193,8 @@ export default function ProjectGuidanceSetup({
       intent: item.intent,
       source: item.source || 'system',
     })
+    setMappedIntent(item.intent)
+    setClosestIntents([])
     setIntentChoiceOpen(false)
   }
 
@@ -223,6 +254,8 @@ export default function ProjectGuidanceSetup({
                 onChange={(event) => {
                   setQuestion(event.target.value)
                   setSelected(null)
+                  setMappedIntent('')
+                  setClosestIntents([])
                   setIntentChoiceOpen(false)
                 }}
               />
@@ -242,7 +275,7 @@ export default function ProjectGuidanceSetup({
               <div className="ax-guidance-intent-choices">
                 <p>That question needs a clearer supported path. Choose the closest one and SimuCast will guide from there.</p>
                 <div>
-                  {closestIntentChoices(question).map((intent) => (
+                  {(closestIntents.length ? closestIntents : closestIntentChoices(question)).map((intent) => (
                     <button
                       className="ax-btn mini"
                       key={intent}
@@ -288,8 +321,8 @@ export default function ProjectGuidanceSetup({
             </button>
           )}
           {step === 'question' ? (
-            <button className="ax-btn prim" type="button" onClick={continueWithQuestion} disabled={!question.trim() || busy}>
-              Continue
+            <button className="ax-btn prim" type="button" onClick={continueWithQuestion} disabled={!question.trim() || busy || mappingLoading}>
+              {mappingLoading ? 'Checking path...' : 'Continue'}
             </button>
           ) : (
             <button

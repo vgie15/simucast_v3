@@ -81,6 +81,7 @@ export default function ProjectWorkspace() {
   const [historyWidth, setHistoryWidth] = useState(320)
   const [aiWidth, setAiWidth] = useState(360)
   const [resizing, setResizing] = useState(null) // 'history' | 'ai' | null
+  const [guidedLockNotice, setGuidedLockNotice] = useState('')
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
 
   const historyKey = id ? `simucast.historyRail.collapsed.${id}` : ''
@@ -264,14 +265,19 @@ export default function ProjectWorkspace() {
               const locked = guidedLocksFuture && index > guidedTabIndex
               if (locked) {
                 return (
-                  <span
+                  <button
                     key={t.key}
+                    type="button"
                     className={`ax-subnav-item ${state} locked`}
                     title="Complete the current required guided step first."
                     aria-disabled="true"
+                    onClick={() => {
+                      setGuidedLockNotice('Complete the current guided task first.')
+                      window.setTimeout(() => setGuidedLockNotice(''), 2600)
+                    }}
                   >
                     {t.label}
-                  </span>
+                  </button>
                 )
               }
               return (
@@ -299,6 +305,7 @@ export default function ProjectWorkspace() {
           <div className="ax-flow-context">
             <span>{activeTabMeta.subtitle}</span>
             <small>{activeTabMeta.guidance}</small>
+            {guidedLockNotice && <strong className="ax-guided-lock-toast">{guidedLockNotice}</strong>}
           </div>
         </div>
         <div className={`ax-workspace-content ${guidedStep?.page === activeTab ? 'ax-guided-focus-mode' : ''}`}>
