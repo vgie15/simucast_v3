@@ -1,46 +1,41 @@
 /* ============================================================
  * COMPONENT: PROJECT GUIDANCE SETUP
- * Keywords: onboarding, goal, guided workflow, coach
+ * Keywords: onboarding, question, guided workflow, coach
  * ============================================================ */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
+import { useAuth } from '../providers/AuthProvider'
 
-export const GOALS = [
+export const INTENTS = [
   {
     id: 'prepare_data',
     title: 'Clean and prepare data',
-    description: 'Fix missing values, outliers, duplicates, labels, and formatting.',
-    path: ['Prepare data', 'Review fixes', 'Continue when ready'],
+    path: ['Inspect data', 'Fix detected issues', 'Keep prepared data'],
   },
   {
     id: 'train_model',
-    title: 'Build a prediction model',
-    description: 'Prepare the data, choose a target, train and compare models.',
-    path: ['Prepare data', 'Understand variables', 'Train models'],
+    title: 'Predict an outcome',
+    path: ['Prepare data', 'Choose a target', 'Train models'],
   },
   {
     id: 'compare_models',
-    title: 'Compare models',
-    description: 'Train several models and understand which one performs best.',
-    path: ['Prepare data', 'Choose target', 'Compare metrics'],
+    title: 'Compare prediction models',
+    path: ['Prepare data', 'Train candidates', 'Compare health and metrics'],
   },
   {
     id: 'what_if',
-    title: 'Run what-if analysis',
-    description: 'Build or use a model, then test how changed inputs affect predictions.',
-    path: ['Prepare data', 'Train a model', 'Test scenarios'],
+    title: 'Test a what-if question',
+    path: ['Prepare data', 'Train a model', 'Test changed inputs'],
   },
   {
     id: 'report',
     title: 'Create a report',
-    description: 'Collect saved outputs, explanations, visuals, and documentation.',
-    path: ['Save outputs', 'Review findings', 'Generate report'],
+    path: ['Save useful outputs', 'Review findings', 'Generate report'],
   },
   {
     id: 'full_workflow',
-    title: 'Guide me through the full workflow',
-    description: 'Follow SimuCast from preparation to report.',
-    path: ['Prepare data', 'Analyze and model', 'Report'],
+    title: 'Explore patterns and next steps',
+    path: ['Prepare data', 'Describe and analyze', 'Model or report'],
   },
 ]
 
@@ -48,16 +43,23 @@ const GUIDANCE_CHOICES = [
   {
     id: true,
     title: 'Guide me step by step',
-    description: 'SimuCast will highlight the next section to use and explain why.',
+    description: 'SimuCast focuses the next required task and explains what unlocks after it.',
   },
   {
     id: false,
-    title: "Let me explore",
-    description: 'Keep the workflow plan visible without pop-up guidance.',
+    title: 'Let me explore',
+    description: 'Keep the Guided Workflow visible while you move through the workspace freely.',
   },
 ]
 
-// Short post-create setup that personalizes the project workflow without blocking exploration.
+const CLEAN_QUESTION = {
+  question: 'I just want to clean and prepare this data.',
+  intent: 'prepare_data',
+  source: 'system',
+  why: 'Start with dataset quality before deciding on analysis or modeling.',
+}
+
+// Short post-create setup that turns a user question into a supported workflow.
 export default function ProjectGuidanceSetup({
   dataset,
   open,
@@ -65,22 +67,70 @@ export default function ProjectGuidanceSetup({
   onSaved,
   allowDismiss = true,
 }) {
+  const auth = useAuth()
   const current = dataset?.guidance || {}
-  const [step, setStep] = useState('goal')
-  const [goal, setGoal] = useState(current.goal || '')
+  const [step, setStep] = useState('question')
   const [guidedMode, setGuidedMode] = useState(Boolean(current.guided_mode))
+  const [question, setQuestion] = useState(current.question_text || '')
+  const [selected, setSelected] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
+  const [suggestionsAI, setSuggestionsAI] = useState(false)
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [intentChoiceOpen, setIntentChoiceOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!open) return
-    setStep('goal')
-    setGoal(current.goal || '')
+    const restored = current.question_text && current.goal
+      ? {
+          question: current.question_text,
+          intent: current.intent || current.goal,
+          source: current.question_source || 'user',
+        }
+      : null
+    setStep('question')
     setGuidedMode(Boolean(current.guided_mode))
+    setQuestion(current.question_text || '')
+    setSelected(restored)
+    setIntentChoiceOpen(false)
     setError('')
-  }, [open, current.goal, current.guided_mode])
+  }, [open, current.goal, current.guided_mode, current.intent, current.question_source, current.question_text])
 
-  const selectedGoal = GOALS.find((item) => item.id === goal)
+  useEffect(() => {
+    if (!open || !dataset?.id) return
+    let cancelled = false
+    setSuggestions(systemQuestionSuggestions(dataset))
+    setSuggestionsAI(false)
+    if (auth.isGuest) return undefined
+    setSuggestionsLoading(true)
+    api.aiGuidanceQuestions(dataset.id)
+      .then((response) => {
+        if (cancelled || !response?.suggestions?.length) return
+        setSuggestions(response.suggestions.map((item) => ({ ...item, source: response.ai ? 'ai' : 'system' })))
+        setSuggestionsAI(Boolean(response.ai))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSuggestions(systemQuestionSuggestions(dataset))
+          setSuggestionsAI(false)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSuggestionsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [auth.isGuest, dataset, open])
+
+  const derivedIntent = useMemo(() => inferIntent(question), [question])
+  const picked = selected || (derivedIntent ? {
+    question: question.trim(),
+    intent: derivedIntent,
+    source: 'user',
+  } : null)
+  const selectedIntent = INTENTS.find((item) => item.id === picked?.intent)
 
   const save = async (body, startTarget = null) => {
     if (!dataset?.id) return
@@ -89,11 +139,32 @@ export default function ProjectGuidanceSetup({
     try {
       const response = await api.updateGuidance(dataset.id, body)
       onSaved?.(response.guidance, startTarget)
+      onClose?.()
     } catch (err) {
       setError(err.message || 'Could not save project guidance.')
     } finally {
       setBusy(false)
     }
+  }
+
+  const continueWithQuestion = () => {
+    if (!picked?.intent) {
+      setIntentChoiceOpen(true)
+      return
+    }
+    setSelected(picked)
+    setIntentChoiceOpen(false)
+    setStep('guidance')
+  }
+
+  const selectQuestion = (item) => {
+    setQuestion(item.question)
+    setSelected({
+      question: item.question,
+      intent: item.intent,
+      source: item.source || 'system',
+    })
+    setIntentChoiceOpen(false)
   }
 
   if (!open) return null
@@ -104,37 +175,94 @@ export default function ProjectGuidanceSetup({
         <div className="ax-guidance-head">
           <div>
             <p className="ax-kicker">Project start</p>
-            <h2>{step === 'goal' ? 'What would you like to do with this dataset?' : 'How much guidance do you want?'}</h2>
+            <h2>{step === 'question' ? 'What would you like to find out from this dataset?' : 'Would you like SimuCast to guide you step by step?'}</h2>
             <p>
-              {step === 'goal'
-                ? 'Choose a goal and SimuCast will shape the workflow around it. You can change this later.'
-                : 'The workflow plan stays available either way. Step-by-step guidance only appears when it helps you act.'}
+              {step === 'question'
+                ? 'Choose a question or write your own. SimuCast will map it to a workflow it can actually support.'
+                : 'The Guided Workflow stays visible either way. Guided Mode focuses the next required task when you want supervision.'}
             </p>
           </div>
-          {allowDismiss && (
-            <button className="ax-btn ghost" type="button" onClick={() => save({ setup_status: 'dismissed', guided_mode: false })} disabled={busy}>
+          {allowDismiss && step === 'question' && (
+            <button
+              className="ax-btn ghost"
+              type="button"
+              onClick={() => save({ setup_status: 'dismissed', guided_mode: false })}
+              disabled={busy}
+            >
               Decide later
             </button>
           )}
         </div>
 
-        {step === 'goal' ? (
-          <div className="ax-goal-grid">
-            {GOALS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`ax-goal-card ${goal === item.id ? 'selected' : ''}`}
-                onClick={() => setGoal(item.id)}
-              >
-                <strong>{item.title}</strong>
-                <span>{item.description}</span>
-              </button>
-            ))}
-          </div>
+        {step === 'question' ? (
+          <>
+            <div className="ax-question-suggestions-head">
+              <strong>{suggestionsAI ? 'AI suggested questions' : 'Questions SimuCast can guide'}</strong>
+              <span>{suggestionsLoading ? 'Thinking with the current dataset...' : 'Pick one or ask your own below.'}</span>
+            </div>
+            <div className="ax-goal-grid">
+              {suggestions.slice(0, 4).map((item) => (
+                <button
+                  key={`${item.intent}:${item.question}`}
+                  type="button"
+                  className={`ax-goal-card ${picked?.question === item.question ? 'selected' : ''}`}
+                  onClick={() => selectQuestion(item)}
+                >
+                  <strong>{item.question}</strong>
+                  <span>{item.why || goalLabel(item.intent)}</span>
+                </button>
+              ))}
+            </div>
+            <div className="ax-guidance-question-entry">
+              <label htmlFor="simucast-project-question">Ask your own question</label>
+              <textarea
+                id="simucast-project-question"
+                rows={2}
+                value={question}
+                placeholder="For example: Can I predict whether a student will pass math from reading score and attendance?"
+                onChange={(event) => {
+                  setQuestion(event.target.value)
+                  setSelected(null)
+                  setIntentChoiceOpen(false)
+                }}
+              />
+              {derivedIntent && question.trim() && (
+                <p>SimuCast will start with: <strong>{goalLabel(derivedIntent)}</strong>.</p>
+              )}
+            </div>
+            <button
+              type="button"
+              className={`ax-guidance-clean-path ${picked?.question === CLEAN_QUESTION.question ? 'selected' : ''}`}
+              onClick={() => selectQuestion(CLEAN_QUESTION)}
+            >
+              <strong>{CLEAN_QUESTION.question}</strong>
+              <span>{CLEAN_QUESTION.why}</span>
+            </button>
+            {intentChoiceOpen && (
+              <div className="ax-guidance-intent-choices">
+                <p>That question needs a clearer supported path. Choose the closest one and SimuCast will guide from there.</p>
+                <div>
+                  {closestIntentChoices(question).map((intent) => (
+                    <button
+                      className="ax-btn mini"
+                      key={intent}
+                      type="button"
+                      onClick={() => {
+                        setSelected({ question: question.trim(), intent, source: 'user' })
+                        setIntentChoiceOpen(false)
+                        setStep('guidance')
+                      }}
+                    >
+                      {goalLabel(intent)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <>
-            {selectedGoal && <GoalPathPreview goal={selectedGoal} />}
+            {selectedIntent && <QuestionPathPreview question={picked.question} intent={selectedIntent} />}
             <div className="ax-guidance-choice-grid">
               {GUIDANCE_CHOICES.map((item) => (
                 <button
@@ -155,27 +283,30 @@ export default function ProjectGuidanceSetup({
 
         <footer className="ax-guidance-actions">
           {step === 'guidance' && (
-            <button className="ax-btn" type="button" onClick={() => setStep('goal')} disabled={busy}>
+            <button className="ax-btn" type="button" onClick={() => setStep('question')} disabled={busy}>
               Back
             </button>
           )}
-          {step === 'goal' ? (
-            <button className="ax-btn prim" type="button" onClick={() => setStep('guidance')} disabled={!goal || busy}>
+          {step === 'question' ? (
+            <button className="ax-btn prim" type="button" onClick={continueWithQuestion} disabled={!question.trim() || busy}>
               Continue
             </button>
           ) : (
             <button
               className="ax-btn prim"
               type="button"
-              disabled={busy}
+              disabled={busy || !picked?.intent}
               onClick={() => save({
-                goal,
+                goal: picked.intent,
+                intent: picked.intent,
+                question_text: picked.question,
+                question_source: picked.source,
                 setup_status: 'completed',
                 guided_mode: guidedMode,
-                walkthrough_step: guidedMode ? firstCoachStep(goal, dataset)?.id : null,
+                walkthrough_step: guidedMode ? firstCoachStep(picked.intent, dataset)?.id : null,
                 dismissed_tips: [],
                 completed_tips: [],
-              }, firstCoachStep(goal, dataset))}
+              }, firstCoachStep(picked.intent, dataset))}
             >
               {busy ? 'Starting...' : 'Start'}
             </button>
@@ -186,15 +317,15 @@ export default function ProjectGuidanceSetup({
   )
 }
 
-function GoalPathPreview({ goal }) {
+function QuestionPathPreview({ question, intent }) {
   return (
     <div className="ax-goal-path">
-      <span>To reach {goal.title.toLowerCase()}:</span>
+      <span>{question}</span>
       <div>
-        {goal.path.map((item, index) => (
+        {intent.path.map((item, index) => (
           <React.Fragment key={item}>
             <strong>{item}</strong>
-            {index < goal.path.length - 1 && <em>{'>'}</em>}
+            {index < intent.path.length - 1 && <em>{'>'}</em>}
           </React.Fragment>
         ))}
       </div>
@@ -203,23 +334,83 @@ function GoalPathPreview({ goal }) {
 }
 
 export function goalLabel(goal) {
-  return GOALS.find((item) => item.id === goal)?.title || 'Choose a project goal'
+  return INTENTS.find((item) => item.id === goal)?.title || 'Choose a project question'
+}
+
+export function systemQuestionSuggestions(dataset) {
+  const variables = dataset?.variables || []
+  const target = variables
+    .filter((item) => item?.name && Number(item.unique || 0) > 1)
+    .at(-1)?.name || variables.at(-1)?.name || 'an outcome'
+  const numeric = variables.filter((item) => ['numeric', 'int', 'float'].includes(item?.dtype)).map((item) => item.name)
+  const measure = numeric[0] || target
+  const compare = numeric[1] || measure
+  return [
+    {
+      question: `Can I predict ${target} from the other variables in this dataset?`,
+      intent: 'train_model',
+      source: 'system',
+      why: 'Build a prediction path around a supported target.',
+    },
+    {
+      question: `Which variables seem most related to ${measure}?`,
+      intent: 'full_workflow',
+      source: 'system',
+      why: 'Start with summaries and evidence before deciding on modeling.',
+    },
+    {
+      question: `How does ${measure} compare with ${compare} and the category groups here?`,
+      intent: 'full_workflow',
+      source: 'system',
+      why: 'Check relationships and group differences that the dataset can support.',
+    },
+    {
+      question: `What could change a prediction for ${target} in a what-if scenario?`,
+      intent: 'what_if',
+      source: 'system',
+      why: 'Prepare a model first, then test changed feature values.',
+    },
+  ]
+}
+
+export function inferIntent(question) {
+  const text = String(question || '').trim().toLowerCase()
+  if (!text) return ''
+  if (/(clean|prepare|missing|outlier|duplicate|standardi[sz]e|format)/.test(text)) return 'prepare_data'
+  if (/(what[- ]?if|scenario|change .*prediction|if .* change|simulate)/.test(text)) return 'what_if'
+  if (/(compare .*model|best model|which model|model performance)/.test(text)) return 'compare_models'
+  if (/(report|summary for|export findings|document)/.test(text)) return 'report'
+  if (/(predict|prediction|will .* pass|can .* pass|forecast|likely to|probability)/.test(text)) return 'train_model'
+  if (/(factor|affect|relationship|related|difference|compare|trend|pattern|explain|explore)/.test(text)) return 'full_workflow'
+  return ''
+}
+
+function closestIntentChoices(question) {
+  const inferred = inferIntent(question)
+  return [...new Set([inferred, 'full_workflow', 'train_model', 'prepare_data'].filter(Boolean))].slice(0, 3)
 }
 
 export function coachStepsForGoal(goal, dataset) {
-  const needsFixes = (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
-  const prepStart = needsFixes ? coachStep(
+  const needsMissingFix = (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
+  const prepStart = needsMissingFix ? coachStep(
     'data.suggested_fixes',
     'data',
     'fix-cleaning-suggestions',
-    'Start with the detected issues',
-    'Review Suggested Fixes before summaries or models depend on this data.',
+    'Resolve missing values before downstream work',
+    'SimuCast found missing values in the current dataset stage.',
+    'Apply or review the recommended missing-value fixes so summaries and models use complete inputs.',
+    'The next analysis step unlocks when those required blanks are handled.',
+    'required',
+    'missing',
   ) : coachStep(
     'data.inspect',
     'data',
     'data-section-raw_data',
     'Check the dataset structure',
+    'The dataset is ready for a quick inspection.',
     'Confirm the sheet, columns, and values look right before moving forward.',
+    'You can continue when the structure looks right.',
+    'recommended',
   )
   const common = {
     describe: coachStep(
@@ -227,35 +418,55 @@ export function coachStepsForGoal(goal, dataset) {
       'describe',
       'describe-section-variables',
       'Summarize the prepared variables',
-      'Descriptive outputs help you see distributions before deeper analysis.',
+      'Descriptive summaries show what the variables look like now.',
+      'Run the variables you need so distributions are visible before deeper analysis.',
+      'Analysis becomes easier once the key variables are summarized.',
+      'recommended',
+      'describe',
     ),
     analysis: coachStep(
       'tests.setup',
       'tests',
       'fix-correlation-test',
       'Choose a supported analysis',
-      'Use a recommended test pair when you want evidence about relationships or group differences.',
+      'SimuCast can recommend valid test pairs from the variables you have.',
+      'Open the analysis setup and pick the test that answers your question.',
+      'Modeling can follow once the relationship or group result is clear.',
+      'recommended',
+      'tests',
     ),
     models: coachStep(
       'models.target',
       'models',
       'fix-target-handling',
-      'Choose the model target',
-      'Prediction starts by choosing the outcome SimuCast should learn.',
+      'Train the model path for your question',
+      'Prediction and what-if work need a saved trained model.',
+      'Choose the target, review model setup, and train at least one model.',
+      'What-if analysis unlocks after a model is saved.',
+      'required',
+      'models',
     ),
     whatif: coachStep(
       'whatif.controls',
       'whatif',
       'whatif-section-controls',
-      'Test a scenario',
-      'Use a trained model to compare baseline values with changed inputs.',
+      'Test a what-if scenario',
+      'A trained model can compare baseline values with changed inputs.',
+      'Adjust supported feature values and review how the prediction changes.',
+      'Save the scenario when it answers the question you are exploring.',
+      'recommended',
+      'whatif',
     ),
     report: coachStep(
       'report.preview',
       'report',
       'ax-report-preview',
       'Build the report',
-      'Compile the saved work into a report when the useful outputs are ready.',
+      'Reports compile the outputs already saved in this project.',
+      'Select the findings, explanations, and scenarios worth including.',
+      'The workflow is complete once the report is generated.',
+      'recommended',
+      'report',
     ),
   }
 
@@ -266,15 +477,18 @@ export function coachStepsForGoal(goal, dataset) {
       'data',
       'data-section-category_standardization',
       'Review labels when categories look split',
-      'Standardized labels keep groups readable in analysis and modeling.',
+      'Similar category labels can split groups across analysis and models.',
+      'Review the label groups only when SimuCast detects values that should be merged.',
+      'You can skip this recommendation when labels are already consistent.',
+      'recommended',
     ),
   ]
   const paths = {
     prepare_data: preparePath,
-    train_model: needsFixes ? [prepStart, common.describe, common.models] : [common.models, common.describe],
-    compare_models: needsFixes ? [prepStart, common.models] : [common.models],
-    what_if: needsFixes ? [prepStart, common.models, common.whatif] : [common.models, common.whatif],
-    report: needsFixes ? [prepStart, common.describe, common.report] : [common.describe, common.report],
+    train_model: needsMissingFix ? [prepStart, common.describe, common.models] : [common.models, common.describe],
+    compare_models: needsMissingFix ? [prepStart, common.models] : [common.models],
+    what_if: needsMissingFix ? [prepStart, common.models, common.whatif] : [common.models, common.whatif],
+    report: needsMissingFix ? [prepStart, common.describe, common.report] : [common.describe, common.report],
     full_workflow: [prepStart, common.describe, common.analysis, common.models, common.whatif, common.report],
   }
   return paths[goal] || [prepStart]
@@ -284,6 +498,11 @@ export function firstCoachStep(goal, dataset) {
   return coachStepsForGoal(goal, dataset)[0]
 }
 
+export function currentCoachStep(guidance, dataset) {
+  const steps = coachStepsForGoal(guidance?.goal || guidance?.intent, dataset)
+  return steps.find((step) => step.id === guidance?.walkthrough_step) || steps[0] || null
+}
+
 export function nextCoachStep(goal, dataset, currentId, dismissedTips = []) {
   const hidden = new Set(dismissedTips || [])
   const steps = coachStepsForGoal(goal, dataset)
@@ -291,6 +510,6 @@ export function nextCoachStep(goal, dataset, currentId, dismissedTips = []) {
   return steps.slice(Math.max(currentIndex + 1, 0)).find((step) => !hidden.has(step.id)) || null
 }
 
-function coachStep(id, page, section, title, message) {
-  return { id, page, section, title, message }
+function coachStep(id, page, section, title, detected, action, unlocks, requirement = 'recommended', completion = '') {
+  return { id, page, section, title, detected, action, unlocks, requirement, completion }
 }

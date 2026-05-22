@@ -39,7 +39,8 @@ def _plan_prompt_profile(ds, df, variables, session):
     """Augment the dataset profile with extra context the project planner needs."""
     profile = _dataset_profile(ds, df, variables)
     guidance = jload(getattr(ds, "guidance", None)) or {}
-    profile["project_goal"] = guidance.get("goal")
+    profile["project_goal"] = guidance.get("goal") or guidance.get("intent")
+    profile["project_question"] = guidance.get("question_text")
     profile["column_names"] = list(df.columns)
     profile["detected_types"] = {v.get("name"): v.get("dtype") for v in variables or []}
     profile["missing_values"] = {v.get("name"): int(v.get("missing") or 0) for v in variables or []}
@@ -230,10 +231,154 @@ def _parse_ai_plan_text(text):
     return parsed
 
 
+_GUIDANCE_QUESTION_INTENTS = {
+    "prepare_data",
+    "train_model",
+    "compare_models",
+    "what_if",
+    "report",
+    "full_workflow",
+}
+
+
+def _rule_based_guidance_questions(df, variables):
+    """Return deterministic starter questions anchored to supported SimuCast paths."""
+    variables = variables or []
+    names = [v.get("name") for v in variables if v.get("name")]
+    numeric = [
+        v.get("name") for v in variables
+        if v.get("name") and v.get("dtype") in ("numeric", "int", "float")
+    ]
+    targets = [
+        v.get("name") for v in variables
+        if v.get("name")
+        and v.get("dtype") in ("binary", "category", "numeric", "int", "float")
+        and int(v.get("unique") or 0) > 1
+    ]
+    outcome = targets[-1] if targets else (names[-1] if names else "an outcome")
+    measure = numeric[0] if numeric else outcome
+    compare = numeric[1] if len(numeric) > 1 else measure
+    questions = [
+        {
+            "question": f"Can I predict {outcome} from the other variables in this dataset?",
+            "intent": "train_model",
+            "why": "Build a prediction path around a supported target and candidate features.",
+        },
+        {
+            "question": f"Which variables seem most related to {measure}?",
+            "intent": "full_workflow",
+            "why": "Start with summaries and analysis before deciding whether modeling helps.",
+        },
+        {
+            "question": f"How does {measure} compare with {compare} and the category groups in this dataset?",
+            "intent": "full_workflow",
+            "why": "Use descriptive and statistical analysis to check patterns and group differences.",
+        },
+        {
+            "question": f"What could change a prediction for {outcome} in a what-if scenario?",
+            "intent": "what_if",
+            "why": "Prepare a model first, then test changed feature values.",
+        },
+    ]
+    return {
+        "ai": False,
+        "summary": f"Starter questions for {len(df)} rows and {len(names)} variables.",
+        "suggestions": questions,
+    }
+
+
+def _normalize_guidance_questions(payload, fallback):
+    """Keep AI onboarding questions inside supported intent and text bounds."""
+    suggestions = []
+    for item in (payload or {}).get("suggestions") or []:
+        question = str(item.get("question") or "").strip()
+        intent = str(item.get("intent") or "").strip()
+        why = str(item.get("why") or item.get("rationale") or "").strip()
+        if not question or intent not in _GUIDANCE_QUESTION_INTENTS:
+            continue
+        suggestions.append({
+            "question": question[:240],
+            "intent": intent,
+            "why": why[:260],
+        })
+        if len(suggestions) == 4:
+            break
+    if not suggestions:
+        return fallback
+    return {
+        "ai": True,
+        "summary": str((payload or {}).get("summary") or "Dataset-specific questions SimuCast can guide.").strip()[:220],
+        "suggestions": suggestions,
+    }
+
+
 # ===========================================================================
 # SECTION: AI FEATURES - PLAN, RECOMMEND, EXPLAIN, CHAT, SUGGEST
 # Keywords: ai, claude, anthropic, project plan, recommend, explain, chat, suggest, llm
 # ===========================================================================
+# ANCHOR: AI: Suggest Guidance Questions
+@bp.route("/api/datasets/<ds_id>/ai/guidance_questions", methods=["POST"])
+def ai_guidance_questions(ds_id):
+    """Suggest dataset-specific questions for the post-upload guided start."""
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        df = df_from_dataset(ds, s)
+        variables = _current_variables(ds, s)
+        fallback = _rule_based_guidance_questions(df, variables)
+        blocked = _ai_account_required_response(s)
+        if blocked:
+            return blocked
+
+        cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "guidance_questions", {"version": 1})
+        cached = _AI_CACHE.get(cache_key) or _ai_db_get(s, cache_key)
+        if cached is not None:
+            return jsonify(cached)
+        if _ai_client() is None:
+            return jsonify(fallback)
+
+        profile = _plan_prompt_profile(ds, df, variables, s)
+        system = (
+            "You suggest starter analytics questions for SimuCast users. "
+            "Use only supported SimuCast paths. Do not invent analysis features, "
+            "targets, or actions. Prefer plain user language over statistics jargon."
+        )
+        prompt = (
+            "Suggest exactly 4 concise questions this user could reasonably ask "
+            "about the dataset. Each question must map to one supported intent: "
+            "prepare_data, train_model, compare_models, what_if, report, or full_workflow. "
+            "Use train_model only for prediction questions, what_if only when a model "
+            "prerequisite path makes sense, and prepare_data only for cleanup intent. "
+            'Respond as JSON: {"summary": str, "suggestions": [{"question": str, '
+            '"intent": "prepare_data|train_model|compare_models|what_if|report|full_workflow", "why": str}]}'
+        )
+        try:
+            payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=900)
+            response = _normalize_guidance_questions(payload, fallback)
+            _cache_put(_AI_CACHE, cache_key, response)
+            _, user = _auth_from_request(s)
+            _ai_db_put(
+                s,
+                dataset_id=ds_id,
+                stage_id=ds.current_stage_id,
+                user_id=user.id if user else None,
+                kind="guidance_questions",
+                context="project_start",
+                cache_key=cache_key,
+                request={"version": 1},
+                response=response,
+                model=_AI_MODEL_FAST,
+            )
+            return jsonify(clean_json(response))
+        except Exception as exc:
+            print(f"AI guidance question suggestion failed: {exc}", flush=True)
+            return jsonify(fallback)
+    finally:
+        s.close()
+
+
 # ANCHOR: AI: Generate Project Plan
 @bp.route("/api/datasets/<ds_id>/ai/project_plan", methods=["POST"])
 def ai_project_plan(ds_id):
@@ -248,7 +393,7 @@ def ai_project_plan(ds_id):
         df = df_from_dataset(ds, s)
         variables = _current_variables(ds, s)
         guidance = jload(getattr(ds, "guidance", None)) or {}
-        project_goal = guidance.get("goal")
+        project_goal = guidance.get("goal") or guidance.get("intent")
         profile = _plan_prompt_profile(ds, df, variables, s)
         if mode == "system":
             return jsonify(_rule_based_project_plan(df, variables, project_goal))
@@ -333,7 +478,8 @@ def ai_project_plan(ds_id):
             "- Recommend high-level workflow steps only.\n"
             "- Do not include method-level choices such as mean, median, mode, IQR cap, remove rows, or bin labels.\n"
             "- Prefer 5 to 8 steps.\n"
-            f"- Prioritize the user's selected project goal: {project_goal or 'not selected yet'}.\n"
+            f"- Prioritize the user's selected project intent: {project_goal or 'not selected yet'}.\n"
+            f"- If a project question is present in the profile, shape the high-level workflow toward that question without inventing tools.\n"
             "- If previous completed actions already cover a step, recommend the next useful step instead."
         )
         try:

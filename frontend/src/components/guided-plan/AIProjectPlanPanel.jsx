@@ -57,6 +57,7 @@ export default function AIProjectPlanPanel({
   const stageKey = dataset?.current_stage_id || 'original'
   const guidance = dataset?.guidance || {}
   const guidanceGoal = guidance.goal || 'general'
+  const guidanceQuestionKey = encodeURIComponent((guidance.question_text || '').slice(0, 80) || 'no-question')
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
   const skipKey = datasetId ? `simucast.aiPlan.skipped.${datasetId}.${stageKey}` : ''
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
@@ -89,7 +90,7 @@ export default function AIProjectPlanPanel({
 
   const cacheKeyFor = (targetMode = mode, targetStage = stageKey) => {
     const scope = targetMode === 'auto' ? 'latest' : targetStage
-    return `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${scope}.${guidanceGoal}.${targetMode}`
+    return `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${scope}.${guidanceGoal}.${guidanceQuestionKey}.${targetMode}`
   }
 
   const load = async (force = false) => {
@@ -175,13 +176,13 @@ export default function AIProjectPlanPanel({
     }
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, guidanceGoal, mode])
+  }, [datasetId, guidanceGoal, guidanceQuestionKey, mode])
 
   useEffect(() => {
     if (mode !== 'system') return
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, guidanceGoal, stageKey, mode])
+  }, [datasetId, guidanceGoal, guidanceQuestionKey, stageKey, mode])
 
   useEffect(() => {
     loadActivity()
@@ -362,17 +363,18 @@ export default function AIProjectPlanPanel({
 
           <div className="ax-plan-goal">
             <div>
-              <span>Goal</span>
-              <strong>{guidance.goal ? goalLabel(guidance.goal) : 'Choose a project goal'}</strong>
+              <span>{guidance.question_text ? 'Question' : 'Path'}</span>
+              <strong>{guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'Choose a project question')}</strong>
               <small>
+                {guidance.goal && guidance.question_text && `${goalLabel(guidance.goal)}. `}
                 {guidance.guided_mode
-                  ? 'Step-by-step guidance is on for the next real task.'
+                  ? 'Guided Mode is focusing the next required task.'
                   : 'The workflow stays visible while you explore.'}
               </small>
             </div>
             <div className="ax-plan-goal-actions">
               <button className="ax-link-btn" type="button" onClick={onOpenGuidanceSetup}>
-                {guidance.goal ? 'Change goal' : 'Choose goal'}
+                {guidance.goal ? 'Change question' : 'Choose question'}
               </button>
               {guidance.goal && (
                 <button className="ax-link-btn" type="button" onClick={toggleGuidedMode}>

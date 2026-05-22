@@ -40,10 +40,40 @@ _GUIDANCE_GOALS = {
 }
 
 
+def _guidance_intent_for_question(question):
+    """Map user-language questions onto the supported SimuCast intent set."""
+    text = str(question or "").strip().lower()
+    if not text:
+        return None
+    if re.search(r"(clean|prepare|missing|outlier|duplicate|standardi[sz]e|format)", text):
+        return "prepare_data"
+    if re.search(r"(what[- ]?if|scenario|change .*prediction|if .* change|simulate)", text):
+        return "what_if"
+    if re.search(r"(compare .*model|best model|which model|model performance)", text):
+        return "compare_models"
+    if re.search(r"(report|summary for|export findings|document)", text):
+        return "report"
+    if re.search(r"(predict|prediction|will .* pass|can .* pass|forecast|likely to|probability)", text):
+        return "train_model"
+    if re.search(r"(factor|affect|relationship|related|difference|compare|trend|pattern|explain|explore)", text):
+        return "full_workflow"
+    return None
+
+
+def _guidance_closest_intents(question):
+    """Return safe fallback paths when a typed question is still vague."""
+    inferred = _guidance_intent_for_question(question)
+    options = [item for item in (inferred, "full_workflow", "train_model", "prepare_data") if item]
+    return list(dict.fromkeys(options))[:3]
+
+
 def _default_guidance(status="pending"):
     """Initial goal-selection state for newly-created projects."""
     return {
         "goal": None,
+        "intent": None,
+        "question_text": None,
+        "question_source": None,
         "setup_status": status,
         "guided_mode": False,
         "walkthrough_step": None,
@@ -58,9 +88,15 @@ def _guidance_payload(ds):
     payload = jload(raw) or {}
     default_status = "pending" if raw else "dismissed"
     normalized = _default_guidance(payload.get("setup_status") or default_status)
-    goal = payload.get("goal")
+    goal = payload.get("goal") or payload.get("intent")
     if goal in _GUIDANCE_GOALS:
         normalized["goal"] = goal
+        normalized["intent"] = goal
+    question = str(payload.get("question_text") or "").strip()
+    normalized["question_text"] = question[:500] or None
+    source = str(payload.get("question_source") or "").strip().lower()
+    if source in {"ai", "system", "user"}:
+        normalized["question_source"] = source
     normalized["guided_mode"] = bool(payload.get("guided_mode"))
     step = payload.get("walkthrough_step")
     normalized["walkthrough_step"] = str(step) if step else None
@@ -83,6 +119,21 @@ def _guidance_update(current, body):
         if goal not in _GUIDANCE_GOALS and goal is not None:
             return None, "unsupported project goal"
         next_payload["goal"] = goal
+        next_payload["intent"] = goal
+    if "intent" in body:
+        intent = body.get("intent")
+        if intent not in _GUIDANCE_GOALS and intent is not None:
+            return None, "unsupported project intent"
+        next_payload["goal"] = intent
+        next_payload["intent"] = intent
+    if "question_text" in body:
+        question = str(body.get("question_text") or "").strip()
+        next_payload["question_text"] = question[:500] or None
+    if "question_source" in body:
+        source = str(body.get("question_source") or "").strip().lower()
+        if source not in {"ai", "system", "user"} and source:
+            return None, "unsupported question source"
+        next_payload["question_source"] = source or None
     if "setup_status" in body:
         status = str(body.get("setup_status") or "").strip().lower()
         if status not in {"pending", "completed", "dismissed"}:
@@ -104,6 +155,27 @@ def _guidance_update(current, body):
             return None, "completed_tips must be a list"
         next_payload["completed_tips"] = [str(item) for item in tips if item]
     return next_payload, None
+
+
+@bp.route("/api/datasets/<ds_id>/guidance/question_path", methods=["POST"])
+def map_dataset_guidance_question(ds_id):
+    """Resolve a typed project question to one of SimuCast's supported paths."""
+    body = request.get_json() or {}
+    question = str(body.get("question_text") or body.get("question") or "").strip()
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return jsonify({"error": "not found"}), 404
+        intent = _guidance_intent_for_question(question)
+        return jsonify({
+            "question_text": question[:500],
+            "intent": intent,
+            "supported": bool(intent),
+            "closest_intents": _guidance_closest_intents(question),
+        })
+    finally:
+        s.close()
 
 
 # ===========================================================================

@@ -16,6 +16,7 @@ import ProjectHistoryRail from '../history/ProjectHistoryRail'
 import ProjectAIRail from '../guided-plan/ProjectAIRail'
 import ProjectGuidanceSetup from '../guided-plan/ProjectGuidanceSetup'
 import GuidedCoach, { routeTarget } from '../guided-plan/GuidedCoach'
+import { currentCoachStep } from '../guided-plan/ProjectGuidanceSetup'
 import { useAuth } from '../providers/AuthProvider'
 
 const TABS = [
@@ -219,11 +220,14 @@ export default function ProjectWorkspace() {
   }
 
   const activeTabMeta = TABS.find((t) => t.key === activeTab) || TABS[0]
+  const guidedStep = dataset.guidance?.guided_mode ? currentCoachStep(dataset.guidance, dataset) : null
+  const guidedTabIndex = guidedStep ? TABS.findIndex((item) => item.key === guidedStep.page) : -1
+  const guidedLocksFuture = Boolean(guidedStep?.requirement === 'required' && guidedTabIndex >= 0)
   const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey })
 
   return (
     <div
-      className={`ax-workspace-grid ${historyCollapsed ? 'history-closed' : ''} ${aiCollapsed ? 'ai-closed' : ''}`}
+      className={`ax-workspace-grid ${historyCollapsed ? 'history-closed' : ''} ${aiCollapsed ? 'ai-closed' : ''} ${guidedStep ? 'guided-focus-enabled' : ''}`}
       style={{ '--history-w': `${historyWidth}px`, '--ai-w': `${aiWidth}px` }}
     >
       <ProjectHistoryRail
@@ -257,6 +261,19 @@ export default function ProjectWorkspace() {
             {TABS.map((t, index) => {
               const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
               const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
+              const locked = guidedLocksFuture && index > guidedTabIndex
+              if (locked) {
+                return (
+                  <span
+                    key={t.key}
+                    className={`ax-subnav-item ${state} locked`}
+                    title="Complete the current required guided step first."
+                    aria-disabled="true"
+                  >
+                    {t.label}
+                  </span>
+                )
+              }
               return (
                 <NavLink
                   key={t.key}
@@ -284,9 +301,9 @@ export default function ProjectWorkspace() {
             <small>{activeTabMeta.guidance}</small>
           </div>
         </div>
-        <div className="ax-workspace-content">
+        <div className={`ax-workspace-content ${guidedStep?.page === activeTab ? 'ax-guided-focus-mode' : ''}`}>
           {page}
-          <NextPagePrompt activeTab={activeTab} datasetId={id} />
+          {!guidedLocksFuture && <NextPagePrompt activeTab={activeTab} datasetId={id} />}
         </div>
       </div>
       <ProjectAIRail

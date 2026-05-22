@@ -205,6 +205,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ mode }),
     }),
+  aiGuidanceQuestions: (id) =>
+    request(`/api/datasets/${id}/ai/guidance_questions`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   aiExplain: (id, step, params, question, result, includeInReport = false) =>
     request(`/api/datasets/${id}/ai/explain`, {
       method: 'POST',
