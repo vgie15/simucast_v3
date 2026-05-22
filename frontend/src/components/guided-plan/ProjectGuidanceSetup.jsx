@@ -428,7 +428,7 @@ export function coachStepsForGoal(goal, dataset) {
   const prepStart = needsMissingFix ? coachStep(
     'data.suggested_fixes',
     'data',
-    'fix-cleaning-suggestions',
+    'fix-cleaning-missing',
     'Resolve missing values before downstream work',
     'SimuCast found missing values in the current dataset stage.',
     'Apply or review the recommended missing-value fixes so summaries and models use complete inputs.',
@@ -518,7 +518,7 @@ export function coachStepsForGoal(goal, dataset) {
   ]
   const paths = {
     prepare_data: preparePath,
-    train_model: needsMissingFix ? [prepStart, common.describe, common.models] : [common.models, common.describe],
+    train_model: needsMissingFix ? [prepStart, common.describe, common.models, common.whatif] : [common.models, common.describe, common.whatif],
     compare_models: needsMissingFix ? [prepStart, common.models] : [common.models],
     what_if: needsMissingFix ? [prepStart, common.models, common.whatif] : [common.models, common.whatif],
     report: needsMissingFix ? [prepStart, common.describe, common.report] : [common.describe, common.report],

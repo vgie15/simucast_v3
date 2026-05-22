@@ -497,8 +497,12 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
     }
   }
 
+  const cardTargetId = `fix-cleaning-${kind}`
+  const recommendationTargetId = `fix-cleaning-${kind}-recommendations`
+  const applyTargetId = `fix-cleaning-${kind}-apply`
+
   return (
-    <div className={`ax-card ax-busy-host ${applying ? 'is-busy' : ''}`} style={{ padding: 14 }}>
+    <div id={cardTargetId} className={`ax-card ax-busy-host ${applying ? 'is-busy' : ''}`} style={{ padding: 14 }}>
       <BusyOverlay
         active={applying}
         title={`Applying ${title.toLowerCase()} fix...`}
@@ -517,6 +521,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>{description}</p>
         </div>
         <button
+          id={applyTargetId}
           className="ax-btn prim"
           disabled={applying || (kind !== 'duplicates' && selected.length === 0)}
           onClick={() => onApply({ kind, action, columns, overrides, options: { keep } })}
@@ -557,14 +562,16 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
               ))}
             </select>
           </div>
-          <GroupedColumnRecommendations
-            kind={kind}
-            items={items}
-            selected={selected}
-            aiLoading={aiLoading}
-            aiSuggestion={aiSuggestion}
-            onAskAi={askAiForRecommendation}
-          />
+          <div id={recommendationTargetId}>
+            <GroupedColumnRecommendations
+              kind={kind}
+              items={items}
+              selected={selected}
+              aiLoading={aiLoading}
+              aiSuggestion={aiSuggestion}
+              onAskAi={askAiForRecommendation}
+            />
+          </div>
 
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             <button

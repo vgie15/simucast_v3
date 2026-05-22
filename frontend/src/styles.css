@@ -2662,27 +2662,19 @@ a.ax-btn {
 .ax-workspace-content {
   min-width: 0;
 }
-.ax-guided-focus-mode :is(.ax-card, .ax-section-anchor, [id^="data-section-"], [id^="describe-section-"], [id^="fix-"], [id^="whatif-section-"], #ax-report-preview):not(#data-section-raw_data) {
-  opacity: 0.68;
-  filter: saturate(0.78);
-  pointer-events: none;
-  transition: opacity 0.28s ease-out, box-shadow 0.28s ease-out, filter 0.28s ease-out, background 0.28s ease-out;
-}
-.ax-guided-focus-mode .ax-guided-focus-target,
-.ax-guided-focus-mode .ax-guided-focus-target :is(.ax-card, .ax-section-anchor, [id^="data-section-"], [id^="describe-section-"], [id^="fix-"], [id^="whatif-section-"], #ax-report-preview),
-.ax-guided-focus-mode #data-section-raw_data {
-  opacity: 1;
-  filter: none;
-  pointer-events: auto;
+.ax-guided-focus-mode {
+  isolation: isolate;
 }
 .ax-guided-focus-target {
   position: relative;
-  z-index: 2;
+  z-index: 236;
   filter: none;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 247, 237, 0.72), rgba(255, 255, 255, 0));
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.22), 0 20px 48px rgba(17, 24, 39, 0.12);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.28), 0 22px 58px rgba(17, 24, 39, 0.16);
   animation: ax-guided-focus-breathe 1.8s ease-in-out 1;
+}
+.ax-guided-focus-target:not(button) {
+  background: var(--color-background-primary);
 }
 .ax-guided-lock-toast {
   width: fit-content;
@@ -5219,6 +5211,69 @@ a.ax-btn {
   animation: ax-guided-coach-float-in 0.34s cubic-bezier(0.2, 0.9, 0.2, 1), ax-guided-coach-hover 3.8s ease-in-out 0.4s infinite;
 }
 
+.ax-guided-spotlight {
+  position: fixed;
+  inset: 0;
+  z-index: 232;
+  pointer-events: none;
+}
+
+.ax-guided-spotlight > span:not(.ring) {
+  position: absolute;
+  display: block;
+  background: rgba(17, 24, 39, 0.47);
+  pointer-events: auto;
+  transition: top 0.28s cubic-bezier(0.16, 1, 0.3, 1), left 0.28s cubic-bezier(0.16, 1, 0.3, 1), width 0.28s cubic-bezier(0.16, 1, 0.3, 1), height 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: ax-guided-dim-in 0.26s ease-out;
+}
+
+.ax-guided-spotlight > .top,
+.ax-guided-spotlight > .bottom {
+  left: 0;
+  width: 100%;
+}
+
+.ax-guided-spotlight > .left {
+  left: 0;
+}
+
+.ax-guided-spotlight > .ring {
+  position: absolute;
+  z-index: 1;
+  border: 2px solid rgba(249, 115, 22, 0.82);
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px rgba(255, 247, 237, 0.86), 0 0 0 7px rgba(249, 115, 22, 0.12), 0 18px 55px rgba(17, 24, 39, 0.2);
+  pointer-events: none;
+  transition: top 0.28s cubic-bezier(0.16, 1, 0.3, 1), left 0.28s cubic-bezier(0.16, 1, 0.3, 1), width 0.28s cubic-bezier(0.16, 1, 0.3, 1), height 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: ax-guided-ring-in 0.32s cubic-bezier(0.16, 1, 0.3, 1), ax-guided-ring-pulse 2.4s ease-out 0.32s infinite;
+}
+
+.ax-guided-spotlight-coach {
+  z-index: 242;
+  max-height: min(560px, calc(100vh - 24px));
+  overflow: auto;
+}
+
+.ax-guided-coach-step-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ax-guided-coach-step-row .ax-kicker {
+  margin: 0;
+}
+
+.ax-guided-coach-step-row span {
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 760;
+}
+
 .ax-guided-coach strong {
   display: block;
   color: var(--color-text-primary);
@@ -5306,8 +5361,25 @@ a.ax-btn {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-3px); }
 }
+@keyframes ax-guided-dim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ax-guided-ring-in {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes ax-guided-ring-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(255, 247, 237, 0.86), 0 0 0 7px rgba(249, 115, 22, 0.12), 0 18px 55px rgba(17, 24, 39, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(255, 247, 237, 0.94), 0 0 0 12px rgba(249, 115, 22, 0.06), 0 24px 68px rgba(17, 24, 39, 0.24);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .ax-guided-coach,
+  .ax-guided-spotlight > span,
   .ax-guided-focus-target,
   .ax-guided-lock-toast {
     animation: none;
