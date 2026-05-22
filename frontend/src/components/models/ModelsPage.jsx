@@ -84,7 +84,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       const sectionId = target.section
       const el = document.getElementById(sectionId)
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
         el.classList.add('ax-fix-highlight')
         setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
       }

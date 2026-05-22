@@ -80,6 +80,8 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
       setCoachStyle(null)
       return undefined
     }
+    setSpotlight(null)
+    setCoachStyle(null)
 
     const place = () => {
       const el = document.getElementById(focusTarget)
@@ -101,17 +103,26 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
       setCoachStyle({ left, top, width, right: 'auto', bottom: 'auto' })
     }
 
+    let placementTimer = null
+    let listening = false
+    const startPlacement = () => {
+      place()
+      window.addEventListener('resize', place)
+      window.addEventListener('scroll', place, true)
+      listening = true
+    }
     const timer = window.setTimeout(() => {
       highlightSection(focusTarget)
       focusSection(focusTarget)
-      place()
+      placementTimer = window.setTimeout(startPlacement, spotlightSettleDelay())
     }, 180)
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
     return () => {
       window.clearTimeout(timer)
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
+      if (placementTimer) window.clearTimeout(placementTimer)
+      if (listening) {
+        window.removeEventListener('resize', place)
+        window.removeEventListener('scroll', place, true)
+      }
       clearFocusSection(focusTarget)
     }
   }, [activeTab, focusTarget, guidance.guided_mode, onCurrentPage])
@@ -252,7 +263,7 @@ export function routeTarget(datasetId, target, activeTab, navigate) {
 function highlightSection(section) {
   const el = document.getElementById(section)
   if (!el) return
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.scrollIntoView({ behavior: spotlightScrollBehavior(), block: 'center', inline: 'nearest' })
   el.classList.add('ax-fix-highlight')
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2200)
 }
@@ -265,6 +276,14 @@ function focusSection(section) {
 function clearFocusSection(section) {
   const el = document.getElementById(section)
   if (el) el.classList.remove('ax-guided-focus-target')
+}
+
+function spotlightScrollBehavior() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+}
+
+function spotlightSettleDelay() {
+  return spotlightScrollBehavior() === 'auto' ? 40 : 420
 }
 
 export async function checkCoachCompletion(dataset, step) {

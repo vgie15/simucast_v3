@@ -12,6 +12,7 @@ import TestsPage from '../analysis/TestsPage'
 import ModelsPage from '../models/ModelsPage'
 import WhatIfPage from '../whatif/WhatIfPage'
 import ReportPage from '../report/ReportPage'
+import FloatingDatasetPreview from '../data/FloatingDatasetPreview'
 import ProjectHistoryRail from '../history/ProjectHistoryRail'
 import ProjectAIRail from '../guided-plan/ProjectAIRail'
 import ProjectGuidanceSetup from '../guided-plan/ProjectGuidanceSetup'
@@ -326,6 +327,7 @@ export default function ProjectWorkspace() {
         activeTab={activeTab}
         onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
       />
+      <FloatingDatasetPreview dataset={dataset} activeTab={activeTab} />
       <ProjectGuidanceSetup
         dataset={dataset}
         open={guidanceSetupOpen}

@@ -44,7 +44,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     const timer = setTimeout(() => {
       const el = document.getElementById(`data-section-${openSection}`)
       if (!el) return
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
       el.style.outline = '2px solid var(--color-accent)'
       el.style.outlineOffset = '3px'
       el.style.borderRadius = '8px'
