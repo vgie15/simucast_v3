@@ -425,7 +425,7 @@ function closestIntentChoices(question) {
 
 export function coachStepsForGoal(goal, dataset) {
   const needsMissingFix = (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
-  const prepStart = needsMissingFix ? coachStep(
+  const missingStep = needsMissingFix ? coachStep(
     'data.suggested_fixes',
     'data',
     'fix-cleaning-missing',
@@ -435,7 +435,8 @@ export function coachStepsForGoal(goal, dataset) {
     'The next analysis step unlocks when those required blanks are handled.',
     'required',
     'missing',
-  ) : coachStep(
+  ) : null
+  const inspectStep = coachStep(
     'data.inspect',
     'data',
     'data-section-raw_data',
@@ -445,6 +446,32 @@ export function coachStepsForGoal(goal, dataset) {
     'You can continue when the structure looks right.',
     'recommended',
   )
+  const dataIssueSteps = [
+    ...(missingStep ? [missingStep] : []),
+    coachStep(
+      'data.outliers',
+      'data',
+      'fix-cleaning-outliers',
+      'Review outliers before downstream work',
+      'Extreme numeric values can distort summaries, analysis, and model fit.',
+      'Review the Outliers card and apply the recommended handling when the current stage still has outliers.',
+      'The guide keeps Data preparation active until detected outliers are handled.',
+      'required',
+      'outliers',
+    ),
+    coachStep(
+      'data.duplicates',
+      'data',
+      'fix-cleaning-duplicates',
+      'Remove duplicate rows before downstream work',
+      'Repeated rows can overcount the same record in summaries and training.',
+      'Review the Duplicates card and remove exact duplicate rows when SimuCast detects them.',
+      'The guide moves on once exact duplicate rows are no longer pending.',
+      'required',
+      'duplicates',
+    ),
+  ]
+  const dataPreparationPath = dataIssueSteps.length ? dataIssueSteps : [inspectStep]
   const common = {
     describe: coachStep(
       'describe.summaries',
@@ -504,7 +531,7 @@ export function coachStepsForGoal(goal, dataset) {
   }
 
   const preparePath = [
-    prepStart,
+    ...dataPreparationPath,
     coachStep(
       'data.categories',
       'data',
@@ -518,13 +545,13 @@ export function coachStepsForGoal(goal, dataset) {
   ]
   const paths = {
     prepare_data: preparePath,
-    train_model: needsMissingFix ? [prepStart, common.describe, common.models, common.whatif] : [common.models, common.describe, common.whatif],
-    compare_models: needsMissingFix ? [prepStart, common.models] : [common.models],
-    what_if: needsMissingFix ? [prepStart, common.models, common.whatif] : [common.models, common.whatif],
-    report: needsMissingFix ? [prepStart, common.describe, common.report] : [common.describe, common.report],
-    full_workflow: [prepStart, common.describe, common.analysis, common.models, common.whatif, common.report],
+    train_model: [...preparePath, common.describe, common.models, common.whatif],
+    compare_models: [...preparePath, common.models],
+    what_if: [...preparePath, common.models, common.whatif],
+    report: [...preparePath, common.describe, common.report],
+    full_workflow: [...preparePath, common.describe, common.analysis, common.models, common.whatif, common.report],
   }
-  return paths[goal] || [prepStart]
+  return paths[goal] || dataPreparationPath
 }
 
 export function firstCoachStep(goal, dataset) {

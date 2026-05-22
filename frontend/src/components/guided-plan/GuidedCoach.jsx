@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
-import { currentCoachStep, firstCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
+import { coachStepsForGoal, currentCoachStep, firstCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
 
 // Spotlight walkthrough that routes users to exact workflow controls.
 export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
@@ -17,6 +17,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   const [microIndex, setMicroIndex] = useState(0)
   const [spotlight, setSpotlight] = useState(null)
   const [coachStyle, setCoachStyle] = useState(null)
+  const [progressTick, setProgressTick] = useState(0)
 
   const focusSteps = useMemo(() => spotlightStepsForStep(current, dataset, completion.complete), [current, dataset, completion.complete])
   const focusStep = focusSteps[microIndex] || focusSteps[0] || fallbackSpotlightStep(current)
@@ -41,7 +42,37 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
     return () => {
       cancelled = true
     }
-  }, [current?.id, dataset, dataset?.current_stage_id])
+  }, [current?.id, dataset, dataset?.current_stage_id, progressTick])
+
+  useEffect(() => {
+    const refreshCompletion = () => setProgressTick((value) => value + 1)
+    window.addEventListener('simucast:guided-progress', refreshCompletion)
+    return () => window.removeEventListener('simucast:guided-progress', refreshCompletion)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!dataset?.id || !guidance.guided_mode || !guidance.goal || !current) return undefined
+    api.cleanSuggestions(dataset.id)
+      .then(async (response) => {
+        if (cancelled) return
+        const steps = coachStepsForGoal(guidance.goal, dataset)
+        const pending = firstPendingDataStep(steps, response)
+        const currentIndex = steps.findIndex((step) => step.id === current.id)
+        const pendingIndex = steps.findIndex((step) => step.id === pending?.id)
+        if (!pending || pending.id === current.id || pendingIndex < 0) return
+        if (currentIndex >= 0 && pendingIndex > currentIndex) return
+        const updated = await api.updateGuidance(dataset.id, { walkthrough_step: pending.id, guided_mode: true })
+        if (!cancelled) {
+          onGuidanceUpdated?.(updated.guidance)
+          routeTarget(dataset.id, pending, activeTab, navigate)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, current?.id, dataset, dataset?.current_stage_id, guidance.goal, guidance.guided_mode, navigate, onGuidanceUpdated])
 
   useEffect(() => {
     if (!guidance.guided_mode || !focusTarget || !onCurrentPage) {
@@ -101,8 +132,8 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
 
   const advanceWorkflow = async (skip = false) => {
     const verifiedComplete = skip ? false : await checkCoachCompletion(dataset, current)
+    if (!skip) setCompletion({ checked: true, complete: verifiedComplete })
     if (!skip && current.requirement === 'required' && !verifiedComplete) {
-      setCompletion({ checked: true, complete: false })
       routeCurrent()
       return
     }
@@ -161,10 +192,10 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
           <button
             className="ax-btn mini prim"
             type="button"
-            disabled={busy || (microAtEnd && !canFinishRequired)}
+            disabled={busy}
             onClick={nextMicroStep}
           >
-            {focusStep.nextLabel || (microAtEnd ? (current.requirement === 'required' ? 'Continue when done' : 'Next step') : 'Continue')}
+            {focusStep.nextLabel || (microAtEnd ? (current.requirement === 'required' && !canFinishRequired ? 'Check and continue' : 'Next step') : 'Continue')}
           </button>
         )}
         {current.requirement !== 'required' && (
@@ -241,6 +272,10 @@ export async function checkCoachCompletion(dataset, step) {
   if (step.completion === 'missing') {
     return !(dataset.variables || []).some((variable) => Number(variable.missing || 0) > 0)
   }
+  if (step.completion === 'outliers' || step.completion === 'duplicates') {
+    const response = await api.cleanSuggestions(dataset.id)
+    return !cleanIssuePending(response, step.completion)
+  }
   if (step.completion === 'models') {
     const response = await api.listModels(dataset.id)
     return Boolean((response || []).length)
@@ -305,6 +340,92 @@ function spotlightStepsForStep(step, dataset, complete) {
       },
     ]
   }
+  if (step.id === 'data.outliers') {
+    if (complete) return [cleanedDataReviewStep('outlier')]
+    return [
+      {
+        section: 'fix-cleaning-outliers',
+        title: 'Review the Outliers card',
+        detected: 'SimuCast found numeric values that sit outside the current IQR bounds.',
+        action: 'Stay on the Outliers card so this issue is handled separately from missing values and duplicates.',
+        why: 'Extreme values can pull summaries and model fit away from the typical pattern.',
+        nextLabel: 'Show recommendation',
+      },
+      {
+        section: 'fix-cleaning-outliers-recommendations',
+        title: 'Check the outlier recommendation',
+        detected: 'The card shows affected numeric columns and the current recommended handling.',
+        action: 'Review why capping or another method is selected before applying it.',
+        why: 'Outlier handling changes values, so the recommended method should make sense before the stage updates.',
+        nextLabel: 'Show apply button',
+      },
+      {
+        section: 'fix-cleaning-outliers-apply',
+        title: 'Apply the selected outlier handling',
+        detected: 'The selected outlier method is ready to create a new cleaned dataset stage.',
+        action: 'Click Apply group when the affected columns and method look correct.',
+        why: 'The next guided Data task stays locked until current outlier suggestions are resolved.',
+        nextLabel: 'Check and continue',
+      },
+    ]
+  }
+  if (step.id === 'data.duplicates') {
+    if (complete) return [cleanedDataReviewStep('duplicate')]
+    return [
+      {
+        section: 'fix-cleaning-duplicates',
+        title: 'Review duplicate rows',
+        detected: 'SimuCast detected exact repeated rows in the current dataset stage.',
+        action: 'Use the Duplicates card to confirm what will be removed and which occurrence is kept.',
+        why: 'Repeated rows can count the same record more than once.',
+        nextLabel: 'Show remove button',
+      },
+      {
+        section: 'fix-cleaning-duplicates-apply',
+        title: 'Remove exact duplicates',
+        detected: 'The Duplicates card is ready to remove repeated rows from the active stage.',
+        action: 'Click Remove duplicates when the keep rule looks right.',
+        why: 'The guide leaves Data cleanup after exact duplicates no longer remain.',
+        nextLabel: 'Check and continue',
+      },
+    ]
+  }
+  if (step.id === 'models.target') {
+    return [
+      {
+        section: 'models-step-1',
+        title: 'Choose what the model should predict',
+        detected: 'The prediction path needs one target column before features and model health can be evaluated.',
+        action: 'Pick the target that matches your question.',
+        why: 'A target tells SimuCast what outcome the model should learn.',
+        nextLabel: 'Show features',
+      },
+      {
+        section: 'fix-feature-selection',
+        title: 'Choose the input features',
+        detected: 'Features are the columns the model can use to predict the target.',
+        action: 'Review the recommended features and remove anything that directly reveals the answer.',
+        why: 'Good feature choices reduce leakage and make the model easier to trust.',
+        nextLabel: 'Show validation',
+      },
+      {
+        section: 'models-step-4',
+        title: 'Set the validation method',
+        detected: 'Validation compares learned patterns with unseen rows.',
+        action: 'Review the train/test or cross-validation choice before training.',
+        why: 'Validation is how SimuCast checks generalization and possible overfitting.',
+        nextLabel: 'Show training',
+      },
+      {
+        section: 'models-train-action',
+        title: 'Train and save the model result',
+        detected: 'The current guided question needs at least one saved model artifact.',
+        action: 'Choose algorithms if needed, then click Train models.',
+        why: 'A saved model unlocks model health, What-if analysis, and report-ready predictions.',
+        nextLabel: 'Check and continue',
+      },
+    ]
+  }
   return [fallbackSpotlightStep(step)]
 }
 
@@ -323,6 +444,32 @@ function missingVariableNames(dataset) {
   return (dataset?.variables || [])
     .filter((variable) => Number(variable.missing || 0) > 0)
     .map((variable) => variable.name)
+}
+
+function cleanedDataReviewStep(kind) {
+  return {
+    section: 'data-section-raw_data',
+    title: `Review the ${kind} cleanup result`,
+    detected: `No current ${kind} suggestions remain in this dataset stage.`,
+    action: 'Inspect the dataset preview and History before the guide continues.',
+    why: 'A quick review keeps the guided path tied to the transformed data you are actually using.',
+    nextLabel: 'Continue',
+  }
+}
+
+function firstPendingDataStep(steps, response) {
+  return steps.find((step) => (
+    step.page === 'data' &&
+    step.requirement === 'required' &&
+    cleanIssuePending(response, step.completion)
+  )) || null
+}
+
+function cleanIssuePending(response, completion) {
+  if (completion === 'missing') return Boolean((response?.groups?.missing?.columns || []).length)
+  if (completion === 'outliers') return Boolean((response?.groups?.outliers?.columns || []).length)
+  if (completion === 'duplicates') return Number(response?.groups?.duplicates?.count || 0) > 0
+  return false
 }
 
 function readableList(items) {

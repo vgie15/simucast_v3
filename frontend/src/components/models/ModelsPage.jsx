@@ -264,6 +264,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       setActiveResultIdx(0)
       const list = await api.listModels(dataset.id)
       setModels(list)
+      window.dispatchEvent(new CustomEvent('simucast:guided-progress', { detail: { type: 'models', datasetId: dataset.id } }))
     } catch (err) {
       if (err.guest_model_limit) {
         auth.showAuthModal('signup')
@@ -741,6 +742,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       {/* Step 5 — train */}
       <div className="ax-row" style={{ margin: '8px 0 16px', justifyContent: 'flex-end' }}>
         <button
+          id="models-train-action"
           className="ax-btn prim"
           disabled={training || !plan || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit || (plan.validation_checks || []).some((c) => c.status === 'block')}
           onClick={train}
