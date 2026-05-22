@@ -6,13 +6,25 @@ import React from 'react'
 import AIProjectPlanPanel from './AIProjectPlanPanel'
 
 // Right-rail aside that hosts the AI project plan panel with an optional resize handle.
-export default function ProjectAIRail({ dataset, activeTab, collapsed, onStartResize }) {
+export default function ProjectAIRail({
+  dataset,
+  activeTab,
+  collapsed,
+  onStartResize,
+  onOpenGuidanceSetup,
+  onGuidanceUpdated,
+}) {
   if (!dataset || collapsed) return null
 
   return (
     <aside className="ax-ai-rail">
       <div className="ax-rail-body ax-rail-body-plan">
-        <AIProjectPlanPanel dataset={dataset} activeTab={activeTab} />
+        <AIProjectPlanPanel
+          dataset={dataset}
+          activeTab={activeTab}
+          onOpenGuidanceSetup={onOpenGuidanceSetup}
+          onGuidanceUpdated={onGuidanceUpdated}
+        />
       </div>
       {onStartResize && (
         <div

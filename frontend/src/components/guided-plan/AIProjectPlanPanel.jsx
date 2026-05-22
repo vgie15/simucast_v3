@@ -9,6 +9,7 @@ import { api } from '../../api'
 import { SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
 import { useAuth } from '../providers/AuthProvider'
+import { firstCoachStep, goalLabel } from './ProjectGuidanceSetup'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
 const PLAN_CACHE_VERSION = 'v4'
@@ -42,11 +43,20 @@ const DATA_CHANGE_ACTIONS = new Set([
 ])
 
 // Sidebar panel that renders the AI or system guided project plan and tracks progress.
-export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollapsedChange }) {
+export default function AIProjectPlanPanel({
+  dataset,
+  activeTab,
+  planH,
+  onCollapsedChange,
+  onOpenGuidanceSetup,
+  onGuidanceUpdated,
+}) {
   const navigate = useNavigate()
   const auth = useAuth()
   const datasetId = dataset?.id
   const stageKey = dataset?.current_stage_id || 'original'
+  const guidance = dataset?.guidance || {}
+  const guidanceGoal = guidance.goal || 'general'
   const doneKey = datasetId ? `simucast.aiPlan.done.${datasetId}.${stageKey}` : ''
   const skipKey = datasetId ? `simucast.aiPlan.skipped.${datasetId}.${stageKey}` : ''
   const collapseKey = datasetId ? `simucast.aiPlan.collapsed.${datasetId}` : ''
@@ -79,7 +89,7 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
 
   const cacheKeyFor = (targetMode = mode, targetStage = stageKey) => {
     const scope = targetMode === 'auto' ? 'latest' : targetStage
-    return `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${scope}.${targetMode}`
+    return `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${scope}.${guidanceGoal}.${targetMode}`
   }
 
   const load = async (force = false) => {
@@ -165,13 +175,13 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     }
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, mode])
+  }, [datasetId, guidanceGoal, mode])
 
   useEffect(() => {
     if (mode !== 'system') return
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, stageKey, mode])
+  }, [datasetId, guidanceGoal, stageKey, mode])
 
   useEffect(() => {
     loadActivity()
@@ -265,6 +275,20 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
     navigate(`/projects/${datasetId}/${step.page}`)
   }
 
+  const updateGuidance = async (body) => {
+    if (!datasetId) return
+    const response = await api.updateGuidance(datasetId, body)
+    onGuidanceUpdated?.(response.guidance)
+  }
+
+  const toggleGuidedMode = async () => {
+    const start = firstCoachStep(guidance.goal, dataset)
+    await updateGuidance({
+      guided_mode: !guidance.guided_mode,
+      walkthrough_step: guidance.guided_mode ? null : (guidance.walkthrough_step || start?.id || null),
+    })
+  }
+
   return (
     <section
       className={`ax-card ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}
@@ -335,6 +359,28 @@ export default function AIProjectPlanPanel({ dataset, activeTab, planH, onCollap
               {plan.summary}
             </p>
           )}
+
+          <div className="ax-plan-goal">
+            <div>
+              <span>Goal</span>
+              <strong>{guidance.goal ? goalLabel(guidance.goal) : 'Choose a project goal'}</strong>
+              <small>
+                {guidance.guided_mode
+                  ? 'Step-by-step guidance is on for the next real task.'
+                  : 'The workflow stays visible while you explore.'}
+              </small>
+            </div>
+            <div className="ax-plan-goal-actions">
+              <button className="ax-link-btn" type="button" onClick={onOpenGuidanceSetup}>
+                {guidance.goal ? 'Change goal' : 'Choose goal'}
+              </button>
+              {guidance.goal && (
+                <button className="ax-link-btn" type="button" onClick={toggleGuidedMode}>
+                  {guidance.guided_mode ? 'Turn off guidance' : 'Turn on step-by-step guidance'}
+                </button>
+              )}
+            </div>
+          </div>
 
           {mode === 'system' && plan && (
             <p className="ax-plan-helper">

@@ -1,0 +1,994 @@
+[2m7:32:46 PM[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./AuthProvider" from "src/components/LandingPage.jsx". Does the file exist?
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./AuthProvider" from "src/components/FilesPage.jsx". Does the file exist?
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./DialogProvider" from "src/components/ProjectsPage.jsx". Does the file exist?
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./DialogProvider" from "src/components/Sidebar.jsx". Does the file exist?
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./AuthProvider" from "src/components/DashboardPage.jsx". Does the file exist?
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./AuthProvider" from "src/components/SettingsPage.jsx". Does the file exist?
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./DataPage" from "src/components/ProjectWorkspace.jsx". Does the file exist?
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./AuthProvider" from "src/components/FloatingAIAssistant.jsx". Does the file exist?
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\layout\Sidebar.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useCallback[33m,[31m useEffect[33m,[31m useRef[33m,[31m useState } [36mfrom[31m [32m'react'[31m
+ [90m  6 |[31m [36mimport[31m { [33mLink[31m[33m,[31m [33mNavLink[31m[33m,[31m useNavigate } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m  7 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m[33m:[31mfrontend[33m/[31msrc[33m/[31mcomponents[33m/[31m[33mSidebar[31m[33m.[31mjsx
+ [90m    |[31m [31m[1m^[22m[31m
+ [90m  8 |[31m [36mimport[31m { useTheme } [36mfrom[31m [32m'../theme'[31m
+ [90m  9 |[31m [36mimport[31m { useDialog } [36mfrom[31m [32m'./DialogProvider'[31m
+ [90m 10 |[31m [36mimport[31m { useAuth } [36mfrom[31m [32m'./AuthProvider'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/components/layout/Sidebar.jsx[39m:7:0
+[33m  5  |  import React, { useCallback, useEffect, useRef, useState } from 'react'
+  6  |  import { Link, NavLink, useNavigate } from 'react-router-dom'
+  7  |  <<<<<<< HEAD:frontend/src/components/Sidebar.jsx
+     |        ^
+  8  |  import { useTheme } from '../theme'
+  9  |  import { useDialog } from './DialogProvider'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\describe\DescribePage.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[39m [36mimport[39m [33mReact[39m[33m,[39m { useEffect[33m,[39m useState } [36mfrom[39m [32m'react'[39m
+ [90m  6 |[39m [36mimport[39m { [33mBar[39m } [36mfrom[39m [32m'react-chartjs-2'[39m
+[31m[1m>[22m[39m[90m  7 |[39m [33m<<[39m[33m<<[39m[33m<<[39m[33m<[39m [33mHEAD[39m[33m:[39mfrontend[33m/[39msrc[33m/[39mcomponents[33m/[39m[33mDescribePage[39m[33m.[39mjsx
+ [90m    |[39m [31m[1m^[22m[39m
+ [90m  8 |[39m [36mimport[39m { api } [36mfrom[39m [32m'../api'[39m
+ [90m  9 |[39m [36mimport[39m { [33mExplainButton[39m } [36mfrom[39m [32m'./AIExplainers'[39m
+ [90m 10 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m'./AuthProvider'[39m[0m
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\report\ReportPage.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m  6 |[31m [36mimport[31m { [33mChart[31m } [36mfrom[31m [32m'chart.js'[31m
+[31m[1m>[22m[31m[90m  7 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m[33m:[31mfrontend[33m/[31msrc[33m/[31mcomponents[33m/[31m[33mReportPage[31m[33m.[31mjsx
+ [90m    |[31m [31m[1m^[22m[31m
+ [90m  8 |[31m [36mimport[31m { api } [36mfrom[31m [32m'../api'[31m
+ [90m  9 |[31m [36mimport[31m { [33mAIInsightCard[31m } [36mfrom[31m [32m'./AIExplainers'[31m
+ [90m 10 |[31m [36mimport[31m { [33mBusyOverlay[31m[33m,[31m [33mInlineSpinner[31m[33m,[31m [33mSkeletonCards[31m } [36mfrom[31m [32m'./LoadingStates'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/components/report/ReportPage.jsx[39m:7:0
+[33m  5  |  import React, { useState } from 'react'
+  6  |  import { Chart } from 'chart.js'
+  7  |  <<<<<<< HEAD:frontend/src/components/ReportPage.jsx
+     |        ^
+  8  |  import { api } from '../api'
+  9  |  import { AIInsightCard } from './AIExplainers'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m Pre-transform error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\report\ReportPage.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[39m [36mimport[39m [33mReact[39m[33m,[39m { useState } [36mfrom[39m [32m'react'[39m
+ [90m  6 |[39m [36mimport[39m { [33mChart[39m } [36mfrom[39m [32m'chart.js'[39m
+[31m[1m>[22m[39m[90m  7 |[39m [33m<<[39m[33m<<[39m[33m<<[39m[33m<[39m [33mHEAD[39m[33m:[39mfrontend[33m/[39msrc[33m/[39mcomponents[33m/[39m[33mReportPage[39m[33m.[39mjsx
+ [90m    |[39m [31m[1m^[22m[39m
+ [90m  8 |[39m [36mimport[39m { api } [36mfrom[39m [32m'../api'[39m
+ [90m  9 |[39m [36mimport[39m { [33mAIInsightCard[39m } [36mfrom[39m [32m'./AIExplainers'[39m
+ [90m 10 |[39m [36mimport[39m { [33mBusyOverlay[39m[33m,[39m [33mInlineSpinner[39m[33m,[39m [33mSkeletonCards[39m } [36mfrom[39m [32m'./LoadingStates'[39m[0m
+[2m7:32:47 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./AuthProvider" from "src/components/SettingsPage.jsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/components/SettingsPage.jsx[39m:8:24
+[33m  19 |  import { useNavigate } from "react-router-dom";
+  20 |  import { api } from "../api";
+  21 |  import { useAuth } from "./AuthProvider";
+     |                           ^
+  22 |  import { useDialog } from "./DialogProvider";
+  23 |  export default function SettingsPage() {[39m
+      at TransformPluginContext._formatError (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 6)
+      at async TransformPluginContext.transform (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+      at async viteTransformMiddleware (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:62106:24)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m Pre-transform error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\data\DataDetailView.jsx: Unexpected token (6:0)
+
+[0m [90m 4 |[39m [90m * ============================================================ */[39m
+ [90m 5 |[39m [36mimport[39m [33mReact[39m[33m,[39m { useCallback[33m,[39m useEffect[33m,[39m useMemo[33m,[39m useRef[33m,[39m useState } [36mfrom[39m [32m'react'[39m
+[31m[1m>[22m[39m[90m 6 |[39m [33m<<[39m[33m<<[39m[33m<<[39m[33m<[39m [33mHEAD[39m[33m:[39mfrontend[33m/[39msrc[33m/[39mcomponents[33m/[39m[33mDataDetailView[39m[33m.[39mjsx
+ [90m   |[39m [31m[1m^[22m[39m
+ [90m 7 |[39m [36mimport[39m { api } [36mfrom[39m [32m'../api'[39m
+ [90m 8 |[39m [33m===[39m[33m===[39m[33m=[39m
+ [90m 9 |[39m [36mimport[39m { api } [36mfrom[39m [32m'../../api'[39m[0m
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./AuthProvider" from "src/components/FloatingAIAssistant.jsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/components/FloatingAIAssistant.jsx[39m:8:24
+[33m  19 |  import { useLocation } from "react-router-dom";
+  20 |  import { api } from "../api";
+  21 |  import { useAuth } from "./AuthProvider";
+     |                           ^
+  22 |  const TAB_LABELS = {
+  23 |    data: "Data",[39m
+      at TransformPluginContext._formatError (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 6)
+      at async TransformPluginContext.transform (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+      at async viteTransformMiddleware (file:///C:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:62106:24)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\data\DataDetailView.jsx: Unexpected token (6:0)
+
+[0m [90m 4 |[31m [90m * ============================================================ */[31m
+ [90m 5 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useCallback[33m,[31m useEffect[33m,[31m useMemo[33m,[31m useRef[33m,[31m useState } [36mfrom[31m [32m'react'[31m
+[31m[1m>[22m[31m[90m 6 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m[33m:[31mfrontend[33m/[31msrc[33m/[31mcomponents[33m/[31m[33mDataDetailView[31m[33m.[31mjsx
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 7 |[31m [36mimport[31m { api } [36mfrom[31m [32m'../api'[31m
+ [90m 8 |[31m [33m===[31m[33m===[31m[33m=[31m
+ [90m 9 |[31m [36mimport[31m { api } [36mfrom[31m [32m'../../api'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/components/data/DataDetailView.jsx[39m:6:0
+[33m  4  |   * ============================================================ */
+  5  |  import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+  6  |  <<<<<<< HEAD:frontend/src/components/DataDetailView.jsx
+     |       ^
+  7  |  import { api } from '../api'
+  8  |  =======[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\describe\DescribePage.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useEffect[33m,[31m useState } [36mfrom[31m [32m'react'[31m
+ [90m  6 |[31m [36mimport[31m { [33mBar[31m } [36mfrom[31m [32m'react-chartjs-2'[31m
+[31m[1m>[22m[31m[90m  7 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m[33m:[31mfrontend[33m/[31msrc[33m/[31mcomponents[33m/[31m[33mDescribePage[31m[33m.[31mjsx
+ [90m    |[31m [31m[1m^[22m[31m
+ [90m  8 |[31m [36mimport[31m { api } [36mfrom[31m [32m'../api'[31m
+ [90m  9 |[31m [36mimport[31m { [33mExplainButton[31m } [36mfrom[31m [32m'./AIExplainers'[31m
+ [90m 10 |[31m [36mimport[31m { useAuth } [36mfrom[31m [32m'./AuthProvider'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/components/describe/DescribePage.jsx[39m:7:0
+[33m  5  |  import React, { useEffect, useState } from 'react'
+  6  |  import { Bar } from 'react-chartjs-2'
+  7  |  <<<<<<< HEAD:frontend/src/components/DescribePage.jsx
+     |        ^
+  8  |  import { api } from '../api'
+  9  |  import { ExplainButton } from './AIExplainers'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m Pre-transform error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\data\DataDetailView.jsx: Unexpected token (6:0)
+
+[0m [90m 4 |[39m [90m * ============================================================ */[39m
+ [90m 5 |[39m [36mimport[39m [33mReact[39m[33m,[39m { useCallback[33m,[39m useEffect[33m,[39m useMemo[33m,[39m useRef[33m,[39m useState } [36mfrom[39m [32m'react'[39m
+[31m[1m>[22m[39m[90m 6 |[39m [33m<<[39m[33m<<[39m[33m<<[39m[33m<[39m [33mHEAD[39m[33m:[39mfrontend[33m/[39msrc[33m/[39mcomponents[33m/[39m[33mDataDetailView[39m[33m.[39mjsx
+ [90m   |[39m [31m[1m^[22m[39m
+ [90m 7 |[39m [36mimport[39m { api } [36mfrom[39m [32m'../api'[39m
+ [90m 8 |[39m [33m===[39m[33m===[39m[33m=[39m
+ [90m 9 |[39m [36mimport[39m { api } [36mfrom[39m [32m'../../api'[39m[0m
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\layout\Sidebar.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useCallback[33m,[31m useEffect[33m,[31m useRef[33m,[31m useState } [36mfrom[31m [32m'react'[31m
+ [90m  6 |[31m [36mimport[31m { [33mLink[31m[33m,[31m [33mNavLink[31m[33m,[31m useNavigate } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m  7 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m[33m:[31mfrontend[33m/[31msrc[33m/[31mcomponents[33m/[31m[33mSidebar[31m[33m.[31mjsx
+ [90m    |[31m [31m[1m^[22m[31m
+ [90m  8 |[31m [36mimport[31m { useTheme } [36mfrom[31m [32m'../theme'[31m
+ [90m  9 |[31m [36mimport[31m { useDialog } [36mfrom[31m [32m'./DialogProvider'[31m
+ [90m 10 |[31m [36mimport[31m { useAuth } [36mfrom[31m [32m'./AuthProvider'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/components/layout/Sidebar.jsx[39m:7:0
+[33m  5  |  import React, { useCallback, useEffect, useRef, useState } from 'react'
+  6  |  import { Link, NavLink, useNavigate } from 'react-router-dom'
+  7  |  <<<<<<< HEAD:frontend/src/components/Sidebar.jsx
+     |        ^
+  8  |  import { useTheme } from '../theme'
+  9  |  import { useDialog } from './DialogProvider'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m Pre-transform error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\describe\DescribePage.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[39m [36mimport[39m [33mReact[39m[33m,[39m { useEffect[33m,[39m useState } [36mfrom[39m [32m'react'[39m
+ [90m  6 |[39m [36mimport[39m { [33mBar[39m } [36mfrom[39m [32m'react-chartjs-2'[39m
+[31m[1m>[22m[39m[90m  7 |[39m [33m<<[39m[33m<<[39m[33m<<[39m[33m<[39m [33mHEAD[39m[33m:[39mfrontend[33m/[39msrc[33m/[39mcomponents[33m/[39m[33mDescribePage[39m[33m.[39mjsx
+ [90m    |[39m [31m[1m^[22m[39m
+ [90m  8 |[39m [36mimport[39m { api } [36mfrom[39m [32m'../api'[39m
+ [90m  9 |[39m [36mimport[39m { [33mExplainButton[39m } [36mfrom[39m [32m'./AIExplainers'[39m
+ [90m 10 |[39m [36mimport[39m { useAuth } [36mfrom[39m [32m'./AuthProvider'[39m[0m
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m Pre-transform error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\report\ReportPage.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[39m [36mimport[39m [33mReact[39m[33m,[39m { useState } [36mfrom[39m [32m'react'[39m
+ [90m  6 |[39m [36mimport[39m { [33mChart[39m } [36mfrom[39m [32m'chart.js'[39m
+[31m[1m>[22m[39m[90m  7 |[39m [33m<<[39m[33m<<[39m[33m<<[39m[33m<[39m [33mHEAD[39m[33m:[39mfrontend[33m/[39msrc[33m/[39mcomponents[33m/[39m[33mReportPage[39m[33m.[39mjsx
+ [90m    |[39m [31m[1m^[22m[39m
+ [90m  8 |[39m [36mimport[39m { api } [36mfrom[39m [32m'../api'[39m
+ [90m  9 |[39m [36mimport[39m { [33mAIInsightCard[39m } [36mfrom[39m [32m'./AIExplainers'[39m
+ [90m 10 |[39m [36mimport[39m { [33mBusyOverlay[39m[33m,[39m [33mInlineSpinner[39m[33m,[39m [33mSkeletonCards[39m } [36mfrom[39m [32m'./LoadingStates'[39m[0m
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\components\report\ReportPage.jsx: Unexpected token (7:0)
+
+[0m [90m  5 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m  6 |[31m [36mimport[31m { [33mChart[31m } [36mfrom[31m [32m'chart.js'[31m
+[31m[1m>[22m[31m[90m  7 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m[33m:[31mfrontend[33m/[31msrc[33m/[31mcomponents[33m/[31m[33mReportPage[31m[33m.[31mjsx
+ [90m    |[31m [31m[1m^[22m[31m
+ [90m  8 |[31m [36mimport[31m { api } [36mfrom[31m [32m'../api'[31m
+ [90m  9 |[31m [36mimport[31m { [33mAIInsightCard[31m } [36mfrom[31m [32m'./AIExplainers'[31m
+ [90m 10 |[31m [36mimport[31m { [33mBusyOverlay[31m[33m,[31m [33mInlineSpinner[31m[33m,[31m [33mSkeletonCards[31m } [36mfrom[31m [32m'./LoadingStates'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/components/report/ReportPage.jsx[39m:7:0
+[33m  5  |  import React, { useState } from 'react'
+  6  |  import { Chart } from 'chart.js'
+  7  |  <<<<<<< HEAD:frontend/src/components/ReportPage.jsx
+     |        ^
+  8  |  import { api } from '../api'
+  9  |  import { AIInsightCard } from './AIExplainers'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:32:48 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[31m [36mimport[31m [33mReact[31m[33m,[31m { useState } [36mfrom[31m [32m'react'[31m
+ [90m 2 |[31m [36mimport[31m { [33mBrowserRouter[31m[33m,[31m [33mNavigate[31m[33m,[31m [33mRoute[31m[33m,[31m [33mRoutes[31m[33m,[31m useLocation } [36mfrom[31m [32m'react-router-dom'[31m
+[31m[1m>[22m[31m[90m 3 |[31m [33m<<[31m[33m<<[31m[33m<<[31m[33m<[31m [33mHEAD[31m
+ [90m   |[31m [31m[1m^[22m[31m
+ [90m 4 |[31m [36mimport[31m [33mSidebar[31m [36mfrom[31m [32m'./components/Sidebar'[31m
+ [90m 5 |[31m [36mimport[31m [33mLandingPage[31m [36mfrom[31m [32m'./components/LandingPage'[31m
+ [90m 6 |[31m [36mimport[31m [33mDashboardPage[31m [36mfrom[31m [32m'./components/DashboardPage'[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/vangi/Documents/Codex/2026-04-30/github-plugin-github-openai-curated-connect/frontend/src/App.jsx[39m:3:0
+[33m  1  |  import React, { useState } from 'react'
+  2  |  import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+  3  |  <<<<<<< HEAD
+     |    ^
+  4  |  import Sidebar from './components/Sidebar'
+  5  |  import LandingPage from './components/LandingPage'[39m
+      at constructor (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at JSXParserMixin.raise (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6599:19)
+      at JSXParserMixin.unexpected (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:6619:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11442:22)
+      at JSXParserMixin.parseExprAtom (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11081:23)
+      at JSXParserMixin.parseUpdate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10899:61)
+      at JSXParserMixin.parseExprOps (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10784:23)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:39
+      at JSXParserMixin.allowInAnd (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12421:16)
+      at JSXParserMixin.parseExpression (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:13309:10)
+      at JSXParserMixin.parseProgram (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:12612:25)
+      at JSXParserMixin.parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14488:25)
+      at parse (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\parser\lib\index.js:14522:38)
+      at parser (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:261:32)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:189:28
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:113:33
+      at step (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:287:14)
+      at C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\node_modules\gensync\index.js:223:11)
+[2m7:33:02 PM[22m [31m[1m[vite][22m[39m Pre-transform error: C:\Users\vangi\Documents\Codex\2026-04-30\github-plugin-github-openai-curated-connect\frontend\src\App.jsx: Unexpected token (3:0)
+
+[0m [90m 1 |[39m [36mimport[39m [33mReact[39m[33m,[39m { useState } [36mfrom[39m [32m'react'[39m
+ [90m 2 |[39m [36mimport[39m { [33mBrowserRouter[39m[33m,[39m [33mNavigate[39m[33m,[39m [33mRoute[39m[33m,[39m [33mRoutes[39m[33m,[39m useLocation } [36mfrom[39m [32m'react-router-dom'[39m
+[31m[1m>[22m[39m[90m 3 |[39m [33m<<[39m[33m<<[39m[33m<<[39m[33m<[39m [33mHEAD[39m
+ [90m   |[39m [31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m [33mSidebar[39m [36mfrom[39m [32m'./components/Sidebar'[39m
+ [90m 5 |[39m [36mimport[39m [33mLandingPage[39m [36mfrom[39m [32m'./components/LandingPage'[39m
+ [90m 6 |[39m [36mimport[39m [33mDashboardPage[39m [36mfrom[39m [32m'./components/DashboardPage'[39m[0m

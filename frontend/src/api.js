@@ -145,6 +145,11 @@ export const api = {
   // datasets
   listDatasets: () => request('/api/datasets'),
   getDataset: (id) => request(`/api/datasets/${id}`),
+  updateGuidance: (id, body) =>
+    request(`/api/datasets/${id}/guidance`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   selectSheet: (id, sheet) =>
     request(`/api/datasets/${id}/sheet`, {
       method: 'POST',

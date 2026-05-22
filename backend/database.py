@@ -78,6 +78,7 @@ class Dataset(Base):
     # For Excel uploads: dict of {sheet_name: rows}. NULL for CSV.
     sheets = _json_col()
     active_sheet = Column(String, nullable=True)                 # which sheet is currently shown
+    guidance = _json_col()                                       # project goal + guided-mode state
 
     # Ownership: which user/session this project belongs to.
     user_id = Column(Integer, nullable=True, index=True)         # NULL for guest-only datasets
@@ -297,6 +298,8 @@ def _migrate_add_columns():
             conn.execute(text("ALTER TABLE datasets ADD COLUMN sheets TEXT"))
         if "active_sheet" not in cols:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN active_sheet VARCHAR"))
+        if "guidance" not in cols:
+            conn.execute(text("ALTER TABLE datasets ADD COLUMN guidance JSONB"))
         if "user_id" not in cols:
             conn.execute(text("ALTER TABLE datasets ADD COLUMN user_id INTEGER"))
         if "session_id" not in cols:

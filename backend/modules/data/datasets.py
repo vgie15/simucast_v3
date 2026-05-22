@@ -30,6 +30,82 @@ from backend.shared.dataframe import (
 bp = Blueprint("datasets", __name__)
 
 
+_GUIDANCE_GOALS = {
+    "prepare_data",
+    "train_model",
+    "compare_models",
+    "what_if",
+    "report",
+    "full_workflow",
+}
+
+
+def _default_guidance(status="pending"):
+    """Initial goal-selection state for newly-created projects."""
+    return {
+        "goal": None,
+        "setup_status": status,
+        "guided_mode": False,
+        "walkthrough_step": None,
+        "dismissed_tips": [],
+        "completed_tips": [],
+    }
+
+
+def _guidance_payload(ds):
+    """Return normalized project guidance state for API responses."""
+    raw = getattr(ds, "guidance", None)
+    payload = jload(raw) or {}
+    default_status = "pending" if raw else "dismissed"
+    normalized = _default_guidance(payload.get("setup_status") or default_status)
+    goal = payload.get("goal")
+    if goal in _GUIDANCE_GOALS:
+        normalized["goal"] = goal
+    normalized["guided_mode"] = bool(payload.get("guided_mode"))
+    step = payload.get("walkthrough_step")
+    normalized["walkthrough_step"] = str(step) if step else None
+    dismissed = payload.get("dismissed_tips") or []
+    if isinstance(dismissed, list):
+        normalized["dismissed_tips"] = [str(item) for item in dismissed if item]
+    completed = payload.get("completed_tips") or []
+    if isinstance(completed, list):
+        normalized["completed_tips"] = [str(item) for item in completed if item]
+    if normalized["setup_status"] not in {"pending", "completed", "dismissed"}:
+        normalized["setup_status"] = "pending"
+    return normalized
+
+
+def _guidance_update(current, body):
+    """Merge a safe guidance PATCH payload into existing project state."""
+    next_payload = {**current}
+    if "goal" in body:
+        goal = body.get("goal")
+        if goal not in _GUIDANCE_GOALS and goal is not None:
+            return None, "unsupported project goal"
+        next_payload["goal"] = goal
+    if "setup_status" in body:
+        status = str(body.get("setup_status") or "").strip().lower()
+        if status not in {"pending", "completed", "dismissed"}:
+            return None, "unsupported setup status"
+        next_payload["setup_status"] = status
+    if "guided_mode" in body:
+        next_payload["guided_mode"] = bool(body.get("guided_mode"))
+    if "walkthrough_step" in body:
+        step = body.get("walkthrough_step")
+        next_payload["walkthrough_step"] = str(step) if step else None
+    if "dismissed_tips" in body:
+        tips = body.get("dismissed_tips")
+        if not isinstance(tips, list):
+            return None, "dismissed_tips must be a list"
+        next_payload["dismissed_tips"] = [str(item) for item in tips if item]
+    if "completed_tips" in body:
+        tips = body.get("completed_tips")
+        if not isinstance(tips, list):
+            return None, "completed_tips must be a list"
+        next_payload["completed_tips"] = [str(item) for item in tips if item]
+    return next_payload, None
+
+
 # ===========================================================================
 # SECTION: DATASETS - LIST & UPLOAD
 # Keywords: dataset, project, list, upload, csv, excel, file, create
@@ -211,6 +287,7 @@ def upload_dataset():
             data=jdump(records),
             sheets=jdump(sheets) if sheets else None,
             active_sheet=active_sheet,
+            guidance=jdump(_default_guidance()),
         )
         _attach_owner(ds, s)
         s.add(ds)
@@ -251,6 +328,7 @@ def upload_dataset():
             "variables": variables,
             "sheets": _sheet_list(ds),
             "active_sheet": active_sheet,
+            "guidance": _guidance_payload(ds),
             "usage_count": int(sess.guest_usage_count) if sess and sess.is_guest else None,
         }
     finally:
@@ -282,6 +360,7 @@ def get_dataset(ds_id):
             "current_stage_id": ds.current_stage_id,
             "sheets": _sheet_list(ds),
             "active_sheet": ds.active_sheet,
+            "guidance": _guidance_payload(ds),
             "created_at": ds.created_at.isoformat() if ds.created_at else None,
         }
     finally:
@@ -346,7 +425,28 @@ def select_dataset_sheet(ds_id):
             "current_stage_id": ds.current_stage_id,
             "sheets": _sheet_list(ds),
             "active_sheet": ds.active_sheet,
+            "guidance": _guidance_payload(ds),
         }))
+    finally:
+        s.close()
+
+
+# ANCHOR: Dataset: Update Project Guidance
+@bp.route("/api/datasets/<ds_id>/guidance", methods=["PATCH"])
+def update_dataset_guidance(ds_id):
+    """Persist a project's goal choice and guided walkthrough state."""
+    body = request.get_json() or {}
+    s = db()
+    try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
+        next_payload, error = _guidance_update(_guidance_payload(ds), body)
+        if error:
+            return {"error": error}, 400
+        ds.guidance = jdump(next_payload)
+        s.commit()
+        return jsonify({"ok": True, "guidance": next_payload})
     finally:
         s.close()
 

@@ -14,6 +14,8 @@ import WhatIfPage from '../whatif/WhatIfPage'
 import ReportPage from '../report/ReportPage'
 import ProjectHistoryRail from '../history/ProjectHistoryRail'
 import ProjectAIRail from '../guided-plan/ProjectAIRail'
+import ProjectGuidanceSetup from '../guided-plan/ProjectGuidanceSetup'
+import GuidedCoach, { routeTarget } from '../guided-plan/GuidedCoach'
 import { useAuth } from '../providers/AuthProvider'
 
 const TABS = [
@@ -74,6 +76,7 @@ export default function ProjectWorkspace() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [historyCollapsed, setHistoryCollapsed] = useState(true)
   const [aiCollapsed, setAiCollapsed] = useState(false)
+  const [guidanceSetupOpen, setGuidanceSetupOpen] = useState(false)
   const [historyWidth, setHistoryWidth] = useState(320)
   const [aiWidth, setAiWidth] = useState(360)
   const [resizing, setResizing] = useState(null) // 'history' | 'ai' | null
@@ -164,7 +167,10 @@ export default function ProjectWorkspace() {
     setError(null)
     api
       .getDataset(id)
-      .then((d) => setDataset(d))
+      .then((d) => {
+        setDataset(d)
+        setGuidanceSetupOpen(d.guidance?.setup_status === 'pending')
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [id, auth.session?.token])
@@ -288,6 +294,23 @@ export default function ProjectWorkspace() {
         activeTab={activeTab}
         collapsed={aiCollapsed}
         onStartResize={() => setResizing('ai')}
+        onOpenGuidanceSetup={() => setGuidanceSetupOpen(true)}
+        onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
+      />
+      <GuidedCoach
+        dataset={dataset}
+        activeTab={activeTab}
+        onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
+      />
+      <ProjectGuidanceSetup
+        dataset={dataset}
+        open={guidanceSetupOpen}
+        onSaved={(guidance, firstTarget) => {
+          setDataset((current) => ({ ...current, guidance }))
+          setGuidanceSetupOpen(false)
+          if (firstTarget) routeTarget(id, firstTarget, activeTab, navigate)
+        }}
+        onClose={() => setGuidanceSetupOpen(false)}
       />
     </div>
   )

@@ -38,6 +38,8 @@ _CHAT_HISTORY_LIMIT = 20
 def _plan_prompt_profile(ds, df, variables, session):
     """Augment the dataset profile with extra context the project planner needs."""
     profile = _dataset_profile(ds, df, variables)
+    guidance = jload(getattr(ds, "guidance", None)) or {}
+    profile["project_goal"] = guidance.get("goal")
     profile["column_names"] = list(df.columns)
     profile["detected_types"] = {v.get("name"): v.get("dtype") for v in variables or []}
     profile["missing_values"] = {v.get("name"): int(v.get("missing") or 0) for v in variables or []}
@@ -245,21 +247,27 @@ def ai_project_plan(ds_id):
             return {"error": "not found"}, 404
         df = df_from_dataset(ds, s)
         variables = _current_variables(ds, s)
+        guidance = jload(getattr(ds, "guidance", None)) or {}
+        project_goal = guidance.get("goal")
         profile = _plan_prompt_profile(ds, df, variables, s)
         if mode == "system":
-            return jsonify(_rule_based_project_plan(df, variables))
+            return jsonify(_rule_based_project_plan(df, variables, project_goal))
         blocked = _ai_account_required_response(s)
         if blocked:
             return blocked
 
-        cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "project_plan", {"mode": mode, "plan_version": 3})
+        cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "project_plan", {
+            "mode": mode,
+            "goal": project_goal,
+            "plan_version": 4,
+        })
         cached = _AI_CACHE.get(cache_key) or _ai_db_get(s, cache_key)
         if cached is not None:
             return jsonify(cached)
 
         client = _ai_client()
         if client is None:
-            return jsonify(_rule_based_project_plan(df, variables))
+            return jsonify(_rule_based_project_plan(df, variables, project_goal))
 
         system = (
             "You are SimuCast's project guide. Create an ordered analytics plan "
@@ -325,12 +333,14 @@ def ai_project_plan(ds_id):
             "- Recommend high-level workflow steps only.\n"
             "- Do not include method-level choices such as mean, median, mode, IQR cap, remove rows, or bin labels.\n"
             "- Prefer 5 to 8 steps.\n"
+            f"- Prioritize the user's selected project goal: {project_goal or 'not selected yet'}.\n"
             "- If previous completed actions already cover a step, recommend the next useful step instead."
         )
         try:
             text = ai_call(profile, prompt, system=system, json_mode=False, max_tokens=1400)
             steps = _parse_ai_plan_text(text)
             steps = _filter_project_steps_for_dataset(steps, df, variables)
+            steps = _filter_project_steps_for_goal(steps, project_goal)
             response = {
                 "ai": True,
                 "summary": f"AI suggested workflow for {len(df)} rows and {len(variables)} variables.",
@@ -351,7 +361,7 @@ def ai_project_plan(ds_id):
             raw = getattr(e, "raw_response", None)
             if raw:
                 print("AI project plan raw response:", raw[:4000], flush=True)
-            fallback = _rule_based_project_plan(df, variables)
+            fallback = _rule_based_project_plan(df, variables, project_goal)
             fallback["error"] = "AI plan unavailable. Using built-in guided workflow."
             return jsonify(fallback)
     finally:
@@ -1153,7 +1163,7 @@ def _filter_project_steps_for_dataset(steps, df, variables):
         filtered.append(step)
     return filtered
 
-def _rule_based_project_plan(df, variables):
+def _rule_based_project_plan(df, variables, project_goal=None):
     """Heuristic project plan used when the AI key is unset or the call fails."""
     nums = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]
     cats = [v["name"] for v in variables if v.get("dtype") == "category"]
@@ -1275,11 +1285,41 @@ def _rule_based_project_plan(df, variables):
         "priority": "medium",
         "columns": [],
     })
+    steps = _filter_project_steps_for_goal(steps, project_goal)
+    goal_summaries = {
+        "prepare_data": "Preparation path",
+        "train_model": "Prediction path",
+        "compare_models": "Model comparison path",
+        "what_if": "What-if path",
+        "report": "Report path",
+        "full_workflow": "Full workflow",
+    }
+    prefix = goal_summaries.get(project_goal, "Suggested workflow")
     return {
         "ai": False,
-        "summary": f"Suggested workflow for {len(df)} rows and {len(variables)} variables.",
+        "summary": f"{prefix} for {len(df)} rows and {len(variables)} variables.",
         "steps": _normalize_project_steps(steps),
     }
+
+
+def _filter_project_steps_for_goal(steps, goal):
+    """Keep deterministic and AI plans focused on the goal selected by the user."""
+    allowed_pages = {
+        "prepare_data": {"data", "expand", "describe"},
+        "train_model": {"data", "expand", "describe", "models"},
+        "compare_models": {"data", "expand", "describe", "models"},
+        "what_if": {"data", "expand", "models", "whatif"},
+        "report": {"data", "describe", "tests", "models", "whatif", "report"},
+        "full_workflow": {"data", "expand", "describe", "tests", "models", "whatif", "report"},
+    }.get(goal)
+    if not allowed_pages:
+        return steps
+    focused = [step for step in (steps or []) if (step.get("page") or "data") in allowed_pages]
+    if goal == "prepare_data":
+        return focused[:7]
+    if goal == "what_if":
+        return focused[:7]
+    return focused
 
 
 # ANCHOR: AI: Suggest Action
