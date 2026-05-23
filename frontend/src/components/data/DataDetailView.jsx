@@ -501,19 +501,18 @@ export default function DataDetailView({
           <div className="ax-dd-changebar-copy">
             <strong>{changeLoading ? 'Loading changes...' : formatVisibleChangeCount(visibleChanges.length, removedRows.length)}</strong>
             <span>
-              {latestStage?.summary || (changeScope === 'last' ? 'Showing the latest data change.' : 'Showing all stored data changes for this stage.')}
-              {removedRows.length ? ` ${removedRows.length} removed row${removedRows.length === 1 ? '' : 's'} tracked.` : ''}
+              {formatChangeSummary({ latestStage, changeScope, changeType, visibleChanges, removedRows })}
             </span>
           </div>
           <div className="ax-dd-changebar-controls">
-            <label>
+            <label className="ax-dd-filter-chip">
               <span>Filter</span>
               <select value={changeScope} onChange={(event) => setChangeScope(event.target.value)}>
                 <option value="all">All changes</option>
                 <option value="last">Last change only</option>
               </select>
             </label>
-            <label>
+            <label className="ax-dd-filter-chip">
               <span>Type</span>
               <select value={changeType} onChange={(event) => setChangeType(event.target.value)}>
                 {CHANGE_TYPE_OPTIONS.map((option) => (
@@ -526,7 +525,7 @@ export default function DataDetailView({
             </button>
             <button
               type="button"
-              className="ax-dd-nav-btn"
+              className="ax-dd-nav-btn prev"
               onClick={() => setActiveChangeIndex((value) => (visibleChanges.length ? (value - 1 + visibleChanges.length) % visibleChanges.length : 0))}
               aria-label="Previous changed cell"
               title="Previous changed cell"
@@ -536,7 +535,7 @@ export default function DataDetailView({
             </button>
             <button
               type="button"
-              className="ax-dd-nav-btn"
+              className="ax-dd-nav-btn next"
               onClick={() => setActiveChangeIndex((value) => (visibleChanges.length ? (value + 1) % visibleChanges.length : 0))}
               aria-label="Next changed cell"
               title="Next changed cell"
@@ -768,6 +767,15 @@ function formatVisibleChangeCount(cellCount, rowCount) {
   if (cellCount > 0) parts.push(`${cellCount} changed cell${cellCount === 1 ? '' : 's'}`)
   if (rowCount > 0) parts.push(`${rowCount} removed row${rowCount === 1 ? '' : 's'}`)
   return parts.length ? parts.join(', ') : '0 changes'
+}
+
+function formatChangeSummary({ latestStage, changeScope, changeType, visibleChanges, removedRows }) {
+  if (changeType !== 'all' && !visibleChanges.length && !removedRows.length) {
+    return 'No changes match the current filter.'
+  }
+  const base = latestStage?.summary || (changeScope === 'last' ? 'Showing the latest data change.' : 'Showing all stored data changes for this stage.')
+  if (!removedRows.length) return base
+  return `${base} ${removedRows.length} removed row${removedRows.length === 1 ? '' : 's'} tracked.`
 }
 
 function changeMatchesType(change, type, changedColumns = new Set()) {

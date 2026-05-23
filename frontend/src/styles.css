@@ -4078,24 +4078,28 @@ a.ax-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 9px 18px;
+  gap: 16px;
+  padding: 10px 20px;
   border-bottom: 0.5px solid var(--color-border-tertiary);
-  background: rgba(254, 243, 199, 0.42);
+  background: rgba(255, 251, 235, 0.72);
   flex-shrink: 0;
 }
 .ax-dd-changebar-copy {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  min-width: 150px;
+  gap: 3px;
+  min-width: 220px;
+  max-width: min(440px, 46%);
 }
 .ax-dd-changebar-copy strong {
-  font-size: 12px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
 }
 .ax-dd-changebar-copy span {
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.45;
 }
 .ax-dd-changebar-actions {
   display: flex;
@@ -4109,55 +4113,74 @@ a.ax-btn {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
-.ax-dd-changebar-controls label {
+.ax-dd-filter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  padding: 0 8px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
   border: 0.5px solid var(--color-border-secondary);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--color-background-primary);
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
-.ax-dd-changebar-controls label span {
+.ax-dd-filter-chip span {
   color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 800;
 }
-.ax-dd-changebar-controls select {
-  max-width: 190px;
+.ax-dd-filter-chip select {
+  width: auto;
+  max-width: 210px;
   border: none;
   outline: none;
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
+  font-weight: 700;
   cursor: pointer;
 }
 .ax-dd-nav-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 29px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border: 0.5px solid var(--color-border-secondary);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--color-background-primary);
   color: var(--color-text-primary);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 0;
   line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.ax-dd-nav-btn.prev::before,
+.ax-dd-nav-btn.next::before {
+  font-size: 18px;
+  font-weight: 800;
+}
+.ax-dd-nav-btn.prev::before {
+  content: "<";
+}
+.ax-dd-nav-btn.next::before {
+  content: ">";
 }
 .ax-dd-nav-btn:disabled {
   opacity: 0.42;
   cursor: not-allowed;
 }
 .ax-dd-changebar .ax-btn.mini {
-  min-height: 28px;
-  padding: 0 9px;
-  font-size: 11px;
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
 }
 .ax-dd-changebar .ax-btn.mini.active {
   border-color: rgba(249, 115, 22, 0.45);
@@ -5314,7 +5337,7 @@ a.ax-btn {
 .ax-floating-dataset-changebar {
   padding: 10px 14px;
 }
-.ax-floating-dataset-changebar .ax-dd-changebar-actions {
+.ax-floating-dataset-changebar .ax-dd-changebar-controls {
   max-width: 460px;
 }
 .ax-floating-dataset-modes {
