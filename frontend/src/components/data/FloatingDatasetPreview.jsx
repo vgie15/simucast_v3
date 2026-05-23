@@ -35,7 +35,8 @@ const TYPE_LABEL = {
 // Compact read-only dataset table for pages without the full Data table.
 export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) {
   const datasetId = dataset?.id
-  const hidden = !datasetId || activeTab === 'data'
+  const [dataTableInView, setDataTableInView] = useState(false)
+  const hidden = !datasetId || (activeTab === 'data' && dataTableInView)
 
   const [open, setOpen] = useState(false)
   const [viewMode, setViewMode] = useState('cleaned')
@@ -54,6 +55,44 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
   const scrollRef = useRef(null)
   const sentinelRef = useRef(null)
+
+  useEffect(() => {
+    if (activeTab !== 'data') {
+      setDataTableInView(false)
+      return
+    }
+
+    let observer = null
+    let cancelled = false
+
+    const watchTable = () => {
+      if (cancelled) return
+      const tableCard = document.querySelector('.ax-data-detail')
+      if (!tableCard) {
+        setDataTableInView(false)
+        return
+      }
+
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          setDataTableInView(entry.isIntersecting && entry.intersectionRatio > 0.18)
+        },
+        {
+          root: null,
+          threshold: [0, 0.18, 0.4, 0.8],
+          rootMargin: '-80px 0px -80px 0px',
+        },
+      )
+      observer.observe(tableCard)
+    }
+
+    const timer = window.setTimeout(watchTable, 150)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      observer?.disconnect()
+    }
+  }, [activeTab, datasetId])
 
   const variableColumns = useMemo(() => (dataset?.variables || []).map((variable) => variable.name), [dataset?.variables])
   const allColumns = useMemo(
