@@ -204,7 +204,6 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
       <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
         <div className="ax-module-head" style={{ marginBottom: appliedSummary ? 10 : 0 }}>
           <div className="ax-module-head-main">
-            <span className="ax-module-icon" aria-hidden>T</span>
             <div className="ax-module-copy">
               <p className="ax-module-title">
                 Category standardization
@@ -241,7 +240,6 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
     <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
       <div className="ax-module-head" style={{ marginBottom: 10 }}>
         <div className="ax-module-head-main">
-          <span className="ax-module-icon" aria-hidden>T</span>
           <div className="ax-module-copy">
             <p className="ax-module-title">
               Category standardization

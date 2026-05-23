@@ -238,25 +238,20 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       </PageGuide>
 
       {(dataset.sheets || []).length > 1 && (
-        <div className="ax-card ax-module-card ax-card-data" style={{ marginBottom: 16 }}>
-          <div className="ax-module-head ax-workbook-head">
-            <div className="ax-module-head-main">
-              <span className="ax-module-icon" aria-hidden>D</span>
-              <div className="ax-module-copy">
-                <p className="ax-module-title">
+        <div className="ax-card" style={{ marginBottom: 16 }}>
+          <div className="ax-row" style={{ alignItems: 'center', gap: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                 Workbook sheet
                 <HelpButton
                   title="Workbook sheet"
                   text="Use this card when an uploaded Excel file has multiple sheets. Switching sheets reloads the data preview, detected types, suggested fixes, and downstream project state."
                 />
               </p>
-                <p className="ax-module-subtitle">
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
                 Select which Excel sheet powers the active dataset.
               </p>
-              </div>
             </div>
-          </div>
-          <div className="ax-module-body-row">
             <select
               value={dataset.active_sheet || ''}
               onChange={(e) => handleSheetChange(e.target.value)}
@@ -1248,11 +1243,9 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
         onClick={() => setOpen((v) => !v)}
       >
         <div className="ax-module-head-main">
-          <span className="ax-module-icon" aria-hidden>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
-              <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
-            </svg>
-          </span>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', color: 'var(--card-tone-text)', flex: '0 0 auto' }}>
+            <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          </svg>
           <div className="ax-module-copy">
             <p className="ax-module-title">
               Optional feature tools and numeric formatting

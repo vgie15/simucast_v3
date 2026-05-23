@@ -133,7 +133,6 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
       >
         <div className="ax-module-head">
           <div className="ax-module-head-main">
-            <span className="ax-module-icon" aria-hidden>D</span>
             <p className="ax-module-title">New project</p>
           </div>
           <button

@@ -115,7 +115,6 @@ export default function FilesPage() {
         <div className="ax-card ax-module-card ax-card-data" style={{ overflow: 'hidden', marginTop: 12 }}>
           <div className="ax-module-head">
             <div className="ax-module-head-main">
-              <span className="ax-module-icon" aria-hidden>D</span>
               <p className="ax-module-title">Uploaded files</p>
             </div>
           </div>

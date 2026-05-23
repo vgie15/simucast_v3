@@ -235,6 +235,19 @@ input[type="range"]::-moz-range-thumb {
   font-weight: 800;
   font-size: 12px;
 }
+.ax-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  background: var(--card-tone-chip-bg);
+  color: var(--card-tone-text);
+  font-size: 12px;
+  font-weight: 800;
+}
 .ax-module-title {
   margin: 0;
   color: var(--color-text-primary);

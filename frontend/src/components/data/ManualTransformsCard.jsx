@@ -89,7 +89,6 @@ export default function ManualTransformsCard({ dataset, onApplied }) {
     <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
       <div className="ax-module-head">
         <div className="ax-module-head-main">
-          <span className="ax-module-icon" aria-hidden>T</span>
           <div className="ax-module-copy">
             <p className="ax-module-title">
               Manual transforms

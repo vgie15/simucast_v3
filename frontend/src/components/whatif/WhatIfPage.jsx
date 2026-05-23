@@ -163,7 +163,6 @@ export default function WhatIfPage({ dataset, activeModel }) {
       <div id="whatif-section-controls" className="ax-card ax-module-card ax-card-whatif" style={{ marginBottom: 14, padding: 16 }}>
         <div className="ax-module-head ax-whatif-head">
           <div className="ax-module-head-main">
-            <span className="ax-module-icon" aria-hidden>W</span>
             <p className="ax-module-title">Prediction result</p>
             <p className="ax-module-subtitle">
               Predicted {isProb ? `probability${pred?.positive_class ? ` of ${pred.positive_class}` : pred?.predicted_class ? ` of ${pred.predicted_class}` : ''}` : modelFull.target}
@@ -248,7 +247,6 @@ export default function WhatIfPage({ dataset, activeModel }) {
       <div className="ax-card ax-module-card ax-card-whatif">
         <div className="ax-module-head">
           <div className="ax-module-head-main">
-            <span className="ax-module-icon" aria-hidden>W</span>
             <p className="ax-module-title">Adjust feature values</p>
           </div>
         </div>

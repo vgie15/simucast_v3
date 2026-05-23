@@ -540,7 +540,6 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         <div id="fix-numeric-preprocessing" className="ax-card ax-module-card ax-card-prep" style={{ padding: 12, marginBottom: 12, background: 'var(--color-background-primary)' }}>
           <div className="ax-module-head ax-model-inner-head">
             <div className="ax-module-head-main">
-              <span className="ax-module-icon" aria-hidden>T</span>
               <p className="ax-module-title">
                 Encoding and scaling choices
                 <HelpButton
@@ -770,7 +769,6 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             <div id="models-tuning" className="ax-card ax-module-card ax-card-model" style={{ padding: 14, marginTop: 12 }}>
               <div className="ax-module-head ax-model-inner-head">
                 <div className="ax-module-head-main">
-                  <span className="ax-module-icon" aria-hidden>M</span>
                   <p className="ax-module-title">
                     Tune parameters
                     <HelpButton
@@ -852,7 +850,7 @@ function Step({ n, title, disabled, children, id }) {
     >
       <div className="ax-module-head ax-model-step-head">
         <div className="ax-module-head-main">
-          <span className="ax-module-icon" style={{ fontSize: 11, fontWeight: 500 }}>
+          <span className="ax-step-number" aria-hidden>
             {n}
           </span>
           <p className="ax-module-title">
