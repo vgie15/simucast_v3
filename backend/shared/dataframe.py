@@ -208,13 +208,17 @@ def _build_stage_change_payload(before_df, after_df, op_type, op_params, summary
     for index, before_position in before_positions.items():
         if index in after_positions:
             continue
-        removed_rows.append({
+        removed_row = {
             "row_index": before_position,
             "action_type": _display_action(op_type),
             "method": _method_label(op_type, op_params),
             "reason": summary or "This row was removed by the latest transformation.",
             "values": clean_json(before_df.loc[index].to_dict()),
-        })
+        }
+        duplicate_match = _duplicate_kept_position(before_df, after_df, index, before_positions, after_positions, op_type)
+        if duplicate_match is not None:
+            removed_row["duplicate_of_row_index"] = duplicate_match
+        removed_rows.append(removed_row)
 
     generated_rows = []
     for index, after_position in after_positions.items():
@@ -253,6 +257,27 @@ def _stamp_stage_changes(payload, stage):
     stamped["dataset_version_id"] = stage.id
     stamped["timestamp"] = timestamp
     return stamped
+
+
+def _duplicate_kept_position(before_df, after_df, removed_index, before_positions, after_positions, op_type):
+    """Return the original row position of the kept duplicate for removed duplicate rows."""
+    if op_type != "drop_duplicates" or removed_index not in before_df.index:
+        return None
+    removed_values = before_df.loc[removed_index]
+    common_columns = [column for column in before_df.columns if column in after_df.columns]
+    for kept_index, _after_position in after_positions.items():
+        if kept_index not in before_positions:
+            continue
+        if _same_duplicate_row(removed_values, after_df.loc[kept_index], common_columns):
+            return before_positions.get(kept_index)
+    return None
+
+
+def _same_duplicate_row(left, right, columns):
+    for column in columns:
+        if not _same_value(left.get(column), right.get(column)):
+            return False
+    return True
 
 
 def _column_change_descriptors(op_type, op_params, summary):

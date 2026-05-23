@@ -745,12 +745,14 @@ function ChangeTooltip({ change }) {
 }
 
 function RemovedRowTooltip({ row, column }) {
+  const duplicateRow = formatDuplicateRow(row)
   return (
     <span className="ax-dd-change-tooltip" role="tooltip">
       <b>{row.action_type || 'Removed row'}</b>
       <span><em>Original</em>{formatChangeValue(row.values?.[column])}</span>
       <span><em>Cleaned</em>Removed from this stage</span>
       <span><em>Method</em>{row.method || 'row removal'}</span>
+      {duplicateRow && <span><em>Duplicate</em>{duplicateRow}</span>}
       <span><em>Reason</em>{row.reason || 'This row was removed by the latest transformation.'}</span>
     </span>
   )
@@ -787,7 +789,7 @@ function mergeRemovedRows(rows, removedRows, viewMode) {
     ...(row.values || {}),
     __row_index: normalizeRowIndex(row.row_index),
     __removed_row: true,
-    __removed_change: row,
+    __removed_change: withDuplicateMatch(row, rows),
     __removed_key: `removed-${row.stage_id || 'stage'}-${row.row_index}-${index}`,
   }))
   return [...rows, ...removed].sort((a, b) => {
@@ -797,6 +799,37 @@ function mergeRemovedRows(rows, removedRows, viewMode) {
     if (!a.__removed_row && b.__removed_row) return 1
     return 0
   })
+}
+
+function withDuplicateMatch(removedRow, currentRows) {
+  if (!isDuplicateRemoval(removedRow) || removedRow.duplicate_of_row_index !== undefined) {
+    return removedRow
+  }
+  const columns = Object.keys(removedRow.values || {})
+  const match = currentRows.find((row) =>
+    columns.every((column) => sameDuplicateValue(row[column], removedRow.values?.[column])),
+  )
+  if (!match) return removedRow
+  return {
+    ...removedRow,
+    duplicate_of_row_index: normalizeRowIndex(match.__row_index),
+  }
+}
+
+function isDuplicateRemoval(row) {
+  const text = `${row.action_type || ''} ${row.method || ''} ${row.reason || ''}`.toLowerCase()
+  return text.includes('duplicate')
+}
+
+function sameDuplicateValue(left, right) {
+  if ((left === null || left === undefined || left === '') && (right === null || right === undefined || right === '')) return true
+  return String(left) === String(right)
+}
+
+function formatDuplicateRow(row) {
+  const value = row.duplicate_of_row_index ?? row.duplicate_of_source_row_index ?? row.kept_row_index
+  if (value === null || value === undefined || value === '') return ''
+  return `Matches kept row ${normalizeRowIndex(value) + 1}`
 }
 
 function normalizeRowIndex(value) {
