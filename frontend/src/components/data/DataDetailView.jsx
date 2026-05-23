@@ -7,6 +7,7 @@ import { api } from '../../api'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { BusyOverlay } from '../common/LoadingStates'
 import { useAuth } from '../providers/AuthProvider'
+import { useDatasetTableState } from './useDatasetTableState'
 
 const PAGE_SIZE = 100
 const TYPE_ICON = {
@@ -41,11 +42,18 @@ export default function DataDetailView({
 }) {
   const datasetId = dataset?.id
   const [rowColumns, setRowColumns] = useState([])
-  const [viewMode, setViewMode] = useState(preferredViewMode)
-  const [changeScope, setChangeScope] = useState('all')
-  const [changeStages, setChangeStages] = useState([])
-  const [changeLoading, setChangeLoading] = useState(false)
-  const [activeChangeIndex, setActiveChangeIndex] = useState(0)
+  const {
+    viewMode,
+    changeScope,
+    activeChangeIndex,
+    changeStages,
+    changeLoading,
+    setViewMode,
+    setChangeScope,
+    setActiveChangeIndex,
+    setChangeStages,
+    setChangeLoading,
+  } = useDatasetTableState(datasetId, preferredViewMode)
   const variableColumns = useMemo(() => (variables || []).map((v) => v.name), [variables])
   const allColumns = useMemo(
     () => (viewMode === 'original' && rowColumns.length ? rowColumns : variableColumns),
@@ -158,10 +166,6 @@ export default function DataDetailView({
   }, [datasetId, effectiveStageId, page, refreshKey])
 
   useEffect(() => {
-    setViewMode(preferredViewMode)
-  }, [preferredViewMode, refreshKey, datasetId])
-
-  useEffect(() => {
     if (!datasetId || viewMode === 'original') {
       setChangeStages([])
       return
@@ -182,7 +186,7 @@ export default function DataDetailView({
     return () => {
       cancelled = true
     }
-  }, [datasetId, stageId, currentStageId, refreshKey, viewMode])
+  }, [datasetId, stageId, currentStageId, refreshKey, setChangeLoading, setChangeStages, viewMode])
 
   const scopedChangeStages = useMemo(() => {
     if (!changeStages.length) return []

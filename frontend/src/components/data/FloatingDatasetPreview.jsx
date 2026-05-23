@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu'
+import { useDatasetTableState } from './useDatasetTableState'
 
 const PAGE_SIZE = 100
 const VIEW_MODES = [
@@ -39,17 +40,24 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   const hidden = !datasetId || (activeTab === 'data' && dataTableInView)
 
   const [open, setOpen] = useState(false)
-  const [viewMode, setViewMode] = useState('cleaned')
-  const [changeScope, setChangeScope] = useState('last')
-  const [activeChangeIndex, setActiveChangeIndex] = useState(0)
+  const {
+    viewMode,
+    changeScope,
+    activeChangeIndex,
+    changeStages,
+    changeLoading,
+    setViewMode,
+    setChangeScope,
+    setActiveChangeIndex,
+    setChangeStages,
+    setChangeLoading,
+  } = useDatasetTableState(datasetId)
   const [rows, setRows] = useState([])
   const [rowColumns, setRowColumns] = useState([])
   const [visibleColumns, setVisibleColumns] = useState([])
   const [page, setPage] = useState(1)
   const [totalRows, setTotalRows] = useState(0)
   const [hasMore, setHasMore] = useState(false)
-  const [changeStages, setChangeStages] = useState([])
-  const [loadingChanges, setLoadingChanges] = useState(false)
   const [loadingRows, setLoadingRows] = useState(false)
   const [error, setError] = useState('')
 
@@ -110,16 +118,12 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
   useEffect(() => {
     setOpen(false)
-    setViewMode('cleaned')
-    setChangeScope('last')
-    setActiveChangeIndex(0)
     setRows([])
     setRowColumns([])
     setVisibleColumns([])
     setPage(1)
     setTotalRows(0)
     setHasMore(false)
-    setChangeStages([])
     setError('')
   }, [datasetId])
 
@@ -137,12 +141,13 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   }, [allColumns])
 
   useEffect(() => {
-    if (!open || !datasetId || viewMode === 'original') {
+    if (!datasetId || viewMode === 'original') {
       setChangeStages([])
       return
     }
+    if (!open) return
     let cancelled = false
-    setLoadingChanges(true)
+    setChangeLoading(true)
     setError('')
 
     api
@@ -155,13 +160,13 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
         if (!cancelled) setChangeStages([])
       })
       .finally(() => {
-        if (!cancelled) setLoadingChanges(false)
+        if (!cancelled) setChangeLoading(false)
       })
 
     return () => {
       cancelled = true
     }
-  }, [dataset?.current_stage_id, datasetId, open, viewMode])
+  }, [dataset?.current_stage_id, datasetId, open, setChangeLoading, setChangeStages, viewMode])
 
   useEffect(() => {
     setRows([])
@@ -320,7 +325,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                   key={mode.id}
                   type="button"
                   className={viewMode === mode.id ? 'active' : ''}
-                  disabled={mode.id === 'highlight' && !changeStages.length && !loadingChanges}
+                  disabled={mode.id === 'highlight' && !changeStages.length && !changeLoading}
                   onClick={() => setViewMode(mode.id)}
                 >
                   {mode.label}
@@ -338,7 +343,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
           {viewMode === 'highlight' && (
             <section className="ax-dd-changebar ax-floating-dataset-changebar" aria-live="polite">
               <div className="ax-dd-changebar-copy">
-                <strong>{loadingChanges ? 'Loading changes...' : `${visibleChanges.length} changed cell${visibleChanges.length === 1 ? '' : 's'}`}</strong>
+                <strong>{changeLoading ? 'Loading changes...' : formatVisibleChangeCount(visibleChanges.length, removedRows.length)}</strong>
                 <span>
                   {latestStage?.summary || (changeScope === 'last' ? 'Showing the latest data change.' : 'Showing all stored data changes for this stage.')}
                   {removedRows.length ? ` ${removedRows.length} removed row${removedRows.length === 1 ? '' : 's'} tracked.` : ''}
@@ -544,6 +549,13 @@ function previewStatus(dataset, rowCount, columnCount) {
 function formatValue(value) {
   if (value === null || value === undefined || value === '') return 'Blank'
   return String(value)
+}
+
+function formatVisibleChangeCount(cellCount, rowCount) {
+  const parts = []
+  if (cellCount > 0) parts.push(`${cellCount} changed cell${cellCount === 1 ? '' : 's'}`)
+  if (rowCount > 0) parts.push(`${rowCount} removed row${rowCount === 1 ? '' : 's'}`)
+  return parts.length ? parts.join(', ') : '0 changes'
 }
 
 function normalizeRowIndex(value) {
