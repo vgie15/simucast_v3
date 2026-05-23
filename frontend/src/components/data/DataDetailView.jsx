@@ -69,6 +69,7 @@ export default function DataDetailView({
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [hasMore, setHasMore] = useState(true)
+  const [rowError, setRowError] = useState(null)
 
   const [aboutData, setAboutData] = useState(null)
   const [aboutLoading, setAboutLoading] = useState(false)
@@ -139,6 +140,7 @@ export default function DataDetailView({
     setEditing(null)
     setHeaderEdit(null)
     setCellError(null)
+    setRowError(null)
   }, [datasetId, effectiveStageId, refreshKey, viewMode])
 
   // load rows page
@@ -146,6 +148,7 @@ export default function DataDetailView({
     if (!datasetId) return
     let cancelled = false
     setLoading(true)
+    setRowError(null)
     api
       .getRows(datasetId, page, PAGE_SIZE, effectiveStageId)
       .then((r) => {
@@ -156,6 +159,13 @@ export default function DataDetailView({
         }
         setTotal(r.total || 0)
         setHasMore(page * PAGE_SIZE < (r.total || 0))
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setRows((prev) => (page === 1 ? [] : prev))
+          setHasMore(false)
+          setRowError(err.message || 'Dataset rows could not load.')
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -226,8 +236,10 @@ export default function DataDetailView({
     }
     const targetPage = Math.floor(activeRowIndex / PAGE_SIZE) + 1
     if (!rows.some((row) => normalizeRowIndex(row.__row_index) === activeRowIndex)) {
-      setRows([])
-      setPage(targetPage)
+      if (page !== targetPage) {
+        setRows([])
+        setPage(targetPage)
+      }
       return
     }
     const timer = window.setTimeout(() => {
@@ -237,7 +249,7 @@ export default function DataDetailView({
       window.setTimeout(() => cell?.classList.remove('ax-dd-change-focus'), 1300)
     }, 40)
     return () => window.clearTimeout(timer)
-  }, [activeChangeIndex, rows, viewMode, visibleChanges, visibleColumns])
+  }, [activeChangeIndex, page, rows, viewMode, visibleChanges, visibleColumns])
 
   // infinite scroll
   const sentinelRef = useRef(null)
@@ -390,7 +402,8 @@ export default function DataDetailView({
 
   const containerCls = `ax-data-detail ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
   const latestStage = scopedChangeStages[scopedChangeStages.length - 1] || null
-  const displayRows = mergeRemovedRows(rows, removedRows, viewMode)
+  const hasBaseRows = rows.length > 0
+  const displayRows = mergeRemovedRows(rows, hasBaseRows ? removedRows : [], viewMode)
 
   const node = (
     <div className={containerCls}>
@@ -552,6 +565,21 @@ export default function DataDetailView({
             </tr>
           </thead>
           <tbody>
+            {loading && !hasBaseRows && (
+              <tr className="ax-dd-state-row">
+                <td colSpan={(visibleColumns.length || 1) + 1}>Loading the current dataset rows...</td>
+              </tr>
+            )}
+            {rowError && !hasBaseRows && (
+              <tr className="ax-dd-state-row error">
+                <td colSpan={(visibleColumns.length || 1) + 1}>{rowError}</td>
+              </tr>
+            )}
+            {!loading && !rowError && !hasBaseRows && (
+              <tr className="ax-dd-state-row">
+                <td colSpan={(visibleColumns.length || 1) + 1}>No rows are available for this dataset stage.</td>
+              </tr>
+            )}
             {displayRows.map((row) => {
               const rowIndex = normalizeRowIndex(row.__row_index)
               const removedRow = row.__removed_row ? row.__removed_change : null
@@ -587,7 +615,9 @@ export default function DataDetailView({
                   ? 'Loading…'
                   : hasMore
                   ? ' '
-                  : `End of ${total.toLocaleString()} rows`}
+                  : hasBaseRows
+                  ? `End of ${total.toLocaleString()} rows`
+                  : ''}
               </td>
             </tr>
           </tbody>

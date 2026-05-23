@@ -4325,6 +4325,17 @@ a.ax-btn {
 .ax-dd-table tbody td.readonly {
   cursor: default;
 }
+.ax-dd-table tbody tr.ax-dd-state-row td {
+  padding: 18px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  white-space: normal;
+  background: var(--color-background-primary);
+}
+.ax-dd-table tbody tr.ax-dd-state-row.error td {
+  color: var(--color-text-danger);
+  background: rgba(254, 242, 242, 0.72);
+}
 .ax-dd-table tbody tr:hover th.ax-dd-rownum,
 .ax-dd-table tbody tr:hover td {
   background: var(--color-background-secondary);
