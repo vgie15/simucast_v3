@@ -253,7 +253,7 @@ export default function ReportPage({ dataset }) {
           </div>
         </div>
 
-        <div className={`ax-card ax-busy-host ${loading ? 'is-busy' : ''}`} style={{ padding: 18, minHeight: 400 }} id="ax-report-preview">
+        <div className={`ax-card ax-module-card ax-card-report ax-busy-host ${loading ? 'is-busy' : ''}`} style={{ padding: 18, minHeight: 400 }} id="ax-report-preview">
           <BusyOverlay
             active={loading}
             title="Generating report..."

@@ -201,11 +201,11 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   }
   if (!suggestions.length || visibleSuggestions.length === 0) {
     return (
-      <div className="ax-card" style={{ marginBottom: 16 }}>
-        <div className="ax-row" style={{ marginBottom: appliedSummary ? 10 : 0 }}>
+      <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
+        <div className="ax-module-head" style={{ marginBottom: appliedSummary ? 10 : 0 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Category standardization</p>
+              <p className="ax-module-title">Category standardization</p>
               <HelpButton
                 title="Category standardization: what this card does"
                 text="Use this card to combine labels that mean the same thing, such as yes, Yes, and 1. This prevents categories from being split incorrectly during summaries, tests, models, what-if analysis, and reports."
@@ -235,11 +235,11 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   }
 
   return (
-    <div className="ax-card" style={{ marginBottom: 16 }}>
-      <div className="ax-row" style={{ marginBottom: 10 }}>
+    <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
+      <div className="ax-module-head" style={{ marginBottom: 10 }}>
         <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Category standardization</p>
+              <p className="ax-module-title">Category standardization</p>
               <HelpButton
                 title="Category standardization: what this card does"
                 text="Use this card to combine labels that mean the same thing, such as yes, Yes, and 1. This prevents categories from being split incorrectly during summaries, tests, models, what-if analysis, and reports."

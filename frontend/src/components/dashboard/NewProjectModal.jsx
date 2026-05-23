@@ -123,7 +123,7 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="ax-card"
+        className="ax-card ax-module-card ax-card-data"
         style={{
           width: '100%',
           maxWidth: 520,

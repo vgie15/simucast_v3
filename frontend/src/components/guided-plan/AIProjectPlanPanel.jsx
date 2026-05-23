@@ -292,7 +292,7 @@ export default function AIProjectPlanPanel({
 
   return (
     <section
-      className={`ax-card ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}
+      className={`ax-card ax-module-card ax-card-ai ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}
       style={!collapsed && planH ? { height: planH, maxHeight: 'none' } : undefined}
     >
       <div className="ax-panel-sticky-header">

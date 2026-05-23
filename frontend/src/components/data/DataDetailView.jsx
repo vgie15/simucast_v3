@@ -419,7 +419,7 @@ export default function DataDetailView({
 
   if (!dataset) return null
 
-  const containerCls = `ax-data-detail ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
+  const containerCls = `ax-data-detail ax-module-card ax-card-data ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
   const latestStage = scopedChangeStages[scopedChangeStages.length - 1] || null
   const hasBaseRows = rows.length > 0
   const displayRows = mergeRemovedRows(rows, hasBaseRows ? removedRows : [], viewMode)

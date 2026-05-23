@@ -238,7 +238,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       </PageGuide>
 
       {(dataset.sheets || []).length > 1 && (
-        <div className="ax-card" style={{ marginBottom: 16 }}>
+        <div className="ax-card ax-module-card ax-card-data" style={{ marginBottom: 16 }}>
           <div className="ax-row" style={{ alignItems: 'center' }}>
             <div>
               <p style={{ fontSize: 13, fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -351,7 +351,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         {suggestionsLoading ? (
           <SkeletonCards count={3} />
         ) : suggestions.length === 0 && !(suggestionGroups.duplicates?.count > 0) ? (
-          <div className="ax-card" style={{ padding: '10px 12px', marginBottom: 16 }}>
+          <div className="ax-card ax-module-card ax-card-muted" style={{ padding: '10px 12px', marginBottom: 16 }}>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>No suggested fixes are pending. Your data looks clean.</p>
             {appliedFixSummary.length > 0 && (
               <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: 10, paddingTop: 10 }}>
@@ -459,7 +459,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
   const hasWork = kind === 'duplicates' ? duplicateCount > 0 : items.length > 0
   if (!hasWork) {
     return (
-      <div className="ax-card" style={{ padding: '12px 14px', opacity: 0.72 }}>
+      <div className="ax-card ax-module-card ax-card-muted" style={{ padding: '12px 14px', opacity: 0.72 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <KindBadge kind={kind} />
           <strong style={{ fontSize: 13 }}>{title}</strong>
@@ -509,7 +509,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
   const applyTargetId = `fix-cleaning-${kind}-apply`
 
   return (
-    <div id={cardTargetId} className={`ax-card ax-busy-host ${applying ? 'is-busy' : ''}`} style={{ padding: 14 }}>
+    <div id={cardTargetId} className={`ax-card ax-module-card ax-card-warning ax-busy-host ${applying ? 'is-busy' : ''}`} style={{ padding: 14 }}>
       <BusyOverlay
         active={applying}
         title={`Applying ${title.toLowerCase()} fix...`}
@@ -1231,7 +1231,7 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
   }
 
   return (
-    <div className={`ax-card ax-busy-host ${busy ? 'is-busy' : ''}`} style={{ marginBottom: 16 }}>
+    <div className={`ax-card ax-module-card ax-card-prep ax-busy-host ${busy ? 'is-busy' : ''}`} style={{ marginBottom: 16 }}>
       <BusyOverlay
         active={busy}
         title={tool === 'format' ? 'Formatting numeric values...' : 'Applying feature engineering...'}

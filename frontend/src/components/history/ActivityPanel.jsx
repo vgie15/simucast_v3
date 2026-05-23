@@ -177,7 +177,7 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored, titl
   }
 
   return (
-    <div className="ax-card ax-activity-panel">
+    <div className="ax-card ax-module-card ax-card-muted ax-activity-panel">
       <div className="ax-panel-sticky-header">
         <div className="ax-row" style={{ marginBottom: 8, alignItems: 'flex-start', gap: 10 }}>
           <div style={{ minWidth: 0, flex: '1 1 160px' }}>

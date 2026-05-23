@@ -160,7 +160,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
         Start from the baseline values, change the variables you care about, then save useful scenarios for the report.
       </PageGuide>
 
-      <div id="whatif-section-controls" className="ax-card" style={{ marginBottom: 14, padding: 16 }}>
+      <div id="whatif-section-controls" className="ax-card ax-module-card ax-card-whatif" style={{ marginBottom: 14, padding: 16 }}>
         <div className="ax-row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
           <div>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -236,7 +236,7 @@ export default function WhatIfPage({ dataset, activeModel }) {
       <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: -6 }}>
         See how dataset-learned values affect the prediction. Numeric controls show the observed range and mean from the training data.
       </p>
-      <div className="ax-card">
+      <div className="ax-card ax-module-card ax-card-whatif">
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
           <input type="checkbox" checked={restrictToRange} onChange={(e) => setRestrictToRange(e.target.checked)} />
           Restrict inputs to dataset range
@@ -366,7 +366,7 @@ function ScenarioCard({ name, prediction, baseline, extrapolation, inputs, activ
   const scenarioRisk = extrapolation?.overall_risk
   return (
     <div
-      className="ax-card"
+      className="ax-card ax-module-card ax-card-whatif"
       onClick={onClick}
       style={{ padding: '10px 12px', border: active ? '2px solid var(--color-border-info)' : undefined, cursor: onClick ? 'pointer' : undefined }}
       title={onClick ? 'Load this scenario into the adjust feature values controls.' : undefined}

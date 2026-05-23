@@ -112,7 +112,7 @@ export default function SettingsPage() {
       <div className="ax-settings-page">
         <h1 className="ax-page-title">Settings</h1>
         <p className="ax-page-sub">Account settings require a saved account.</p>
-        <div className="ax-card ax-settings-card">
+        <div className="ax-card ax-module-card ax-card-muted ax-settings-card">
           <p className="ax-settings-copy">Create an account or log in to manage profile details, passwords, sign out, and account deletion.</p>
           <div className="ax-settings-actions">
             <button type="button" className="ax-btn prim" onClick={() => auth.showAuthModal('signup')}>Create account</button>
@@ -133,7 +133,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="ax-settings-grid">
-        <form className="ax-card ax-settings-card" onSubmit={saveProfile}>
+        <form className="ax-card ax-module-card ax-card-muted ax-settings-card" onSubmit={saveProfile}>
           <div className="ax-settings-card-head">
             <h2>Profile</h2>
             <p>Name and email used for your saved projects.</p>
@@ -166,7 +166,7 @@ export default function SettingsPage() {
           </div>
         </form>
 
-        <form className="ax-card ax-settings-card" onSubmit={changePassword}>
+        <form className="ax-card ax-module-card ax-card-muted ax-settings-card" onSubmit={changePassword}>
           <div className="ax-settings-card-head">
             <h2>Change Password</h2>
             <p>Update the password for this account.</p>
@@ -211,7 +211,7 @@ export default function SettingsPage() {
           </div>
         </form>
 
-        <section className="ax-card ax-settings-card">
+        <section className="ax-card ax-module-card ax-card-muted ax-settings-card">
           <div className="ax-settings-card-head">
             <h2>Sign Out</h2>
             <p>End this device session and return to guest mode.</p>
@@ -228,7 +228,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <form className="ax-card ax-settings-card danger" onSubmit={deleteAccount}>
+        <form className="ax-card ax-module-card ax-card-danger ax-settings-card danger" onSubmit={deleteAccount}>
           <div className="ax-settings-card-head">
             <h2>Delete Account</h2>
             <p>Permanently remove your account and saved project data.</p>

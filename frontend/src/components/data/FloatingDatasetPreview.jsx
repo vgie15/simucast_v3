@@ -306,7 +306,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   return (
     <div className={`ax-floating-dataset ${open ? 'open' : ''}`}>
       {open && (
-        <section className="ax-floating-dataset-panel" aria-label="Dataset preview">
+        <section className="ax-floating-dataset-panel ax-module-card ax-card-data" aria-label="Dataset preview">
           <header className="ax-floating-dataset-header">
             <div className="ax-floating-dataset-title">
               <span className="ax-floating-dataset-mark" aria-hidden><TableIcon /></span>

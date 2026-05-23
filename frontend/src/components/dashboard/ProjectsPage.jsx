@@ -85,7 +85,7 @@ export default function ProjectsPage() {
         All projects
       </p>
       {datasets.length === 0 ? (
-        <div className="ax-card">
+        <div className="ax-card ax-module-card ax-card-muted">
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
             No projects yet. Click <strong>+ New project</strong> to upload a dataset and get started.
           </p>
@@ -95,7 +95,7 @@ export default function ProjectsPage() {
           {datasets.map((d) => (
             <div
               key={d.id}
-              className="ax-card"
+              className="ax-card ax-module-card ax-card-data"
               style={{ padding: '10px 12px', cursor: 'pointer' }}
               onClick={() => navigate(`/projects/${d.id}`)}
             >
