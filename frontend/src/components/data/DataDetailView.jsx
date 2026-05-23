@@ -42,7 +42,7 @@ export default function DataDetailView({
   const datasetId = dataset?.id
   const [rowColumns, setRowColumns] = useState([])
   const [viewMode, setViewMode] = useState(preferredViewMode)
-  const [changeScope, setChangeScope] = useState('last')
+  const [changeScope, setChangeScope] = useState('all')
   const [changeStages, setChangeStages] = useState([])
   const [changeLoading, setChangeLoading] = useState(false)
   const [activeChangeIndex, setActiveChangeIndex] = useState(0)
@@ -385,10 +385,8 @@ export default function DataDetailView({
   if (!dataset) return null
 
   const containerCls = `ax-data-detail ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
-  const displayRows = useMemo(
-    () => mergeRemovedRows(rows, removedRows, viewMode),
-    [removedRows, rows, viewMode],
-  )
+  const latestStage = scopedChangeStages[scopedChangeStages.length - 1] || null
+  const displayRows = mergeRemovedRows(rows, removedRows, viewMode)
 
   const node = (
     <div className={containerCls}>
@@ -465,9 +463,10 @@ export default function DataDetailView({
       {viewMode === 'highlight' && (
         <section className="ax-dd-changebar" aria-live="polite">
           <div className="ax-dd-changebar-copy">
-            <strong>{changeLoading ? 'Loading changes...' : `${visibleChanges.length} changed cell${visibleChanges.length === 1 ? '' : 's'}`}</strong>
+            <strong>{changeLoading ? 'Loading changes...' : formatVisibleChangeCount(visibleChanges.length, removedRows.length)}</strong>
             <span>
-              {changeScope === 'last' ? 'Showing the latest data change.' : 'Showing all stored data changes for this stage.'}
+              {latestStage?.summary || (changeScope === 'last' ? 'Showing the latest data change.' : 'Showing all stored data changes for this stage.')}
+              {removedRows.length ? ` ${removedRows.length} removed row${removedRows.length === 1 ? '' : 's'} tracked.` : ''}
             </span>
           </div>
           <div className="ax-dd-changebar-actions">
@@ -530,6 +529,7 @@ export default function DataDetailView({
         <table className="ax-dd-table">
           <thead>
             <tr className="ax-dd-colhead">
+              <th className="ax-dd-rowhead">Row</th>
               {visibleVariables.map((v) => (
                 <th key={v.name} className={viewMode === 'highlight' && changedColumns.has(v.name) ? 'ax-dd-new-column' : ''}>
                   <button
@@ -553,6 +553,7 @@ export default function DataDetailView({
               const removedRow = row.__removed_row ? row.__removed_change : null
               return (
               <tr key={row.__removed_key || row.__row_index} className={removedRow ? 'ax-dd-removed-row' : ''}>
+                <th scope="row" className="ax-dd-rownum">{removedRow ? `${rowIndex + 1} removed` : rowIndex + 1}</th>
                 {visibleColumns.map((col) => {
                   const change = !removedRow && viewMode === 'highlight' ? changedCellMap.get(`${rowIndex}:${col}`) : null
                   return (
@@ -577,7 +578,7 @@ export default function DataDetailView({
               )
             })}
             <tr ref={sentinelRef} className="ax-dd-sentinel">
-              <td colSpan={visibleColumns.length || 1}>
+              <td colSpan={(visibleColumns.length || 1) + 1}>
                 {loading
                   ? 'Loading…'
                   : hasMore
@@ -692,6 +693,13 @@ function RemovedRowTooltip({ row, column }) {
 function formatChangeValue(value) {
   if (value === null || value === undefined || value === '') return 'Blank'
   return String(value)
+}
+
+function formatVisibleChangeCount(cellCount, rowCount) {
+  const parts = []
+  if (cellCount > 0) parts.push(`${cellCount} changed cell${cellCount === 1 ? '' : 's'}`)
+  if (rowCount > 0) parts.push(`${rowCount} removed row${rowCount === 1 ? '' : 's'}`)
+  return parts.length ? parts.join(', ') : '0 changes'
 }
 
 function mergeRemovedRows(rows, removedRows, viewMode) {

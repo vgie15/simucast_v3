@@ -4242,6 +4242,15 @@ a.ax-btn {
   border-bottom: 0.5px solid var(--color-border-tertiary);
   padding: 0;
 }
+.ax-dd-table thead .ax-dd-colhead th.ax-dd-rowhead {
+  min-width: 58px;
+  width: 58px;
+  padding: 6px 10px;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+}
 .ax-dd-table thead .ax-dd-colsummary th {
   position: sticky;
   top: 38px;
@@ -4303,9 +4312,20 @@ a.ax-btn {
   text-overflow: ellipsis;
   max-width: 220px;
 }
+.ax-dd-table tbody th.ax-dd-rownum {
+  padding: 6px 10px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
 .ax-dd-table tbody td.readonly {
   cursor: default;
 }
+.ax-dd-table tbody tr:hover th.ax-dd-rownum,
 .ax-dd-table tbody tr:hover td {
   background: var(--color-background-secondary);
 }
