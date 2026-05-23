@@ -4340,6 +4340,36 @@ a.ax-btn {
 .ax-dd-table tbody td.ax-dd-change-focus {
   box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.78), 0 0 0 3px rgba(249, 115, 22, 0.14);
 }
+.ax-dd-table tbody tr.ax-dd-removed-row th,
+.ax-dd-table tbody tr.ax-dd-removed-row td,
+.ax-dd-table tbody tr.ax-dd-removed-row:hover th,
+.ax-dd-table tbody tr.ax-dd-removed-row:hover td {
+  background: rgba(254, 226, 226, 0.72);
+  color: rgba(127, 29, 29, 0.92);
+}
+.ax-dd-table tbody tr.ax-dd-removed-row th {
+  font-weight: 800;
+}
+.ax-dd-table tbody td.ax-dd-removed-cell {
+  position: relative;
+  overflow: visible;
+  text-decoration: line-through;
+  text-decoration-color: rgba(185, 28, 28, 0.42);
+}
+.ax-dd-table tbody td.ax-dd-removed-cell::after {
+  content: "removed";
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.13);
+  color: rgba(153, 27, 27, 0.85);
+  font-size: 9px;
+  font-weight: 800;
+  text-decoration: none;
+  text-transform: uppercase;
+}
 .ax-dd-change-tooltip {
   position: absolute;
   left: 10px;
@@ -4356,7 +4386,9 @@ a.ax-btn {
   white-space: normal;
 }
 .ax-dd-changed-cell:hover .ax-dd-change-tooltip,
-.ax-dd-changed-cell:focus-within .ax-dd-change-tooltip {
+.ax-dd-changed-cell:focus-within .ax-dd-change-tooltip,
+.ax-dd-removed-cell:hover .ax-dd-change-tooltip,
+.ax-dd-removed-cell:focus-within .ax-dd-change-tooltip {
   display: grid;
   gap: 5px;
 }

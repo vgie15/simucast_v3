@@ -199,7 +199,7 @@ export default function DataDetailView({
   const changedCellMap = useMemo(() => {
     const cells = new Map()
     for (const change of visibleChanges) {
-      cells.set(`${change.row_index}:${change.column}`, change)
+      cells.set(`${normalizeRowIndex(change.row_index)}:${change.column}`, change)
     }
     return cells
   }, [visibleChanges])
@@ -216,17 +216,18 @@ export default function DataDetailView({
     if (viewMode !== 'highlight' || !visibleChanges.length) return
     const active = visibleChanges[activeChangeIndex]
     if (!active) return
+    const activeRowIndex = normalizeRowIndex(active.row_index)
     if (!visibleColumns.includes(active.column)) {
       setVisibleColumns((current) => [...current, active.column].filter((name, index, list) => list.indexOf(name) === index))
     }
-    const targetPage = Math.floor(Number(active.row_index || 0) / PAGE_SIZE) + 1
-    if (!rows.some((row) => row.__row_index === active.row_index)) {
+    const targetPage = Math.floor(activeRowIndex / PAGE_SIZE) + 1
+    if (!rows.some((row) => normalizeRowIndex(row.__row_index) === activeRowIndex)) {
       setRows([])
       setPage(targetPage)
       return
     }
     const timer = window.setTimeout(() => {
-      const cell = scrollRef.current?.querySelector(`[data-change-cell="${active.row_index}:${cssEscape(active.column)}"]`)
+      const cell = scrollRef.current?.querySelector(`[data-change-cell="${activeRowIndex}:${cssEscape(active.column)}"]`)
       cell?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
       cell?.classList.add('ax-dd-change-focus')
       window.setTimeout(() => cell?.classList.remove('ax-dd-change-focus'), 1300)
@@ -384,6 +385,10 @@ export default function DataDetailView({
   if (!dataset) return null
 
   const containerCls = `ax-data-detail ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
+  const displayRows = useMemo(
+    () => mergeRemovedRows(rows, removedRows, viewMode),
+    [removedRows, rows, viewMode],
+  )
 
   const node = (
     <div className={containerCls}>
@@ -503,9 +508,6 @@ export default function DataDetailView({
       )}
 
       <div className="ax-dd-table-wrap" ref={scrollRef}>
-        {viewMode === 'highlight' && removedRows.length > 0 && (
-          <RemovedRowsPreview rows={removedRows} visibleColumns={visibleColumns} />
-        )}
         <section className="ax-dd-about">
           <h4>About this file</h4>
           {aboutLoading && !aboutData && (
@@ -546,28 +548,34 @@ export default function DataDetailView({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.__row_index}>
+            {displayRows.map((row) => {
+              const rowIndex = normalizeRowIndex(row.__row_index)
+              const removedRow = row.__removed_row ? row.__removed_change : null
+              return (
+              <tr key={row.__removed_key || row.__row_index} className={removedRow ? 'ax-dd-removed-row' : ''}>
                 {visibleColumns.map((col) => {
-                  const change = viewMode === 'highlight' ? changedCellMap.get(`${row.__row_index}:${col}`) : null
+                  const change = !removedRow && viewMode === 'highlight' ? changedCellMap.get(`${rowIndex}:${col}`) : null
                   return (
                     <td
                       key={col}
-                      data-change-cell={`${row.__row_index}:${col}`}
-                      onClick={() => !readOnly && startEdit(row, col, row[col])}
+                      data-change-cell={`${rowIndex}:${col}`}
+                      onClick={() => !removedRow && !readOnly && startEdit(row, col, row[col])}
                       className={[
-                        readOnly ? 'readonly' : '',
+                        readOnly || removedRow ? 'readonly' : '',
+                        removedRow ? 'ax-dd-removed-cell' : '',
                         change ? `ax-dd-changed-cell ax-dd-change-${change.change_kind || 'converted'}` : '',
                         viewMode === 'highlight' && changedColumns.has(col) ? 'ax-dd-new-column-cell' : '',
                       ].filter(Boolean).join(' ')}
                     >
                       {renderCellValue(row, col)}
                       {change && <ChangeTooltip change={change} />}
+                      {removedRow && <RemovedRowTooltip row={removedRow} column={col} />}
                     </td>
                   )
                 })}
               </tr>
-            ))}
+              )
+            })}
             <tr ref={sentinelRef} className="ax-dd-sentinel">
               <td colSpan={visibleColumns.length || 1}>
                 {loading
@@ -669,9 +677,44 @@ function ChangeTooltip({ change }) {
   )
 }
 
+function RemovedRowTooltip({ row, column }) {
+  return (
+    <span className="ax-dd-change-tooltip" role="tooltip">
+      <b>{row.action_type || 'Removed row'}</b>
+      <span><em>Original</em>{formatChangeValue(row.values?.[column])}</span>
+      <span><em>Cleaned</em>Removed from this stage</span>
+      <span><em>Method</em>{row.method || 'row removal'}</span>
+      <span><em>Reason</em>{row.reason || 'This row was removed by the latest transformation.'}</span>
+    </span>
+  )
+}
+
 function formatChangeValue(value) {
   if (value === null || value === undefined || value === '') return 'Blank'
   return String(value)
+}
+
+function mergeRemovedRows(rows, removedRows, viewMode) {
+  if (viewMode !== 'highlight' || !removedRows.length) return rows
+  const removed = removedRows.map((row, index) => ({
+    ...(row.values || {}),
+    __row_index: normalizeRowIndex(row.row_index),
+    __removed_row: true,
+    __removed_change: row,
+    __removed_key: `removed-${row.stage_id || 'stage'}-${row.row_index}-${index}`,
+  }))
+  return [...rows, ...removed].sort((a, b) => {
+    const diff = normalizeRowIndex(a.__row_index) - normalizeRowIndex(b.__row_index)
+    if (diff !== 0) return diff
+    if (a.__removed_row && !b.__removed_row) return -1
+    if (!a.__removed_row && b.__removed_row) return 1
+    return 0
+  })
+}
+
+function normalizeRowIndex(value) {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : 0
 }
 
 function cssEscape(value) {

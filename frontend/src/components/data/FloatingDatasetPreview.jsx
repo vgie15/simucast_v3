@@ -277,6 +277,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
   const latestStage = changeStages[changeStages.length - 1] || null
   const effectiveRows = totalRows || dataset?.row_count || 0
+  const displayRows = mergeRemovedRows(rows, removedRows, viewMode)
 
   return (
     <div className={`ax-floating-dataset ${open ? 'open' : ''}`}>
@@ -391,9 +392,6 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
             {rows.length > 0 && (
               <div className="ax-floating-dataset-table-wrap" ref={scrollRef}>
-                {viewMode === 'highlight' && removedRows.length > 0 && (
-                  <RemovedRowsPreview rows={removedRows} visibleColumns={visibleColumns} />
-                )}
                 <table className="ax-dd-table ax-floating-dataset-table">
                   <thead>
                     <tr className="ax-dd-colhead">
@@ -408,29 +406,34 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.__row_index}>
-                        <th scope="row">{normalizeRowIndex(row.__row_index) + 1}</th>
+                    {displayRows.map((row) => {
+                      const rowIndex = normalizeRowIndex(row.__row_index)
+                      const removedRow = row.__removed_row ? row.__removed_change : null
+                      return (
+                      <tr key={row.__removed_key || row.__row_index} className={removedRow ? 'ax-dd-removed-row' : ''}>
+                        <th scope="row">{removedRow ? `${rowIndex + 1} removed` : rowIndex + 1}</th>
                         {visibleColumns.map((column) => {
-                          const rowIndex = normalizeRowIndex(row.__row_index)
-                          const change = viewMode === 'highlight' ? changedCellMap.get(`${rowIndex}:${column}`) : null
+                          const change = !removedRow && viewMode === 'highlight' ? changedCellMap.get(`${rowIndex}:${column}`) : null
                           return (
                             <td
                               key={column}
                               data-change-cell={`${rowIndex}:${column}`}
                               className={[
                                 'readonly',
+                                removedRow ? 'ax-dd-removed-cell' : '',
                                 change ? `ax-dd-changed-cell ax-dd-change-${change.change_kind || 'converted'}` : '',
                                 viewMode === 'highlight' && changedColumns.has(column) ? 'ax-dd-new-column-cell' : '',
                               ].filter(Boolean).join(' ')}
                             >
                               {formatValue(row[column])}
                               {change && <PreviewChangeTooltip change={change} />}
+                              {removedRow && <RemovedRowTooltip row={removedRow} column={column} />}
                             </td>
                           )
                         })}
                       </tr>
-                    ))}
+                      )
+                    })}
                     <tr ref={sentinelRef} className="ax-dd-sentinel">
                       <td colSpan={(visibleColumns.length || 1) + 1}>
                         {loadingRows
@@ -519,6 +522,18 @@ function PreviewChangeTooltip({ change }) {
   )
 }
 
+function RemovedRowTooltip({ row, column }) {
+  return (
+    <span className="ax-dd-change-tooltip" role="tooltip">
+      <b>{row.action_type || 'Removed row'}</b>
+      <span><em>Original</em>{formatValue(row.values?.[column])}</span>
+      <span><em>Cleaned</em>Removed from this stage</span>
+      <span><em>Method</em>{row.method || 'row removal'}</span>
+      <span><em>Reason</em>{row.reason || 'This row was removed by the latest transformation.'}</span>
+    </span>
+  )
+}
+
 function previewStatus(dataset, rowCount, columnCount) {
   const rows = Number(rowCount || dataset.row_count || 0).toLocaleString()
   const columns = Number(columnCount || dataset.col_count || dataset.variables?.length || 0).toLocaleString()
@@ -534,6 +549,24 @@ function formatValue(value) {
 function normalizeRowIndex(value) {
   const numberValue = Number(value)
   return Number.isFinite(numberValue) ? numberValue : 0
+}
+
+function mergeRemovedRows(rows, removedRows, viewMode) {
+  if (viewMode !== 'highlight' || !removedRows.length) return rows
+  const removed = removedRows.map((row, index) => ({
+    ...(row.values || {}),
+    __row_index: normalizeRowIndex(row.row_index),
+    __removed_row: true,
+    __removed_change: row,
+    __removed_key: `removed-${row.stage_id || 'stage'}-${row.row_index}-${index}`,
+  }))
+  return [...rows, ...removed].sort((a, b) => {
+    const diff = normalizeRowIndex(a.__row_index) - normalizeRowIndex(b.__row_index)
+    if (diff !== 0) return diff
+    if (a.__removed_row && !b.__removed_row) return -1
+    if (!a.__removed_row && b.__removed_row) return 1
+    return 0
+  })
 }
 
 function cssEscape(value) {
