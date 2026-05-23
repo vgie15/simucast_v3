@@ -5114,8 +5114,8 @@ a.ax-btn {
   color: var(--color-accent);
 }
 .ax-floating-dataset-panel {
-  width: min(680px, calc(100vw - 48px));
-  height: min(520px, calc(100vh - 108px));
+  width: min(1040px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - 96px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -5137,6 +5137,7 @@ a.ax-btn {
 }
 .ax-floating-dataset-title {
   min-width: 0;
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -5162,6 +5163,13 @@ a.ax-btn {
   justify-content: center;
   border-radius: 50%;
   background: var(--color-accent-light);
+}
+.ax-floating-dataset-header-actions,
+.ax-floating-dataset-tools {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .ax-floating-dataset-close {
   width: 32px;
@@ -5189,6 +5197,12 @@ a.ax-btn {
   padding: 10px 14px;
   border-bottom: 0.5px solid var(--color-border-tertiary);
   background: var(--color-background-tertiary);
+}
+.ax-floating-dataset-changebar {
+  padding: 10px 14px;
+}
+.ax-floating-dataset-changebar .ax-dd-changebar-actions {
+  max-width: 460px;
 }
 .ax-floating-dataset-modes {
   min-width: 0;
@@ -5289,13 +5303,19 @@ a.ax-btn {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  border-top: 0.5px solid var(--color-border-tertiary);
 }
 .ax-floating-dataset-table {
   min-width: 100%;
   width: max-content;
 }
+.ax-floating-dataset-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
 .ax-floating-dataset-table thead .ax-dd-colhead th {
-  min-width: 118px;
+  min-width: 132px;
   padding: 9px 10px;
   color: var(--color-text-secondary);
   font-size: 11px;
@@ -5303,12 +5323,16 @@ a.ax-btn {
   text-align: left;
   white-space: nowrap;
 }
-.ax-floating-dataset-table thead .ax-dd-colhead th span {
+.ax-floating-dataset-table thead .ax-dd-colhead th .ax-dd-colname {
   display: block;
-  max-width: 170px;
+  max-width: 190px;
   overflow: hidden;
   color: var(--color-text-primary);
   text-overflow: ellipsis;
+}
+.ax-floating-dataset-table thead .ax-dd-colhead th .ax-dd-typeicon {
+  display: block;
+  color: var(--color-text-tertiary);
 }
 .ax-floating-dataset-table thead .ax-dd-colhead th.ax-floating-dataset-rowhead,
 .ax-floating-dataset-table tbody th {
@@ -5330,7 +5354,7 @@ a.ax-btn {
   z-index: 5;
 }
 .ax-floating-dataset-table tbody td {
-  max-width: 190px;
+  max-width: 220px;
   cursor: default;
 }
 .ax-floating-dataset-footer {

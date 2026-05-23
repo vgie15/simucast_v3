@@ -182,7 +182,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   )
   const changedCellMap = useMemo(() => {
     const cells = new Map()
-    visibleChanges.forEach((change) => cells.set(`${change.row_index}:${change.column}`, change))
+    visibleChanges.forEach((change) => cells.set(`${normalizeRowIndex(change.row_index)}:${change.column}`, change))
     return cells
   }, [visibleChanges])
 
@@ -194,25 +194,28 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     if (viewMode !== 'highlight' || !visibleChanges.length) return
     const active = visibleChanges[activeChangeIndex]
     if (!active) return
+    const activeRowIndex = normalizeRowIndex(active.row_index)
     if (!visibleColumns.includes(active.column)) {
       setVisibleColumns((current) =>
         allColumns.filter((name) => current.includes(name) || name === active.column),
       )
     }
-    const targetPage = Math.floor(Number(active.row_index || 0) / PAGE_SIZE) + 1
-    if (!rows.some((row) => row.__row_index === active.row_index)) {
-      setRows([])
-      setPage(targetPage)
+    const targetPage = Math.floor(activeRowIndex / PAGE_SIZE) + 1
+    if (!rows.some((row) => normalizeRowIndex(row.__row_index) === activeRowIndex)) {
+      if (page !== targetPage) {
+        setRows([])
+        setPage(targetPage)
+      }
       return
     }
     const timer = window.setTimeout(() => {
-      const cell = scrollRef.current?.querySelector(`[data-change-cell="${active.row_index}:${cssEscape(active.column)}"]`)
+      const cell = scrollRef.current?.querySelector(`[data-change-cell="${activeRowIndex}:${cssEscape(active.column)}"]`)
       cell?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
       cell?.classList.add('ax-dd-change-focus')
       window.setTimeout(() => cell?.classList.remove('ax-dd-change-focus'), 1300)
     }, 80)
     return () => window.clearTimeout(timer)
-  }, [activeChangeIndex, allColumns, rows, viewMode, visibleChanges, visibleColumns])
+  }, [activeChangeIndex, allColumns, page, rows, viewMode, visibleChanges, visibleColumns])
 
   useEffect(() => {
     if (!hasMore || loadingRows) return
@@ -368,13 +371,14 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                   <tbody>
                     {rows.map((row) => (
                       <tr key={row.__row_index}>
-                        <th scope="row">{Number(row.__row_index || 0) + 1}</th>
+                        <th scope="row">{normalizeRowIndex(row.__row_index) + 1}</th>
                         {visibleColumns.map((column) => {
-                          const change = viewMode === 'highlight' ? changedCellMap.get(`${row.__row_index}:${column}`) : null
+                          const rowIndex = normalizeRowIndex(row.__row_index)
+                          const change = viewMode === 'highlight' ? changedCellMap.get(`${rowIndex}:${column}`) : null
                           return (
                             <td
                               key={column}
-                              data-change-cell={`${row.__row_index}:${column}`}
+                              data-change-cell={`${rowIndex}:${column}`}
                               className={[
                                 'readonly',
                                 change ? `ax-dd-changed-cell ax-dd-change-${change.change_kind || 'converted'}` : '',
@@ -486,6 +490,11 @@ function previewStatus(dataset, rowCount, columnCount) {
 function formatValue(value) {
   if (value === null || value === undefined || value === '') return 'Blank'
   return String(value)
+}
+
+function normalizeRowIndex(value) {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : 0
 }
 
 function cssEscape(value) {
