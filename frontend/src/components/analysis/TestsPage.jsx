@@ -535,9 +535,9 @@ function Decision({ significant }) {
 // Renders an accent-colored box with a title and plain-language interpretation text.
 function Interpretation({ title, text }) {
   return (
-    <div style={{ background: 'var(--color-accent-light)', borderRadius: 6, padding: '8px 10px' }}>
+    <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, padding: '8px 10px' }}>
       <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-accent-dark)', margin: '0 0 3px' }}>{title}</p>
-      <p style={{ fontSize: 11, color: 'var(--color-accent-dark)', margin: 0, lineHeight: 1.5 }}>{text}</p>
+      <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.5 }}>{text}</p>
     </div>
   )
 }

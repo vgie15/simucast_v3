@@ -310,10 +310,10 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
             </div>
           </div>
           {groups.map((group, index) => (
-            <div key={index} className="ax-card" style={{ padding: 12, background: 'var(--color-accent-light)', border: '0.5px solid rgba(249, 115, 22, 0.28)' }}>
+            <div key={index} className="ax-card" style={{ padding: 12, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)' }}>
               <div className="ax-row" style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
+                  <span className="ax-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
                   <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>Group {index + 1}</p>
                 </div>
                 <button className="ax-btn danger" onClick={() => deleteGroup(index)} disabled={busy} type="button">

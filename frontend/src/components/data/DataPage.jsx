@@ -239,7 +239,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 
       {(dataset.sheets || []).length > 1 && (
         <div className="ax-card ax-module-card ax-card-data" style={{ marginBottom: 16 }}>
-          <div className="ax-row" style={{ alignItems: 'center' }}>
+          <div className="ax-module-head ax-workbook-head" style={{ alignItems: 'center' }}>
             <div>
               <p style={{ fontSize: 13, fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                 Workbook sheet
@@ -515,7 +515,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
         title={`Applying ${title.toLowerCase()} fix...`}
         detail="Updating the active dataset, creating a stage, and logging the step."
       />
-      <div className="ax-row" style={{ alignItems: 'flex-start', gap: 10 }}>
+      <div className="ax-module-head ax-clean-group-head" style={{ alignItems: 'flex-start', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <KindBadge kind={kind} />
@@ -858,14 +858,14 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
             key={group.action}
             style={{
               padding: '10px 12px',
-              border: '0.5px solid rgba(249, 115, 22, 0.28)',
+              border: '0.5px solid var(--color-border-tertiary)',
               borderRadius: 10,
-              background: 'var(--color-accent-light)',
+              background: 'var(--color-background-primary)',
               fontSize: 12,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-              <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
+              <span className="ax-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
               <strong>{group.label}</strong>
               <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>
                 {selectedCount}/{group.items.length} selected
@@ -1111,14 +1111,14 @@ function FeatureRecommendationCard({ recommendation }) {
   return (
     <div style={{
       padding: '10px 12px',
-      border: '0.5px solid rgba(249, 115, 22, 0.28)',
+      border: '0.5px solid var(--color-border-tertiary)',
       borderRadius: 10,
-      background: 'var(--color-accent-light)',
+      background: 'var(--color-background-primary)',
       fontSize: 12,
       marginBottom: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-        <span className="ax-chip" style={{ color: 'var(--color-accent)', background: '#fff' }}>System recommended</span>
+        <span className="ax-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
         <strong>{recommendation.label}</strong>
       </div>
       <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>

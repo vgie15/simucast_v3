@@ -189,12 +189,12 @@ input[type="range"]::-moz-range-thumb {
 }
 .ax-module-card {
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--card-tone-border) 45%, var(--color-border-tertiary));
-  box-shadow: inset 0 4px 0 var(--card-tone-border), var(--shadow-card);
+  border-color: var(--color-border-tertiary);
+  box-shadow: var(--shadow-card);
 }
 .ax-module-card:hover {
-  border-color: color-mix(in srgb, var(--card-tone-border) 65%, var(--color-border-secondary));
-  box-shadow: inset 0 4px 0 var(--card-tone-border), var(--shadow-card-hover);
+  border-color: var(--color-border-secondary);
+  box-shadow: var(--shadow-card-hover);
 }
 .ax-module-card > .ax-module-head,
 .ax-card-head {
@@ -204,7 +204,7 @@ input[type="range"]::-moz-range-thumb {
   gap: 12px;
   margin: -18px -18px 14px;
   padding: 12px 16px;
-  border-bottom: 0.5px solid color-mix(in srgb, var(--card-tone-border) 52%, transparent);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
   border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
   background: var(--card-tone-bg);
   color: var(--card-tone-text);
@@ -250,55 +250,55 @@ input[type="range"]::-moz-range-thumb {
   flex-wrap: wrap;
 }
 .ax-module-card .ax-chip {
-  border-color: color-mix(in srgb, var(--card-tone-border) 44%, var(--color-border-tertiary));
+  border-color: var(--color-border-tertiary);
 }
 .ax-card-ai,
 .ax-tone-ai {
-  --card-tone-bg: #fff4e8;
-  --card-tone-border: #fdba74;
+  --card-tone-bg: #fff7ed;
+  --card-tone-border: #fed7aa;
   --card-tone-text: #c2410c;
 }
 .ax-card-data,
 .ax-tone-data {
-  --card-tone-bg: #eff6ff;
-  --card-tone-border: #93c5fd;
+  --card-tone-bg: #f3f8ff;
+  --card-tone-border: #bfdbfe;
   --card-tone-text: #1d4ed8;
 }
 .ax-card-prep,
 .ax-tone-prep {
-  --card-tone-bg: #ecfdf5;
-  --card-tone-border: #5eead4;
+  --card-tone-bg: #f0fdfa;
+  --card-tone-border: #99f6e4;
   --card-tone-text: #0f766e;
 }
 .ax-card-model,
 .ax-tone-model {
-  --card-tone-bg: #f5f3ff;
-  --card-tone-border: #c4b5fd;
+  --card-tone-bg: #f7f5ff;
+  --card-tone-border: #ddd6fe;
   --card-tone-text: #6d28d9;
 }
 .ax-card-whatif,
 .ax-tone-whatif {
-  --card-tone-bg: #eef2ff;
-  --card-tone-border: #a5b4fc;
+  --card-tone-bg: #f4f6ff;
+  --card-tone-border: #c7d2fe;
   --card-tone-text: #4338ca;
 }
 .ax-card-report,
 .ax-tone-report {
-  --card-tone-bg: #f0fdf4;
-  --card-tone-border: #86efac;
+  --card-tone-bg: #f2fbf5;
+  --card-tone-border: #bbf7d0;
   --card-tone-text: #15803d;
 }
 .ax-card-warning,
 .ax-tone-warning {
-  --card-tone-bg: #fffbeb;
-  --card-tone-border: #fcd34d;
+  --card-tone-bg: #fffbea;
+  --card-tone-border: #fde68a;
   --card-tone-text: #b45309;
 }
 .ax-card-danger,
 .ax-tone-danger,
 .ax-settings-card.danger {
-  --card-tone-bg: #fef2f2;
-  --card-tone-border: #fca5a5;
+  --card-tone-bg: #fff5f5;
+  --card-tone-border: #fecaca;
   --card-tone-text: #b91c1c;
 }
 .ax-card-muted,
@@ -2545,14 +2545,14 @@ a.ax-btn {
 }
 
 .ax-settings-card.danger {
-  border-color: rgba(220, 38, 38, 0.28);
-  background: linear-gradient(0deg, rgba(220, 38, 38, 0.04), rgba(220, 38, 38, 0.04)), var(--color-background-primary);
+  border-color: var(--color-border-tertiary);
+  background: var(--color-background-primary);
 }
 .ax-settings-card.ax-module-card .ax-settings-card-head {
   margin: -18px -18px 0;
   padding: 12px 16px;
   background: var(--card-tone-bg);
-  border-bottom: 0.5px solid color-mix(in srgb, var(--card-tone-border) 52%, transparent);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
   border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
 }
 
@@ -3327,8 +3327,19 @@ a.ax-btn {
   margin: -14px -14px 10px;
   padding: 12px 14px;
   background: var(--card-tone-bg);
-  border-bottom: 0.5px solid color-mix(in srgb, var(--card-tone-border) 52%, transparent);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
   border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+}
+.ax-module-card > .ax-model-step-head {
+  margin: -14px -14px 12px;
+  padding: 12px 14px;
+}
+.ax-module-card > .ax-clean-group-head {
+  margin: -14px -14px 12px;
+  padding: 12px 14px;
+}
+.ax-module-card > .ax-workbook-head {
+  margin-bottom: 0;
 }
 .ax-plan-title-wrap {
   min-width: 0;
@@ -3402,8 +3413,8 @@ a.ax-btn {
   margin: 8px 0 10px;
   padding: 9px 10px;
   border-radius: 10px;
-  border: 0.5px solid rgba(249, 115, 22, 0.28);
-  background: var(--color-background-warning);
+  border: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
 }
 .ax-plan-fallback strong {
   font-size: 12px;
@@ -3662,7 +3673,7 @@ a.ax-btn {
 }
 .ax-activity-panel.ax-module-card .ax-panel-sticky-header {
   background: var(--card-tone-bg);
-  border-bottom-color: color-mix(in srgb, var(--card-tone-border) 52%, transparent);
+  border-bottom-color: var(--color-border-tertiary);
 }
 .ax-plan-list,
 .ax-activity-panel > *:not(.ax-panel-sticky-header) {
@@ -3736,7 +3747,6 @@ a.ax-btn {
   padding: 14px;
   background: var(--color-background-primary);
   box-shadow: 0 6px 18px rgba(17, 24, 39, 0.04);
-  border-top-color: color-mix(in srgb, var(--card-tone-border) 55%, var(--color-border-tertiary));
 }
 .ax-activity-details {
   margin-top: 8px;
@@ -4107,8 +4117,8 @@ a.ax-btn {
   position: relative;
 }
 .ax-data-detail.ax-module-card {
-  border-color: color-mix(in srgb, var(--card-tone-border) 45%, var(--color-border-tertiary));
-  box-shadow: inset 0 4px 0 var(--card-tone-border), var(--shadow-card);
+  border-color: var(--color-border-tertiary);
+  box-shadow: var(--shadow-card);
 }
 .ax-data-detail.expanded {
   position: fixed;
@@ -4126,7 +4136,7 @@ a.ax-btn {
 }
 .ax-data-detail.ax-module-card .ax-dd-header {
   background: var(--card-tone-bg);
-  border-bottom: 0.5px solid color-mix(in srgb, var(--card-tone-border) 52%, transparent);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
 }
 .ax-dd-title {
   display: flex;
@@ -5527,8 +5537,8 @@ a.ax-btn {
   box-shadow: 0 22px 62px rgba(15, 23, 42, 0.22);
 }
 .ax-floating-dataset-panel.ax-module-card {
-  border-color: color-mix(in srgb, var(--card-tone-border) 45%, var(--color-border-secondary));
-  box-shadow: inset 0 4px 0 var(--card-tone-border), 0 22px 62px rgba(15, 23, 42, 0.22);
+  border-color: var(--color-border-secondary);
+  box-shadow: 0 22px 62px rgba(15, 23, 42, 0.22);
 }
 .ax-floating-dataset-header {
   flex: 0 0 auto;
@@ -5542,7 +5552,7 @@ a.ax-btn {
 }
 .ax-floating-dataset-panel.ax-module-card .ax-floating-dataset-header {
   background: var(--card-tone-bg);
-  border-bottom-color: color-mix(in srgb, var(--card-tone-border) 52%, transparent);
+  border-bottom-color: var(--color-border-tertiary);
 }
 .ax-floating-dataset-panel.ax-module-card .ax-floating-dataset-mark {
   background: var(--card-tone-chip-bg);

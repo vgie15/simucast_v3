@@ -463,7 +463,7 @@ function CorrelationHeatmap({ result }) {
 // Inline accent card showing a title and a short rule-based summary blurb.
 function SummaryExplainer({ title, text }) {
   return (
-    <div className="ax-card" style={{ padding: '8px 10px', marginBottom: 8, background: 'var(--color-accent-light)' }}>
+    <div className="ax-card" style={{ padding: '8px 10px', marginBottom: 8, background: 'var(--color-background-primary)' }}>
       <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 3px' }}>{title}</p>
       <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{text}</p>
     </div>

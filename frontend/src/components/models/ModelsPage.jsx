@@ -658,7 +658,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                 </span>
               </div>
               <span />
-              <div className="ax-card" style={{ padding: '10px 12px', background: 'var(--color-background-info-soft)', borderColor: 'var(--color-border-info)' }}>
+              <div className="ax-card" style={{ padding: '10px 12px', background: 'var(--color-background-primary)', borderColor: 'var(--color-border-tertiary)' }}>
                 <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>Cross-validation rotates training and testing across {cvFolds} folds.</p>
                 <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
                   Cross-validation automatically rotates training and testing across {cvFolds} folds to produce more stable evaluation results.
@@ -691,7 +691,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             </p>
           </RecommendationPanel>
           {auth.isGuest && (
-            <div className="ax-card" style={{ padding: '10px 12px', borderColor: guestModelLimitReached ? '#E24B4A' : 'var(--color-border-info)', background: guestModelLimitReached ? '#FFF1F1' : 'var(--color-background-info-soft)' }}>
+            <div className="ax-card" style={{ padding: '10px 12px', borderColor: 'var(--color-border-tertiary)', background: 'var(--color-background-primary)' }}>
               <div className="ax-row">
                 <strong style={{ fontSize: 12 }}>Guest training usage</strong>
                 <span className="ax-chip" style={{ fontSize: 11 }}>{guestTrainingUsed}/{GUEST_MODEL_LIMIT} guest trainings used</span>
@@ -842,17 +842,10 @@ function Step({ n, title, disabled, children, id }) {
       className="ax-card ax-module-card ax-card-model"
       style={{ marginBottom: 12, opacity: disabled ? 0.55 : 1, padding: 14 }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      <div className="ax-module-head ax-model-step-head">
         <span
+          className="ax-module-icon"
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 22,
-            height: 22,
-            borderRadius: 11,
-            background: 'var(--color-text-primary)',
-            color: 'var(--color-background-primary)',
             fontSize: 11,
             fontWeight: 500,
           }}
@@ -898,7 +891,7 @@ function modelStepHelp(title) {
 // Card that surfaces a system-suggested choice with a title, source chip, and content.
 function RecommendationPanel({ title, source, children }) {
   return (
-    <div className="ax-card ax-module-card ax-card-ai" style={{ padding: '9px 10px', marginTop: 10, background: 'var(--color-background-secondary)' }}>
+    <div className="ax-card ax-module-card ax-card-ai" style={{ padding: '9px 10px', marginTop: 10, background: 'var(--color-background-primary)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
         <strong style={{ fontSize: 12 }}>{title}</strong>
         <HelpButton
