@@ -90,16 +90,18 @@ export default function ManualTransformsCard({ dataset, onApplied }) {
       <div className="ax-module-head">
         <div className="ax-module-head-main">
           <span className="ax-module-icon" aria-hidden>T</span>
-          <p className="ax-module-title">
-            Manual transforms
-            <HelpButton
-              title="Manual transforms"
-              text="Use this card for structural edits such as merging columns, splitting a column, dropping rows, or dropping columns. These are broad data-shaping actions; each applied change creates a reversible stage."
-            />
-          </p>
-          <p className="ax-module-subtitle">
-            Restructure data with merge, split, drop-column, and drop-row actions. Each apply creates a preserved stage.
-          </p>
+          <div className="ax-module-copy">
+            <p className="ax-module-title">
+              Manual transforms
+              <HelpButton
+                title="Manual transforms"
+                text="Use this card for structural edits such as merging columns, splitting a column, dropping rows, or dropping columns. These are broad data-shaping actions; each applied change creates a reversible stage."
+              />
+            </p>
+            <p className="ax-module-subtitle">
+              Restructure data with merge, split, drop-column, and drop-row actions. Each apply creates a preserved stage.
+            </p>
+          </div>
         </div>
       </div>
 

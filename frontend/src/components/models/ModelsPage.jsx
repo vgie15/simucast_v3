@@ -539,13 +539,16 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       <Step n={3} id="models-step-3" title="Preprocessing plan &amp; readiness" disabled={!target || features.length === 0}>
         <div id="fix-numeric-preprocessing" className="ax-card ax-module-card ax-card-prep" style={{ padding: 12, marginBottom: 12, background: 'var(--color-background-primary)' }}>
           <div className="ax-module-head ax-model-inner-head">
-            <p style={{ fontSize: 13, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Encoding and scaling choices
-              <HelpButton
-                title="Encoding and scaling choices"
-                text="This card controls model preprocessing. Categorical features are encoded for model input; numeric scaling is recommended for linear/logistic models and optional for tree-based models."
-              />
-            </p>
+            <div className="ax-module-head-main">
+              <span className="ax-module-icon" aria-hidden>T</span>
+              <p className="ax-module-title">
+                Encoding and scaling choices
+                <HelpButton
+                  title="Encoding and scaling choices"
+                  text="This card controls model preprocessing. Categorical features are encoded for model input; numeric scaling is recommended for linear/logistic models and optional for tree-based models."
+                />
+              </p>
+            </div>
             <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
           </div>
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
@@ -766,13 +769,16 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           {(results.models || []).length > 0 && (
             <div id="models-tuning" className="ax-card ax-module-card ax-card-model" style={{ padding: 14, marginTop: 12 }}>
               <div className="ax-module-head ax-model-inner-head">
-              <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                Tune parameters
-                <HelpButton
-                  title="Tune parameters"
-                  text="This card lets you adjust meaningful algorithm settings after an initial training run. Tuning is optional and most useful when model health warns about overfitting or when candidate models perform similarly."
-                />
-              </p>
+                <div className="ax-module-head-main">
+                  <span className="ax-module-icon" aria-hidden>M</span>
+                  <p className="ax-module-title">
+                    Tune parameters
+                    <HelpButton
+                      title="Tune parameters"
+                      text="This card lets you adjust meaningful algorithm settings after an initial training run. Tuning is optional and most useful when model health warns about overfitting or when candidate models perform similarly."
+                    />
+                  </p>
+                </div>
               </div>
               <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
                 Defaults were used for the first training run. Tuning is optional; try it when model health warns about overfitting or when metrics are close between models.
@@ -845,19 +851,15 @@ function Step({ n, title, disabled, children, id }) {
       style={{ marginBottom: 12, opacity: disabled ? 0.55 : 1, padding: 14 }}
     >
       <div className="ax-module-head ax-model-step-head">
-        <span
-          className="ax-module-icon"
-          style={{
-            fontSize: 11,
-            fontWeight: 500,
-          }}
-        >
-          {n}
-        </span>
-        <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-          {title}
-          {help && <HelpButton title={plainTitle(title)} text={help} />}
-        </p>
+        <div className="ax-module-head-main">
+          <span className="ax-module-icon" style={{ fontSize: 11, fontWeight: 500 }}>
+            {n}
+          </span>
+          <p className="ax-module-title">
+            {title}
+            {help && <HelpButton title={plainTitle(title)} text={help} />}
+          </p>
+        </div>
       </div>
       <div style={{ pointerEvents: disabled ? 'none' : 'auto' }}>{children}</div>
     </div>

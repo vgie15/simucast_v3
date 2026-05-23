@@ -203,19 +203,22 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
     return (
       <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
         <div className="ax-module-head" style={{ marginBottom: appliedSummary ? 10 : 0 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <p className="ax-module-title">Category standardization</p>
-              <HelpButton
-                title="Category standardization: what this card does"
-                text="Use this card to combine labels that mean the same thing, such as yes, Yes, and 1. This prevents categories from being split incorrectly during summaries, tests, models, what-if analysis, and reports."
-              />
-            </div>
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+          <div className="ax-module-head-main">
+            <span className="ax-module-icon" aria-hidden>T</span>
+            <div className="ax-module-copy">
+              <p className="ax-module-title">
+                Category standardization
+                <HelpButton
+                  title="Category standardization: what this card does"
+                  text="Use this card to combine labels that mean the same thing, such as yes, Yes, and 1. This prevents categories from being split incorrectly during summaries, tests, models, what-if analysis, and reports."
+                />
+              </p>
+              <p className="ax-module-subtitle">
               {suggestions.length && visibleSuggestions.length === 0
                 ? `${suggestions.length} column${suggestions.length === 1 ? '' : 's'} skipped for now.`
                 : 'No category standardization suggestions are pending.'}
             </p>
+            </div>
           </div>
           {suggestions.length && visibleSuggestions.length === 0 ? (
             <button className="ax-btn" onClick={resumeSkipped} disabled={loading}>Resume review</button>
@@ -237,20 +240,23 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   return (
     <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
       <div className="ax-module-head" style={{ marginBottom: 10 }}>
-        <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <p className="ax-module-title">Category standardization</p>
+        <div className="ax-module-head-main">
+          <span className="ax-module-icon" aria-hidden>T</span>
+          <div className="ax-module-copy">
+            <p className="ax-module-title">
+              Category standardization
               <HelpButton
                 title="Category standardization: what this card does"
                 text="Use this card to combine labels that mean the same thing, such as yes, Yes, and 1. This prevents categories from being split incorrectly during summaries, tests, models, what-if analysis, and reports."
               />
-            </div>
-          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+            </p>
+          <p className="ax-module-subtitle">
             {visibleSuggestions.length} column{visibleSuggestions.length === 1 ? '' : 's'} need review. Review, skip, or apply when useful.
           </p>
-          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+          <p className="ax-module-subtitle">
             Optional but recommended when similar labels are detected. Check the source values that belong under each final label, then apply the mapping.
           </p>
+          </div>
         </div>
         {/* buttons removed — use per-column Skip / Previous / Next controls below */}
       </div>

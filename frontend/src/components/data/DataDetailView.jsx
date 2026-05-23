@@ -433,12 +433,15 @@ export default function DataDetailView({
       />
 
       <header className="ax-dd-header">
-        <div className="ax-dd-title">
-          <strong>{dataset.filename || dataset.name}</strong>
-          <span className="ax-dd-meta">
+        <div className="ax-module-head-main">
+          <span className="ax-module-icon" aria-hidden>D</span>
+          <div className="ax-module-copy">
+            <p className="ax-module-title">{dataset.filename || dataset.name}</p>
+            <span className="ax-module-subtitle">
             ({total ? total.toLocaleString() : (dataset.row_count || 0).toLocaleString()} rows · {allColumns.length} cols
             {stageLabel ? ` · ${stageLabel}` : ''})
-          </span>
+            </span>
+          </div>
         </div>
         <div className="ax-dd-actions">
           <a

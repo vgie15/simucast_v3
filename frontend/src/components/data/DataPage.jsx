@@ -239,23 +239,28 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 
       {(dataset.sheets || []).length > 1 && (
         <div className="ax-card ax-module-card ax-card-data" style={{ marginBottom: 16 }}>
-          <div className="ax-module-head ax-workbook-head" style={{ alignItems: 'center' }}>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="ax-module-head ax-workbook-head">
+            <div className="ax-module-head-main">
+              <span className="ax-module-icon" aria-hidden>D</span>
+              <div className="ax-module-copy">
+                <p className="ax-module-title">
                 Workbook sheet
                 <HelpButton
                   title="Workbook sheet"
                   text="Use this card when an uploaded Excel file has multiple sheets. Switching sheets reloads the data preview, detected types, suggested fixes, and downstream project state."
                 />
               </p>
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+                <p className="ax-module-subtitle">
                 Select which Excel sheet powers the active dataset.
               </p>
+              </div>
             </div>
+          </div>
+          <div className="ax-module-body-row">
             <select
               value={dataset.active_sheet || ''}
               onChange={(e) => handleSheetChange(e.target.value)}
-              style={{ minWidth: 240 }}
+              style={{ minWidth: 240, width: 'min(360px, 100%)' }}
             >
               {(dataset.sheets || []).map((sheet) => (
                 <option key={sheet.name} value={sheet.name}>
@@ -1240,18 +1245,25 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
       <button
         type="button"
         className="ax-module-head ax-feature-tool-head"
-        style={{ cursor: 'pointer', font: 'inherit', width: '100%', textAlign: 'left' }}
         onClick={() => setOpen((v) => !v)}
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
-          <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
-        </svg>
-        <span style={{ fontSize: 13, fontWeight: 500 }}>Optional feature tools and numeric formatting</span>
-        <HelpButton
-          title="Optional feature tools: what this card does"
-          text="Use this card for optional enrichment and display cleanup. Create bins when grouped ranges are easier to interpret, or apply numeric formatting when decimal precision is excessive or inconsistent."
-        />
-        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>Optional: create binned features or standardize decimal places</span>
+        <div className="ax-module-head-main">
+          <span className="ax-module-icon" aria-hidden>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+              <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            </svg>
+          </span>
+          <div className="ax-module-copy">
+            <p className="ax-module-title">
+              Optional feature tools and numeric formatting
+              <HelpButton
+                title="Optional feature tools: what this card does"
+                text="Use this card for optional enrichment and display cleanup. Create bins when grouped ranges are easier to interpret, or apply numeric formatting when decimal precision is excessive or inconsistent."
+              />
+            </p>
+            <p className="ax-module-subtitle">Optional: create binned features or standardize decimal places</p>
+          </div>
+        </div>
       </button>
 
       {open && (
