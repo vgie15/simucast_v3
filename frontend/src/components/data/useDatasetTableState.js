@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 const DEFAULT_STATE = {
   viewMode: 'cleaned',
   changeScope: 'all',
+  changeType: 'all',
   activeChangeIndex: 0,
   changeStages: [],
   changeLoading: false,
@@ -21,6 +22,8 @@ function getState(key, preferredViewMode) {
       ...DEFAULT_STATE,
       viewMode: preferredViewMode || DEFAULT_STATE.viewMode,
     })
+  } else {
+    states.set(key, { ...DEFAULT_STATE, ...states.get(key) })
   }
   return states.get(key)
 }
@@ -46,6 +49,7 @@ function setPartialState(key, patch) {
   if (
     next.viewMode === current.viewMode &&
     next.changeScope === current.changeScope &&
+    next.changeType === current.changeType &&
     next.activeChangeIndex === current.activeChangeIndex &&
     next.changeStages === current.changeStages &&
     next.changeLoading === current.changeLoading
@@ -92,6 +96,15 @@ export function useDatasetTableState(datasetId, preferredViewMode = 'cleaned') {
     [key],
   )
 
+  const setChangeType = useCallback(
+    (value) => {
+      setPartialState(key, (current) => ({
+        changeType: typeof value === 'function' ? value(current.changeType) : value,
+      }))
+    },
+    [key],
+  )
+
   const setChangeStages = useCallback(
     (value) => {
       setPartialState(key, (current) => ({
@@ -118,6 +131,7 @@ export function useDatasetTableState(datasetId, preferredViewMode = 'cleaned') {
     ...state,
     setViewMode,
     setChangeScope,
+    setChangeType,
     setActiveChangeIndex,
     setChangeStages,
     setChangeLoading,

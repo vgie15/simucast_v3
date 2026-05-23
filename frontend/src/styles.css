@@ -4104,6 +4104,56 @@ a.ax-btn {
   flex-wrap: wrap;
   gap: 5px;
 }
+.ax-dd-changebar-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ax-dd-changebar-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 7px;
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ax-dd-changebar-controls label span {
+  color: var(--color-text-tertiary);
+}
+.ax-dd-changebar-controls select {
+  max-width: 190px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.ax-dd-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 28px;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 7px;
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.ax-dd-nav-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
 .ax-dd-changebar .ax-btn.mini {
   min-height: 28px;
   padding: 0 9px;

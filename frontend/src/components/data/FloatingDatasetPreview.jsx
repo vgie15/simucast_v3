@@ -32,6 +32,15 @@ const TYPE_LABEL = {
   text: 'TEXT',
   datetime: 'DATETIME',
 }
+const CHANGE_TYPE_OPTIONS = [
+  { value: 'all', label: 'All types' },
+  { value: 'missing', label: 'Missing value fixes' },
+  { value: 'outlier', label: 'Outlier changes' },
+  { value: 'removed', label: 'Removed rows' },
+  { value: 'converted', label: 'Encoded/converted values' },
+  { value: 'scaled', label: 'Scaled values' },
+  { value: 'generated', label: 'Generated columns' },
+]
 
 // Compact read-only dataset table for pages without the full Data table.
 export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) {
@@ -43,11 +52,13 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   const {
     viewMode,
     changeScope,
+    changeType,
     activeChangeIndex,
     changeStages,
     changeLoading,
     setViewMode,
     setChangeScope,
+    setChangeType,
     setActiveChangeIndex,
     setChangeStages,
     setChangeLoading,
@@ -104,8 +115,8 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
   const variableColumns = useMemo(() => (dataset?.variables || []).map((variable) => variable.name), [dataset?.variables])
   const allColumns = useMemo(
-    () => (viewMode === 'original' && rowColumns.length ? rowColumns : variableColumns),
-    [rowColumns, variableColumns, viewMode],
+    () => (rowColumns.length ? rowColumns : variableColumns),
+    [rowColumns, variableColumns],
   )
   const tableVariables = useMemo(
     () => allColumns.map((name) => (dataset?.variables || []).find((variable) => variable.name === name) || { name, dtype: 'text' }),
@@ -135,13 +146,13 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   useEffect(() => {
     setVisibleColumns((current) => {
       const filtered = current.filter((name) => allColumns.includes(name))
-      if (filtered.length) return filtered
-      return allColumns.slice(0, Math.min(10, allColumns.length))
+      if (filtered.length) return allColumns.filter((name) => filtered.includes(name))
+      return allColumns
     })
   }, [allColumns])
 
   useEffect(() => {
-    if (!datasetId || viewMode === 'original') {
+    if (!datasetId) {
       setChangeStages([])
       return
     }
@@ -212,17 +223,25 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     if (!changeStages.length) return []
     return changeScope === 'last' ? [changeStages[changeStages.length - 1]] : changeStages
   }, [changeScope, changeStages])
-  const visibleChanges = useMemo(
+  const allVisibleChanges = useMemo(
     () => scopedChangeStages.flatMap((stage) => stage.changes || []),
     [scopedChangeStages],
   )
-  const removedRows = useMemo(
+  const allRemovedRows = useMemo(
     () => scopedChangeStages.flatMap((stage) => stage.removed_rows || []),
     [scopedChangeStages],
   )
   const changedColumns = useMemo(
     () => new Set(scopedChangeStages.flatMap((stage) => stage.new_columns || [])),
     [scopedChangeStages],
+  )
+  const visibleChanges = useMemo(
+    () => allVisibleChanges.filter((change) => changeType === 'all' || changeMatchesType(change, changeType, changedColumns)),
+    [allVisibleChanges, changeType, changedColumns],
+  )
+  const removedRows = useMemo(
+    () => (changeType === 'all' || changeType === 'removed' ? allRemovedRows : []),
+    [allRemovedRows, changeType],
   )
   const changedCellMap = useMemo(() => {
     const cells = new Map()
@@ -349,31 +368,44 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                   {removedRows.length ? ` ${removedRows.length} removed row${removedRows.length === 1 ? '' : 's'} tracked.` : ''}
                 </span>
               </div>
-              <div className="ax-dd-changebar-actions">
-                <button type="button" className={`ax-btn mini ${changeScope === 'last' ? 'active' : ''}`} onClick={() => setChangeScope('last')}>
-                  Last change
-                </button>
-                <button type="button" className={`ax-btn mini ${changeScope === 'all' ? 'active' : ''}`} onClick={() => setChangeScope('all')}>
-                  All changes
-                </button>
+              <div className="ax-dd-changebar-controls">
+                <label>
+                  <span>Filter</span>
+                  <select value={changeScope} onChange={(event) => setChangeScope(event.target.value)}>
+                    <option value="all">All changes</option>
+                    <option value="last">Last change only</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Type</span>
+                  <select value={changeType} onChange={(event) => setChangeType(event.target.value)}>
+                    {CHANGE_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
                 <button type="button" className="ax-btn mini" onClick={() => setViewMode('cleaned')}>
                   Clear highlights
                 </button>
                 <button
                   type="button"
-                  className="ax-btn mini"
+                  className="ax-dd-nav-btn"
                   onClick={() => setActiveChangeIndex((value) => (visibleChanges.length ? (value - 1 + visibleChanges.length) % visibleChanges.length : 0))}
+                  aria-label="Previous changed cell"
+                  title="Previous changed cell"
                   disabled={!visibleChanges.length}
                 >
-                  Previous cell
+                  ‹
                 </button>
                 <button
                   type="button"
-                  className="ax-btn mini"
+                  className="ax-dd-nav-btn"
                   onClick={() => setActiveChangeIndex((value) => (visibleChanges.length ? (value + 1) % visibleChanges.length : 0))}
+                  aria-label="Next changed cell"
+                  title="Next changed cell"
                   disabled={!visibleChanges.length}
                 >
-                  Next cell
+                  ›
                 </button>
               </div>
             </section>
@@ -556,6 +588,19 @@ function formatVisibleChangeCount(cellCount, rowCount) {
   if (cellCount > 0) parts.push(`${cellCount} changed cell${cellCount === 1 ? '' : 's'}`)
   if (rowCount > 0) parts.push(`${rowCount} removed row${rowCount === 1 ? '' : 's'}`)
   return parts.length ? parts.join(', ') : '0 changes'
+}
+
+function changeMatchesType(change, type, changedColumns = new Set()) {
+  const kind = String(change.change_kind || '').toLowerCase()
+  const action = String(change.action_type || '').toLowerCase()
+  const method = String(change.method || '').toLowerCase()
+  const text = `${kind} ${action} ${method}`
+  if (type === 'missing') return text.includes('missing') || text.includes('fill')
+  if (type === 'outlier') return text.includes('outlier') || text.includes('cap') || text.includes('clip')
+  if (type === 'converted') return text.includes('convert') || text.includes('encode') || text.includes('standardize') || text.includes('category')
+  if (type === 'scaled') return text.includes('scale') || text.includes('standardize_numeric') || text.includes('normalize')
+  if (type === 'generated') return changedColumns.has(change.column) || text.includes('generated') || text.includes('new_column')
+  return true
 }
 
 function normalizeRowIndex(value) {
