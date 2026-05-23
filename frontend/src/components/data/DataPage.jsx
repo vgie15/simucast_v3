@@ -351,7 +351,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         {suggestionsLoading ? (
           <SkeletonCards count={3} />
         ) : suggestions.length === 0 && !(suggestionGroups.duplicates?.count > 0) ? (
-          <div className="ax-card ax-module-card ax-card-muted" style={{ padding: '10px 12px', marginBottom: 16 }}>
+          <div className="ax-card" style={{ padding: '10px 12px', marginBottom: 16 }}>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>No suggested fixes are pending. Your data looks clean.</p>
             {appliedFixSummary.length > 0 && (
               <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: 10, paddingTop: 10 }}>
@@ -459,7 +459,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
   const hasWork = kind === 'duplicates' ? duplicateCount > 0 : items.length > 0
   if (!hasWork) {
     return (
-      <div className="ax-card ax-module-card ax-card-muted" style={{ padding: '12px 14px', opacity: 0.72 }}>
+      <div className="ax-card" style={{ padding: '12px 14px', opacity: 0.72 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <KindBadge kind={kind} />
           <strong style={{ fontSize: 13 }}>{title}</strong>
@@ -1239,7 +1239,8 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
       />
       <button
         type="button"
-        style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit', width: '100%', textAlign: 'left' }}
+        className="ax-module-head ax-feature-tool-head"
+        style={{ cursor: 'pointer', font: 'inherit', width: '100%', textAlign: 'left' }}
         onClick={() => setOpen((v) => !v)}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>

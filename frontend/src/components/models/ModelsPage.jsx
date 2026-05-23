@@ -537,8 +537,8 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 
       {/* Step 3 — preprocessing plan */}
       <Step n={3} id="models-step-3" title="Preprocessing plan &amp; readiness" disabled={!target || features.length === 0}>
-        <div id="fix-numeric-preprocessing" className="ax-card ax-module-card ax-card-prep" style={{ padding: 12, marginBottom: 12, background: 'var(--color-background-secondary)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <div id="fix-numeric-preprocessing" className="ax-card ax-module-card ax-card-prep" style={{ padding: 12, marginBottom: 12, background: 'var(--color-background-primary)' }}>
+          <div className="ax-module-head ax-model-inner-head">
             <p style={{ fontSize: 13, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
               Encoding and scaling choices
               <HelpButton
@@ -765,6 +765,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           />
           {(results.models || []).length > 0 && (
             <div id="models-tuning" className="ax-card ax-module-card ax-card-model" style={{ padding: 14, marginTop: 12 }}>
+              <div className="ax-module-head ax-model-inner-head">
               <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                 Tune parameters
                 <HelpButton
@@ -772,6 +773,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                   text="This card lets you adjust meaningful algorithm settings after an initial training run. Tuning is optional and most useful when model health warns about overfitting or when candidate models perform similarly."
                 />
               </p>
+              </div>
               <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
                 Defaults were used for the first training run. Tuning is optional; try it when model health warns about overfitting or when metrics are close between models.
               </p>
@@ -802,7 +804,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {models.map((m) => (
-              <div key={m.id} className="ax-card ax-module-card ax-card-model" style={{ padding: '10px 12px' }}>
+              <div key={m.id} className="ax-card" style={{ padding: '10px 12px' }}>
                 <div className="ax-row">
                   <div>
                     <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>
@@ -891,7 +893,7 @@ function modelStepHelp(title) {
 // Card that surfaces a system-suggested choice with a title, source chip, and content.
 function RecommendationPanel({ title, source, children }) {
   return (
-    <div className="ax-card ax-module-card ax-card-ai" style={{ padding: '9px 10px', marginTop: 10, background: 'var(--color-background-primary)' }}>
+    <div className="ax-card" style={{ padding: '9px 10px', marginTop: 10, background: 'var(--color-background-primary)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
         <strong style={{ fontSize: 12 }}>{title}</strong>
         <HelpButton

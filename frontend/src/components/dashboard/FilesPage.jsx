@@ -106,16 +106,19 @@ export default function FilesPage() {
       </PageGuide>
 
       {datasets.length === 0 ? (
-        <div className="ax-card ax-module-card ax-card-muted" style={{ marginTop: 12 }}>
+        <div className="ax-card" style={{ marginTop: 12 }}>
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
             No files yet. Click <strong>Upload new file</strong> to add a .csv, .xlsx, or .xls file (max 50 MB).
           </p>
         </div>
       ) : (
-        <div className="ax-card ax-module-card ax-card-data" style={{ padding: 0, overflow: 'hidden', marginTop: 12 }}>
-          <p className="ax-lbl" style={{ margin: '14px 16px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            Uploaded files
-          </p>
+        <div className="ax-card ax-module-card ax-card-data" style={{ overflow: 'hidden', marginTop: 12 }}>
+          <div className="ax-module-head">
+            <div className="ax-module-head-main">
+              <span className="ax-module-icon" aria-hidden>D</span>
+              <p className="ax-module-title">Uploaded files</p>
+            </div>
+          </div>
           <table className="ax-tbl">
             <thead>
               <tr>

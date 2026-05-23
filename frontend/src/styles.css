@@ -3341,6 +3341,25 @@ a.ax-btn {
 .ax-module-card > .ax-workbook-head {
   margin-bottom: 0;
 }
+.ax-module-card > .ax-feature-tool-head {
+  color: var(--color-text-primary);
+}
+#fix-numeric-preprocessing > .ax-model-inner-head {
+  margin: -12px -12px 12px;
+  padding: 12px;
+}
+#models-tuning > .ax-model-inner-head {
+  margin: -14px -14px 12px;
+  padding: 12px 14px;
+}
+#whatif-section-controls > .ax-whatif-head {
+  margin: -16px -16px 14px;
+  padding: 12px 16px;
+}
+.ax-new-project-card > .ax-module-head {
+  margin: -20px -20px 14px;
+  padding: 12px 20px;
+}
 .ax-plan-title-wrap {
   min-width: 0;
   display: flex;

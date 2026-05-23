@@ -71,7 +71,7 @@ export default function DashboardPage() {
           </Link>
         </div>
         {datasets.length === 0 ? (
-          <div className="ax-card ax-module-card ax-card-muted">
+          <div className="ax-card">
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
               No projects yet. Click <strong>+ Add new project</strong> to get started.
             </p>
@@ -82,7 +82,7 @@ export default function DashboardPage() {
               <Link
                 key={d.id}
                 to={`/projects/${d.id}`}
-                className="ax-card ax-module-card ax-card-data ax-tile"
+                className="ax-card ax-tile"
               >
                 <p className="ax-tile-title">{d.name}</p>
                 {d.description && <p className="ax-tile-desc">{d.description}</p>}
@@ -108,7 +108,7 @@ export default function DashboardPage() {
           </Link>
         </div>
         {datasets.length === 0 ? (
-          <div className="ax-card ax-module-card ax-card-muted">
+          <div className="ax-card">
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
               No files yet. Files appear here when you create a project.
             </p>
@@ -119,7 +119,7 @@ export default function DashboardPage() {
               <Link
                 key={d.id}
                 to={`/projects/${d.id}`}
-                className="ax-card ax-module-card ax-card-data ax-tile"
+                className="ax-card ax-tile"
               >
                 <p className="ax-tile-title" style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                   {d.filename || d.name}
@@ -151,7 +151,7 @@ export default function DashboardPage() {
 // Card that displays a labeled summary statistic value with optional smaller text styling.
 function StatCard({ label, value, small }) {
   return (
-    <div className="ax-card ax-module-card ax-card-data">
+    <div className="ax-card">
       <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
         {label}
       </p>

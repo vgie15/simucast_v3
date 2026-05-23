@@ -123,7 +123,7 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="ax-card ax-module-card ax-card-data"
+        className="ax-card ax-module-card ax-card-data ax-new-project-card"
         style={{
           width: '100%',
           maxWidth: 520,
@@ -131,8 +131,11 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
           background: 'var(--color-background-primary)',
         }}
       >
-        <div className="ax-row" style={{ marginBottom: 12 }}>
-          <p style={{ fontSize: 15, fontWeight: 500, margin: 0 }}>New project</p>
+        <div className="ax-module-head">
+          <div className="ax-module-head-main">
+            <span className="ax-module-icon" aria-hidden>D</span>
+            <p className="ax-module-title">New project</p>
+          </div>
           <button
             className="ax-btn"
             onClick={close}

@@ -161,10 +161,29 @@ export default function WhatIfPage({ dataset, activeModel }) {
       </PageGuide>
 
       <div id="whatif-section-controls" className="ax-card ax-module-card ax-card-whatif" style={{ marginBottom: 14, padding: 16 }}>
+        <div className="ax-module-head ax-whatif-head">
+          <div className="ax-module-head-main">
+            <span className="ax-module-icon" aria-hidden>W</span>
+            <p className="ax-module-title">Prediction result</p>
+            <p className="ax-module-subtitle">
+              Predicted {isProb ? `probability${pred?.positive_class ? ` of ${pred.positive_class}` : pred?.predicted_class ? ` of ${pred.predicted_class}` : ''}` : modelFull.target}
+            </p>
+          </div>
+          {pred && (
+            <ExplainButton
+              datasetId={dataset.id}
+              step="whatif-prediction"
+              params={{ target: modelFull.target, inputs, baseline_inputs: undefined }}
+              result={{ prediction: pred, baseline, delta, extrapolation }}
+              question="Explain this scenario prediction in plain English: what changed from the baseline, why the prediction shifted in that direction, and how confident the user should be given the extrapolation risk."
+              label="Explain"
+            />
+          )}
+        </div>
         <div className="ax-row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
           <div>
             <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Predicted {isProb ? `probability${pred?.positive_class ? ` of ${pred.positive_class}` : pred?.predicted_class ? ` of ${pred.predicted_class}` : ''}` : modelFull.target}
+              Current scenario
               <HelpButton
                 title="Prediction result"
                 text="This card shows the model prediction for the current scenario. The baseline compares against the original average/default inputs, while the scenario risk warns when values go outside the training data range."
@@ -184,16 +203,6 @@ export default function WhatIfPage({ dataset, activeModel }) {
               </p>
             )}
           </div>
-          {pred && (
-            <ExplainButton
-              datasetId={dataset.id}
-              step="whatif-prediction"
-              params={{ target: modelFull.target, inputs, baseline_inputs: undefined }}
-              result={{ prediction: pred, baseline, delta, extrapolation }}
-              question="Explain this scenario prediction in plain English: what changed from the baseline, why the prediction shifted in that direction, and how confident the user should be given the extrapolation risk."
-              label="Explain"
-            />
-          )}
         </div>
         {isProb && (
           <div style={{ height: 8, background: 'var(--color-background-secondary)', borderRadius: 4, overflow: 'hidden' }}>
@@ -237,6 +246,12 @@ export default function WhatIfPage({ dataset, activeModel }) {
         See how dataset-learned values affect the prediction. Numeric controls show the observed range and mean from the training data.
       </p>
       <div className="ax-card ax-module-card ax-card-whatif">
+        <div className="ax-module-head">
+          <div className="ax-module-head-main">
+            <span className="ax-module-icon" aria-hidden>W</span>
+            <p className="ax-module-title">Adjust feature values</p>
+          </div>
+        </div>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
           <input type="checkbox" checked={restrictToRange} onChange={(e) => setRestrictToRange(e.target.checked)} />
           Restrict inputs to dataset range
@@ -366,7 +381,7 @@ function ScenarioCard({ name, prediction, baseline, extrapolation, inputs, activ
   const scenarioRisk = extrapolation?.overall_risk
   return (
     <div
-      className="ax-card ax-module-card ax-card-whatif"
+      className="ax-card"
       onClick={onClick}
       style={{ padding: '10px 12px', border: active ? '2px solid var(--color-border-info)' : undefined, cursor: onClick ? 'pointer' : undefined }}
       title={onClick ? 'Load this scenario into the adjust feature values controls.' : undefined}

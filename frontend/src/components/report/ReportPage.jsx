@@ -254,6 +254,13 @@ export default function ReportPage({ dataset }) {
         </div>
 
         <div className={`ax-card ax-module-card ax-card-report ax-busy-host ${loading ? 'is-busy' : ''}`} style={{ padding: 18, minHeight: 400 }} id="ax-report-preview">
+          <div className="ax-module-head">
+            <div className="ax-module-head-main">
+              <span className="ax-module-icon" aria-hidden>R</span>
+              <p className="ax-module-title">Report preview</p>
+              <p className="ax-module-subtitle">Generated analyses, models, scenarios, and documentation.</p>
+            </div>
+          </div>
           <BusyOverlay
             active={loading}
             title="Generating report..."
