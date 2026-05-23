@@ -22,8 +22,6 @@ function getState(key, preferredViewMode) {
       ...DEFAULT_STATE,
       viewMode: preferredViewMode || DEFAULT_STATE.viewMode,
     })
-  } else {
-    states.set(key, { ...DEFAULT_STATE, ...states.get(key) })
   }
   return states.get(key)
 }
