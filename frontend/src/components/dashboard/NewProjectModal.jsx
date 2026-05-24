@@ -16,6 +16,8 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
   const [existing, setExisting] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [loadingExisting, setLoadingExisting] = useState(false)
+  const [pendingDataset, setPendingDataset] = useState(null)
+  const [selectedSheet, setSelectedSheet] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const fileRef = useRef(null)
@@ -38,15 +40,11 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
     setDescription('')
     setFile(null)
     setSelectedId(null)
+    setPendingDataset(null)
+    setSelectedSheet('')
     setError(null)
     setBusy(false)
     if (fileRef.current) fileRef.current.value = ''
-  }
-
-  const close = () => {
-    if (busy) return
-    reset()
-    onClose()
   }
 
   const onPick = (e) => {
@@ -62,6 +60,43 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
   const onPickExisting = (d) => {
     setSelectedId(d.id)
     if (!name) setName(d.name)
+  }
+
+  const finishCreatedProject = async (result) => {
+    reset()
+    onCreated(result)
+    auth.refreshSession?.().catch(() => {})
+  }
+
+  const close = () => {
+    if (busy) return
+    if (pendingDataset) {
+      finishCreatedProject(pendingDataset)
+      return
+    }
+    reset()
+    onClose()
+  }
+
+  const continueWithSheet = async () => {
+    if (!pendingDataset) return
+    const sheetName = selectedSheet || pendingDataset.active_sheet
+    if (!sheetName) {
+      setError('Choose a workbook sheet.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const result =
+        sheetName !== pendingDataset.active_sheet
+          ? await api.selectSheet(pendingDataset.id, sheetName)
+          : pendingDataset
+      await finishCreatedProject(result)
+    } catch (err) {
+      setError(err.message || 'Failed to select workbook sheet')
+      setBusy(false)
+    }
   }
 
   const submit = async () => {
@@ -89,11 +124,17 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
         mode === 'upload'
           ? await api.uploadDataset(file, name.trim(), description.trim())
           : await api.createFromDataset(selectedId, name.trim(), description.trim())
-      // Mark the guest slot used immediately — persists even if project is later deleted
+      // Mark the guest slot used immediately; persists even if project is later deleted.
       if (auth.isGuest) markGuestSlotUsed(auth.session?.token)
-      reset()
-      onCreated(result)
-      auth.refreshSession?.().catch(() => {})
+      const sheets = Array.isArray(result.sheets) ? result.sheets : []
+      if (mode === 'upload' && sheets.length > 1) {
+        const firstUsableSheet = sheets.find((sheet) => !sheet.empty)?.name || sheets[0]?.name || ''
+        setPendingDataset(result)
+        setSelectedSheet(result.active_sheet || firstUsableSheet)
+        setBusy(false)
+        return
+      }
+      await finishCreatedProject(result)
     } catch (err) {
       if (err.guest_limit || err.auth_required) {
         auth.showAuthModal('signup')
@@ -142,132 +183,74 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
             aria-label="Close"
             style={{ padding: '2px 8px' }}
           >
-            ×
+            x
           </button>
         </div>
 
-        <div className="ax-tabs" style={{ padding: 0, marginBottom: 12 }}>
-          <button
-            type="button"
-            className={`ax-tab ${mode === 'upload' ? 'active' : ''}`}
-            onClick={() => { setMode('upload'); setError(null) }}
-            disabled={busy}
-          >
-            Upload from computer
-          </button>
-          <button
-            type="button"
-            className={`ax-tab ${mode === 'existing' ? 'active' : ''}`}
-            onClick={() => { setMode('existing'); setError(null) }}
-            disabled={busy}
-          >
-            Choose uploaded file
-          </button>
-        </div>
-
-        <label style={{ display: 'block', marginBottom: 10 }}>
-          <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Project name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Customer churn 2026"
-            disabled={busy}
-            style={inputStyle}
+        {pendingDataset ? (
+          <SheetChoiceStep
+            dataset={pendingDataset}
+            selectedSheet={selectedSheet}
+            onSelect={setSelectedSheet}
+            busy={busy}
           />
-        </label>
-
-        <label style={{ display: 'block', marginBottom: 10 }}>
-          <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Description</span>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Optional — what this dataset is for, where it came from, etc."
-            disabled={busy}
-            rows={2}
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-          />
-        </label>
-
-        {mode === 'upload' ? (
-          <div style={{ marginBottom: 12 }}>
-            <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Data file</span>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              onChange={onPick}
-              disabled={busy}
-              style={{ display: 'none' }}
-            />
-            <div className="ax-row" style={{ gap: 8 }}>
-              <button
-                className="ax-btn"
-                onClick={() => fileRef.current?.click()}
-                disabled={busy}
-                type="button"
-              >
-                {file ? 'Choose different file' : 'Upload file'}
-              </button>
-              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {file ? file.name : 'No file selected · .csv, .xlsx, .xls (max 50 MB)'}
-              </span>
-            </div>
-          </div>
         ) : (
-          <div style={{ marginBottom: 12 }}>
-            <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Pick a previously uploaded file</span>
-            <div
-              style={{
-                maxHeight: 220,
-                overflow: 'auto',
-                border: '0.5px solid var(--color-border-tertiary)',
-                borderRadius: 6,
-              }}
-            >
-              {loadingExisting ? (
-                <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', padding: 12, margin: 0 }}>
-                  Loading files…
-                </p>
-              ) : existing.length === 0 ? (
-                <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', padding: 12, margin: 0 }}>
-                  No files yet. Upload one in the other tab.
-                </p>
-              ) : (
-                existing.map((d) => {
-                  const active = d.id === selectedId
-                  return (
-                    <button
-                      key={d.id}
-                      type="button"
-                      onClick={() => onPickExisting(d)}
-                      disabled={busy}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '8px 12px',
-                        border: 0,
-                        borderBottom: '0.5px solid var(--color-border-tertiary)',
-                        background: active ? 'var(--color-accent-light)' : 'transparent',
-                        cursor: 'pointer',
-                        font: 'inherit',
-                        color: 'inherit',
-                      }}
-                    >
-                      <p style={{ fontSize: 12, fontWeight: 500, margin: 0, fontFamily: 'var(--font-mono)' }}>
-                        {d.filename || d.name}
-                      </p>
-                      <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-                        {d.row_count?.toLocaleString()} rows · {d.col_count} columns
-                        {d.created_at && ` · ${new Date(d.created_at).toLocaleDateString()}`}
-                      </p>
-                    </button>
-                  )
-                })
-              )}
+          <>
+            <div className="ax-tabs" style={{ padding: 0, marginBottom: 12 }}>
+              <button
+                type="button"
+                className={`ax-tab ${mode === 'upload' ? 'active' : ''}`}
+                onClick={() => { setMode('upload'); setError(null) }}
+                disabled={busy}
+              >
+                Upload from computer
+              </button>
+              <button
+                type="button"
+                className={`ax-tab ${mode === 'existing' ? 'active' : ''}`}
+                onClick={() => { setMode('existing'); setError(null) }}
+                disabled={busy}
+              >
+                Choose uploaded file
+              </button>
             </div>
-          </div>
+
+            <label style={{ display: 'block', marginBottom: 10 }}>
+              <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Project name</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Customer churn 2026"
+                disabled={busy}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ display: 'block', marginBottom: 10 }}>
+              <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Description</span>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional - what this dataset is for, where it came from, etc."
+                disabled={busy}
+                rows={2}
+                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </label>
+
+            {mode === 'upload' ? (
+              <UploadFileField file={file} fileRef={fileRef} busy={busy} onPick={onPick} />
+            ) : (
+              <ExistingDatasetList
+                existing={existing}
+                selectedId={selectedId}
+                loadingExisting={loadingExisting}
+                busy={busy}
+                onPickExisting={onPickExisting}
+              />
+            )}
+          </>
         )}
 
         {error && (
@@ -278,10 +261,125 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
 
         <div className="ax-row" style={{ justifyContent: 'flex-end', gap: 6 }}>
           <button className="ax-btn" onClick={close} disabled={busy} type="button">Cancel</button>
-          <button className="ax-btn prim" onClick={submit} disabled={busy} type="button">
-            {busy ? 'Creating…' : 'Create project'}
+          <button className="ax-btn prim" onClick={pendingDataset ? continueWithSheet : submit} disabled={busy} type="button">
+            {busy ? 'Creating...' : pendingDataset ? 'Open project' : 'Create project'}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function SheetChoiceStep({ dataset, selectedSheet, onSelect, busy }) {
+  return (
+    <div style={{ display: 'grid', gap: 14, marginBottom: 12 }}>
+      <div>
+        <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 750 }}>Choose workbook sheet</p>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+          This Excel file has multiple sheets. Select which one should power the active dataset before opening the project.
+        </p>
+      </div>
+      <label style={{ display: 'block' }}>
+        <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Workbook sheet</span>
+        <select
+          value={selectedSheet}
+          onChange={(e) => onSelect(e.target.value)}
+          disabled={busy}
+          style={inputStyle}
+        >
+          {(dataset.sheets || []).map((sheet) => (
+            <option key={sheet.name} value={sheet.name}>
+              {sheet.name} ({sheet.row_count} rows, {sheet.col_count} cols{sheet.empty ? ', empty' : ''})
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
+}
+
+function UploadFileField({ file, fileRef, busy, onPick }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Data file</span>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv,.xlsx,.xls"
+        onChange={onPick}
+        disabled={busy}
+        style={{ display: 'none' }}
+      />
+      <div className="ax-row" style={{ gap: 8 }}>
+        <button
+          className="ax-btn"
+          onClick={() => fileRef.current?.click()}
+          disabled={busy}
+          type="button"
+        >
+          {file ? 'Choose different file' : 'Upload file'}
+        </button>
+        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {file ? file.name : 'No file selected - .csv, .xlsx, .xls (max 50 MB)'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function ExistingDatasetList({ existing, selectedId, loadingExisting, busy, onPickExisting }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Pick a previously uploaded file</span>
+      <div
+        style={{
+          maxHeight: 220,
+          overflow: 'auto',
+          border: '0.5px solid var(--color-border-tertiary)',
+          borderRadius: 6,
+        }}
+      >
+        {loadingExisting ? (
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', padding: 12, margin: 0 }}>
+            Loading files...
+          </p>
+        ) : existing.length === 0 ? (
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', padding: 12, margin: 0 }}>
+            No files yet. Upload one in the other tab.
+          </p>
+        ) : (
+          existing.map((d) => {
+            const active = d.id === selectedId
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => onPickExisting(d)}
+                disabled={busy}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '8px 12px',
+                  border: 0,
+                  borderBottom: '0.5px solid var(--color-border-tertiary)',
+                  background: active ? 'var(--color-accent-light)' : 'transparent',
+                  cursor: 'pointer',
+                  font: 'inherit',
+                  color: 'inherit',
+                }}
+              >
+                <p style={{ fontSize: 12, fontWeight: 500, margin: 0, fontFamily: 'var(--font-mono)' }}>
+                  {d.filename || d.name}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+                  {d.row_count?.toLocaleString()} rows - {d.col_count} columns
+                  {d.created_at && ` - ${new Date(d.created_at).toLocaleDateString()}`}
+                </p>
+              </button>
+            )
+          })
+        )}
       </div>
     </div>
   )
