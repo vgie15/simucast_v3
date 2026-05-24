@@ -17,6 +17,8 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
   const [selectedId, setSelectedId] = useState(null)
   const [loadingExisting, setLoadingExisting] = useState(false)
   const [pendingDataset, setPendingDataset] = useState(null)
+  const [fileSheets, setFileSheets] = useState([])
+  const [inspectingSheets, setInspectingSheets] = useState(false)
   const [selectedSheet, setSelectedSheet] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -41,19 +43,36 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
     setFile(null)
     setSelectedId(null)
     setPendingDataset(null)
+    setFileSheets([])
+    setInspectingSheets(false)
     setSelectedSheet('')
     setError(null)
     setBusy(false)
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const onPick = (e) => {
+  const onPick = async (e) => {
     const f = e.target.files?.[0]
     if (!f) return
     setFile(f)
+    setFileSheets([])
+    setSelectedSheet('')
+    setError(null)
     if (!name) {
       const dot = f.name.lastIndexOf('.')
       setName(dot > 0 ? f.name.slice(0, dot) : f.name)
+    }
+    if (!/\.(xlsx|xls)$/i.test(f.name)) return
+    setInspectingSheets(true)
+    try {
+      const result = await api.inspectDatasetFile(f)
+      const sheets = Array.isArray(result.sheets) ? result.sheets : []
+      setFileSheets(sheets)
+      setSelectedSheet(sheets.find((sheet) => !sheet.empty)?.name || sheets[0]?.name || '')
+    } catch (err) {
+      setError(err.message || 'Could not inspect workbook sheets.')
+    } finally {
+      setInspectingSheets(false)
     }
   }
 
@@ -108,6 +127,10 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
       setError('Choose a .csv, .xlsx, or .xls file.')
       return
     }
+    if (mode === 'upload' && fileSheets.length > 0 && !selectedSheet) {
+      setError('Choose a workbook sheet.')
+      return
+    }
     if (mode === 'existing' && !selectedId) {
       setError('Pick a file from the list.')
       return
@@ -122,12 +145,12 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
     try {
       const result =
         mode === 'upload'
-          ? await api.uploadDataset(file, name.trim(), description.trim())
+          ? await api.uploadDataset(file, name.trim(), description.trim(), selectedSheet)
           : await api.createFromDataset(selectedId, name.trim(), description.trim())
       // Mark the guest slot used immediately; persists even if project is later deleted.
       if (auth.isGuest) markGuestSlotUsed(auth.session?.token)
       const sheets = Array.isArray(result.sheets) ? result.sheets : []
-      if (mode === 'upload' && sheets.length > 1) {
+      if (mode === 'upload' && sheets.length > 1 && !selectedSheet) {
         const firstUsableSheet = sheets.find((sheet) => !sheet.empty)?.name || sheets[0]?.name || ''
         setPendingDataset(result)
         setSelectedSheet(result.active_sheet || firstUsableSheet)
@@ -240,7 +263,23 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
             </label>
 
             {mode === 'upload' ? (
-              <UploadFileField file={file} fileRef={fileRef} busy={busy} onPick={onPick} />
+              <>
+                <UploadFileField file={file} fileRef={fileRef} busy={busy || inspectingSheets} onPick={onPick} />
+                {inspectingSheets && (
+                  <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
+                    Reading workbook sheets...
+                  </p>
+                )}
+                {fileSheets.length > 0 && (
+                  <SheetChoiceStep
+                    dataset={{ sheets: fileSheets }}
+                    selectedSheet={selectedSheet}
+                    onSelect={setSelectedSheet}
+                    busy={busy || inspectingSheets}
+                    inline
+                  />
+                )}
+              </>
             ) : (
               <ExistingDatasetList
                 existing={existing}
@@ -270,13 +309,15 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
   )
 }
 
-function SheetChoiceStep({ dataset, selectedSheet, onSelect, busy }) {
+function SheetChoiceStep({ dataset, selectedSheet, onSelect, busy, inline = false }) {
   return (
     <div style={{ display: 'grid', gap: 14, marginBottom: 12 }}>
       <div>
         <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 750 }}>Choose workbook sheet</p>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
-          This Excel file has multiple sheets. Select which one should power the active dataset before opening the project.
+          {inline
+            ? 'This Excel file has multiple sheets. Select which one should power the project before creating it.'
+            : 'This Excel file has multiple sheets. Select which one should power the active dataset before opening the project.'}
         </p>
       </div>
       <label style={{ display: 'block' }}>

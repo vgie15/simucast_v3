@@ -236,11 +236,28 @@ export const api = {
       body: JSON.stringify({ message, context }),
     }),
   aiChatClear: (id) => request(`/api/datasets/${id}/ai/chat`, { method: 'DELETE' }),
-  uploadDataset: async (file, name, description) => {
+  inspectDatasetFile: async (file) => {
+    let lastError = null
+    for (const base of apiBases()) {
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        const r = await fetch(`${base}/api/datasets/inspect`, { method: 'POST', body: fd, headers: authHeaders() })
+        if (!r.ok) await throwApiError(r)
+        return r.json()
+      } catch (err) {
+        lastError = err
+        if (base || !LOCAL_API_BASE) throw err
+      }
+    }
+    throw lastError || new Error('File inspection failed')
+  },
+  uploadDataset: async (file, name, description, sheet) => {
     const fd = new FormData()
     fd.append('file', file)
     if (name) fd.append('name', name)
     if (description) fd.append('description', description)
+    if (sheet) fd.append('sheet', sheet)
     return _submitDataset(fd)
   },
   createFromDataset: async (sourceId, name, description) => {

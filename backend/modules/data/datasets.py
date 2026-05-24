@@ -259,6 +259,34 @@ def _validate_upload_file(f):
 
 
 # ANCHOR: Dataset: Upload File (CSV/Excel)
+@bp.route("/api/datasets/inspect", methods=["POST"])
+def inspect_dataset_file():
+    """Return workbook sheet metadata before creating a Dataset."""
+    if "file" not in request.files:
+        return {"error": "no file"}, 400
+    f = request.files["file"]
+    ok, err, kind = _validate_upload_file(f)
+    if not ok:
+        return {"error": err}, 400
+    if kind == "csv":
+        return {"kind": "csv", "sheets": []}
+    try:
+        xls = pd.ExcelFile(f)
+        sheets = []
+        for sheet_name in xls.sheet_names:
+            sheet_df = pd.read_excel(xls, sheet_name=sheet_name)
+            sheets.append({
+                "name": str(sheet_name),
+                "row_count": int(len(sheet_df)),
+                "col_count": int(len(sheet_df.columns)),
+                "empty": bool(sheet_df.empty),
+            })
+        return {"kind": "excel", "sheets": sheets}
+    except Exception as e:
+        print(f"upload inspect failed: {e}", flush=True)
+        return {"error": "Could not read the workbook sheets. Please check the file."}, 400
+
+
 @bp.route("/api/datasets/upload", methods=["POST"])
 def upload_dataset():
     """Create a Dataset from either an uploaded file or an existing Dataset.
@@ -271,6 +299,7 @@ def upload_dataset():
     name = request.form.get("name")
     description = (request.form.get("description") or "").strip() or None
     from_id = request.form.get("from_dataset_id")
+    requested_sheet = (request.form.get("sheet") or "").strip() or None
 
     s = db()
     try:
@@ -327,7 +356,9 @@ def upload_dataset():
                         sheet_payload[str(sheet_name)] = _sheet_payload_from_df(sheet_df)
                     if not sheet_payload:
                         return {"error": "workbook has no sheets"}, 400
-                    active_sheet = str(xls.sheet_names[0])
+                    if requested_sheet and requested_sheet not in sheet_payload:
+                        return {"error": f"sheet '{requested_sheet}' not found"}, 400
+                    active_sheet = requested_sheet or str(xls.sheet_names[0])
                     sheets = sheet_payload
                     df = pd.DataFrame(sheet_payload[active_sheet]["data"])
             except Exception as e:
