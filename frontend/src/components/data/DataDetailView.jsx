@@ -112,9 +112,10 @@ export default function DataDetailView({
 
   const [expanded, setExpanded] = useState(false)
 
+  const effectiveVisibleColumns = visibleColumns.length ? visibleColumns : allColumns
   const visibleVariables = useMemo(
-    () => visibleColumns.map((name) => tableVariables.find((v) => v.name === name)).filter(Boolean),
-    [visibleColumns, tableVariables],
+    () => effectiveVisibleColumns.map((name) => tableVariables.find((v) => v.name === name)).filter(Boolean),
+    [effectiveVisibleColumns, tableVariables],
   )
 
   const effectiveStageId = viewMode === 'original' ? 'original' : stageId
@@ -254,7 +255,7 @@ export default function DataDetailView({
     const active = visibleChanges[activeChangeIndex]
     if (!active) return
     const activeRowIndex = normalizeRowIndex(active.row_index)
-    if (!visibleColumns.includes(active.column)) {
+    if (!effectiveVisibleColumns.includes(active.column)) {
       setVisibleColumns((current) => [...current, active.column].filter((name, index, list) => list.indexOf(name) === index))
     }
     const targetPage = Math.floor(activeRowIndex / PAGE_SIZE) + 1
@@ -272,7 +273,7 @@ export default function DataDetailView({
       window.setTimeout(() => cell?.classList.remove('ax-dd-change-focus'), 1300)
     }, 40)
     return () => window.clearTimeout(timer)
-  }, [activeChangeIndex, page, rows, viewMode, visibleChanges, visibleColumns])
+  }, [activeChangeIndex, page, rows, viewMode, visibleChanges, effectiveVisibleColumns])
 
   // infinite scroll
   const sentinelRef = useRef(null)
@@ -482,7 +483,7 @@ export default function DataDetailView({
 
       {renderToolbar?.({
         allColumns,
-        visibleColumns,
+        visibleColumns: effectiveVisibleColumns,
         setVisibleColumns,
         viewSort,
         setViewSort,
@@ -550,7 +551,7 @@ export default function DataDetailView({
           <div className="ax-dd-tabs-right">
             <ColumnVisibilityMenu
               allColumns={allColumns}
-              selected={visibleColumns}
+              selected={effectiveVisibleColumns}
               onApply={setVisibleColumns}
             />
           </div>
@@ -659,17 +660,17 @@ export default function DataDetailView({
           <tbody>
             {loading && !hasBaseRows && (
               <tr className="ax-dd-state-row">
-                <td colSpan={(visibleColumns.length || 1) + 1}>Loading the current dataset rows...</td>
+                <td colSpan={(effectiveVisibleColumns.length || 1) + 1}>Loading the current dataset rows...</td>
               </tr>
             )}
             {rowError && !hasBaseRows && (
               <tr className="ax-dd-state-row error">
-                <td colSpan={(visibleColumns.length || 1) + 1}>{rowError}</td>
+                <td colSpan={(effectiveVisibleColumns.length || 1) + 1}>{rowError}</td>
               </tr>
             )}
             {!loading && !rowError && !hasBaseRows && (
               <tr className="ax-dd-state-row">
-                <td colSpan={(visibleColumns.length || 1) + 1}>No rows are available for this dataset stage.</td>
+                <td colSpan={(effectiveVisibleColumns.length || 1) + 1}>No rows are available for this dataset stage.</td>
               </tr>
             )}
             {displayRows.map((row) => {
@@ -678,7 +679,7 @@ export default function DataDetailView({
               return (
               <tr key={row.__removed_key || row.__row_index} className={removedRow ? 'ax-dd-removed-row' : ''}>
                 <th scope="row" className="ax-dd-rownum">{removedRow ? `${rowIndex + 1} removed` : rowIndex + 1}</th>
-                {visibleColumns.map((col) => {
+                {effectiveVisibleColumns.map((col) => {
                   const change = !removedRow && viewMode === 'highlight' ? changedCellMap.get(`${rowIndex}:${col}`) : null
                   return (
                     <td
@@ -702,7 +703,7 @@ export default function DataDetailView({
               )
             })}
             <tr ref={sentinelRef} className="ax-dd-sentinel">
-              <td colSpan={(visibleColumns.length || 1) + 1}>
+              <td colSpan={(effectiveVisibleColumns.length || 1) + 1}>
                 {loading
                   ? 'Loading…'
                   : hasMore
