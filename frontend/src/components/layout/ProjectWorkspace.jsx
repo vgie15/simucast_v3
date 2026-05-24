@@ -203,7 +203,7 @@ export default function ProjectWorkspace() {
       <div className="ax-workspace-main">
         <div className="ax-workflow-header">
           <Link to="/projects" className="ax-project-brand" title={dataset.name}>
-            <span className="ax-project-mark">SC</span>
+            <span className="ax-project-mark"><img src="/simucast-logo.png" alt="SimuCast logo" /></span>
             <span>SimuCast</span>
           </Link>
           <div className="ax-subnav">

@@ -2934,10 +2934,14 @@ a.ax-btn {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: var(--color-accent);
-  color: #fff7ed;
-  font-size: 13px;
-  font-weight: 800;
+  background: var(--color-accent-light);
+  overflow: hidden;
+}
+.ax-project-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 .ax-history-button {
   min-height: 36px;
