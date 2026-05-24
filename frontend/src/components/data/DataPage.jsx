@@ -393,7 +393,6 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
       <div className="ax-module-head ax-clean-group-head" style={{ alignItems: 'flex-start', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <KindBadge kind={kind} />
             <strong style={{ fontSize: 14 }}>{title}</strong>
             <HelpButton title={`${title}: what this card does`} text={helpTextForCleanCard(kind)} />
             <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
@@ -615,6 +614,7 @@ function DataToolsToolbar({
   return (
     <div className="ax-data-toolbar-shell">
       <div className="ax-data-toolbar" role="toolbar" aria-label="Dataset tools">
+        <span className="ax-data-toolbar-title">Dataset tools</span>
         {groups.map((group) => (
           <div className="ax-data-toolbar-group" key={group.label}>
             <span className="ax-data-toolbar-group-label">{group.label}</span>
@@ -633,7 +633,7 @@ function DataToolsToolbar({
           <ToolbarButton
             tool={{
               key: 'columns',
-              label: `${visibilityProps.visibleColumns.length} of ${visibilityProps.allColumns.length}`,
+              label: `${visibilityProps.visibleColumns.length}/${visibilityProps.allColumns.length}`,
               icon: 'eye',
               tip: 'Show or hide columns',
             }}
@@ -663,7 +663,7 @@ function DataToolsToolbar({
                     <span className="ax-rec-toggle-track" aria-hidden="true" />
                   </label>
                 )}
-                <button type="button" className="ax-dd-nav-btn" onClick={close} aria-label="Close tool">x</button>
+                <button type="button" className="ax-popover-close" onClick={close} aria-label="Close tool">×</button>
               </div>
             </div>
             <div className="ax-data-toolbar-popover-body">

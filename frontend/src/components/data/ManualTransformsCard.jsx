@@ -110,18 +110,20 @@ export default function ManualTransformsCard({ dataset, onApplied, initialTab = 
         </div>
       )}
 
-      <div className="ax-tabs" style={{ padding: 0, marginBottom: 12, flexWrap: 'wrap' }}>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`ax-tab ${tab === t.key ? 'active' : ''}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {!compact && (
+        <div className="ax-tabs" style={{ padding: 0, marginBottom: 12, flexWrap: 'wrap' }}>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`ax-tab ${tab === t.key ? 'active' : ''}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <Form tab={tab} params={params} setParams={setParams} variables={variables} />
 
