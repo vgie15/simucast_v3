@@ -19,8 +19,8 @@ const TABS = [
  * /transform?preview=true call so the user sees the result on a 20-row
  * sample before applying. Apply commits a new versioned stage.
  */
-export default function ManualTransformsCard({ dataset, onApplied }) {
-  const [tab, setTab] = useState('merge')
+export default function ManualTransformsCard({ dataset, onApplied, initialTab = 'merge', compact = false }) {
+  const [tab, setTab] = useState(initialTab)
   const [params, setParams] = useState({})
   const [preview, setPreview] = useState(null)
   const [previewing, setPreviewing] = useState(false)
@@ -33,6 +33,10 @@ export default function ManualTransformsCard({ dataset, onApplied }) {
     setPreview(null)
     setError(null)
   }, [tab, dataset?.id])
+
+  useEffect(() => {
+    setTab(initialTab)
+  }, [initialTab])
 
   const op = opForTab(tab)
   const variables = dataset.variables || []
@@ -86,23 +90,25 @@ export default function ManualTransformsCard({ dataset, onApplied }) {
   }
 
   return (
-    <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
-      <div className="ax-module-head">
-        <div className="ax-module-head-main">
-          <div className="ax-module-copy">
-            <p className="ax-module-title">
-              Manual transforms
-              <HelpButton
-                title="Manual transforms"
-                text="Use this card for structural edits such as merging columns, splitting a column, dropping rows, or dropping columns. These are broad data-shaping actions; each applied change creates a reversible stage."
-              />
-            </p>
-            <p className="ax-module-subtitle">
-              Restructure data with merge, split, drop-column, and drop-row actions. Each apply creates a preserved stage.
-            </p>
+    <div className={`ax-card ax-module-card ax-card-prep ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
+      {!compact && (
+        <div className="ax-module-head">
+          <div className="ax-module-head-main">
+            <div className="ax-module-copy">
+              <p className="ax-module-title">
+                Manual transforms
+                <HelpButton
+                  title="Manual transforms"
+                  text="Use this card for structural edits such as merging columns, splitting a column, dropping rows, or dropping columns. These are broad data-shaping actions; each applied change creates a reversible stage."
+                />
+              </p>
+              <p className="ax-module-subtitle">
+                Restructure data with merge, split, drop-column, and drop-row actions. Each apply creates a preserved stage.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="ax-tabs" style={{ padding: 0, marginBottom: 12, flexWrap: 'wrap' }}>
         {TABS.map((t) => (

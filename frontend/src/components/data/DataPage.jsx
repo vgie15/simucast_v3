@@ -278,6 +278,17 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
           refreshKey={historyKey}
           preferredViewMode={tableViewMode}
           onDataChanged={handleApplied}
+          renderToolbar={(visibilityProps) => (
+            <DataToolsToolbar
+              dataset={dataset}
+              suggestionGroups={suggestionGroups}
+              suggestionsLoading={suggestionsLoading}
+              applyingGroup={applyingGroup}
+              onApplyGroup={applyGroupFix}
+              onApplied={handleApplied}
+              visibilityProps={visibilityProps}
+            />
+          )}
         />
         {viewStageId !== 'current' && (
           <div style={{ marginTop: 8, textAlign: 'right' }}>
@@ -652,6 +663,379 @@ function StatCard({ label, value }) {
       </p>
       <p style={{ fontSize: 22, fontWeight: 500, margin: '4px 0 0' }}>{value}</p>
     </div>
+  )
+}
+
+function DataToolsToolbar({
+  dataset,
+  suggestionGroups,
+  suggestionsLoading,
+  applyingGroup,
+  onApplyGroup,
+  onApplied,
+  visibilityProps,
+}) {
+  const [openTool, setOpenTool] = useState(null)
+  const [popoverX, setPopoverX] = useState(18)
+  const close = () => setOpenTool(null)
+  const variables = dataset?.variables || []
+  const missingCount = suggestionGroups.missing?.columns?.length || 0
+  const outlierCount = suggestionGroups.outliers?.columns?.length || 0
+  const duplicateCount = suggestionGroups.duplicates?.count || 0
+  const labelCount = variables.filter((v) => ['category', 'text', 'binary'].includes(v.dtype)).length
+  const hasIssue = {
+    missing: missingCount > 0,
+    outliers: outlierCount > 0,
+    duplicates: duplicateCount > 0,
+    labels: labelCount > 0,
+  }
+
+  const groups = [
+    {
+      label: 'Quality',
+      tools: [
+        { key: 'missing', label: 'Missing', icon: 'circle-dotted', tip: 'Review missing values', issue: hasIssue.missing },
+        { key: 'outliers', label: 'Outliers', icon: 'alert-triangle', tip: 'Review outliers', issue: hasIssue.outliers },
+        { key: 'duplicates', label: 'Duplicates', icon: 'copy-off', tip: 'Review duplicate rows', issue: hasIssue.duplicates },
+      ],
+    },
+    {
+      label: 'Transform',
+      tools: [
+        { key: 'labels', label: 'Labels', icon: 'tag', tip: 'Standardize labels', issue: hasIssue.labels },
+        { key: 'bin', label: 'Bin', icon: 'chart-histogram', tip: 'Create binned columns' },
+        { key: 'scale', label: 'Scale', icon: 'ruler-measure', tip: 'Scale or round numeric values' },
+        { key: 'encode', label: 'Encode', icon: 'hash', tip: 'Prepare encoded values' },
+      ],
+    },
+    {
+      label: 'Structure',
+      tools: [
+        { key: 'merge', label: 'Merge', icon: 'layout-columns', tip: 'Merge columns' },
+        { key: 'split', label: 'Split', icon: 'columns', tip: 'Split a column' },
+        { key: 'drop_cols', label: 'Drop Col', icon: 'column-remove', tip: 'Drop columns' },
+        { key: 'drop_rows', label: 'Drop Row', icon: 'row-remove', tip: 'Drop matching rows' },
+        { key: 'rename', label: 'Rename', icon: 'pencil', tip: 'Rename columns' },
+      ],
+    },
+    {
+      label: 'View',
+      tools: [
+        { key: 'sort', label: 'Sort', icon: 'arrows-sort', tip: 'Sort the table view' },
+        { key: 'filter', label: 'Filter', icon: 'filter', tip: 'Filter the table view' },
+      ],
+    },
+  ]
+
+  const toolMap = Object.fromEntries(groups.flatMap((group) => group.tools.map((tool) => [tool.key, tool])))
+  const activeTool = openTool === 'columns'
+    ? { key: 'columns', label: 'Columns', icon: 'eye' }
+    : toolMap[openTool]
+  const openFromButton = (toolKey, event) => {
+    const shell = event.currentTarget.closest('.ax-data-toolbar-shell')
+    const shellLeft = shell?.getBoundingClientRect().left || 0
+    const buttonLeft = event.currentTarget.getBoundingClientRect().left
+    const maxLeft = Math.max(8, (shell?.clientWidth || 430) - 420)
+    setPopoverX(Math.min(maxLeft, Math.max(8, buttonLeft - shellLeft)))
+    setOpenTool((current) => (current === toolKey ? null : toolKey))
+  }
+
+  return (
+    <div className="ax-data-toolbar-shell">
+      <div className="ax-data-toolbar" role="toolbar" aria-label="Dataset tools">
+        {groups.map((group) => (
+          <div className="ax-data-toolbar-group" key={group.label}>
+            <span className="ax-data-toolbar-group-label">{group.label}</span>
+            {group.tools.map((tool) => (
+              <ToolbarButton
+                key={tool.key}
+                tool={tool}
+                active={openTool === tool.key}
+                onClick={(event) => openFromButton(tool.key, event)}
+              />
+            ))}
+          </div>
+        ))}
+        <div className="ax-data-toolbar-spacer" />
+        <div className="ax-data-toolbar-group ax-data-toolbar-group-last">
+          <ToolbarButton
+            tool={{
+              key: 'columns',
+              label: `${visibilityProps.visibleColumns.length} of ${visibilityProps.allColumns.length}`,
+              icon: 'eye',
+              tip: 'Show or hide columns',
+            }}
+            active={openTool === 'columns'}
+            onClick={(event) => openFromButton('columns', event)}
+          />
+        </div>
+      </div>
+      {openTool && (
+        <>
+          <button className="ax-data-toolbar-overlay" type="button" aria-label="Close data tool" onClick={close} />
+          <div className="ax-data-toolbar-popover" style={{ left: popoverX }}>
+            <div className="ax-data-toolbar-popover-head">
+              <div>
+                <TablerIcon name={activeTool?.icon || 'tool'} />
+                <strong>{activeTool?.label || 'Columns'}</strong>
+              </div>
+              <button type="button" className="ax-dd-nav-btn" onClick={close} aria-label="Close tool">x</button>
+            </div>
+            <div className="ax-data-toolbar-popover-body">
+              {suggestionsLoading && ['missing', 'outliers', 'duplicates'].includes(openTool) ? (
+                <p className="ax-data-toolbar-note">Loading detected issues...</p>
+              ) : (
+                <ToolbarPopoverContent
+                  toolKey={openTool}
+                  dataset={dataset}
+                  group={groupForTool(openTool, suggestionGroups)}
+                  applying={applyingGroup === openTool}
+                  onApplyGroup={onApplyGroup}
+                  onApplied={async (...args) => {
+                    close()
+                    await onApplied?.(...args)
+                  }}
+                  visibilityProps={visibilityProps}
+                  close={close}
+                />
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ToolbarButton({ tool, active, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`ax-data-tool-btn ${active ? 'active' : ''}`}
+      data-tip={tool.tip}
+      onClick={onClick}
+    >
+      <span className="ax-data-tool-icon-wrap">
+        <TablerIcon name={tool.icon} />
+        {tool.issue && <span className="ax-data-tool-dot" />}
+      </span>
+      <span>{tool.label}</span>
+    </button>
+  )
+}
+
+function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup, onApplied, visibilityProps, close }) {
+  if (toolKey === 'columns') {
+    return (
+      <ColumnVisibilityPanel
+        allColumns={visibilityProps.allColumns}
+        selected={visibilityProps.visibleColumns}
+        onApply={(next) => {
+          visibilityProps.setVisibleColumns(next)
+          close?.()
+        }}
+      />
+    )
+  }
+  if (['missing', 'outliers', 'duplicates'].includes(toolKey)) {
+    const title = toolKey === 'missing' ? 'Missing values' : toolKey === 'outliers' ? 'Outliers' : 'Duplicates'
+    const description = toolKey === 'missing'
+      ? 'Fill or drop blank values across selected columns.'
+      : toolKey === 'outliers'
+      ? 'Cap or remove extreme numeric values.'
+      : 'Remove exact duplicate rows from the current stage.'
+    return (
+      <CleanGroupCard
+        datasetId={dataset.id}
+        stageId={dataset.current_stage_id}
+        group={group}
+        kind={toolKey}
+        title={title}
+        description={description}
+        applying={applying}
+        onApply={async (payload) => {
+          await onApplyGroup(payload)
+          close?.()
+        }}
+      />
+    )
+  }
+  if (toolKey === 'labels') {
+    return <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} />
+  }
+  if (['merge', 'split', 'drop_cols', 'drop_rows', 'rename'].includes(toolKey)) {
+    return <ManualTransformsCard dataset={dataset} onApplied={onApplied} initialTab={toolKey} compact />
+  }
+  if (toolKey === 'bin') {
+    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="bins" compact />
+  }
+  if (toolKey === 'scale') {
+    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="scale" compact />
+  }
+  if (toolKey === 'encode') {
+    return (
+      <div className="ax-data-toolbar-panel">
+        <p className="ax-data-toolbar-note">
+          Encoding is currently applied automatically in Models during preprocessing. Use Labels first to standardize source categories before training.
+        </p>
+        <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} />
+      </div>
+    )
+  }
+  if (toolKey === 'sort') {
+    return <SortTool variables={dataset.variables || []} visibilityProps={visibilityProps} close={close} />
+  }
+  if (toolKey === 'filter') {
+    return <FilterTool variables={dataset.variables || []} visibilityProps={visibilityProps} close={close} />
+  }
+  return null
+}
+
+function SortTool({ variables, visibilityProps, close }) {
+  const [column, setColumn] = useState(visibilityProps.viewSort?.column || variables[0]?.name || '')
+  const [order, setOrder] = useState(visibilityProps.viewSort?.order || 'asc')
+  return (
+    <div className="ax-data-toolbar-panel">
+      <p className="ax-data-toolbar-note">Sort changes the table view only. It does not modify the dataset.</p>
+      <div className="ax-data-toolbar-form-grid">
+        <label>Column</label>
+        <select value={column} onChange={(e) => setColumn(e.target.value)}>
+          {variables.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+        </select>
+        <label>Order</label>
+        <select value={order} onChange={(e) => setOrder(e.target.value)}>
+          <option value="asc">Ascending</option>
+          <option value="desc">Descending</option>
+        </select>
+      </div>
+      <div className="ax-row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+        <button className="ax-btn" type="button" onClick={() => visibilityProps.setViewSort({ column: '', order: 'asc' })}>Clear</button>
+        <button className="ax-btn prim" type="button" onClick={() => { visibilityProps.setViewSort({ column, order }); close?.() }}>Apply</button>
+      </div>
+    </div>
+  )
+}
+
+function FilterTool({ variables, visibilityProps, close }) {
+  const [column, setColumn] = useState(visibilityProps.viewFilter?.column || variables[0]?.name || '')
+  const [condition, setCondition] = useState(visibilityProps.viewFilter?.condition || 'contains')
+  const [value, setValue] = useState(visibilityProps.viewFilter?.value || '')
+  return (
+    <div className="ax-data-toolbar-panel">
+      <p className="ax-data-toolbar-note">Filter changes the table view only. It does not modify the dataset.</p>
+      <div className="ax-data-toolbar-form-grid">
+        <label>Column</label>
+        <select value={column} onChange={(e) => setColumn(e.target.value)}>
+          {variables.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+        </select>
+        <label>Condition</label>
+        <select value={condition} onChange={(e) => setCondition(e.target.value)}>
+          <option value="contains">contains</option>
+          <option value="equals">equals</option>
+          <option value="missing">is missing</option>
+          <option value="gt">greater than</option>
+          <option value="lt">less than</option>
+        </select>
+        {condition !== 'missing' && (
+          <>
+            <label>Value</label>
+            <input type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Filter value" />
+          </>
+        )}
+      </div>
+      <div className="ax-row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+        <button className="ax-btn" type="button" onClick={() => visibilityProps.setViewFilter({ column: '', condition: 'contains', value: '' })}>Clear</button>
+        <button className="ax-btn prim" type="button" onClick={() => { visibilityProps.setViewFilter({ column, condition, value }); close?.() }}>Apply</button>
+      </div>
+    </div>
+  )
+}
+
+function ColumnVisibilityPanel({ allColumns, selected, onApply }) {
+  const [pending, setPending] = useState(selected)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    setPending(selected)
+  }, [selected.join('|')])
+
+  const filtered = allColumns.filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()))
+  const allFilteredSelected = filtered.length > 0 && filtered.every((name) => pending.includes(name))
+  const toggleColumn = (name) => {
+    setPending((current) => current.includes(name)
+      ? current.filter((item) => item !== name)
+      : [...current, name])
+  }
+
+  return (
+    <div className="ax-data-toolbar-panel">
+      <input
+        type="text"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search columns..."
+      />
+      <div className="ax-colvis-summary">
+        <label className="ax-colvis-row">
+          <input
+            type="checkbox"
+            checked={allFilteredSelected}
+            onChange={() => {
+              setPending((current) => allFilteredSelected
+                ? current.filter((name) => !filtered.includes(name))
+                : Array.from(new Set([...current, ...filtered])))
+            }}
+          />
+          <span>Select all{search ? ` (${filtered.length})` : ''}</span>
+        </label>
+        <span className="ax-colvis-count">{pending.length} of {allColumns.length} selected</span>
+      </div>
+      <div className="ax-colvis-list inline">
+        {filtered.map((name) => (
+          <label key={name} className="ax-colvis-row">
+            <input type="checkbox" checked={pending.includes(name)} onChange={() => toggleColumn(name)} />
+            <span title={name}>{name}</span>
+          </label>
+        ))}
+      </div>
+      <div className="ax-row" style={{ justifyContent: 'flex-end' }}>
+        <button type="button" className="ax-btn prim" onClick={() => onApply(allColumns.filter((name) => pending.includes(name)))}>
+          Apply
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function groupForTool(toolKey, groups) {
+  if (toolKey === 'missing') return groups.missing
+  if (toolKey === 'outliers') return groups.outliers
+  if (toolKey === 'duplicates') return groups.duplicates
+  return null
+}
+
+function TablerIcon({ name }) {
+  const path = {
+    'circle-dotted': <><circle cx="12" cy="12" r="8" /><path d="M12 4v.01M12 20v.01M4 12h.01M20 12h.01" /></>,
+    'alert-triangle': <><path d="M12 3l9 16H3L12 3z" /><path d="M12 9v4M12 17h.01" /></>,
+    'copy-off': <><path d="M8 8h8v8H8z" /><path d="M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1M4 4l16 16" /></>,
+    tag: <><path d="M4 4h6l10 10-6 6L4 10V4z" /><circle cx="8" cy="8" r="1" /></>,
+    'chart-histogram': <><path d="M4 19h16" /><path d="M7 16V9M12 16V5M17 16v-3" /></>,
+    'ruler-measure': <><path d="M4 15l11-11 5 5-11 11-5-5z" /><path d="M8 15l-1-1M11 12l-1-1M14 9l-1-1" /></>,
+    hash: <><path d="M5 9h14M5 15h14M9 4L7 20M17 4l-2 16" /></>,
+    'layout-columns': <><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M12 5v14" /></>,
+    columns: <><path d="M6 5h5v14H6zM13 5h5v14h-5z" /></>,
+    'column-remove': <><path d="M5 5h14v14H5zM12 5v14M9 12h6" /></>,
+    'row-remove': <><path d="M5 5h14v14H5zM5 12h14M9 16h6" /></>,
+    pencil: <><path d="M4 20h4l11-11-4-4L4 16v4z" /><path d="M13 7l4 4" /></>,
+    'arrows-sort': <><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3" /></>,
+    filter: <><path d="M4 5h16l-6 7v5l-4 2v-7L4 5z" /></>,
+    eye: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
+  }[name] || <path d="M5 12h14" />
+  return (
+    <svg className="ax-data-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+      {path}
+    </svg>
   )
 }
 
@@ -1127,10 +1511,10 @@ function FeatureRecommendationCard({ recommendation }) {
 }
 
 // Card offering binning and numeric formatting tools for creating new feature columns.
-function FeatureEngineeringCard({ dataset, onApplied }) {
+function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', compact = false }) {
   const auth = useAuth()
-  const [open, setOpen] = useState(false)
-  const [tool, setTool] = useState('bins') // 'bins' | 'format'
+  const [open, setOpen] = useState(compact)
+  const [tool, setTool] = useState(initialTool) // 'bins' | 'scale' | 'format'
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
@@ -1151,8 +1535,16 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
   const [fmtOp, setFmtOp] = useState('round')
   const [fmtParam, setFmtParam] = useState('2')
   const [fmtNewName, setFmtNewName] = useState('')
+  const [scaleCol, setScaleCol] = useState('')
+  const [scaleMethod, setScaleMethod] = useState('minmax')
+  const [scaleNewName, setScaleNewName] = useState('')
   const binRecommendation = recommendBinning(numericVariables)
   const formatRecommendation = recommendNumericFormatting(numericVariables)
+
+  useEffect(() => {
+    setTool(initialTool)
+    if (compact) setOpen(true)
+  }, [initialTool, compact])
 
   useEffect(() => {
     if (!binCol && binRecommendation?.column) {
@@ -1168,6 +1560,12 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
       setFmtParam('2')
     }
   }, [formatRecommendation?.column, fmtCol])
+
+  useEffect(() => {
+    if (!scaleCol && numericVariables[0]?.name) {
+      setScaleCol(numericVariables[0].name)
+    }
+  }, [numericVariables[0]?.name, scaleCol])
 
   useEffect(() => {
     setAiSuggestion(null)
@@ -1189,9 +1587,11 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
         system_recommendation: activeRecommendation || null,
         selected_options: tool === 'bins'
           ? { column: binCol, bins: binCount, labels: binLabels, new_name: binNewName || `${binCol || 'column'}_bin` }
+          : tool === 'scale'
+          ? { column: scaleCol, method: scaleMethod, new_name: scaleNewName || `${scaleCol}_${scaleMethod}` }
           : { column: fmtCol, operation: fmtOp, decimals: fmtParam, new_name: fmtNewName || fmtCol },
         numeric_columns: numericVariables.map((v) => ({ name: v.name, type: v.dtype, unique: v.unique })),
-        supported_actions: ['create bins', 'numeric formatting'],
+        supported_actions: ['create bins', 'scale numeric values', 'numeric formatting'],
       }
       const r = await api.aiExplain(
         dataset.id,
@@ -1216,6 +1616,11 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
       if (tool === 'bins') {
         if (!binCol) { setMsg('Select a column to bin.'); setBusy(false); return }
         body = { operation: 'bin', column: binCol, bins: Number(binCount), labels: binLabels ? binLabels.split(',').map((s) => s.trim()) : null, new_name: binNewName || `${binCol}_bin` }
+      } else if (tool === 'scale') {
+        if (!scaleCol) { setMsg('Select a column.'); setBusy(false); return }
+        body = scaleMethod === 'decimal'
+          ? { operation: 'round', column: scaleCol, param: '2', new_name: scaleNewName || scaleCol }
+          : { operation: scaleMethod, column: scaleCol, new_name: scaleNewName || `${scaleCol}_${scaleMethod}` }
       } else if (tool === 'format') {
         if (!fmtCol) { setMsg('Select a column.'); setBusy(false); return }
         body = { operation: 'round', column: fmtCol, param: fmtParam, new_name: fmtNewName || fmtCol }
@@ -1231,38 +1636,40 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
   }
 
   return (
-    <div className={`ax-card ax-module-card ax-card-prep ax-busy-host ${busy ? 'is-busy' : ''}`} style={{ marginBottom: 16 }}>
+    <div className={`ax-card ax-module-card ax-card-prep ax-busy-host ${busy ? 'is-busy' : ''} ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
       <BusyOverlay
         active={busy}
         title={tool === 'format' ? 'Formatting numeric values...' : 'Applying feature engineering...'}
         detail="Creating a new dataset stage and refreshing the data preparation workspace."
       />
-      <button
-        type="button"
-        className="ax-module-head ax-feature-tool-head"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <div className="ax-module-head-main">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', color: 'var(--card-tone-text)', flex: '0 0 auto' }}>
-            <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          </svg>
-          <div className="ax-module-copy">
-            <p className="ax-module-title">
-              Optional feature tools and numeric formatting
-              <HelpButton
-                title="Optional feature tools: what this card does"
-                text="Use this card for optional enrichment and display cleanup. Create bins when grouped ranges are easier to interpret, or apply numeric formatting when decimal precision is excessive or inconsistent."
-              />
-            </p>
-            <p className="ax-module-subtitle">Optional: create binned features or standardize decimal places</p>
+      {!compact && (
+        <button
+          type="button"
+          className="ax-module-head ax-feature-tool-head"
+          onClick={() => setOpen((v) => !v)}
+        >
+          <div className="ax-module-head-main">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', color: 'var(--card-tone-text)', flex: '0 0 auto' }}>
+              <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            </svg>
+            <div className="ax-module-copy">
+              <p className="ax-module-title">
+                Optional feature tools and numeric formatting
+                <HelpButton
+                  title="Optional feature tools: what this card does"
+                  text="Use this card for optional enrichment and display cleanup. Create bins when grouped ranges are easier to interpret, or apply numeric formatting when decimal precision is excessive or inconsistent."
+                />
+              </p>
+              <p className="ax-module-subtitle">Optional: create binned features or standardize decimal places</p>
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
+      )}
 
       {open && (
         <div style={{ marginTop: 12 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-            {[['bins','Create bins'],['format','Numeric formatting']].map(([key, label]) => (
+            {[['bins','Create bins'],['scale','Scale values'],['format','Numeric formatting']].map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -1348,6 +1755,42 @@ function FeatureEngineeringCard({ dataset, onApplied }) {
               </select>
               <label style={{ color: 'var(--color-text-secondary)' }}>New column name</label>
               <input type="text" placeholder={ratioNum && ratioDen ? `${ratioNum}_per_${ratioDen}` : 'auto'} value={ratioNewName} onChange={(e) => setRatioNewName(e.target.value)} />
+            </div>
+          )}
+
+          {tool === 'scale' && (
+            <div>
+              <FeatureRecommendationHeader
+                title="Scale numeric values"
+                info="Scale numeric columns when values have very different ranges. Scaling creates a new column unless decimal formatting is selected."
+                loading={aiLoading}
+                onAsk={askAiForFeatureRecommendation}
+              />
+              <FeatureRecommendationCard recommendation={{
+                label: scaleCol ? `Scale ${scaleCol}` : 'Choose a numeric column',
+                why: 'Use min-max for 0-1 ranges, z-score for standardized units, or decimal formatting when the issue is only display precision.',
+              }} />
+              <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12, marginTop: 12 }}>
+                <label style={{ color: 'var(--color-text-secondary)' }}>Column</label>
+                <select value={scaleCol} onChange={(e) => setScaleCol(e.target.value)}>
+                  <option value="">- select -</option>
+                  {numVars.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <label style={{ color: 'var(--color-text-secondary)' }}>Method</label>
+                <select value={scaleMethod} onChange={(e) => setScaleMethod(e.target.value)}>
+                  <option value="minmax">Min-max</option>
+                  <option value="zscore">Z-score</option>
+                  <option value="decimal">Decimal formatting</option>
+                </select>
+                <label style={{ color: 'var(--color-text-secondary)' }}>New column name</label>
+                <input
+                  type="text"
+                  placeholder={scaleMethod === 'decimal' ? (scaleCol || 'same column') : (scaleCol ? `${scaleCol}_${scaleMethod}` : 'auto')}
+                  value={scaleNewName}
+                  onChange={(e) => setScaleNewName(e.target.value)}
+                />
+              </div>
             </div>
           )}
 

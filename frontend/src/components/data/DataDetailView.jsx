@@ -48,6 +48,7 @@ export default function DataDetailView({
   refreshKey,
   preferredViewMode = 'cleaned',
   onDataChanged,
+  renderToolbar,
 }) {
   const datasetId = dataset?.id
   const [rowColumns, setRowColumns] = useState([])
@@ -86,6 +87,8 @@ export default function DataDetailView({
   const [aboutLoading, setAboutLoading] = useState(false)
 
   const [visibleColumns, setVisibleColumns] = useState([])
+  const [viewSort, setViewSort] = useState({ column: '', order: 'asc' })
+  const [viewFilter, setViewFilter] = useState({ column: '', condition: 'contains', value: '' })
 
   useEffect(() => {
     setVisibleColumns((prev) => {
@@ -422,7 +425,11 @@ export default function DataDetailView({
   const containerCls = `ax-data-detail ax-module-card ax-card-data ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
   const latestStage = scopedChangeStages[scopedChangeStages.length - 1] || null
   const hasBaseRows = rows.length > 0
-  const displayRows = mergeRemovedRows(rows, hasBaseRows ? removedRows : [], viewMode)
+  const displayRows = applyViewTools(
+    mergeRemovedRows(rows, hasBaseRows ? removedRows : [], viewMode),
+    viewSort,
+    viewFilter,
+  )
 
   const node = (
     <div className={containerCls}>
@@ -464,6 +471,16 @@ export default function DataDetailView({
         </div>
       </header>
 
+      {renderToolbar?.({
+        allColumns,
+        visibleColumns,
+        setVisibleColumns,
+        viewSort,
+        setViewSort,
+        viewFilter,
+        setViewFilter,
+      })}
+
       <nav className="ax-dd-tabs">
         <div className="ax-dd-viewmodes" role="tablist" aria-label="Dataset view">
           <button
@@ -489,13 +506,15 @@ export default function DataDetailView({
             Highlight Changes
           </button>
         </div>
-        <div className="ax-dd-tabs-right">
-          <ColumnVisibilityMenu
-            allColumns={allColumns}
-            selected={visibleColumns}
-            onApply={setVisibleColumns}
-          />
-        </div>
+        {!renderToolbar && (
+          <div className="ax-dd-tabs-right">
+            <ColumnVisibilityMenu
+              allColumns={allColumns}
+              selected={visibleColumns}
+              onApply={setVisibleColumns}
+            />
+          </div>
+        )}
       </nav>
 
       {viewMode === 'highlight' && (
@@ -809,6 +828,37 @@ function mergeRemovedRows(rows, removedRows, viewMode) {
     if (!a.__removed_row && b.__removed_row) return 1
     return 0
   })
+}
+
+function applyViewTools(rows, sort, filter) {
+  let next = rows
+  if (filter?.column && filter.condition) {
+    const needle = String(filter.value ?? '').toLowerCase()
+    next = next.filter((row) => {
+      if (row.__removed_row) return true
+      const value = row[filter.column]
+      const text = String(value ?? '').toLowerCase()
+      if (filter.condition === 'missing') return value === null || value === undefined || value === ''
+      if (filter.condition === 'equals') return text === needle
+      if (filter.condition === 'contains') return text.includes(needle)
+      if (filter.condition === 'gt') return Number(value) > Number(filter.value)
+      if (filter.condition === 'lt') return Number(value) < Number(filter.value)
+      return true
+    })
+  }
+  if (sort?.column) {
+    const direction = sort.order === 'desc' ? -1 : 1
+    next = [...next].sort((a, b) => {
+      if (a.__removed_row || b.__removed_row) return 0
+      const av = a[sort.column]
+      const bv = b[sort.column]
+      const an = Number(av)
+      const bn = Number(bv)
+      if (!Number.isNaN(an) && !Number.isNaN(bn)) return (an - bn) * direction
+      return String(av ?? '').localeCompare(String(bv ?? '')) * direction
+    })
+  }
+  return next
 }
 
 function withDuplicateMatch(removedRow, currentRows) {
