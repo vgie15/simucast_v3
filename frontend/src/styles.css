@@ -2944,6 +2944,13 @@ a.ax-btn {
   object-fit: contain;
   display: block;
 }
+.ax-project-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
 .ax-history-button {
   height: 32px;
   min-height: 32px;
@@ -2960,7 +2967,6 @@ a.ax-btn {
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
-  margin-left: auto;
   white-space: nowrap;
   align-self: center;
 }
@@ -2971,6 +2977,9 @@ a.ax-btn {
 .ax-history-button:hover {
   border-color: var(--color-border-primary);
   background: var(--color-background-secondary);
+}
+.ax-project-actions .ax-rail-toggle-ai {
+  margin-left: 0;
 }
 .ax-data-stage-updated {
   border-radius: 12px;

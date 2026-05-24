@@ -239,25 +239,27 @@ export default function ProjectWorkspace() {
                 </NavLink>
               )
             })}
-            <button
-              type="button"
-              className="ax-history-button"
-              onClick={() => setHistoryOpen(true)}
-              aria-haspopup="dialog"
-            >
-              <HistoryClockIcon />
-              History
-            </button>
-            <button
-              type="button"
-              className={`ax-rail-toggle ax-rail-toggle-ai ${aiCollapsed ? '' : 'active'}`}
-              onClick={toggleAI}
-              aria-pressed={!aiCollapsed}
-              aria-label={aiCollapsed ? 'Open assistant rail' : 'Close assistant rail'}
-              title={aiCollapsed ? 'Open assistant' : 'Close assistant'}
-            >
-              <ToggleChevron direction={aiCollapsed ? 'left' : 'right'} />
-            </button>
+            <div className="ax-project-actions">
+              <button
+                type="button"
+                className="ax-history-button"
+                onClick={() => setHistoryOpen(true)}
+                aria-haspopup="dialog"
+              >
+                <HistoryClockIcon />
+                History
+              </button>
+              <button
+                type="button"
+                className={`ax-rail-toggle ax-rail-toggle-ai ${aiCollapsed ? '' : 'active'}`}
+                onClick={toggleAI}
+                aria-pressed={!aiCollapsed}
+                aria-label={aiCollapsed ? 'Open assistant rail' : 'Close assistant rail'}
+                title={aiCollapsed ? 'Open assistant' : 'Close assistant'}
+              >
+                <ToggleChevron direction={aiCollapsed ? 'left' : 'right'} />
+              </button>
+            </div>
           </div>
           {guidedLockNotice && <strong className="ax-guided-lock-toast">{guidedLockNotice}</strong>}
         </div>
