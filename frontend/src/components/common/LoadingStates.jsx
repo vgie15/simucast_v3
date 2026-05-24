@@ -4,6 +4,32 @@
  * ============================================================ */
 import React from 'react'
 
+// Full workspace loader for project-level transitions.
+export function SimuCastLoader({ label = 'Loading project...' }) {
+  return (
+    <div className="ax-simucast-loader" role="status" aria-live="polite" aria-busy="true">
+      <div className="ax-simucast-loader-dots" aria-hidden="true" />
+      <div className="ax-simucast-loader-brand">
+        <span className="ax-simucast-loader-mark">
+          <img src="/simucast-logo.png" alt="" />
+        </span>
+        <span className="ax-simucast-loader-name">SimuCast</span>
+      </div>
+      <div className="ax-simucast-loader-bar" aria-hidden="true">
+        <span />
+      </div>
+      <div className="ax-simucast-loader-status">
+        <div>
+          <span>Reading dataset...</span>
+          <span>Detecting issues...</span>
+          <span>Running recommendations...</span>
+          <span>{label}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Full-screen busy overlay showing spinner, title, optional detail and step list.
 export function BusyOverlay({ active, title = 'Working...', detail, steps = [] }) {
   if (!active) return null

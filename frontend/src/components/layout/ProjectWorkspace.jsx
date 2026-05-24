@@ -19,6 +19,7 @@ import ProjectGuidanceSetup from '../guided-plan/ProjectGuidanceSetup'
 import GuidedCoach, { routeTarget } from '../guided-plan/GuidedCoach'
 import { currentCoachStep } from '../guided-plan/ProjectGuidanceSetup'
 import { useAuth } from '../providers/AuthProvider'
+import { SimuCastLoader } from '../common/LoadingStates'
 
 const TABS = [
   {
@@ -178,7 +179,7 @@ export default function ProjectWorkspace() {
   }, [activeTab, dataset?.id])
 
   if (loading) {
-    return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Loading project…</p>
+    return <SimuCastLoader label="Loading project..." />
   }
   if (error || !dataset) {
     return (

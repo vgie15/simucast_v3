@@ -786,6 +786,127 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 0;
 }
 
+.ax-simucast-loader {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #faf9f7;
+  color: var(--color-text-primary);
+  isolation: isolate;
+}
+
+.ax-simucast-loader-dots {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(circle, #e8e3db 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ax-simucast-loader-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.ax-simucast-loader-mark {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--color-accent-light);
+  overflow: hidden;
+  box-shadow: 0 14px 30px rgba(249, 115, 22, 0.18);
+}
+
+.ax-simucast-loader-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.ax-simucast-loader-name {
+  color: var(--color-text-primary);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.ax-simucast-loader-bar {
+  width: min(220px, 58vw);
+  height: 3px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ede9e3;
+}
+
+.ax-simucast-loader-bar span {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  animation: ax-loader-fill 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.ax-simucast-loader-status {
+  height: 18px;
+  overflow: hidden;
+  color: #8f877c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ax-simucast-loader-status > div {
+  display: flex;
+  flex-direction: column;
+  animation: ax-loader-status 2.4s ease infinite;
+}
+
+.ax-simucast-loader-status span {
+  height: 18px;
+  white-space: nowrap;
+}
+
+@keyframes ax-loader-fill {
+  0% { width: 0%; }
+  30% { width: 45%; }
+  60% { width: 72%; }
+  85% { width: 88%; }
+  100% { width: 100%; }
+}
+
+@keyframes ax-loader-status {
+  0% { transform: translateY(0); }
+  28% { transform: translateY(0); }
+  33% { transform: translateY(-18px); }
+  58% { transform: translateY(-18px); }
+  63% { transform: translateY(-36px); }
+  88% { transform: translateY(-36px); }
+  93% { transform: translateY(-54px); }
+  100% { transform: translateY(-54px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-simucast-loader-bar span,
+  .ax-simucast-loader-status > div {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
+}
+
 .ax-busy-card {
   max-width: min(360px, 92%);
   display: flex;
