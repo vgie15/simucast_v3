@@ -2085,7 +2085,7 @@ a.ax-btn {
 .ax-dialog-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 7000;
   display: grid;
   place-items: center;
   padding: 20px;
