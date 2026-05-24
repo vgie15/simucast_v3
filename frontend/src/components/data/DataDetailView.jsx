@@ -85,6 +85,7 @@ export default function DataDetailView({
 
   const [aboutData, setAboutData] = useState(null)
   const [aboutLoading, setAboutLoading] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   const [visibleColumns, setVisibleColumns] = useState([])
   const [viewSort, setViewSort] = useState({ column: '', order: 'asc' })
@@ -450,6 +451,14 @@ export default function DataDetailView({
           </div>
         </div>
         <div className="ax-dd-actions">
+          <button
+            type="button"
+            className="ax-dd-about-btn"
+            onClick={() => setAboutOpen((value) => !value)}
+            aria-expanded={aboutOpen}
+          >
+            About
+          </button>
           <a
             href={api.exportCsvUrl(datasetId, effectiveStageId)}
             download={(dataset.filename || dataset.name || 'dataset').replace(/\.[^.]+$/, '') + '.csv'}
@@ -505,6 +514,37 @@ export default function DataDetailView({
           >
             Highlight Changes
           </button>
+          {aboutOpen && (
+            <>
+              <button className="ax-dd-about-overlay" type="button" aria-label="Close about file" onClick={() => setAboutOpen(false)} />
+              <section className="ax-dd-about-popover">
+                <div className="ax-dd-about-popover-head">
+                  <strong>About this file</strong>
+                  <button type="button" className="ax-dd-nav-btn" onClick={() => setAboutOpen(false)} aria-label="Close about file">x</button>
+                </div>
+                <div className="ax-dd-about-popover-body">
+                  {aboutLoading && !aboutData && (
+                    <p className="ax-dd-about-loading">Generating description...</p>
+                  )}
+                  {aboutData?.subject && <p>{aboutData.subject}</p>}
+                  {aboutData?.feature_groups?.length > 0 && (
+                    <ul>
+                      {aboutData.feature_groups.map((g, i) => (
+                        <li key={i}>{g}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {aboutData?.quality_note && <p className="ax-dd-quality">{aboutData.quality_note}</p>}
+                  {aboutData?.error && (
+                    <p className="ax-dd-quality">{aboutData.error}</p>
+                  )}
+                  {!aboutLoading && !aboutData && (
+                    <p>No generated description is available for this file.</p>
+                  )}
+                </div>
+              </section>
+            </>
+          )}
         </div>
         {!renderToolbar && (
           <div className="ax-dd-tabs-right">

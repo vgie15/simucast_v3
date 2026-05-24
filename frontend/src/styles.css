@@ -4459,6 +4459,28 @@ button.ax-module-head:focus-visible {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+  position: relative;
+}
+.ax-dd-about-btn {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 7px;
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.ax-dd-about-btn:hover,
+.ax-dd-about-btn[aria-expanded="true"] {
+  background: #fff7ed;
+  color: var(--color-accent);
+  border-color: rgba(249, 115, 22, 0.35);
 }
 .ax-dd-icon-btn {
   display: inline-flex;
@@ -4477,6 +4499,54 @@ button.ax-module-head:focus-visible {
 .ax-dd-icon-btn:hover {
   background: var(--color-background-secondary);
   color: var(--color-text-primary);
+}
+.ax-dd-about-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 6990;
+  border: 0;
+  background: transparent;
+}
+.ax-dd-about-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 7000;
+  width: min(440px, calc(100vw - 48px));
+  max-height: 360px;
+  overflow: hidden;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 12px;
+  background: var(--color-background-primary);
+  box-shadow: 0 18px 48px rgba(31, 26, 23, 0.18);
+}
+.ax-dd-about-popover-head {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: #faf7f2;
+}
+.ax-dd-about-popover-body {
+  max-height: 318px;
+  overflow: auto;
+  padding: 12px 14px;
+}
+.ax-dd-about-popover-body p,
+.ax-dd-about-popover-body ul {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.ax-dd-about-popover-body p {
+  margin: 0 0 8px;
+}
+.ax-dd-about-popover-body ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
 }
 
 .ax-dd-tabs {
@@ -4843,6 +4913,7 @@ button.ax-module-head:focus-visible {
   color: var(--color-text-primary);
 }
 .ax-dd-about {
+  display: none;
   padding: 14px 18px 8px;
   border-bottom: 0.5px solid var(--color-border-tertiary);
   background: var(--color-background-primary);
