@@ -2884,20 +2884,82 @@ a.ax-btn {
   to { opacity: 1; transform: translateY(0); }
 }
 .ax-workspace-main .ax-workflow-header {
+  min-height: 60px;
   margin: 0 0 18px;
-  border-radius: 8px;
+  padding: 0 22px;
+  border-radius: 10px 10px 0 0;
   border: 0.5px solid var(--color-border-tertiary);
+  border-bottom-color: var(--color-border-secondary);
   box-shadow: none;
   position: sticky;
   top: 0;
   z-index: 30;
   background: var(--color-background-primary);
+  display: flex;
+  align-items: center;
+  gap: 28px;
 }
 .ax-workspace-main .ax-subnav {
-  padding: 0 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+  gap: 28px;
 }
 .ax-workspace-main .ax-flow-context {
   padding: 8px 14px 12px;
+}
+.ax-workspace-main .ax-workspace-breadcrumb {
+  display: none;
+}
+.ax-project-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ax-project-brand:hover {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+.ax-project-mark {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: #fff7ed;
+  font-size: 13px;
+  font-weight: 800;
+}
+.ax-history-button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 0.5px solid var(--color-border-secondary);
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.ax-history-button:hover {
+  border-color: var(--color-border-primary);
+  background: var(--color-background-secondary);
 }
 .ax-data-stage-updated {
   border-radius: 12px;
@@ -3115,6 +3177,53 @@ a.ax-btn {
   border-bottom: none;
   padding: 14px 6px;
   justify-content: center;
+}
+.ax-history-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+  display: flex;
+  justify-content: flex-end;
+  padding: 18px;
+  background: rgba(31, 26, 23, 0.32);
+}
+.ax-history-modal {
+  width: min(420px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+  box-shadow: 0 24px 70px rgba(31, 26, 23, 0.22);
+}
+.ax-history-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+}
+.ax-history-modal-head p {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 750;
+}
+.ax-history-modal-head span {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.ax-history-modal .ax-activity-panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .ax-rail-title {
   font-size: 13px;

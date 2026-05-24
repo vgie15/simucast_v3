@@ -13,7 +13,7 @@ import ModelsPage from '../models/ModelsPage'
 import WhatIfPage from '../whatif/WhatIfPage'
 import ReportPage from '../report/ReportPage'
 import FloatingDatasetPreview from '../data/FloatingDatasetPreview'
-import ProjectHistoryRail from '../history/ProjectHistoryRail'
+import ActivityPanel from '../history/ActivityPanel'
 import ProjectAIRail from '../guided-plan/ProjectAIRail'
 import ProjectGuidanceSetup from '../guided-plan/ProjectGuidanceSetup'
 import GuidedCoach, { routeTarget } from '../guided-plan/GuidedCoach'
@@ -76,37 +76,22 @@ export default function ProjectWorkspace() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [historyCollapsed, setHistoryCollapsed] = useState(true)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [aiCollapsed, setAiCollapsed] = useState(false)
   const [guidanceSetupOpen, setGuidanceSetupOpen] = useState(false)
-  const [historyWidth, setHistoryWidth] = useState(320)
   const [aiWidth, setAiWidth] = useState(360)
-  const [resizing, setResizing] = useState(null) // 'history' | 'ai' | null
+  const [resizing, setResizing] = useState(null) // 'ai' | null
   const [guidedLockNotice, setGuidedLockNotice] = useState('')
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
 
-  const historyKey = id ? `simucast.historyRail.collapsed.${id}` : ''
   const aiKey = id ? `simucast.aiRail.collapsed.${id}` : ''
-  const historyWidthKey = id ? `simucast.historyRail.width.${id}` : ''
   const aiWidthKey = id ? `simucast.aiRail.width.${id}` : ''
-
-  useEffect(() => {
-    if (!historyKey) return
-    const saved = window.localStorage.getItem(historyKey)
-    setHistoryCollapsed(saved === null ? true : saved === '1')
-  }, [historyKey])
 
   useEffect(() => {
     if (!aiKey) return
     const saved = window.localStorage.getItem(aiKey)
     setAiCollapsed(saved === null ? false : saved === '1')
   }, [aiKey])
-
-  useEffect(() => {
-    if (!historyWidthKey) return
-    const saved = Number(window.localStorage.getItem(historyWidthKey))
-    if (Number.isFinite(saved) && saved > 0) setHistoryWidth(Math.max(280, saved))
-  }, [historyWidthKey])
 
   useEffect(() => {
     if (!aiWidthKey) return
@@ -118,10 +103,7 @@ export default function ProjectWorkspace() {
     if (!resizing) return
     const onMove = (e) => {
       e.preventDefault()
-      if (resizing === 'history') {
-        const next = Math.max(280, Math.min(520, e.clientX - 0))
-        setHistoryWidth(next)
-      } else if (resizing === 'ai') {
+      if (resizing === 'ai') {
         const next = Math.max(240, Math.min(640, window.innerWidth - e.clientX))
         setAiWidth(next)
       }
@@ -140,22 +122,9 @@ export default function ProjectWorkspace() {
   }, [resizing])
 
   useEffect(() => {
-    if (resizing || !historyWidthKey) return
-    window.localStorage.setItem(historyWidthKey, String(Math.round(historyWidth)))
-  }, [historyWidth, resizing, historyWidthKey])
-
-  useEffect(() => {
     if (resizing || !aiWidthKey) return
     window.localStorage.setItem(aiWidthKey, String(Math.round(aiWidth)))
   }, [aiWidth, resizing, aiWidthKey])
-
-  const toggleHistory = () => {
-    setHistoryCollapsed((c) => {
-      const next = !c
-      if (historyKey) window.localStorage.setItem(historyKey, next ? '1' : '0')
-      return next
-    })
-  }
 
   const toggleAI = () => {
     setAiCollapsed((c) => {
@@ -221,7 +190,6 @@ export default function ProjectWorkspace() {
     )
   }
 
-  const activeTabMeta = TABS.find((t) => t.key === activeTab) || TABS[0]
   const guidedStep = dataset.guidance?.guided_mode ? currentCoachStep(dataset.guidance, dataset) : null
   const guidedTabIndex = guidedStep ? TABS.findIndex((item) => item.key === guidedStep.page) : -1
   const guidedLocksFuture = Boolean(guidedStep?.requirement === 'required' && guidedTabIndex >= 0)
@@ -229,37 +197,16 @@ export default function ProjectWorkspace() {
 
   return (
     <div
-      className={`ax-workspace-grid ${historyCollapsed ? 'history-closed' : ''} ${aiCollapsed ? 'ai-closed' : ''} ${guidedStep ? 'guided-focus-enabled' : ''}`}
-      style={{ '--history-w': `${historyWidth}px`, '--ai-w': `${aiWidth}px` }}
+      className={`ax-workspace-grid history-closed ${aiCollapsed ? 'ai-closed' : ''} ${guidedStep ? 'guided-focus-enabled' : ''}`}
+      style={{ '--ai-w': `${aiWidth}px` }}
     >
-      <ProjectHistoryRail
-        dataset={dataset}
-        collapsed={historyCollapsed}
-        onStartResize={() => setResizing('history')}
-        onViewStage={(stageId) => {
-          setViewStageRequest({ stageId, nonce: Date.now() })
-          navigate(`/projects/${id}/data`)
-        }}
-        onRestored={refreshDataset}
-      />
       <div className="ax-workspace-main">
-        <div className="ax-workspace-breadcrumb">
-          <Link to="/projects">← Projects</Link>
-          <span className="sep">/</span>
-          <span>{dataset.name}</span>
-        </div>
         <div className="ax-workflow-header">
+          <Link to="/projects" className="ax-project-brand" title={dataset.name}>
+            <span className="ax-project-mark">SC</span>
+            <span>SimuCast</span>
+          </Link>
           <div className="ax-subnav">
-            <button
-              type="button"
-              className={`ax-rail-toggle ${historyCollapsed ? '' : 'active'}`}
-              onClick={toggleHistory}
-              aria-pressed={!historyCollapsed}
-              aria-label={historyCollapsed ? 'Open history rail' : 'Close history rail'}
-              title={historyCollapsed ? 'Open history' : 'Close history'}
-            >
-              <ToggleChevron direction={historyCollapsed ? 'right' : 'left'} />
-            </button>
             {TABS.map((t, index) => {
               const activeIndex = TABS.findIndex((tabItem) => tabItem.key === activeTab)
               const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
@@ -294,6 +241,15 @@ export default function ProjectWorkspace() {
             })}
             <button
               type="button"
+              className="ax-history-button"
+              onClick={() => setHistoryOpen(true)}
+              aria-haspopup="dialog"
+            >
+              <HistoryClockIcon />
+              History
+            </button>
+            <button
+              type="button"
               className={`ax-rail-toggle ax-rail-toggle-ai ${aiCollapsed ? '' : 'active'}`}
               onClick={toggleAI}
               aria-pressed={!aiCollapsed}
@@ -303,11 +259,7 @@ export default function ProjectWorkspace() {
               <ToggleChevron direction={aiCollapsed ? 'left' : 'right'} />
             </button>
           </div>
-          <div className="ax-flow-context">
-            <span>{activeTabMeta.subtitle}</span>
-            <small>{activeTabMeta.guidance}</small>
-            {guidedLockNotice && <strong className="ax-guided-lock-toast">{guidedLockNotice}</strong>}
-          </div>
+          {guidedLockNotice && <strong className="ax-guided-lock-toast">{guidedLockNotice}</strong>}
         </div>
         <div className={`ax-workspace-content ${guidedStep?.page === activeTab ? 'ax-guided-focus-mode' : ''}`}>
           {page}
@@ -338,7 +290,43 @@ export default function ProjectWorkspace() {
         }}
         onClose={() => setGuidanceSetupOpen(false)}
       />
+      {historyOpen && (
+        <div className="ax-history-modal-backdrop" role="dialog" aria-modal="true" aria-label="Project history">
+          <div className="ax-history-modal">
+            <div className="ax-history-modal-head">
+              <div>
+                <p>History</p>
+                <span>Project timeline, notes, undo steps, and report documentation.</span>
+              </div>
+              <button className="ax-btn" type="button" onClick={() => setHistoryOpen(false)} aria-label="Close history">
+                Close
+              </button>
+            </div>
+            <ActivityPanel
+              datasetId={dataset.id}
+              onViewStage={(stageId) => {
+                setViewStageRequest({ stageId, nonce: Date.now() })
+                setHistoryOpen(false)
+                navigate(`/projects/${id}/data`)
+              }}
+              onRestored={refreshDataset}
+              title="History"
+              subtitle="Project timeline, notes, undo steps, and report-ready documentation."
+            />
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function HistoryClockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 4v4h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 
