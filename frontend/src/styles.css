@@ -2906,6 +2906,7 @@ a.ax-btn {
   border-bottom: 0;
   background: transparent;
   gap: 28px;
+  align-items: center;
 }
 .ax-workspace-main .ax-flow-context {
   padding: 8px 14px 12px;
@@ -2944,22 +2945,28 @@ a.ax-btn {
   display: block;
 }
 .ax-history-button {
-  min-height: 36px;
+  height: 32px;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 7px 14px;
-  border-radius: 9px;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 8px;
   border: 0.5px solid var(--color-border-secondary);
   background: var(--color-background-primary);
   color: var(--color-text-primary);
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 650;
   cursor: pointer;
   margin-left: auto;
   white-space: nowrap;
+  align-self: center;
+}
+.ax-history-button svg {
+  width: 14px;
+  height: 14px;
 }
 .ax-history-button:hover {
   border-color: var(--color-border-primary);
