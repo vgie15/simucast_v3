@@ -3110,8 +3110,8 @@ a.ax-btn {
   top: calc(100% + 6px);
   left: 18px;
   z-index: 7000;
-  width: min(400px, calc(100vw - 48px));
-  max-height: 420px;
+  width: min(430px, calc(100vw - 48px));
+  max-height: 440px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3144,6 +3144,118 @@ a.ax-btn {
 .ax-data-toolbar-popover-body .ax-card {
   border-radius: 10px;
   box-shadow: none;
+}
+.ax-data-toolbar-popover .ax-module-card {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.ax-data-toolbar-popover .ax-clean-group-head,
+.ax-data-toolbar-popover .ax-module-head {
+  align-items: center !important;
+  padding: 10px 12px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: #faf7f2 !important;
+}
+.ax-data-toolbar-popover .ax-module-title,
+.ax-data-toolbar-popover .ax-clean-group-head strong {
+  font-size: 14px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0;
+}
+.ax-data-toolbar-popover .ax-module-subtitle,
+.ax-data-toolbar-popover .ax-clean-group-head p {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+.ax-data-toolbar-popover .ax-btn.prim {
+  min-height: 34px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  box-shadow: none;
+  white-space: nowrap;
+}
+.ax-data-toolbar-popover .ax-btn.ax-ai-explain-btn,
+.ax-data-toolbar-popover .ax-btn.ax-ai-explain-btn.mini {
+  min-height: 31px;
+  padding: 5px 10px;
+  border-color: var(--color-border-tertiary);
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  box-shadow: none;
+}
+.ax-data-toolbar-popover .ax-btn.ax-ai-explain-btn:hover {
+  border-color: rgba(249, 115, 22, 0.28);
+  background: #fffaf4;
+  color: var(--color-accent);
+}
+.ax-data-toolbar-popover .ax-btn.danger {
+  min-height: 32px;
+  padding: 6px 10px;
+  box-shadow: none;
+}
+.ax-data-toolbar-popover select,
+.ax-data-toolbar-popover input,
+.ax-data-toolbar-popover textarea {
+  min-height: 36px;
+}
+.ax-tool-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ax-tool-section-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.ax-tool-section-title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+.ax-tool-rec-label {
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+.ax-tool-recommendation-panel {
+  padding: 10px 12px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: #fbfaf8 !important;
+  box-shadow: none !important;
+}
+.ax-tool-recommendation-panel strong {
+  font-weight: 700;
+}
+.ax-tool-rec-chip {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  color: var(--color-accent) !important;
+  font-size: 11px !important;
+}
+.ax-tool-duplicate-panel {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 5px !important;
+  font-size: 12px !important;
+}
+.ax-data-toolbar-popover .ax-tool-embedded-card .ax-card,
+.ax-data-toolbar-popover .ax-card .ax-card {
+  border: 0 !important;
+  background: #fbfaf8 !important;
+  box-shadow: none !important;
+}
+.ax-data-toolbar-popover .ax-chip {
+  font-weight: 650;
 }
 .ax-tool-embedded-card {
   padding: 0 !important;

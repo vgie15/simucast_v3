@@ -409,7 +409,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
           onClick={() => onApply({ kind, action, columns, overrides, options: { keep } })}
           type="button"
         >
-          {applying ? <InlineSpinner label="Applying..." /> : kind === 'duplicates' ? 'Remove duplicates' : 'Apply group'}
+          {applying ? <InlineSpinner label="Applying..." /> : kind === 'duplicates' ? 'Remove' : 'Apply'}
         </button>
       </div>
 
@@ -1088,12 +1088,12 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
   const groups = groupColumnRecommendations(kind, items)
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>
+      <div className="ax-tool-section-head">
+        <div className="ax-tool-section-title-row">
+          <p className="ax-tool-section-title">
             Recommended actions by method
           </p>
-          <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+          <span className="ax-tool-rec-label">System recommended</span>
           <InfoDot text="System recommended means SimuCast selected this method using the current dataset profile, column type, missing count, skew, and outlier checks. You can still change it manually." />
         </div>
         <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={onAskAi} disabled={aiLoading}>
@@ -1105,6 +1105,7 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
         return (
           <div
             key={group.action}
+            className="ax-tool-recommendation-panel"
             style={{
               padding: '10px 12px',
               border: '0.5px solid var(--color-border-tertiary)',
@@ -1114,7 +1115,7 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-              <span className="ax-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
+              <span className="ax-chip ax-tool-rec-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
               <strong>{group.label}</strong>
               <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>
                 {selectedCount}/{group.items.length} selected
@@ -1207,10 +1208,10 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
   if (!count) return null
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>What to do</p>
-          <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
+      <div className="ax-tool-section-head">
+        <div className="ax-tool-section-title-row">
+          <p className="ax-tool-section-title">What to do</p>
+          <span className="ax-tool-rec-label">System recommended</span>
           <InfoDot text="System recommended means SimuCast selected this action from the current duplicate scan. You can still choose which duplicate occurrence to keep." />
         </div>
         <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={onAsk} disabled={loading}>
@@ -1218,6 +1219,7 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
         </button>
       </div>
       <div
+        className="ax-tool-recommendation-panel ax-tool-duplicate-panel"
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(130px, 1fr) minmax(150px, 1fr) 2fr',
@@ -1358,7 +1360,7 @@ function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
 function FeatureRecommendationCard({ recommendation }) {
   if (!recommendation) return null
   return (
-    <div style={{
+    <div className="ax-tool-recommendation-panel" style={{
       padding: '10px 12px',
       border: '0.5px solid var(--color-border-tertiary)',
       borderRadius: 10,
@@ -1367,7 +1369,7 @@ function FeatureRecommendationCard({ recommendation }) {
       marginBottom: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-        <span className="ax-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
+        <span className="ax-chip ax-tool-rec-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
         <strong>{recommendation.label}</strong>
       </div>
       <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>
