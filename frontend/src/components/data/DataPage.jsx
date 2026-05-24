@@ -816,12 +816,13 @@ function FilterTool({ variables, visibilityProps, close }) {
 }
 
 function ColumnVisibilityPanel({ allColumns, selected, onApply }) {
-  const [pending, setPending] = useState(selected)
+  const initialSelected = selected.length ? selected : allColumns
+  const [pending, setPending] = useState(initialSelected)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    setPending(selected)
-  }, [selected.join('|')])
+    setPending(selected.length ? selected : allColumns)
+  }, [selected.join('|'), allColumns.join('|')])
 
   const filtered = allColumns.filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()))
   const allFilteredSelected = filtered.length > 0 && filtered.every((name) => pending.includes(name))
