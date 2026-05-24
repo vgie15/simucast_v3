@@ -755,7 +755,7 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
     )
   }
   if (toolKey === 'labels') {
-    return <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} />
+    return <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} compact />
   }
   if (['merge', 'split', 'drop_cols', 'drop_rows', 'rename'].includes(toolKey)) {
     return <ManualTransformsCard dataset={dataset} onApplied={onApplied} initialTab={toolKey} compact />
@@ -772,7 +772,7 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
         <p className="ax-data-toolbar-note">
           Encoding is currently applied automatically in Models during preprocessing. Use Labels first to standardize source categories before training.
         </p>
-        <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} />
+        <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} compact />
       </div>
     )
   }

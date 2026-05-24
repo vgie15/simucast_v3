@@ -11,7 +11,7 @@ import { SparkleIcon } from '../ai/AIExplainers'
 import { useAuth } from '../providers/AuthProvider'
 
 // Card that suggests fuzzy category groupings per column and lets users review and apply standardizations.
-export default function CategoryStandardizationCard({ dataset, onApplied }) {
+export default function CategoryStandardizationCard({ dataset, onApplied, compact = false }) {
   const dialog = useDialog()
   const auth = useAuth()
   const [suggestions, setSuggestions] = useState([])
@@ -201,8 +201,8 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   }
   if (!suggestions.length || visibleSuggestions.length === 0) {
     return (
-      <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
-        <div className="ax-module-head" style={{ marginBottom: appliedSummary ? 10 : 0 }}>
+      <div className={`ax-card ax-module-card ax-card-prep ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
+        {!compact && <div className="ax-module-head" style={{ marginBottom: appliedSummary ? 10 : 0 }}>
           <div className="ax-module-head-main">
             <div className="ax-module-copy">
               <p className="ax-module-title">
@@ -222,7 +222,14 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
           {suggestions.length && visibleSuggestions.length === 0 ? (
             <button className="ax-btn" onClick={resumeSkipped} disabled={loading}>Resume review</button>
           ) : null}
-        </div>
+        </div>}
+        {compact && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
+            {suggestions.length && visibleSuggestions.length === 0
+              ? `${suggestions.length} column${suggestions.length === 1 ? '' : 's'} skipped for now.`
+              : 'No category standardization suggestions are pending.'}
+          </p>
+        )}
         {appliedSummary && (
           <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 4px' }}>Last applied</p>
@@ -237,8 +244,8 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
   }
 
   return (
-    <div className="ax-card ax-module-card ax-card-prep" style={{ marginBottom: 16 }}>
-      <div className="ax-module-head" style={{ marginBottom: 10 }}>
+    <div className={`ax-card ax-module-card ax-card-prep ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
+      {!compact && <div className="ax-module-head" style={{ marginBottom: 10 }}>
         <div className="ax-module-head-main">
           <div className="ax-module-copy">
             <p className="ax-module-title">
@@ -257,7 +264,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied }) {
           </div>
         </div>
         {/* buttons removed — use per-column Skip / Previous / Next controls below */}
-      </div>
+      </div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', marginBottom: 10 }}>
         <label style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Column</label>
