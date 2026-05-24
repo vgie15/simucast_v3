@@ -11,7 +11,7 @@ import { SparkleIcon } from '../ai/AIExplainers'
 import { useAuth } from '../providers/AuthProvider'
 
 // Card that suggests fuzzy category groupings per column and lets users review and apply standardizations.
-export default function CategoryStandardizationCard({ dataset, onApplied, compact = false }) {
+export default function CategoryStandardizationCard({ dataset, onApplied, compact = false, showRecommendations = false }) {
   const dialog = useDialog()
   const auth = useAuth()
   const [suggestions, setSuggestions] = useState([])
@@ -23,6 +23,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
   const [skippedColumns, setSkippedColumns] = useState([])
   const [aiLoading, setAiLoading] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState(null)
+  const [editingGroups, setEditingGroups] = useState({})
 
   const load = async (preferredColumn) => {
     if (!dataset?.id) return
@@ -53,6 +54,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
   useEffect(() => {
     setSkippedColumns([])
     setAiSuggestion(null)
+    setEditingGroups({})
     load()
   }, [dataset?.id, dataset?.current_stage_id])
 
@@ -94,6 +96,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
       nextGroups[index] = { ...nextGroups[index], ...patch }
       return { ...currentDrafts, [selectedColumn]: nextGroups }
     })
+    setEditingGroups((current) => ({ ...current, [`${selectedColumn}:${index}`]: true }))
   }
 
   const deleteGroup = (index) => {
@@ -266,16 +269,32 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
         {/* buttons removed — use per-column Skip / Previous / Next controls below */}
       </div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', marginBottom: 10 }}>
+      {!compact && <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', marginBottom: 10 }}>
         <label style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Column</label>
         <select value={selectedColumn} onChange={(e) => setSelectedColumn(e.target.value)}>
           {visibleSuggestions.map((s) => (
             <option key={s.column} value={s.column}>{s.column} ({s.groups.length} group{s.groups.length === 1 ? '' : 's'})</option>
           ))}
         </select>
-      </div>
+      </div>}
 
-      <div className="ax-card" style={{ padding: 10, marginBottom: 10, background: 'var(--color-background-primary)' }}>
+      {compact && (
+        <div className="ax-tool-pill-tabs" role="tablist" aria-label="Columns needing label review">
+          {visibleSuggestions.map((s) => (
+            <button
+              key={s.column}
+              type="button"
+              className={`ax-tool-pill-tab ${s.column === selectedColumn ? 'active' : ''}`}
+              onClick={() => setSelectedColumn(s.column)}
+            >
+              {s.column}
+              <span>{s.groups.length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!compact && <div className="ax-card" style={{ padding: 10, marginBottom: 10, background: 'var(--color-background-primary)' }}>
         <div className="ax-row" style={{ gap: 10 }}>
           <div>
             <p style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>
@@ -293,24 +312,25 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
             <button className="ax-btn" onClick={skipCurrent} disabled={busy}>Skip this column</button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {current && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 2 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>
-                Recommended label groups
-              </p>
-              <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
-              <InfoDot text="System recommended means SimuCast grouped labels using exact values, case/spacing similarities, and common binary/value patterns. You can still edit labels or uncheck values before applying." />
-            </div>
-            <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={askAiForRecommendation} disabled={aiLoading}>
-              {aiLoading ? <InlineSpinner label="Asking..." /> : <><SparkleIcon size={11} /> AI explain</>}
-            </button>
-          </div>
-          <AiSuggestionBox loading={aiLoading} suggestion={aiSuggestion} />
-          <div className="ax-card" style={{ padding: 10, background: 'var(--color-background-primary)' }}>
+          {showRecommendations && (
+            <>
+              <div className="ax-tool-section-head">
+                <div className="ax-tool-section-title-row">
+                  <p className="ax-tool-section-title">Recommended label groups</p>
+                  <InfoDot text="System recommended means SimuCast grouped labels using exact values, case/spacing similarities, and common binary/value patterns. You can still edit labels or uncheck values before applying." />
+                </div>
+                <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={askAiForRecommendation} disabled={aiLoading}>
+                  {aiLoading ? <InlineSpinner label="Asking..." /> : <><SparkleIcon size={11} /> AI explain</>}
+                </button>
+              </div>
+              <AiSuggestionBox loading={aiLoading} suggestion={aiSuggestion} />
+            </>
+          )}
+          {showRecommendations && <div className="ax-card ax-tool-values-card" style={{ padding: 10, background: 'var(--color-background-primary)' }}>
             <p style={{ fontSize: 11, fontWeight: 500, margin: '0 0 6px' }}>Unique values detected</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {uniqueValues.map((item) => (
@@ -319,57 +339,85 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
                 </span>
               ))}
             </div>
-          </div>
+          </div>}
           {groups.map((group, index) => (
-            <div key={index} className="ax-card" style={{ padding: 12, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)' }}>
-              <div className="ax-row" style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="ax-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
-                  <p style={{ fontSize: 13, fontWeight: 800, margin: 0 }}>Group {index + 1}</p>
-                </div>
-                <button className="ax-btn danger" onClick={() => deleteGroup(index)} disabled={busy} type="button">
-                  Delete group
-                </button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 10px', alignItems: 'center' }}>
-                <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Final label</label>
-                <input
-                  value={group.suggested_label || ''}
-                  onChange={(e) => setGroup(index, { suggested_label: e.target.value })}
-                />
-              </div>
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '8px 0 4px' }}>
-                {group.reason}
-              </p>
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>
-                For <strong>{group.suggested_label || 'this final label'}</strong>, keep checked: {
-                  Object.entries(group.selected || {})
-                    .filter(([, selected]) => selected)
-                    .map(([value]) => value)
-                    .join(', ') || 'select matching values below'
-                }.
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {uniqueValues.map((item) => (
-                  <label key={item.value} className="ax-chip" style={{ cursor: 'pointer' }}>
+            <div key={index} className="ax-card ax-label-map-row" style={{ padding: 12, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)' }}>
+              {compact && !editingGroups[`${selectedColumn}:${index}`] ? (
+                <>
+                  <div className="ax-label-map-summary">
+                    <strong>{group.suggested_label || `Group ${index + 1}`}</strong>
+                    <span aria-hidden="true">←</span>
+                    <span>
+                      {Object.entries(group.selected || {})
+                        .filter(([, selected]) => selected)
+                        .map(([value]) => value)
+                        .join(', ') || 'No values selected'}
+                    </span>
+                    <button
+                      className="ax-text-action"
+                      type="button"
+                      onClick={() => setEditingGroups((current) => ({ ...current, [`${selectedColumn}:${index}`]: true }))}
+                    >
+                      edit
+                    </button>
+                  </div>
+                  {showRecommendations && <p className="ax-label-map-reason">{group.reason}</p>}
+                </>
+              ) : (
+                <>
+                  <div className="ax-row" style={{ marginBottom: 8 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{compact ? 'Edit group' : `Group ${index + 1}`}</p>
+                    <button className="ax-text-action danger" onClick={() => deleteGroup(index)} disabled={busy} type="button">
+                      Delete group
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 10px', alignItems: 'center' }}>
+                    <label style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Final label</label>
                     <input
-                      type="checkbox"
-                      checked={!!group.selected?.[item.value]}
-                      onChange={(e) => {
-                        setGroup(index, { selected: { ...(group.selected || {}), [item.value]: e.target.checked } })
-                      }}
+                      value={group.suggested_label || ''}
+                      onChange={(e) => setGroup(index, { suggested_label: e.target.value })}
                     />
-                    <span style={{ marginLeft: 4 }}>{item.value}</span>
-                    <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 3 }}>({item.count})</span>
-                  </label>
-                ))}
-              </div>
+                  </div>
+                  {showRecommendations && <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '8px 0 4px' }}>
+                    {group.reason}
+                  </p>}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {uniqueValues.map((item) => (
+                      <label key={item.value} className="ax-chip" style={{ cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={!!group.selected?.[item.value]}
+                          onChange={(e) => {
+                            setGroup(index, { selected: { ...(group.selected || {}), [item.value]: e.target.checked } })
+                          }}
+                        />
+                        <span style={{ marginLeft: 4 }}>{item.value}</span>
+                        <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 3 }}>({item.count})</span>
+                      </label>
+                    ))}
+                  </div>
+                  {compact && (
+                    <button
+                      className="ax-text-action"
+                      type="button"
+                      onClick={() => setEditingGroups((current) => ({ ...current, [`${selectedColumn}:${index}`]: false }))}
+                    >
+                      Done editing
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           ))}
           <div className="ax-row">
-            <button className="ax-btn" onClick={addGroup} disabled={busy}>
+            <button className={compact ? 'ax-text-action' : 'ax-btn'} onClick={addGroup} disabled={busy}>
               Add group
             </button>
+            {compact && (
+              <button className="ax-text-action" onClick={skipCurrent} disabled={busy} type="button">
+                Skip this column
+              </button>
+            )}
             <button className="ax-btn prim" onClick={apply} disabled={busy || !groups.length}>
               {busy ? 'Applying...' : 'Apply and go next'}
             </button>

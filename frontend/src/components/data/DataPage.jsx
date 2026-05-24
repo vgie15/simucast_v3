@@ -310,7 +310,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 }
 
 // Card that previews and applies a grouped cleaning fix for missing/outliers/duplicates/types.
-function CleanGroupCard({ datasetId, stageId, group, kind, title, description, applying, onApply }) {
+function CleanGroupCard({ datasetId, stageId, group, kind, title, description, applying, onApply, showRecommendations = false }) {
   const auth = useAuth()
   const items = group?.columns || []
   const [selected, setSelected] = useState(() => items.map((item) => item.variable).filter(Boolean))
@@ -415,16 +415,18 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
 
       {kind === 'duplicates' ? (
         <>
-          <DuplicateRecommendation
-            group={group}
-            loading={aiLoading}
-            suggestion={aiSuggestion}
-            onAsk={askAiForRecommendation}
-          />
+          {showRecommendations && (
+            <DuplicateRecommendation
+              group={group}
+              loading={aiLoading}
+              suggestion={aiSuggestion}
+              onAsk={askAiForRecommendation}
+            />
+          )}
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-            <button className="ax-btn mini" type="button" disabled>
+            <span className="ax-tool-muted-note">
               All duplicate rows selected
-            </button>
+            </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', marginTop: 12, fontSize: 12 }}>
             <label style={{ color: 'var(--color-text-secondary)' }}>Keep occurrence</label>
@@ -445,19 +447,21 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
             </select>
           </div>
           <div id={recommendationTargetId}>
-            <GroupedColumnRecommendations
-              kind={kind}
-              items={items}
-              selected={selected}
-              aiLoading={aiLoading}
-              aiSuggestion={aiSuggestion}
-              onAskAi={askAiForRecommendation}
-            />
+            {showRecommendations && (
+              <GroupedColumnRecommendations
+                kind={kind}
+                items={items}
+                selected={selected}
+                aiLoading={aiLoading}
+                aiSuggestion={aiSuggestion}
+                onAskAi={askAiForRecommendation}
+              />
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             <button
-              className="ax-btn mini"
+              className="ax-text-action"
               type="button"
               onClick={() => setSelected(selectedAll ? [] : items.map((item) => item.variable).filter(Boolean))}
             >
@@ -483,8 +487,8 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
             ))}
           </div>
 
-          <button className="ax-btn" style={{ marginTop: 10 }} onClick={() => setAdvanced(!advanced)} type="button">
-            {advanced ? 'Hide advanced overrides' : 'Advanced per-column overrides'}
+          <button className="ax-text-action" style={{ marginTop: 10 }} onClick={() => setAdvanced(!advanced)} type="button">
+            {advanced ? 'Hide per-column overrides' : 'Per-column overrides'}
           </button>
           {advanced && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
@@ -541,6 +545,7 @@ function DataToolsToolbar({
 }) {
   const [openTool, setOpenTool] = useState(null)
   const [popoverX, setPopoverX] = useState(18)
+  const [showRecommendations, setShowRecommendations] = useState(false)
   const close = () => setOpenTool(null)
   const variables = dataset?.variables || []
   const missingCount = suggestionGroups.missing?.columns?.length || 0
@@ -595,6 +600,8 @@ function DataToolsToolbar({
   const activeTool = openTool === 'columns'
     ? { key: 'columns', label: 'Columns', icon: 'eye' }
     : toolMap[openTool]
+  const recommendationTools = new Set(['missing', 'outliers', 'duplicates', 'labels', 'bin', 'scale', 'encode'])
+  const hasRecommendationToggle = recommendationTools.has(openTool)
   const openFromButton = (toolKey, event) => {
     const shell = event.currentTarget.closest('.ax-data-toolbar-shell')
     const shellLeft = shell?.getBoundingClientRect().left || 0
@@ -602,6 +609,7 @@ function DataToolsToolbar({
     const maxLeft = Math.max(8, (shell?.clientWidth || 430) - 420)
     setPopoverX(Math.min(maxLeft, Math.max(8, buttonLeft - shellLeft)))
     setOpenTool((current) => (current === toolKey ? null : toolKey))
+    setShowRecommendations(false)
   }
 
   return (
@@ -643,7 +651,20 @@ function DataToolsToolbar({
                 <TablerIcon name={activeTool?.icon || 'tool'} />
                 <strong>{activeTool?.label || 'Columns'}</strong>
               </div>
-              <button type="button" className="ax-dd-nav-btn" onClick={close} aria-label="Close tool">x</button>
+              <div className="ax-data-popover-head-actions">
+                {hasRecommendationToggle && (
+                  <label className="ax-rec-toggle">
+                    <span>Recommendations</span>
+                    <input
+                      type="checkbox"
+                      checked={showRecommendations}
+                      onChange={(event) => setShowRecommendations(event.target.checked)}
+                    />
+                    <span className="ax-rec-toggle-track" aria-hidden="true" />
+                  </label>
+                )}
+                <button type="button" className="ax-dd-nav-btn" onClick={close} aria-label="Close tool">x</button>
+              </div>
             </div>
             <div className="ax-data-toolbar-popover-body">
               {suggestionsLoading && ['missing', 'outliers', 'duplicates'].includes(openTool) ? (
@@ -660,6 +681,7 @@ function DataToolsToolbar({
                     await onApplied?.(...args)
                   }}
                   visibilityProps={visibilityProps}
+                  showRecommendations={showRecommendations}
                   close={close}
                 />
               )}
@@ -688,7 +710,7 @@ function ToolbarButton({ tool, active, onClick }) {
   )
 }
 
-function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup, onApplied, visibilityProps, close }) {
+function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup, onApplied, visibilityProps, showRecommendations, close }) {
   if (toolKey === 'columns') {
     return (
       <ColumnVisibilityPanel
@@ -717,6 +739,7 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
         title={title}
         description={description}
         applying={applying}
+        showRecommendations={showRecommendations}
         onApply={async (payload) => {
           await onApplyGroup(payload)
           close?.()
@@ -725,16 +748,16 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
     )
   }
   if (toolKey === 'labels') {
-    return <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} compact />
+    return <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} compact showRecommendations={showRecommendations} />
   }
   if (['merge', 'split', 'drop_cols', 'drop_rows', 'rename'].includes(toolKey)) {
     return <ManualTransformsCard dataset={dataset} onApplied={onApplied} initialTab={toolKey} compact />
   }
   if (toolKey === 'bin') {
-    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="bins" compact />
+    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="bins" compact showRecommendations={showRecommendations} />
   }
   if (toolKey === 'scale') {
-    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="scale" compact />
+    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="scale" compact showRecommendations={showRecommendations} />
   }
   if (toolKey === 'encode') {
     return (
@@ -742,7 +765,7 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
         <p className="ax-data-toolbar-note">
           Encoding is currently applied automatically in Models during preprocessing. Use Labels first to standardize source categories before training.
         </p>
-        <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} compact />
+        <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} compact showRecommendations={showRecommendations} />
       </div>
     )
   }
@@ -1091,9 +1114,8 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
       <div className="ax-tool-section-head">
         <div className="ax-tool-section-title-row">
           <p className="ax-tool-section-title">
-            Recommended actions by method
+            Recommended method
           </p>
-          <span className="ax-tool-rec-label">System recommended</span>
           <InfoDot text="System recommended means SimuCast selected this method using the current dataset profile, column type, missing count, skew, and outlier checks. You can still change it manually." />
         </div>
         <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={onAskAi} disabled={aiLoading}>
@@ -1115,7 +1137,6 @@ function GroupedColumnRecommendations({ kind, items = [], selected = [], aiLoadi
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-              <span className="ax-chip ax-tool-rec-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
               <strong>{group.label}</strong>
               <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>
                 {selectedCount}/{group.items.length} selected
@@ -1211,7 +1232,6 @@ function DuplicateRecommendation({ group, loading, suggestion, onAsk }) {
       <div className="ax-tool-section-head">
         <div className="ax-tool-section-title-row">
           <p className="ax-tool-section-title">What to do</p>
-          <span className="ax-tool-rec-label">System recommended</span>
           <InfoDot text="System recommended means SimuCast selected this action from the current duplicate scan. You can still choose which duplicate occurrence to keep." />
         </div>
         <button className="ax-btn ax-ai-explain-btn mini" type="button" onClick={onAsk} disabled={loading}>
@@ -1341,7 +1361,6 @@ function FeatureRecommendationHeader({ title, info, loading, onAsk }) {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>{title}</p>
-        <span style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 800 }}>System recommended</span>
         <InfoDot text={info} />
       </div>
       <button
@@ -1369,7 +1388,6 @@ function FeatureRecommendationCard({ recommendation }) {
       marginBottom: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-        <span className="ax-chip ax-tool-rec-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-background-primary)' }}>System recommended</span>
         <strong>{recommendation.label}</strong>
       </div>
       <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{recommendation.why}</p>
@@ -1378,7 +1396,7 @@ function FeatureRecommendationCard({ recommendation }) {
 }
 
 // Card offering binning and numeric formatting tools for creating new feature columns.
-function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', compact = false }) {
+function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', compact = false, showRecommendations = false }) {
   const auth = useAuth()
   const [open, setOpen] = useState(compact)
   const [tool, setTool] = useState(initialTool) // 'bins' | 'scale' | 'format'
@@ -1550,17 +1568,21 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
 
           {tool === 'bins' && (
             <div>
-              <FeatureRecommendationHeader
-                title="Recommended binning setup"
-                info="System recommendation means SimuCast chose a simple optional binning setup from numeric columns that are easier to interpret in grouped ranges. Binning is optional and loses numeric detail."
-                loading={aiLoading}
-                onAsk={askAiForFeatureRecommendation}
-              />
-              <FeatureRecommendationCard recommendation={binRecommendation || {
-                label: 'No strong binning recommendation',
-                why: 'Binning is optional and works best for numeric columns where grouped interpretation is useful.',
-              }} />
-              <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
+              {showRecommendations && (
+                <>
+                  <FeatureRecommendationHeader
+                    title="Recommended setup"
+                    info="System recommendation means SimuCast chose a simple optional binning setup from numeric columns that are easier to interpret in grouped ranges. Binning is optional and loses numeric detail."
+                    loading={aiLoading}
+                    onAsk={askAiForFeatureRecommendation}
+                  />
+                  <FeatureRecommendationCard recommendation={binRecommendation || {
+                    label: 'No strong binning recommendation',
+                    why: 'Binning is optional and works best for numeric columns where grouped interpretation is useful.',
+                  }} />
+                  <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
+                </>
+              )}
               <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 12px' }}>
                 Binning loses numeric detail. Use it only when grouped ranges help explain the data.
               </p>
@@ -1627,17 +1649,21 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
 
           {tool === 'scale' && (
             <div>
-              <FeatureRecommendationHeader
-                title="Scale numeric values"
-                info="Scale numeric columns when values have very different ranges. Scaling creates a new column unless decimal formatting is selected."
-                loading={aiLoading}
-                onAsk={askAiForFeatureRecommendation}
-              />
-              <FeatureRecommendationCard recommendation={{
-                label: scaleCol ? `Scale ${scaleCol}` : 'Choose a numeric column',
-                why: 'Use min-max for 0-1 ranges, z-score for standardized units, or decimal formatting when the issue is only display precision.',
-              }} />
-              <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
+              {showRecommendations && (
+                <>
+                  <FeatureRecommendationHeader
+                    title="Recommended method"
+                    info="Scale numeric columns when values have very different ranges. Scaling creates a new column unless decimal formatting is selected."
+                    loading={aiLoading}
+                    onAsk={askAiForFeatureRecommendation}
+                  />
+                  <FeatureRecommendationCard recommendation={{
+                    label: scaleCol ? `Scale ${scaleCol}` : 'Choose a numeric column',
+                    why: 'Use min-max for 0-1 ranges, z-score for standardized units, or decimal formatting when the issue is only display precision.',
+                  }} />
+                  <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
+                </>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12, marginTop: 12 }}>
                 <label style={{ color: 'var(--color-text-secondary)' }}>Column</label>
                 <select value={scaleCol} onChange={(e) => setScaleCol(e.target.value)}>
@@ -1663,17 +1689,21 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
 
           {tool === 'format' && (
             <div>
-              <FeatureRecommendationHeader
-                title="Recommended numeric formatting"
-                info="System recommendation means SimuCast checks numeric columns for excessive or inconsistent decimal precision. Formatting is optional and should be used for cleaner display, exports, and reports."
-                loading={aiLoading}
-                onAsk={askAiForFeatureRecommendation}
-              />
-              <FeatureRecommendationCard recommendation={formatRecommendation || {
-                label: 'No numeric formatting needed',
-                why: 'Only round or format values when decimal precision is excessive or inconsistent.',
-              }} />
-              <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
+              {showRecommendations && (
+                <>
+                  <FeatureRecommendationHeader
+                    title="Recommended formatting"
+                    info="System recommendation means SimuCast checks numeric columns for excessive or inconsistent decimal precision. Formatting is optional and should be used for cleaner display, exports, and reports."
+                    loading={aiLoading}
+                    onAsk={askAiForFeatureRecommendation}
+                  />
+                  <FeatureRecommendationCard recommendation={formatRecommendation || {
+                    label: 'No numeric formatting needed',
+                    why: 'Only round or format values when decimal precision is excessive or inconsistent.',
+                  }} />
+                  <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
+                </>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12, marginTop: 12 }}>
               <label style={{ color: 'var(--color-text-secondary)' }}>Column</label>
               <select value={fmtCol} onChange={(e) => setFmtCol(e.target.value)}>

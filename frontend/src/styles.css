@@ -3137,6 +3137,54 @@ a.ax-btn {
   color: var(--color-text-primary);
   font-size: 14px;
 }
+.ax-data-popover-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ax-rec-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+.ax-rec-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.ax-rec-toggle-track {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.ax-rec-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-background-primary);
+  box-shadow: 0 1px 3px rgba(31, 26, 23, 0.18);
+  transition: transform 0.16s ease;
+}
+.ax-rec-toggle input:checked + .ax-rec-toggle-track {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: var(--color-accent);
+}
+.ax-rec-toggle input:checked + .ax-rec-toggle-track::after {
+  transform: translateX(12px);
+}
 .ax-data-toolbar-popover-body {
   overflow: auto;
   padding: 12px;
@@ -3175,6 +3223,11 @@ a.ax-btn {
   border-radius: 9px;
   box-shadow: none;
   white-space: nowrap;
+}
+.ax-data-toolbar-popover .ax-btn:not(.prim):not(.ax-dd-nav-btn):not(.ax-ai-explain-btn) {
+  min-height: 32px;
+  padding: 6px 10px;
+  box-shadow: none;
 }
 .ax-data-toolbar-popover .ax-btn.ax-ai-explain-btn,
 .ax-data-toolbar-popover .ax-btn.ax-ai-explain-btn.mini {
@@ -3255,6 +3308,88 @@ a.ax-btn {
   box-shadow: none !important;
 }
 .ax-data-toolbar-popover .ax-chip {
+  font-weight: 650;
+}
+.ax-data-toolbar-popover .ax-tool-pill-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 2px 0 10px;
+}
+.ax-tool-pill-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  max-width: 100%;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 999px;
+  background: #f5f1ec;
+  color: var(--color-text-secondary);
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ax-tool-pill-tab.active {
+  border-color: rgba(249, 115, 22, 0.35);
+  background: #fff7ed;
+  color: var(--color-accent);
+}
+.ax-tool-pill-tab span {
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+}
+.ax-label-map-row {
+  border: 0 !important;
+  background: #fbfaf8 !important;
+  box-shadow: none !important;
+}
+.ax-label-map-summary {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.ax-label-map-summary strong {
+  color: var(--color-text-primary);
+  font-weight: 750;
+}
+.ax-label-map-summary > span:nth-child(3) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ax-label-map-reason {
+  margin: 6px 0 0;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.ax-text-action {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ax-text-action:hover {
+  color: var(--color-accent);
+}
+.ax-text-action.danger {
+  color: var(--color-text-danger);
+}
+.ax-tool-muted-note {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
   font-weight: 650;
 }
 .ax-tool-embedded-card {
