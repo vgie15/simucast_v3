@@ -3149,8 +3149,7 @@ a.ax-btn {
   text-transform: uppercase;
 }
 .ax-data-toolbar-spacer {
-  flex: 1 1 auto;
-  min-width: 4px;
+  display: none;
 }
 .ax-data-tool-btn {
   position: relative;
@@ -3248,6 +3247,10 @@ a.ax-btn {
   border-radius: 12px;
   background: var(--color-background-primary);
   box-shadow: 0 18px 48px rgba(31, 26, 23, 0.18);
+}
+.ax-data-toolbar-popover.columns-popover {
+  width: min(360px, calc(100vw - 48px));
+  max-height: 410px;
 }
 .ax-data-toolbar-popover-head {
   min-height: 40px;
@@ -3588,20 +3591,34 @@ a.ax-btn {
   border-radius: 8px;
 }
 .ax-data-toolbar-popover .ax-colvis-summary {
-  padding: 5px 8px 8px;
+  padding: 2px 4px 6px;
   border-bottom: 0;
   font-size: 12px;
 }
 .ax-data-toolbar-popover .ax-colvis-list.inline {
-  max-height: 172px;
+  max-height: 210px;
   padding: 2px;
 }
 .ax-data-toolbar-popover .ax-colvis-row {
-  min-height: 30px;
+  min-height: 28px;
   gap: 7px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border-radius: 6px;
   font-size: 12px;
+}
+.ax-data-toolbar-popover .ax-colvis-summary .ax-colvis-row {
+  min-height: 24px;
+  padding: 2px 0;
+}
+.ax-data-toolbar-popover.columns-popover .ax-data-toolbar-panel {
+  gap: 8px;
+}
+.ax-data-toolbar-popover.columns-popover .ax-row {
+  margin-top: 2px;
+}
+.ax-data-toolbar-popover.columns-popover .ax-btn.prim {
+  min-height: 32px;
+  padding: 6px 12px;
 }
 .ax-data-toolbar-popover .ax-colvis-row input[type="checkbox"] {
   width: 14px;

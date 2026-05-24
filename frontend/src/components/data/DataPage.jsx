@@ -628,7 +628,6 @@ function DataToolsToolbar({
             ))}
           </div>
         ))}
-        <div className="ax-data-toolbar-spacer" />
         <div className="ax-data-toolbar-group ax-data-toolbar-group-last">
           <ToolbarButton
             tool={{
@@ -645,7 +644,7 @@ function DataToolsToolbar({
       {openTool && (
         <>
           <button className="ax-data-toolbar-overlay" type="button" aria-label="Close data tool" onClick={close} />
-          <div className="ax-data-toolbar-popover" style={{ left: popoverX }}>
+          <div className={`ax-data-toolbar-popover ${openTool === 'columns' ? 'columns-popover' : ''}`} style={{ left: popoverX }}>
             <div className="ax-data-toolbar-popover-head">
               <div>
                 <TablerIcon name={activeTool?.icon || 'tool'} />
