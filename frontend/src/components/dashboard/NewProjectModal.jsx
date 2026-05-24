@@ -266,9 +266,7 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
               <>
                 <UploadFileField file={file} fileRef={fileRef} busy={busy || inspectingSheets} onPick={onPick} />
                 {inspectingSheets && (
-                  <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
-                    Reading workbook sheets...
-                  </p>
+                  <SheetLoadingStep />
                 )}
                 {fileSheets.length > 0 && (
                   <SheetChoiceStep
@@ -299,9 +297,9 @@ export default function NewProjectModal({ open, onClose, onCreated }) {
         )}
 
         <div className="ax-row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-          <button className="ax-btn" onClick={close} disabled={busy} type="button">Cancel</button>
-          <button className="ax-btn prim" onClick={pendingDataset ? continueWithSheet : submit} disabled={busy} type="button">
-            {busy ? 'Creating...' : pendingDataset ? 'Open project' : 'Create project'}
+          <button className="ax-btn" onClick={close} disabled={busy || inspectingSheets} type="button">Cancel</button>
+          <button className="ax-btn prim" onClick={pendingDataset ? continueWithSheet : submit} disabled={busy || inspectingSheets} type="button">
+            {busy ? 'Creating...' : inspectingSheets ? 'Reading sheets...' : pendingDataset ? 'Open project' : 'Create project'}
           </button>
         </div>
       </div>
@@ -335,6 +333,17 @@ function SheetChoiceStep({ dataset, selectedSheet, onSelect, busy, inline = fals
           ))}
         </select>
       </label>
+    </div>
+  )
+}
+
+function SheetLoadingStep() {
+  return (
+    <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+      <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 750 }}>Workbook sheet</p>
+      <div style={{ ...inputStyle, color: 'var(--color-text-secondary)', background: 'var(--color-background-secondary)' }}>
+        Reading workbook sheets...
+      </div>
     </div>
   )
 }

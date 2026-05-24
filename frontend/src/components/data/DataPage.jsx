@@ -234,38 +234,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         meta="Data preparation"
         steps={['Inspect', 'Transform', 'Fix issues', 'Standardize']}
       >
-        Review the table and column types first. Then use the suggested fix cards only for issues detected in the current stage.
+        Review the table and column types first. Then use the toolbar tools for issues detected in the current stage.
       </PageGuide>
-
-      {(dataset.sheets || []).length > 1 && (
-        <div className="ax-card" style={{ marginBottom: 16 }}>
-          <div className="ax-row" style={{ alignItems: 'center', gap: 16 }}>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                Workbook sheet
-                <HelpButton
-                  title="Workbook sheet"
-                  text="Use this card when an uploaded Excel file has multiple sheets. Switching sheets reloads the data preview, detected types, suggested fixes, and downstream project state."
-                />
-              </p>
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-                Select which Excel sheet powers the active dataset.
-              </p>
-            </div>
-            <select
-              value={dataset.active_sheet || ''}
-              onChange={(e) => handleSheetChange(e.target.value)}
-              style={{ minWidth: 240, width: 'min(360px, 100%)' }}
-            >
-              {(dataset.sheets || []).map((sheet) => (
-                <option key={sheet.name} value={sheet.name}>
-                  {sheet.name} ({sheet.row_count} rows, {sheet.col_count} cols{sheet.empty ? ', empty' : ''})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
 
       <div id="data-section-raw_data" className={dataChangePulse ? 'ax-data-stage-updated' : ''} style={{ marginBottom: 16 }}>
         <DataDetailView
