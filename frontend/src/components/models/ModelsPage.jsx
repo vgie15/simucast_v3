@@ -923,29 +923,43 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             onFixAction={handleFixAction}
           />
           {(results.models || []).length > 0 && (
-            <div id="models-tuning" className="ax-card ax-module-card ax-card-model" style={{ padding: 14, marginTop: 16 }}>
-              <div className="ax-module-head ax-model-inner-head">
-                <div className="ax-module-head-main">
-                  <p className="ax-module-title">
+            <div id="models-tuning" className="ax-card ax-module-card ax-card-model" style={{ padding: 18, marginTop: 16 }}>
+              {/* Header */}
+              <div className="ax-tune-head">
+                <div className="ax-tune-head-left">
+                  <h3>
                     Tune parameters
                     <HelpButton
                       title="Tune parameters"
                       text="Adjust algorithm settings after training. Tuning is optional and most useful when model health warns about overfitting."
                     />
-                  </p>
+                  </h3>
+                  <p>Defaults were used for the first run. Adjust complexity and convergence settings below to improve generalization.</p>
                 </div>
+                <button
+                  className="ax-tune-reset"
+                  type="button"
+                  onClick={() => setModelParams(defaultModelParams())}
+                >
+                  <RotateCcw size={12} /> Reset to defaults
+                </button>
               </div>
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
-                Defaults were used for the first training run. Adjust complexity and depth settings below to improve generalization.
-              </p>
+
               <ParameterSettings
                 selectedAlgos={selectedAlgos}
                 modelParams={modelParams}
                 setModelParams={setModelParams}
+                results={results}
               />
-              <div style={{ textAlign: 'right', marginTop: 10 }}>
-                <button className="ax-btn prim" disabled={training || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit} onClick={train}>
-                  {training ? <InlineSpinner label="Training tuned model..." /> : 'Train again with tuned settings'}
+
+              <div className="ax-tune-train-row">
+                <button
+                  className="ax-btn prim"
+                  disabled={training || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit}
+                  onClick={train}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {training ? <InlineSpinner label="Training tuned model..." /> : <><span>Train again with tuned settings</span> <ArrowUpRight size={14} /></>}
                 </button>
               </div>
             </div>
@@ -1173,7 +1187,9 @@ function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
 }
 
 // Renders editable per-algorithm parameter inputs based on each algorithm's parameter definitions.
-function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
+function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results }) {
+  const [activeTab, setActiveTab] = useState('all')
+
   if (!selectedAlgos.length) {
     return (
       <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '10px 0 0' }}>
@@ -1181,6 +1197,7 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
       </p>
     )
   }
+
   const update = (algo, key, value) => {
     setModelParams({
       ...modelParams,
@@ -1190,37 +1207,230 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
       },
     })
   }
-  return (
-    <div style={{ marginTop: 12, borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 12 }}>
-      <p className="ax-lbl" style={{ marginTop: 0 }}>Current settings</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
-        {selectedAlgos.map((algo) => (
-          <div key={algo} className="ax-card" style={{ padding: '10px 12px' }}>
-            <p style={{ fontSize: 12, fontWeight: 500, margin: '0 0 8px' }}>{algoLabel(algo)}</p>
-            {(PARAM_DEFS[algo] || []).map((def) => {
-              const value = modelParams[algo]?.[def.key] ?? def.defaultValue
-              return (
-                <label key={def.key} style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 8, alignItems: 'center', fontSize: 11, marginBottom: 6 }}>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>{def.label}</span>
-                  {def.type === 'checkbox' ? (
-                    <input type="checkbox" checked={!!value} onChange={(e) => update(algo, def.key, e.target.checked)} />
-                  ) : (
-                    <input
-                      type="number"
-                      min={def.min}
-                      max={def.max}
-                      step={def.step}
-                      value={value}
-                      placeholder={def.type === 'numberOrBlank' ? 'None' : undefined}
-                      onChange={(e) => update(algo, def.key, e.target.value === '' ? '' : Number(e.target.value))}
-                    />
-                  )}
-                </label>
-              )
-            })}
+
+  // Algo short labels for badges
+  const ALGO_SHORT = { logistic: 'LR', rf: 'RF', tree: 'DT', linear: 'LIN' }
+  const ALGO_BADGE_CLASS = { logistic: 'lr', rf: 'rf', tree: 'dt', linear: 'lin' }
+
+  // Categorize params
+  const COMPLEXITY_KEYS = ['max_depth', 'min_samples_leaf', 'n_estimators', 'C']
+  const CONVERGENCE_KEYS = ['max_iter', 'fit_intercept']
+
+  // Build merged param list for the active tab
+  const getParamsForAlgo = (algo) => (PARAM_DEFS[algo] || []).map((def) => ({ ...def, algo }))
+
+  const visibleAlgos = activeTab === 'all' ? selectedAlgos : [activeTab]
+  const allParams = visibleAlgos.flatMap(getParamsForAlgo)
+
+  // Merge by key: group params with the same key across algos
+  const mergedMap = new Map()
+  allParams.forEach((p) => {
+    if (!mergedMap.has(p.key)) {
+      mergedMap.set(p.key, { ...p, algos: [p.algo] })
+    } else {
+      mergedMap.get(p.key).algos.push(p.algo)
+    }
+  })
+  const mergedParams = Array.from(mergedMap.values())
+
+  const complexityParams = mergedParams.filter((p) => COMPLEXITY_KEYS.includes(p.key))
+  const convergenceParams = mergedParams.filter((p) => CONVERGENCE_KEYS.includes(p.key))
+  const otherParams = mergedParams.filter((p) => !COMPLEXITY_KEYS.includes(p.key) && !CONVERGENCE_KEYS.includes(p.key))
+
+  // Get health status for an algo from latest results
+  const getAlgoHealth = (algo) => {
+    const model = results?.models?.find((m) => m.algorithm === algo)
+    return model ? assessModelHealth(model) : null
+  }
+
+  // Hint text for params
+  const paramHint = (def, value) => {
+    if (def.key === 'max_depth') {
+      if (value === '' || value === null || value === undefined) return '→ unlimited depth'
+      if (Number(value) <= 5) return '→ shallow, less overfitting'
+      if (Number(value) <= 15) return '→ balanced'
+      return '→ deep, may overfit'
+    }
+    if (def.key === 'n_estimators') {
+      if (Number(value) <= 50) return '→ faster, less stable'
+      if (Number(value) <= 200) return '→ balanced'
+      return '→ more stable, slower'
+    }
+    if (def.key === 'min_samples_leaf') {
+      if (Number(value) <= 2) return '→ flexible, may overfit'
+      if (Number(value) <= 10) return '→ balanced'
+      return '→ conservative, smoother'
+    }
+    if (def.key === 'C') {
+      if (Number(value) <= 0.1) return '→ strong regularization'
+      if (Number(value) <= 10) return '→ balanced'
+      return '→ weak regularization'
+    }
+    if (def.key === 'max_iter') {
+      if (Number(value) <= 500) return '→ may not converge'
+      return '→ sufficient iterations'
+    }
+    return null
+  }
+
+  // Effect prediction based on changes from defaults
+  const defaults = defaultModelParams()
+  const changedParams = []
+  selectedAlgos.forEach((algo) => {
+    (PARAM_DEFS[algo] || []).forEach((def) => {
+      const cur = modelParams[algo]?.[def.key]
+      const dflt = defaults[algo]?.[def.key]
+      if (cur !== undefined && cur !== dflt && !(cur === '' && dflt === '')) {
+        changedParams.push({ algo, ...def, current: cur, default: dflt })
+      }
+    })
+  })
+
+  const effectMessage = changedParams.length > 0
+    ? `Changing ${changedParams.map((p) => p.label.toLowerCase()).join(', ')} may ${changedParams.some((p) => p.key === 'max_depth' || p.key === 'min_samples_leaf') ? 'reduce overfitting risk' : 'affect model convergence'}.`
+    : null
+
+  const renderParam = (merged) => {
+    // Use the first algo's value as representative
+    const primaryAlgo = merged.algos[0]
+    const value = modelParams[primaryAlgo]?.[merged.key] ?? merged.defaultValue
+
+    return (
+      <div key={merged.key} className="ax-tune-param">
+        <div className="ax-tune-param-top">
+          <div>
+            <span className="ax-tune-param-name">{merged.label}</span>
+            <span className="ax-tune-param-key">{merged.key}</span>
           </div>
-        ))}
+          <div className="ax-tune-algo-badges">
+            {merged.algos.map((a) => (
+              <span key={a} className={`ax-tune-algo-badge ${ALGO_BADGE_CLASS[a] || ''}`}>
+                {ALGO_SHORT[a] || a}
+              </span>
+            ))}
+          </div>
+        </div>
+        {merged.type === 'checkbox' ? (
+          <div className="ax-tune-checkbox-row">
+            <input
+              type="checkbox"
+              id={`tune-${merged.key}`}
+              checked={!!value}
+              onChange={(e) => merged.algos.forEach((a) => update(a, merged.key, e.target.checked))}
+            />
+            <label htmlFor={`tune-${merged.key}`}>{value ? 'Enabled' : 'Disabled'}</label>
+          </div>
+        ) : (
+          <>
+            <div className="ax-tune-slider-row">
+              <span className="ax-tune-slider-min">{merged.min}</span>
+              <input
+                className="ax-tune-slider"
+                type="range"
+                min={merged.min}
+                max={merged.max}
+                step={merged.step}
+                value={value === '' || value === null || value === undefined ? merged.defaultValue || merged.min : value}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  merged.algos.forEach((a) => update(a, merged.key, v))
+                }}
+              />
+              <span className="ax-tune-slider-max">{merged.max}</span>
+              <span className="ax-tune-slider-val">
+                {value === '' || value === null || value === undefined ? 'None' : value}
+              </span>
+            </div>
+            {merged.type === 'numberOrBlank' && (
+              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="checkbox"
+                  id={`tune-none-${merged.key}`}
+                  checked={value === '' || value === null || value === undefined}
+                  onChange={(e) => {
+                    const newVal = e.target.checked ? '' : merged.defaultValue || merged.min
+                    merged.algos.forEach((a) => update(a, merged.key, newVal))
+                  }}
+                  style={{ accentColor: 'var(--color-accent)' }}
+                />
+                <label htmlFor={`tune-none-${merged.key}`} style={{ fontSize: 11, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>No limit</label>
+              </div>
+            )}
+          </>
+        )}
+        {paramHint(merged, value) && (
+          <div className="ax-tune-param-hint">
+            <span className="arrow">→</span> {paramHint(merged, value).replace('→ ', '')}
+          </div>
+        )}
       </div>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      {/* Algo tabs */}
+      <div className="ax-tune-tabs">
+        <button
+          type="button"
+          className={`ax-tune-tab ${activeTab === 'all' ? 'active' : ''}`}
+          onClick={() => setActiveTab('all')}
+        >
+          All Parameters
+        </button>
+        {selectedAlgos.map((algo) => {
+          const health = getAlgoHealth(algo)
+          const tone = health ? healthTone(health.color) : null
+          return (
+            <button
+              key={algo}
+              type="button"
+              className={`ax-tune-tab ${activeTab === algo ? 'active' : ''}`}
+              onClick={() => setActiveTab(algo)}
+            >
+              {algoLabel(algo)}
+              {health && (
+                <span
+                  className="ax-tune-health-badge"
+                  style={{ background: tone.chipBg, color: tone.text, marginLeft: 8 }}
+                >
+                  {health.label.includes('overfitting') ? '⚠ overfit' : '✓ healthy'}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Grouped params */}
+      {complexityParams.length > 0 && (
+        <>
+          <div className="ax-tune-category">Complexity</div>
+          {complexityParams.map(renderParam)}
+        </>
+      )}
+      {convergenceParams.length > 0 && (
+        <>
+          <div className="ax-tune-category">Convergence & Scale</div>
+          {convergenceParams.map(renderParam)}
+        </>
+      )}
+      {otherParams.length > 0 && (
+        <>
+          <div className="ax-tune-category">Other</div>
+          {otherParams.map(renderParam)}
+        </>
+      )}
+
+      {/* Effect prediction banner */}
+      {effectMessage && (
+        <div className="ax-tune-effect">
+          <span className="ax-tune-effect-icon">💡</span>
+          <div>
+            <strong>Likely effect on this run:</strong> {effectMessage}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1787,8 +1997,43 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
 
       {active.metrics?.confusion_matrix && (
         <div className="ax-card" style={{ padding: 18, marginTop: 20 }}>
-          <p className="ax-lbl" style={{ margin: '0 0 12px' }}>Confusion matrix</p>
-          <ConfusionMatrix cm={active.metrics.confusion_matrix} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                CONFUSION MATRIX
+              </span>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
+                {algoLabelForTask(active.algorithm, active.metrics?.task)}
+              </h3>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <ExplainButton
+                datasetId={datasetId}
+                step="confusion-matrix"
+                params={{ task: active.metrics?.task, target: active.target }}
+                result={{ confusion_matrix: active.metrics.confusion_matrix, accuracy: active.metrics.accuracy, precision: active.metrics.precision, recall: active.metrics.recall }}
+                question="Explain this confusion matrix in plain English. What do the numbers mean? Are there any class imbalance issues?"
+                label="Explain"
+              />
+              <button
+                className="ax-btn mini"
+                type="button"
+                onClick={() => {
+                  const cm = active.metrics.confusion_matrix
+                  const lines = [',' + cm[0].map((_, j) => `Pred ${j}`).join(',')]
+                  cm.forEach((row, i) => lines.push(`Actual ${i},${row.join(',')}`))
+                  const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+                  const a = document.createElement('a')
+                  a.href = URL.createObjectURL(blob)
+                  a.download = 'confusion_matrix.csv'
+                  a.click()
+                }}
+              >
+                Export
+              </button>
+            </div>
+          </div>
+          <ConfusionMatrix cm={active.metrics.confusion_matrix} metrics={active.metrics} />
         </div>
       )}
     </>
@@ -2028,54 +2273,121 @@ function assessModelHealth(model) {
 }
 
 // Renders a classification confusion matrix with cells shaded by intensity and diagonal emphasis.
-function ConfusionMatrix({ cm }) {
-  const max = cm.flat().reduce((a, b) => Math.max(a, b), 0)
+function ConfusionMatrix({ cm, metrics }) {
+  const n = cm.length // supports 2x2 or NxN
+  // For 2x2, compute per-class precision/recall and overall accuracy
+  const is2x2 = n === 2
+  const total = cm.flat().reduce((a, b) => a + b, 0)
+  const correctTotal = cm.reduce((acc, row, i) => acc + row[i], 0)
+  const accuracy = total > 0 ? correctTotal / total : 0
+
+  // Row and column sums
+  const rowSums = cm.map((row) => row.reduce((a, b) => a + b, 0))
+  const colSums = cm[0].map((_, j) => cm.reduce((a, row) => a + row[j], 0))
+
+  // 2x2 labels
+  const cellLabels2x2 = [
+    ['TN', 'FP'],
+    ['FN', 'TP'],
+  ]
+
+  // Per-class precision & recall for binary
+  const classStats = is2x2
+    ? [0, 1].map((cls) => {
+        const tp = cm[cls][cls]
+        const fp = colSums[cls] - tp
+        const fn = rowSums[cls] - tp
+        const precision = tp + fp > 0 ? tp / (tp + fp) : 0
+        const recall = tp + fn > 0 ? tp / (tp + fn) : 0
+        return { cls, precision, recall }
+      })
+    : []
+
   return (
-    <div style={{ display: 'inline-block', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, padding: 4 }}>
-      <table style={{ borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-        <thead>
-          <tr>
-            <th></th>
-            {cm[0].map((_, i) => (
-              <th key={i} style={{ padding: '4px 10px', color: 'var(--color-text-tertiary)', fontSize: 10, fontWeight: 400 }}>
-                pred {i}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
+    <div className="ax-cm-wrap">
+      {/* Left: Grid */}
+      <div className="ax-cm-grid-area">
+        <div className="ax-cm-grid">
+          {/* Top-left corner */}
+          <div className="ax-cm-corner" />
+          {/* Column headers */}
+          {cm[0].map((_, j) => (
+            <div key={`ch-${j}`} className="ax-cm-col-hdr">
+              Pred {j}
+            </div>
+          ))}
+          {/* Top-right corner for row totals header */}
+          <div className="ax-cm-corner" style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>Σ</div>
+
+          {/* Grid rows */}
           {cm.map((row, i) => (
-            <tr key={i}>
-              <th style={{ padding: '4px 10px', color: 'var(--color-text-tertiary)', fontSize: 10, fontWeight: 400, textAlign: 'right' }}>
-                actual {i}
-              </th>
+            <React.Fragment key={`row-${i}`}>
+              {/* Row header */}
+              <div className="ax-cm-row-hdr">Actual {i}</div>
+              {/* Cells */}
               {row.map((v, j) => {
-                const intensity = max > 0 ? v / max : 0
                 const onDiag = i === j
                 return (
-                  <td
-                    key={j}
-                    style={{
-                      padding: '6px 14px',
-                      textAlign: 'center',
-                      background: onDiag
-                        ? `rgba(15,110,86,${0.10 + intensity * 0.5})`
-                        : `rgba(163,45,45,${0.05 + intensity * 0.4})`,
-                      border: '0.5px solid var(--color-border-tertiary)',
-                      minWidth: 60,
-                    }}
-                  >
-                    {v}
-                  </td>
+                  <div key={`c-${i}-${j}`} className={`ax-cm-cell ${onDiag ? 'correct' : 'incorrect'}`}>
+                    <span className="ax-cm-cell-val">{v.toLocaleString()}</span>
+                    {is2x2 && <span className="ax-cm-cell-lbl">{cellLabels2x2[i][j]}</span>}
+                  </div>
                 )
               })}
-            </tr>
+              {/* Row total */}
+              <div className="ax-cm-total">{rowSums[i].toLocaleString()}</div>
+            </React.Fragment>
           ))}
-        </tbody>
-      </table>
+
+          {/* Bottom row: column totals */}
+          <div className="ax-cm-corner" style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>Σ</div>
+          {colSums.map((s, j) => (
+            <div key={`ct-${j}`} className="ax-cm-total">{s.toLocaleString()}</div>
+          ))}
+          <div className="ax-cm-total" style={{ fontWeight: 800 }}>{total.toLocaleString()}</div>
+        </div>
+
+        {/* Accuracy badge */}
+        <div className="ax-cm-accuracy">
+          <span className="ax-cm-accuracy-lbl">Overall</span>
+          {(accuracy * 100).toFixed(1)}%
+        </div>
+      </div>
+
+      {/* Right: Per-class precision/recall bars */}
+      {is2x2 && (
+        <div className="ax-cm-class-stats">
+          {classStats.map((cs) => (
+            <div key={cs.cls} className="ax-cm-class-block">
+              <div className="ax-cm-class-title">Class {cs.cls}</div>
+              <div className="ax-cm-stat-row">
+                <span className="ax-cm-stat-label">Precision</span>
+                <div className="ax-cm-stat-bar">
+                  <div
+                    className={`ax-cm-stat-bar-fill ${cs.precision >= 0.7 ? 'green' : 'amber'}`}
+                    style={{ width: `${Math.round(cs.precision * 100)}%` }}
+                  />
+                </div>
+                <span className="ax-cm-stat-val">{(cs.precision * 100).toFixed(1)}%</span>
+              </div>
+              <div className="ax-cm-stat-row">
+                <span className="ax-cm-stat-label">Recall</span>
+                <div className="ax-cm-stat-bar">
+                  <div
+                    className={`ax-cm-stat-bar-fill ${cs.recall >= 0.7 ? 'green' : 'amber'}`}
+                    style={{ width: `${Math.round(cs.recall * 100)}%` }}
+                  />
+                </div>
+                <span className="ax-cm-stat-val">{(cs.recall * 100).toFixed(1)}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
+
 
 // Returns a short formatted string of the headline metrics for a trained model.
 function formatMetrics(m) {
