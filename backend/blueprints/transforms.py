@@ -364,7 +364,7 @@ def _pct_change(a, b):
     """Percent change from a to b, or None when undefined (a is 0 / missing)."""
     if a is None or b is None:
         return None
-    if a == 0:
+    if abs(a) < 1e-4:
         return None
     return round((b - a) / abs(a) * 100, 2)
 

@@ -386,11 +386,11 @@ export default function ExpandPage({ dataset, setDataset }) {
         </div>
 
         {/* Right Column: Preview & Stats */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
           {preview ? (
             <>
               {/* Summary stats cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12 }}>
                 {/* Rows Card */}
                 <div 
                   style={{ 
@@ -582,6 +582,7 @@ function MethodCard({ active, onClick, title, desc }) {
 
 // Zero-centered Drift sparkline representation component
 function DriftSparkline({ value }) {
+  if (value === null || value === undefined) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
   const numVal = Number(value)
   if (!Number.isFinite(numVal)) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
   
