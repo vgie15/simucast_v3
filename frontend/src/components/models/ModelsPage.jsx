@@ -1215,7 +1215,7 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
                   <td style={{ padding: '14px 20px 14px 0' }}>
                     <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                       <button title="Restore settings" type="button"
-                        onClick={() => { restoreModelSettings(m); setShowHistory(false) }}
+                        onClick={() => { restoreModelSettings(m) }}
                         style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}
                       >↺</button>
                       <button title="Use in What-if" type="button"
