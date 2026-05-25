@@ -116,6 +116,8 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     setDraftReady(false)
     const raw = window.localStorage.getItem(`simucast.models.${dataset.id}`)
     if (!raw) {
+      setResults(null)
+      setActiveResultIdx(0)
       setDraftReady(true)
       return
     }
@@ -133,6 +135,8 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       setChosenAlgos(saved.chosenAlgos || ['logistic', 'rf'])
       setModelParams(saved.modelParams || defaultModelParams())
       setNumericPreprocessing(saved.numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] })
+      setResults(saved.results || null)
+      setActiveResultIdx(saved.activeResultIdx ?? 0)
     } catch (err) {
       console.warn('Could not restore model draft', err)
     } finally {
@@ -155,8 +159,10 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       chosenAlgos,
       modelParams,
       numericPreprocessing,
+      results,
+      activeResultIdx,
     }))
-  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing)])
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(results), activeResultIdx])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -395,7 +401,34 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       ...defaultModelParams(),
       [model.algorithm]: metrics.model_params || defaultModelParams()[model.algorithm] || {},
     })
-    setResults(null)
+    setResults({
+      models: [{
+        id: model.id,
+        algorithm: model.algorithm,
+        label: algoLabelForTask(model.algorithm, metrics.task),
+        target: model.target,
+        features: model.features,
+        metrics: metrics,
+        feature_importance: model.feature_importance,
+        feature_influence: model.feature_importance,
+        model_params: metrics.model_params || {},
+        has_whatif: model.has_whatif,
+      }],
+      skipped: [],
+      preprocessing_plan: model.preprocessing_pipeline ? {
+        task: metrics.task || 'classification',
+        target: model.target,
+        features: model.features,
+        rows_used: metrics.split_rows?.train ? (metrics.split_rows.train + (metrics.split_rows.test || 0)) : 0,
+        rows_dropped: 0,
+        encoding: model.preprocessing_pipeline.encoding || [],
+        scaling: model.preprocessing_pipeline.scaling || [],
+        split: metrics.split || {},
+        missing_report: [],
+        numeric_preprocessing: model.preprocessing_pipeline.numeric_preprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] },
+      } : null,
+    })
+    setActiveResultIdx(0)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1439,13 +1472,13 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
   }
 
   const update = (algo, key, value) => {
-    setModelParams({
-      ...modelParams,
+    setModelParams((prev) => ({
+      ...prev,
       [algo]: {
-        ...(modelParams[algo] || {}),
+        ...(prev[algo] || {}),
         [key]: value,
       },
-    })
+    }))
   }
 
   const ALGO_SHORT = { logistic: 'LR', rf: 'RF', tree: 'DT', linear: 'LIN' }

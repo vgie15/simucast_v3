@@ -73,6 +73,29 @@ export default function ProjectWorkspace() {
   const auth = useAuth()
   const [dataset, setDataset] = useState(null)
   const [activeModel, setActiveModel] = useState(null)
+
+  useEffect(() => {
+    if (!id) return
+    try {
+      const saved = window.localStorage.getItem(`simucast.activeModel.${id}`)
+      setActiveModel(saved ? JSON.parse(saved) : null)
+    } catch {
+      setActiveModel(null)
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (!id) return
+    try {
+      if (activeModel) {
+        window.localStorage.setItem(`simucast.activeModel.${id}`, JSON.stringify(activeModel))
+      } else {
+        window.localStorage.removeItem(`simucast.activeModel.${id}`)
+      }
+    } catch (err) {
+      console.warn('Could not save active model to localStorage', err)
+    }
+  }, [id, activeModel])
   const [viewStageRequest, setViewStageRequest] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
