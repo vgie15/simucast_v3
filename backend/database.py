@@ -6,7 +6,7 @@ import time                       # used for retry-with-delay during DB startup
 from datetime import datetime     # used as the default value for created_at columns
 
 # SQLAlchemy: the toolkit that lets us talk to Postgres in Python
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text, JSON
 from sqlalchemy.exc import OperationalError                # raised when Postgres isn't reachable yet
 from sqlalchemy.orm import declarative_base, sessionmaker  # ORM building blocks
 from sqlalchemy.dialects.postgresql import JSONB           # Postgres-specific JSON column type
@@ -46,6 +46,8 @@ def _json_col():
     We use this helper 11+ times below, so wrapping it keeps the table
     definitions short and lets us change the default in one place later.
     """
+    if DATABASE_URL.startswith("sqlite"):
+        return Column(JSON, nullable=True)
     return Column(JSONB, nullable=True)
 
 

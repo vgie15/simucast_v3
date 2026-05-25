@@ -1423,10 +1423,12 @@ function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
 }
 
 function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results }) {
-  const [activeTab, setActiveTab] = useState(selectedAlgos[0] ?? 'all')
+  const [activeTab, setActiveTab] = useState(selectedAlgos.length > 1 ? 'all' : (selectedAlgos[0] ?? 'all'))
 
   // Keep activeTab in sync when selectedAlgos changes
-  const validTab = selectedAlgos.includes(activeTab) ? activeTab : (selectedAlgos[0] ?? 'all')
+  const validTab = (activeTab === 'all' && selectedAlgos.length > 1) || selectedAlgos.includes(activeTab)
+    ? activeTab
+    : (selectedAlgos[0] ?? 'all')
 
   if (!selectedAlgos.length) {
     return (
@@ -1454,8 +1456,8 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
 
   const getParamsForAlgo = (algo) => (PARAM_DEFS[algo] || []).map((def) => ({ ...def, algo }))
 
-  // Show params for the active algo tab
-  const visibleAlgos = [validTab]
+  // Show params for the active algo tab(s)
+  const visibleAlgos = validTab === 'all' ? selectedAlgos : [validTab]
   const allParams = visibleAlgos.flatMap(getParamsForAlgo)
 
   // Merge by key
@@ -1464,12 +1466,14 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
     if (!mergedMap.has(p.key)) {
       mergedMap.set(p.key, { ...p, algos: [p.algo] })
     } else {
-      mergedMap.get(p.key).algos.push(p.algo)
+      const entry = mergedMap.get(p.key)
+      if (!entry.algos.includes(p.algo)) entry.algos.push(p.algo)
     }
   })
-  // Also pull same-key params from other selected algos
+
+  // Pull same-key params from other selected algos if not active tab
   selectedAlgos.forEach((algo) => {
-    if (algo === validTab) return
+    if (visibleAlgos.includes(algo)) return
     ;(PARAM_DEFS[algo] || []).forEach((def) => {
       if (mergedMap.has(def.key)) {
         const entry = mergedMap.get(def.key)
@@ -1477,8 +1481,8 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
       }
     })
   })
-  const mergedParams = Array.from(mergedMap.values())
 
+  const mergedParams = Array.from(mergedMap.values())
   const complexityParams = mergedParams.filter((p) => COMPLEXITY_KEYS.includes(p.key))
   const convergenceParams = mergedParams.filter((p) => CONVERGENCE_KEYS.includes(p.key))
 
@@ -1537,7 +1541,7 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
   })
 
   // Health for current active tab
-  const activeHealth = getAlgoHealth(validTab)
+  const activeHealth = validTab !== 'all' ? getAlgoHealth(validTab) : null
   const activeTone = activeHealth ? healthTone(activeHealth.color) : null
 
   const renderParamCard = (merged) => {
@@ -1547,18 +1551,14 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
     const isBlank = value === '' || value == null
 
     return (
-      <div key={merged.key} style={{
-        background: 'var(--color-background-primary)',
-        border: '1.5px solid var(--color-border-tertiary)',
-        borderRadius: 10, padding: '14px 16px', marginBottom: 8,
-      }}>
+      <div key={merged.key} className="ax-tune-param">
         {/* Top row: name + code key + badges */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>{merged.label}</span>
-            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>{merged.key}</span>
+        <div className="ax-tune-param-top">
+          <div>
+            <span className="ax-tune-param-name">{merged.label}</span>
+            <span className="ax-tune-param-key">{merged.key}</span>
           </div>
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div className="ax-tune-algo-badges">
             {merged.algos.map((a) => (
               <span key={a} className={`ax-tune-algo-badge ${ALGO_BADGE_CLASS[a] || ''}`}>
                 {ALGO_SHORT[a] || a}
@@ -1583,7 +1583,8 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="ax-tune-slider-row">
+              <span className="ax-tune-slider-min">{merged.min}</span>
               <input
                 className="ax-tune-slider"
                 type="range"
@@ -1595,10 +1596,10 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
                   const v = Number(e.target.value)
                   merged.algos.forEach((a) => update(a, merged.key, v))
                 }}
-                style={{ flex: 1 }}
               />
-              <span style={{ minWidth: 48, textAlign: 'right', fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>
-                {isBlank ? '∞' : (merged.key === 'C' ? Number(value).toFixed(2) : value)}
+              <span className="ax-tune-slider-max">{merged.max}</span>
+              <span className="ax-tune-slider-val">
+                {isBlank ? 'None' : (merged.key === 'C' ? Number(value).toFixed(2) : value)}
               </span>
             </div>
             {merged.type === 'numberOrBlank' && (
@@ -1621,13 +1622,12 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
 
         {/* Hint */}
         {hint && (
-          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 5 }}>→ {hint}</div>
+          <div className="ax-tune-param-hint">→ {hint}</div>
         )}
       </div>
     )
   }
 
-  // Build effect message from changed params
   const buildEffectMessage = () => {
     if (!changedParams.length) return null
     const pairs = changedParams.slice(0, 3).map((p) => {
@@ -1641,20 +1641,23 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
   }
   const effectMessage = buildEffectMessage()
 
+  // Build the list of tabs: prepend 'All Parameters' if selectedAlgos.length > 1
+  const tabs = selectedAlgos.length > 1 ? ['all', ...selectedAlgos] : selectedAlgos
+
   return (
     <div style={{ marginTop: 8 }}>
       {/* Tab bar: TUNING label + algo pills */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>TUNING</span>
-        {selectedAlgos.map((algo) => {
-          const isActive = algo === validTab
-          const health = getAlgoHealth(algo)
+        {tabs.map((tabKey) => {
+          const isActive = tabKey === validTab
+          const health = tabKey !== 'all' ? getAlgoHealth(tabKey) : null
           const tone = health ? healthTone(health.color) : null
           return (
             <button
-              key={algo}
+              key={tabKey}
               type="button"
-              onClick={() => setActiveTab(algo)}
+              onClick={() => setActiveTab(tabKey)}
               style={{
                 padding: '5px 14px',
                 borderRadius: 999,
@@ -1664,9 +1667,24 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
                 fontSize: 12, fontWeight: isActive ? 700 : 500,
                 cursor: 'pointer', transition: 'all 0.15s',
                 whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
               }}
             >
-              {algoLabel(algo)}
+              <span>{tabKey === 'all' ? 'All Parameters' : algoLabel(tabKey)}</span>
+              {health && tone && (
+                <span style={{
+                  fontSize: 10,
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                  background: isActive ? 'rgba(255,255,255,0.2)' : tone.bg,
+                  color: isActive ? '#fff' : tone.text,
+                  fontWeight: 700
+                }}>
+                  {health.color === 'red' || health.color === 'orange' ? '⚠ overfit' : '✓ healthy'}
+                </span>
+              )}
             </button>
           )
         })}

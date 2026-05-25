@@ -7208,6 +7208,8 @@ button.ax-module-head:focus-visible {
   .ax-guidance-head h2 {
     font-size: 24px;
   }
+}
+
 .ax-guided-coach-orientation div {
   display: flex;
   align-items: center;
