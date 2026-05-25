@@ -198,22 +198,31 @@ export default function DescribePage({ dataset }) {
                 <table className="ax-tbl">
                   <thead>
                     <tr>
-                      <th>Variable</th><th>n</th><th>Mean</th><th>SD</th><th>Min</th><th>Q1</th><th>Median</th><th>Q3</th><th>Max</th><th>Skew</th>
+                      <th style={{ textAlign: 'left' }}>Variable</th>
+                      <th style={{ textAlign: 'right' }}>n</th>
+                      <th style={{ textAlign: 'right' }}>Mean</th>
+                      <th style={{ textAlign: 'right' }}>SD</th>
+                      <th style={{ textAlign: 'right' }}>Min</th>
+                      <th style={{ textAlign: 'right' }}>Q1</th>
+                      <th style={{ textAlign: 'right' }}>Median</th>
+                      <th style={{ textAlign: 'right' }}>Q3</th>
+                      <th style={{ textAlign: 'right' }}>Max</th>
+                      <th style={{ textAlign: 'right' }}>Skew</th>
                     </tr>
                   </thead>
                   <tbody>
                     {numericStats.map((s) => (
                       <tr key={s.variable}>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>{s.variable}</td>
-                        <td>{s.n?.toLocaleString()}</td>
-                        <td>{fmt(s.mean)}</td>
-                        <td>{fmt(s.std)}</td>
-                        <td>{fmt(s.min)}</td>
-                        <td>{fmt(s.q1)}</td>
-                        <td>{fmt(s.median)}</td>
-                        <td>{fmt(s.q3)}</td>
-                        <td>{fmt(s.max)}</td>
-                        <td>{fmt(s.skew)}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)', textAlign: 'left' }}>{s.variable}</td>
+                        <td style={{ textAlign: 'right' }}>{s.n?.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(s.mean)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(s.std)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(s.min)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(s.q1)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(s.median)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(s.q3)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(s.max)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(s.skew)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -238,17 +247,24 @@ export default function DescribePage({ dataset }) {
               <div className="ax-card" style={{ padding: 0, overflow: 'auto', marginBottom: 12 }}>
                 <table className="ax-tbl">
                   <thead>
-                    <tr><th>Variable</th><th>n</th><th>Unique</th><th>Most common</th><th>Share</th><th>Distribution</th></tr>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Variable</th>
+                      <th style={{ textAlign: 'right' }}>n</th>
+                      <th style={{ textAlign: 'right' }}>Unique</th>
+                      <th style={{ textAlign: 'left' }}>Most common</th>
+                      <th style={{ textAlign: 'right' }}>Share</th>
+                      <th style={{ textAlign: 'left' }}>Distribution</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {categoricalStats.map((s) => (
                       <tr key={s.variable}>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>{s.variable}</td>
-                        <td>{s.n?.toLocaleString()}</td>
-                        <td>{s.unique}</td>
-                        <td>{s.top}</td>
-                        <td>{pctOf(s.freq, s.n)}</td>
-                        <td>{topDistribution(s).slice(0, 3).map((x) => `${x.label}: ${x.pct}`).join(' | ')}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)', textAlign: 'left' }}>{s.variable}</td>
+                        <td style={{ textAlign: 'right' }}>{s.n?.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right' }}>{s.unique}</td>
+                        <td style={{ textAlign: 'left' }}>{s.top}</td>
+                        <td style={{ textAlign: 'right' }}>{pctOf(s.freq, s.n)}</td>
+                        <td style={{ textAlign: 'left' }}>{topDistribution(s).slice(0, 3).map((x) => `${x.label}: ${x.pct}`).join(' | ')}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -222,25 +222,25 @@ export default function ExpandPage({ dataset, setDataset }) {
               <table className="ax-tbl" style={{ fontSize: 12 }}>
                 <thead>
                   <tr>
-                    <th>Numeric column</th>
-                    <th>Mean before</th>
-                    <th>Mean after</th>
-                    <th>Δ mean</th>
-                    <th>Std before</th>
-                    <th>Std after</th>
-                    <th>Δ std</th>
+                    <th style={{ textAlign: 'left' }}>Numeric column</th>
+                    <th style={{ textAlign: 'right' }}>Mean before</th>
+                    <th style={{ textAlign: 'right' }}>Mean after</th>
+                    <th style={{ textAlign: 'right' }}>Δ mean</th>
+                    <th style={{ textAlign: 'right' }}>Std before</th>
+                    <th style={{ textAlign: 'right' }}>Std after</th>
+                    <th style={{ textAlign: 'right' }}>Δ std</th>
                   </tr>
                 </thead>
                 <tbody>
                   {preview.drift.map((d) => (
                     <tr key={d.column}>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{d.column}</td>
-                      <td>{fmt(d.before_mean)}</td>
-                      <td>{fmt(d.after_mean)}</td>
-                      <td style={{ color: pctColor(d.mean_pct_change) }}>{fmtPct(d.mean_pct_change)}</td>
-                      <td>{fmt(d.before_std)}</td>
-                      <td>{fmt(d.after_std)}</td>
-                      <td style={{ color: pctColor(d.std_pct_change) }}>{fmtPct(d.std_pct_change)}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', textAlign: 'left' }}>{d.column}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(d.before_mean)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(d.after_mean)}</td>
+                      <td style={{ color: pctColor(d.mean_pct_change), textAlign: 'right' }}>{fmtPct(d.mean_pct_change)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(d.before_std)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(d.after_std)}</td>
+                      <td style={{ color: pctColor(d.std_pct_change), textAlign: 'right' }}>{fmtPct(d.std_pct_change)}</td>
                     </tr>
                   ))}
                 </tbody>
