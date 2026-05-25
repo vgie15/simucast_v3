@@ -466,7 +466,7 @@ export default function DataDetailView({
               <section className="ax-dd-about-popover">
                 <div className="ax-dd-about-popover-head">
                   <strong>About this file</strong>
-                  <button type="button" className="ax-dd-nav-btn" onClick={() => setAboutOpen(false)} aria-label="Close about file">x</button>
+                  <button type="button" className="ax-popover-close" onClick={() => setAboutOpen(false)} aria-label="Close about file">×</button>
                 </div>
                 <div className="ax-dd-about-popover-body">
                   {aboutLoading && !aboutData && (
