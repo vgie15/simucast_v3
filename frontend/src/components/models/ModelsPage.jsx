@@ -1902,6 +1902,19 @@ function ComparisonTable({ models, activeIdx, onPick }) {
   )
 }
 
+// Map model health color names to specific backgrounds, chip colors, and text colors.
+function healthTone(color) {
+  const tones = {
+    green: { bg: '#F0FDF4', chipBg: '#DCFCE7', text: '#15803D', border: '#22C55E' },
+    yellow: { bg: '#FEFCE8', chipBg: '#FEF3C7', text: '#A16207', border: '#EAB308' },
+    orange: { bg: '#FFF7ED', chipBg: '#FFEDD5', text: '#C2410C', border: '#F97316' },
+    red: { bg: '#FEF2F2', chipBg: '#FEE2E2', text: '#B91C1C', border: '#EF4444' },
+    blue: { bg: '#EFF6FF', chipBg: '#DBEAFE', text: '#1D4ED8', border: '#3B82F6' },
+    gray: { bg: 'var(--color-background-primary)', chipBg: 'var(--color-background-secondary)', text: 'var(--color-text-secondary)', border: 'var(--color-border-tertiary)' },
+  }
+  return tones[color] || tones.gray
+}
+
 // Builds a model-health assessment object combining stored diagnostics with computed metric rows.
 function assessModelHealth(model) {
   const m = model?.metrics
