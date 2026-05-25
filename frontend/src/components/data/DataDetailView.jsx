@@ -8,6 +8,7 @@ import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { BusyOverlay } from '../common/LoadingStates'
 import { useAuth } from '../providers/AuthProvider'
 import { useDatasetTableState } from './useDatasetTableState'
+import { Download, Maximize2, Minimize2, X } from 'lucide-react'
 
 const PAGE_SIZE = 100
 const TYPE_ICON = {
@@ -466,7 +467,9 @@ export default function DataDetailView({
               <section className="ax-dd-about-popover">
                 <div className="ax-dd-about-popover-head">
                   <strong>About this file</strong>
-                  <button type="button" className="ax-popover-close" onClick={() => setAboutOpen(false)} aria-label="Close about file">×</button>
+                  <button type="button" className="ax-popover-close" onClick={() => setAboutOpen(false)} aria-label="Close about file">
+                    <X size={16} />
+                  </button>
                 </div>
                 <div className="ax-dd-about-popover-body">
                   {aboutLoading && !aboutData && (
@@ -498,7 +501,7 @@ export default function DataDetailView({
             title="Download CSV"
             aria-label="Download CSV"
           >
-            ⬇
+            <Download size={16} />
           </a>
           <button
             type="button"
@@ -507,7 +510,7 @@ export default function DataDetailView({
             title={expanded ? 'Exit fullscreen' : 'Expand to fullscreen'}
             aria-label={expanded ? 'Exit fullscreen' : 'Expand to fullscreen'}
           >
-            {expanded ? '×' : '⛶'}
+            {expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
         </div>
       </header>
