@@ -31,15 +31,18 @@ const PARAM_DEFS = {
   logistic: [
     { key: 'C', label: 'Regularization C', type: 'number', min: 0.001, max: 100, step: 0.1, defaultValue: 1 },
     { key: 'max_iter', label: 'Max iterations', type: 'number', min: 100, max: 5000, step: 100, defaultValue: 1000 },
+    { key: 'random_state', label: 'Random seed', type: 'number', min: 0, max: 999, step: 1, defaultValue: 42 },
   ],
   rf: [
-    { key: 'n_estimators', label: 'Trees', type: 'number', min: 10, max: 500, step: 10, defaultValue: 100 },
+    { key: 'n_estimators', label: 'Number of trees', type: 'number', min: 10, max: 500, step: 10, defaultValue: 100 },
     { key: 'max_depth', label: 'Max depth', type: 'numberOrBlank', min: 1, max: 50, step: 1, defaultValue: '' },
-    { key: 'min_samples_leaf', label: 'Min samples per leaf', type: 'number', min: 1, max: 50, step: 1, defaultValue: 1 },
+    { key: 'min_samples_leaf', label: 'Min samples / leaf', type: 'number', min: 1, max: 50, step: 1, defaultValue: 1 },
+    { key: 'random_state', label: 'Random seed', type: 'number', min: 0, max: 999, step: 1, defaultValue: 42 },
   ],
   tree: [
     { key: 'max_depth', label: 'Max depth', type: 'numberOrBlank', min: 1, max: 50, step: 1, defaultValue: '' },
-    { key: 'min_samples_leaf', label: 'Min samples per leaf', type: 'number', min: 1, max: 50, step: 1, defaultValue: 1 },
+    { key: 'min_samples_leaf', label: 'Min samples / leaf', type: 'number', min: 1, max: 50, step: 1, defaultValue: 1 },
+    { key: 'random_state', label: 'Random seed', type: 'number', min: 0, max: 999, step: 1, defaultValue: 42 },
   ],
   linear: [
     { key: 'fit_intercept', label: 'Fit intercept', type: 'checkbox', defaultValue: true },
@@ -533,42 +536,22 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         SimuCast helps choose sensible targets and features, then compares train and test performance so overfitting is visible.
       </PageGuide>
 
-      {/* History Collapsible list */}
+      {/* Previous Models Table */}
       {showHistory && models.length > 0 && (
-        <div className="ax-card" style={{ padding: 14, marginBottom: 16, border: '1.5px solid var(--color-accent-soft)', background: 'var(--color-background-tertiary)' }}>
-          <p className="ax-lbl" style={{ margin: '0 0 10px' }}>Previous models</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {models.map((m) => (
-              <div key={m.id} className="ax-card" style={{ padding: '10px 12px', background: 'var(--color-background-primary)' }}>
-                <div className="ax-row">
-                  <div>
-                    <p style={{ fontSize: 12, fontWeight: 700, margin: 0, color: 'var(--color-text-primary)' }}>
-                      {algoLabelForTask(m.algorithm, m.metrics?.task)} - {m.target}
-                    </p>
-                    <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-                      {formatMetrics(m.metrics)}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button className="ax-btn mini" onClick={() => { restoreModelSettings(m); setShowHistory(false); }} type="button">
-                      Restore settings
-                    </button>
-                    <button className="ax-btn mini" onClick={() => prepareAndUseInWhatIf(m)} type="button">
-                      Use in What-if
-                    </button>
-                    <button className="ax-btn mini danger" onClick={() => deleteSavedModel(m)} type="button">
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <PreviousModelsTable
+          models={models}
+          restoreModelSettings={restoreModelSettings}
+          prepareAndUseInWhatIf={prepareAndUseInWhatIf}
+          deleteSavedModel={deleteSavedModel}
+          setShowHistory={setShowHistory}
+        />
       )}
+
+
 
       {/* Inline Configuration Card */}
       <div
+
         className="ax-card"
         style={{
           padding: '12px 16px',
@@ -971,7 +954,253 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 }
 
 // Dropdown menu that houses config selectors for the model build page.
+// Standalone Previous Models history table with filter pills, BEST AUC badge, health badges, and icon actions.
+function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhatIf, deleteSavedModel, setShowHistory }) {
+  const [filterTarget, setFilterTarget] = useState('all')
+  const [checkedIds, setCheckedIds] = useState(new Set())
+
+  const targets = [...new Set(models.map((m) => m.target).filter(Boolean))]
+  const filtered = filterTarget === 'all' ? models : models.filter((m) => m.target === filterTarget)
+
+  // Find best AUC model id
+  let bestAucId = null, bestAucVal = -Infinity
+  models.forEach((m) => {
+    const v = m.metrics?.auc ?? -Infinity
+    if (v > bestAucVal) { bestAucVal = v; bestAucId = m.id }
+  })
+
+  const settingsSummary = (m) => {
+    const defs = defaultModelParams()
+    const params = m.metrics?.model_params || {}
+    const defParams = defs[m.algorithm] || {}
+    const parts = []
+    Object.entries(params).forEach(([k, v]) => {
+      const d = defParams[k]
+      if (v !== undefined && String(v) !== String(d) && !(v === '' && d === '')) {
+        if (k === 'n_estimators') parts.push(`trees +${v}`)
+        else if (k === 'max_depth') parts.push(`depth =${v === '' ? '∞' : v}`)
+        else if (k === 'C') parts.push(`C =${v}`)
+        else if (k === 'min_samples_leaf') parts.push(`leaf =${v}`)
+        else if (k === 'max_iter') parts.push(`iter =${v}`)
+      }
+    })
+    return parts.length ? parts.join(' · ') : 'defaults'
+  }
+
+  const relTime = (ts) => {
+    if (!ts) return ''
+    const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
+    if (diff < 60) return `${diff}s ago`
+    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`
+    return `${Math.floor(diff / 86400)} days ago`
+  }
+
+  const exportCSV = () => {
+    const rows = [['Algorithm', 'Target', 'Accuracy', 'AUC', 'F1', 'Settings', 'Trained']]
+    models.forEach((m) => {
+      rows.push([
+        algoLabelForTask(m.algorithm, m.metrics?.task),
+        m.target,
+        m.metrics?.accuracy != null ? (m.metrics.accuracy * 100).toFixed(1) + '%' : '',
+        m.metrics?.auc != null ? Number(m.metrics.auc).toFixed(3) : '',
+        m.metrics?.f1 != null ? Number(m.metrics.f1).toFixed(3) : '',
+        settingsSummary(m),
+        m.trained_at || '',
+      ])
+    })
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    a.download = 'previous_models.csv'
+    a.click()
+  }
+
+  const toggleCheck = (id) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div style={{
+      background: 'var(--color-background-primary)',
+      border: '1.5px solid var(--color-border-tertiary)',
+      borderRadius: 14, marginBottom: 18, overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 12px' }}>
+        <div>
+          <h2 style={{ fontSize: 16, fontWeight: 800, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>Previous models</h2>
+          <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: 0 }}>
+            {models.length} run{models.length !== 1 ? 's' : ''} · sorted by AUC
+          </p>
+        </div>
+        <button
+          className="ax-btn mini"
+          type="button"
+          onClick={exportCSV}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600 }}
+        >
+          ↓ Export CSV
+        </button>
+      </div>
+
+      {/* Target filter pills */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 20px 12px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginRight: 4 }}>FILTER TARGET</span>
+        {['all', ...targets].map((t) => {
+          const active = filterTarget === t
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setFilterTarget(t)}
+              style={{
+                padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer',
+                border: active ? 'none' : '1.5px solid var(--color-border-tertiary)',
+                background: active ? 'var(--color-accent)' : 'var(--color-background-primary)',
+                color: active ? '#fff' : 'var(--color-text-secondary)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {t === 'all' ? 'All' : t}
+            </button>
+          )
+        })}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+          Tip — tick rows to compare side-by-side
+        </span>
+      </div>
+
+      {/* Table */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderTop: '1.5px solid var(--color-border-tertiary)', borderBottom: '1.5px solid var(--color-border-tertiary)' }}>
+              <th style={{ width: 40, padding: '8px 0 8px 20px' }}></th>
+              <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                ALGORITHM · TARGET
+              </th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                ACCURACY ↕
+              </th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
+                AUC ↓
+              </th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                F1 ↕
+              </th>
+              <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>
+                SETTINGS
+              </th>
+              <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>
+                WHEN
+              </th>
+              <th style={{ width: 100, padding: '8px 20px 8px 0' }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((m, idx) => {
+              const h = assessModelHealth(m)
+              const t = h ? healthTone(h.color) : null
+              const isBestAuc = m.id === bestAucId && m.metrics?.auc != null
+              const isChecked = checkedIds.has(m.id)
+              const summary = settingsSummary(m)
+              const isDefaultSettings = summary === 'defaults'
+
+              return (
+                <tr
+                  key={m.id}
+                  style={{
+                    borderBottom: idx < filtered.length - 1 ? '1px solid var(--color-border-tertiary)' : 'none',
+                    background: isChecked ? 'var(--color-accent-light)' : 'transparent',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={(e) => { if (!isChecked) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
+                  onMouseLeave={(e) => { if (!isChecked) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <td style={{ padding: '14px 0 14px 20px' }}>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleCheck(m.id)}
+                      style={{ accentColor: 'var(--color-accent)', width: 14, height: 14, cursor: 'pointer' }}
+                    />
+                  </td>
+                  <td style={{ padding: '14px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                        {algoLabelForTask(m.algorithm, m.metrics?.task)}
+                      </span>
+                      {isBestAuc && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em',
+                          background: 'var(--color-accent)', color: '#fff', padding: '2px 7px', borderRadius: 999,
+                        }}>BEST AUC</span>
+                      )}
+                      {h && h.color === 'red' && t && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <AlertTriangle size={11} /> {h.label.toLowerCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                      target: {m.target}
+                    </div>
+                  </td>
+                  <td style={{ padding: '14px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)' }}>
+                    {m.metrics?.accuracy != null ? (m.metrics.accuracy * 100).toFixed(1) + '%' : (m.metrics?.r2 != null ? `R²\u00a0${Number(m.metrics.r2).toFixed(3)}` : '—')}
+                  </td>
+                  <td style={{ padding: '14px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)' }}>
+                    {m.metrics?.auc != null ? Number(m.metrics.auc).toFixed(3) : '—'}
+                  </td>
+                  <td style={{ padding: '14px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)' }}>
+                    {m.metrics?.f1 != null ? Number(m.metrics.f1).toFixed(3) : '—'}
+                  </td>
+                  <td style={{ padding: '14px 12px' }}>
+                    <span style={{
+                      fontSize: 11, fontFamily: 'var(--font-mono)',
+                      color: isDefaultSettings ? 'var(--color-text-tertiary)' : 'var(--color-accent-dark)',
+                      fontWeight: isDefaultSettings ? 400 : 600,
+                    }}>
+                      {summary}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 12px', fontSize: 12, color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                    {relTime(m.trained_at)}
+                  </td>
+                  <td style={{ padding: '14px 20px 14px 0' }}>
+                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                      <button title="Restore settings" type="button"
+                        onClick={() => { restoreModelSettings(m); setShowHistory(false) }}
+                        style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}
+                      >↺</button>
+                      <button title="Use in What-if" type="button"
+                        onClick={() => prepareAndUseInWhatIf(m)}
+                        style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}
+                      >→</button>
+                      <button title="Delete" type="button"
+                        onClick={() => deleteSavedModel(m)}
+                        style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #FECACA', background: 'var(--color-background-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', fontSize: 14 }}
+                      >✕</button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// Dropdown menu that houses config selectors for the model build page.
 function ConfigDropdown({ label, value, children }) {
+
   const [isOpen, setIsOpen] = useState(false)
   const ref = useRef()
 
@@ -1186,9 +1415,11 @@ function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
   )
 }
 
-// Renders editable per-algorithm parameter inputs based on each algorithm's parameter definitions.
 function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results }) {
-  const [activeTab, setActiveTab] = useState('all')
+  const [activeTab, setActiveTab] = useState(selectedAlgos[0] ?? 'all')
+
+  // Keep activeTab in sync when selectedAlgos changes
+  const validTab = selectedAlgos.includes(activeTab) ? activeTab : (selectedAlgos[0] ?? 'all')
 
   if (!selectedAlgos.length) {
     return (
@@ -1208,21 +1439,19 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
     })
   }
 
-  // Algo short labels for badges
   const ALGO_SHORT = { logistic: 'LR', rf: 'RF', tree: 'DT', linear: 'LIN' }
   const ALGO_BADGE_CLASS = { logistic: 'lr', rf: 'rf', tree: 'dt', linear: 'lin' }
 
-  // Categorize params
-  const COMPLEXITY_KEYS = ['max_depth', 'min_samples_leaf', 'n_estimators', 'C']
-  const CONVERGENCE_KEYS = ['max_iter', 'fit_intercept']
+  const COMPLEXITY_KEYS = ['max_depth', 'min_samples_leaf', 'C']
+  const CONVERGENCE_KEYS = ['max_iter', 'n_estimators', 'random_state', 'fit_intercept']
 
-  // Build merged param list for the active tab
   const getParamsForAlgo = (algo) => (PARAM_DEFS[algo] || []).map((def) => ({ ...def, algo }))
 
-  const visibleAlgos = activeTab === 'all' ? selectedAlgos : [activeTab]
+  // Show params for the active algo tab
+  const visibleAlgos = [validTab]
   const allParams = visibleAlgos.flatMap(getParamsForAlgo)
 
-  // Merge by key: group params with the same key across algos
+  // Merge by key
   const mergedMap = new Map()
   allParams.forEach((p) => {
     if (!mergedMap.has(p.key)) {
@@ -1231,78 +1460,98 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
       mergedMap.get(p.key).algos.push(p.algo)
     }
   })
+  // Also pull same-key params from other selected algos
+  selectedAlgos.forEach((algo) => {
+    if (algo === validTab) return
+    ;(PARAM_DEFS[algo] || []).forEach((def) => {
+      if (mergedMap.has(def.key)) {
+        const entry = mergedMap.get(def.key)
+        if (!entry.algos.includes(algo)) entry.algos.push(algo)
+      }
+    })
+  })
   const mergedParams = Array.from(mergedMap.values())
 
   const complexityParams = mergedParams.filter((p) => COMPLEXITY_KEYS.includes(p.key))
   const convergenceParams = mergedParams.filter((p) => CONVERGENCE_KEYS.includes(p.key))
-  const otherParams = mergedParams.filter((p) => !COMPLEXITY_KEYS.includes(p.key) && !CONVERGENCE_KEYS.includes(p.key))
 
-  // Get health status for an algo from latest results
   const getAlgoHealth = (algo) => {
     const model = results?.models?.find((m) => m.algorithm === algo)
     return model ? assessModelHealth(model) : null
   }
 
-  // Hint text for params
-  const paramHint = (def, value) => {
-    if (def.key === 'max_depth') {
-      if (value === '' || value === null || value === undefined) return '→ unlimited depth'
-      if (Number(value) <= 5) return '→ shallow, less overfitting'
-      if (Number(value) <= 15) return '→ balanced'
-      return '→ deep, may overfit'
+  const paramHint = (key, value) => {
+    if (key === 'max_depth') {
+      if (value === '' || value == null) return 'unlimited depth'
+      const v = Number(value)
+      if (v <= 5) return 'shallow, less overfitting'
+      if (v <= 15) return 'balanced'
+      return 'deep, may overfit'
     }
-    if (def.key === 'n_estimators') {
-      if (Number(value) <= 50) return '→ faster, less stable'
-      if (Number(value) <= 200) return '→ balanced'
-      return '→ more stable, slower'
+    if (key === 'n_estimators') {
+      const v = Number(value)
+      if (v <= 50) return 'fast, less stable'
+      if (v <= 200) return 'stable'
+      return 'very stable, slower'
     }
-    if (def.key === 'min_samples_leaf') {
-      if (Number(value) <= 2) return '→ flexible, may overfit'
-      if (Number(value) <= 10) return '→ balanced'
-      return '→ conservative, smoother'
+    if (key === 'min_samples_leaf') {
+      const v = Number(value)
+      if (v <= 2) return 'fine-grained'
+      if (v <= 10) return 'balanced'
+      return 'coarse'
     }
-    if (def.key === 'C') {
-      if (Number(value) <= 0.1) return '→ strong regularization'
-      if (Number(value) <= 10) return '→ balanced'
-      return '→ weak regularization'
+    if (key === 'C') {
+      const v = Number(value)
+      if (v <= 0.1) return 'strong regularization'
+      if (v <= 10) return 'balanced'
+      return 'weak regularization'
     }
-    if (def.key === 'max_iter') {
-      if (Number(value) <= 500) return '→ may not converge'
-      return '→ sufficient iterations'
+    if (key === 'max_iter') {
+      const v = Number(value)
+      if (v <= 500) return 'may not converge'
+      if (v <= 2000) return 'fine'
+      return 'thorough'
     }
+    if (key === 'random_state') return 'reproducibility'
     return null
   }
 
-  // Effect prediction based on changes from defaults
+  // Detect changes from defaults for effect banner
   const defaults = defaultModelParams()
   const changedParams = []
   selectedAlgos.forEach((algo) => {
-    (PARAM_DEFS[algo] || []).forEach((def) => {
+    ;(PARAM_DEFS[algo] || []).forEach((def) => {
       const cur = modelParams[algo]?.[def.key]
       const dflt = defaults[algo]?.[def.key]
-      if (cur !== undefined && cur !== dflt && !(cur === '' && dflt === '')) {
-        changedParams.push({ algo, ...def, current: cur, default: dflt })
+      if (cur !== undefined && String(cur) !== String(dflt) && !(cur === '' && dflt === '')) {
+        changedParams.push({ algo, ...def, current: cur, dflt })
       }
     })
   })
 
-  const effectMessage = changedParams.length > 0
-    ? `Changing ${changedParams.map((p) => p.label.toLowerCase()).join(', ')} may ${changedParams.some((p) => p.key === 'max_depth' || p.key === 'min_samples_leaf') ? 'reduce overfitting risk' : 'affect model convergence'}.`
-    : null
+  // Health for current active tab
+  const activeHealth = getAlgoHealth(validTab)
+  const activeTone = activeHealth ? healthTone(activeHealth.color) : null
 
-  const renderParam = (merged) => {
-    // Use the first algo's value as representative
+  const renderParamCard = (merged) => {
     const primaryAlgo = merged.algos[0]
     const value = modelParams[primaryAlgo]?.[merged.key] ?? merged.defaultValue
+    const hint = paramHint(merged.key, value)
+    const isBlank = value === '' || value == null
 
     return (
-      <div key={merged.key} className="ax-tune-param">
-        <div className="ax-tune-param-top">
-          <div>
-            <span className="ax-tune-param-name">{merged.label}</span>
-            <span className="ax-tune-param-key">{merged.key}</span>
+      <div key={merged.key} style={{
+        background: 'var(--color-background-primary)',
+        border: '1.5px solid var(--color-border-tertiary)',
+        borderRadius: 10, padding: '14px 16px', marginBottom: 8,
+      }}>
+        {/* Top row: name + code key + badges */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>{merged.label}</span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>{merged.key}</span>
           </div>
-          <div className="ax-tune-algo-badges">
+          <div style={{ display: 'flex', gap: 4 }}>
             {merged.algos.map((a) => (
               <span key={a} className={`ax-tune-algo-badge ${ALGO_BADGE_CLASS[a] || ''}`}>
                 {ALGO_SHORT[a] || a}
@@ -1310,124 +1559,162 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
             ))}
           </div>
         </div>
+
+        {/* Slider or checkbox */}
         {merged.type === 'checkbox' ? (
-          <div className="ax-tune-checkbox-row">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <input
               type="checkbox"
-              id={`tune-${merged.key}`}
+              id={`tune-${merged.key}-${primaryAlgo}`}
               checked={!!value}
               onChange={(e) => merged.algos.forEach((a) => update(a, merged.key, e.target.checked))}
+              style={{ width: 16, height: 16, accentColor: 'var(--color-accent)', cursor: 'pointer' }}
             />
-            <label htmlFor={`tune-${merged.key}`}>{value ? 'Enabled' : 'Disabled'}</label>
+            <label htmlFor={`tune-${merged.key}-${primaryAlgo}`} style={{ fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+              {value ? 'Enabled' : 'Disabled'}
+            </label>
           </div>
         ) : (
           <>
-            <div className="ax-tune-slider-row">
-              <span className="ax-tune-slider-min">{merged.min}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <input
                 className="ax-tune-slider"
                 type="range"
                 min={merged.min}
                 max={merged.max}
                 step={merged.step}
-                value={value === '' || value === null || value === undefined ? merged.defaultValue || merged.min : value}
+                value={isBlank ? (merged.defaultValue !== '' ? merged.defaultValue : merged.min) : value}
                 onChange={(e) => {
                   const v = Number(e.target.value)
                   merged.algos.forEach((a) => update(a, merged.key, v))
                 }}
+                style={{ flex: 1 }}
               />
-              <span className="ax-tune-slider-max">{merged.max}</span>
-              <span className="ax-tune-slider-val">
-                {value === '' || value === null || value === undefined ? 'None' : value}
+              <span style={{ minWidth: 48, textAlign: 'right', fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>
+                {isBlank ? '∞' : (merged.key === 'C' ? Number(value).toFixed(2) : value)}
               </span>
             </div>
             {merged.type === 'numberOrBlank' && (
-              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <input
                   type="checkbox"
-                  id={`tune-none-${merged.key}`}
-                  checked={value === '' || value === null || value === undefined}
+                  id={`tune-none-${merged.key}-${primaryAlgo}`}
+                  checked={isBlank}
                   onChange={(e) => {
-                    const newVal = e.target.checked ? '' : merged.defaultValue || merged.min
+                    const newVal = e.target.checked ? '' : (merged.defaultValue !== '' ? merged.defaultValue : merged.min)
                     merged.algos.forEach((a) => update(a, merged.key, newVal))
                   }}
                   style={{ accentColor: 'var(--color-accent)' }}
                 />
-                <label htmlFor={`tune-none-${merged.key}`} style={{ fontSize: 11, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>No limit</label>
+                <label htmlFor={`tune-none-${merged.key}-${primaryAlgo}`} style={{ fontSize: 11, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>No limit</label>
               </div>
             )}
           </>
         )}
-        {paramHint(merged, value) && (
-          <div className="ax-tune-param-hint">
-            <span className="arrow">→</span> {paramHint(merged, value).replace('→ ', '')}
-          </div>
+
+        {/* Hint */}
+        {hint && (
+          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 5 }}>→ {hint}</div>
         )}
       </div>
     )
   }
 
+  // Build effect message from changed params
+  const buildEffectMessage = () => {
+    if (!changedParams.length) return null
+    const pairs = changedParams.slice(0, 3).map((p) => {
+      const from = p.dflt === '' ? '∞' : p.dflt
+      const to = p.current === '' ? '∞' : p.current
+      return `${p.key} from ${from} → ${to}`
+    })
+    const gap = activeHealth?.metrics?.find((m) => m.label.toLowerCase().includes('gap'))
+    const gapNote = gap ? ` to shrink the train/test gap from ${gap.value} toward ~5%.` : '.'
+    return `Changing ${pairs.join(' and ')} ${changedParams.some((p) => ['max_depth','min_samples_leaf'].includes(p.key)) ? 'should reduce overfitting' : 'may affect convergence'}${gapNote}`
+  }
+  const effectMessage = buildEffectMessage()
+
   return (
     <div style={{ marginTop: 8 }}>
-      {/* Algo tabs */}
-      <div className="ax-tune-tabs">
-        <button
-          type="button"
-          className={`ax-tune-tab ${activeTab === 'all' ? 'active' : ''}`}
-          onClick={() => setActiveTab('all')}
-        >
-          All Parameters
-        </button>
+      {/* Tab bar: TUNING label + algo pills */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>TUNING</span>
         {selectedAlgos.map((algo) => {
+          const isActive = algo === validTab
           const health = getAlgoHealth(algo)
           const tone = health ? healthTone(health.color) : null
           return (
             <button
               key={algo}
               type="button"
-              className={`ax-tune-tab ${activeTab === algo ? 'active' : ''}`}
               onClick={() => setActiveTab(algo)}
+              style={{
+                padding: '5px 14px',
+                borderRadius: 999,
+                border: isActive ? 'none' : '1.5px solid var(--color-border-tertiary)',
+                background: isActive ? 'var(--color-accent)' : 'var(--color-background-primary)',
+                color: isActive ? '#fff' : 'var(--color-text-secondary)',
+                fontSize: 12, fontWeight: isActive ? 700 : 500,
+                cursor: 'pointer', transition: 'all 0.15s',
+                whiteSpace: 'nowrap',
+              }}
             >
               {algoLabel(algo)}
-              {health && (
-                <span
-                  className="ax-tune-health-badge"
-                  style={{ background: tone.chipBg, color: tone.text, marginLeft: 8 }}
-                >
-                  {health.label.includes('overfitting') ? '⚠ overfit' : '✓ healthy'}
-                </span>
-              )}
             </button>
           )
         })}
+        {/* Health badge on the right */}
+        {activeHealth && activeTone && (
+          <span style={{
+            marginLeft: 'auto', fontSize: 11, color: activeTone.text,
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            Last health: <strong style={{ color: activeTone.text }}>{activeHealth.label.toLowerCase()}</strong>
+          </span>
+        )}
       </div>
 
-      {/* Grouped params */}
-      {complexityParams.length > 0 && (
-        <>
-          <div className="ax-tune-category">Complexity</div>
-          {complexityParams.map(renderParam)}
-        </>
-      )}
-      {convergenceParams.length > 0 && (
-        <>
-          <div className="ax-tune-category">Convergence & Scale</div>
-          {convergenceParams.map(renderParam)}
-        </>
-      )}
-      {otherParams.length > 0 && (
-        <>
-          <div className="ax-tune-category">Other</div>
-          {otherParams.map(renderParam)}
-        </>
-      )}
+      {/* Two-column grid: COMPLEXITY | CONVERGENCE & SCALE */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+        {/* COMPLEXITY column */}
+        {complexityParams.length > 0 && (
+          <div style={{
+            background: 'var(--color-background-secondary)',
+            border: '1.5px solid var(--color-border-tertiary)',
+            borderRadius: 12, padding: '14px 14px 6px',
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)', marginBottom: 4 }}>COMPLEXITY</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 14 }}>Lower → simpler model, less overfitting risk.</div>
+            {complexityParams.map(renderParamCard)}
+          </div>
+        )}
+
+        {/* CONVERGENCE & SCALE column */}
+        {convergenceParams.length > 0 && (
+          <div style={{
+            background: 'var(--color-background-secondary)',
+            border: '1.5px solid var(--color-border-tertiary)',
+            borderRadius: 12, padding: '14px 14px 6px',
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)', marginBottom: 4 }}>CONVERGENCE &amp; SCALE</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 14 }}>Higher → fits more carefully, slower to train.</div>
+            {convergenceParams.map(renderParamCard)}
+          </div>
+        )}
+      </div>
 
       {/* Effect prediction banner */}
       {effectMessage && (
-        <div className="ax-tune-effect">
-          <span className="ax-tune-effect-icon">💡</span>
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12,
+          marginTop: 16, padding: '14px 16px',
+          background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 12,
+          fontSize: 12, color: '#92400E', lineHeight: 1.6,
+        }}>
+          <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>💡</span>
           <div>
-            <strong>Likely effect on this run:</strong> {effectMessage}
+            <strong style={{ fontWeight: 700 }}>Likely effect on this run</strong><br />
+            {effectMessage}
           </div>
         </div>
       )}
@@ -1436,6 +1723,7 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
 }
 
 // Panel that summarizes the training preprocessing plan and lists detected validation issues.
+
 function PreprocessingPlan({ plan, checks: propChecks, onFixAction, dismissedChecks, onDismissCheck }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
 
@@ -1996,46 +2284,52 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
       </div>
 
       {active.metrics?.confusion_matrix && (
-        <div className="ax-card" style={{ padding: 18, marginTop: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div>
-              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                CONFUSION MATRIX
-              </span>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
-                {algoLabelForTask(active.algorithm, active.metrics?.task)}
-              </h3>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <ExplainButton
-                datasetId={datasetId}
-                step="confusion-matrix"
-                params={{ task: active.metrics?.task, target: active.target }}
-                result={{ confusion_matrix: active.metrics.confusion_matrix, accuracy: active.metrics.accuracy, precision: active.metrics.precision, recall: active.metrics.recall }}
-                question="Explain this confusion matrix in plain English. What do the numbers mean? Are there any class imbalance issues?"
-                label="Explain"
-              />
-              <button
-                className="ax-btn mini"
-                type="button"
-                onClick={() => {
-                  const cm = active.metrics.confusion_matrix
-                  const lines = [',' + cm[0].map((_, j) => `Pred ${j}`).join(',')]
-                  cm.forEach((row, i) => lines.push(`Actual ${i},${row.join(',')}`))
-                  const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
-                  const a = document.createElement('a')
-                  a.href = URL.createObjectURL(blob)
-                  a.download = 'confusion_matrix.csv'
-                  a.click()
-                }}
-              >
-                Export
-              </button>
-            </div>
+        <div className="ax-card" style={{ padding: 20, marginTop: 20 }}>
+          {/* Header */}
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px', color: 'var(--color-text-primary)' }}>
+              Confusion matrix
+            </h3>
+            <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: 0 }}>
+              {algoLabelForTask(active.algorithm, active.metrics?.task)} · test set · {active.metrics.confusion_matrix.flat().reduce((a,b)=>a+b,0)} rows
+            </p>
           </div>
+
           <ConfusionMatrix cm={active.metrics.confusion_matrix} metrics={active.metrics} />
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+            <ExplainButton
+              datasetId={datasetId}
+              step="confusion-matrix"
+              params={{ task: active.metrics?.task, target: active.target }}
+              result={{ confusion_matrix: active.metrics.confusion_matrix, accuracy: active.metrics.accuracy, precision: active.metrics.precision, recall: active.metrics.recall }}
+              question="Explain this confusion matrix in plain English. What do the numbers mean? Are there any class imbalance issues?"
+              label="Explain"
+            />
+            <button className="ax-btn mini" type="button" disabled style={{ cursor: 'default', opacity: 0.5 }}>
+              Change threshold
+            </button>
+            <button
+              className="ax-btn mini"
+              type="button"
+              onClick={() => {
+                const cm = active.metrics.confusion_matrix
+                const lines = [',' + cm[0].map((_, j) => `Pred ${j}`).join(',')]
+                cm.forEach((row, i) => lines.push(`Actual ${i},${row.join(',')}`))
+                const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+                const a = document.createElement('a')
+                a.href = URL.createObjectURL(blob)
+                a.download = 'confusion_matrix.csv'
+                a.click()
+              }}
+            >
+              Export
+            </button>
+          </div>
         </div>
       )}
+
     </>
   )
 }
@@ -2273,117 +2567,193 @@ function assessModelHealth(model) {
 }
 
 // Renders a classification confusion matrix with cells shaded by intensity and diagonal emphasis.
-function ConfusionMatrix({ cm, metrics }) {
-  const n = cm.length // supports 2x2 or NxN
-  // For 2x2, compute per-class precision/recall and overall accuracy
+function ConfusionMatrix({ cm, metrics, active, datasetId }) {
+  const n = cm.length
   const is2x2 = n === 2
   const total = cm.flat().reduce((a, b) => a + b, 0)
   const correctTotal = cm.reduce((acc, row, i) => acc + row[i], 0)
   const accuracy = total > 0 ? correctTotal / total : 0
 
-  // Row and column sums
   const rowSums = cm.map((row) => row.reduce((a, b) => a + b, 0))
   const colSums = cm[0].map((_, j) => cm.reduce((a, row) => a + row[j], 0))
 
-  // 2x2 labels
-  const cellLabels2x2 = [
-    ['TN', 'FP'],
-    ['FN', 'TP'],
-  ]
+  // For 2x2: TN=cm[0][0], FP=cm[0][1], FN=cm[1][0], TP=cm[1][1]
+  const cellLabel = (i, j) => {
+    if (i === 0 && j === 0) return 'TN'
+    if (i === 0 && j === 1) return 'FP'
+    if (i === 1 && j === 0) return 'FN'
+    return 'TP'
+  }
+  const isAccent = (i, j) => is2x2 && i === 1 && j === 1 // TP — orange filled
+  const isGray = (i, j) => is2x2 && i === 0 && j === 1  // FP — gray filled
 
-  // Per-class precision & recall for binary
-  const classStats = is2x2
-    ? [0, 1].map((cls) => {
-        const tp = cm[cls][cls]
-        const fp = colSums[cls] - tp
-        const fn = rowSums[cls] - tp
-        const precision = tp + fp > 0 ? tp / (tp + fp) : 0
-        const recall = tp + fn > 0 ? tp / (tp + fn) : 0
-        return { cls, precision, recall }
-      })
-    : []
+  // Per-class stats for 2x2
+  // Class 0: TN=cm[0][0], FP=cm[0][1] → precision=TN/(TN+FN col0), recall=TN/(TN+FP row0)
+  const tn = is2x2 ? cm[0][0] : 0
+  const fp = is2x2 ? cm[0][1] : 0
+  const fn = is2x2 ? cm[1][0] : 0
+  const tp = is2x2 ? cm[1][1] : 0
+
+  // Class 0 precision = TN / (TN + FN), recall = TN / (TN + FP)
+  const c0precision = (tn + fn) > 0 ? tn / (tn + fn) : 0
+  const c0recall    = (tn + fp) > 0 ? tn / (tn + fp) : 0
+  // Class 1 precision = TP / (TP + FP), recall = TP / (TP + FN)
+  const c1precision = (tp + fp) > 0 ? tp / (tp + fp) : 0
+  const c1recall    = (tp + fn) > 0 ? tp / (tp + fn) : 0
+
+  // Use class names from metrics if available, else generic
+  const className0 = metrics?.class_names?.[0] ?? 'Class 0'
+  const className1 = metrics?.class_names?.[1] ?? 'Class 1'
+
+  const threshold = metrics?.threshold ?? 0.5
 
   return (
-    <div className="ax-cm-wrap">
-      {/* Left: Grid */}
-      <div className="ax-cm-grid-area">
-        <div className="ax-cm-grid">
-          {/* Top-left corner */}
-          <div className="ax-cm-corner" />
-          {/* Column headers */}
-          {cm[0].map((_, j) => (
-            <div key={`ch-${j}`} className="ax-cm-col-hdr">
-              Pred {j}
-            </div>
-          ))}
-          {/* Top-right corner for row totals header */}
-          <div className="ax-cm-corner" style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>Σ</div>
+    <div>
+      {/* Top section: grid left, class cards right */}
+      <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
 
-          {/* Grid rows */}
+        {/* LEFT: Grid */}
+        <div style={{ flexShrink: 0 }}>
+          {/* Column headers row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '72px repeat(2, 100px) 44px', gap: 4, marginBottom: 4 }}>
+            <div />
+            <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PRED 0</div>
+            <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PRED 1</div>
+            <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</div>
+          </div>
+
+          {/* Data rows */}
           {cm.map((row, i) => (
-            <React.Fragment key={`row-${i}`}>
-              {/* Row header */}
-              <div className="ax-cm-row-hdr">Actual {i}</div>
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '72px repeat(2, 100px) 44px', gap: 4, marginBottom: 4 }}>
+              {/* Row label */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', paddingRight: 8, gap: 2 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTUAL</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{i}</span>
+              </div>
               {/* Cells */}
               {row.map((v, j) => {
-                const onDiag = i === j
+                const accent = isAccent(i, j)
+                const gray = isGray(i, j)
                 return (
-                  <div key={`c-${i}-${j}`} className={`ax-cm-cell ${onDiag ? 'correct' : 'incorrect'}`}>
-                    <span className="ax-cm-cell-val">{v.toLocaleString()}</span>
-                    {is2x2 && <span className="ax-cm-cell-lbl">{cellLabels2x2[i][j]}</span>}
+                  <div
+                    key={j}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: 10, padding: '14px 8px', minHeight: 74,
+                      background: accent ? 'var(--color-accent)' : gray ? '#E5E7EB' : 'var(--color-background-secondary)',
+                      border: accent ? 'none' : '1.5px solid var(--color-border-tertiary)',
+                    }}
+                  >
+                    <span style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.1, color: accent ? '#fff' : 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>
+                      {v}
+                    </span>
+                    {is2x2 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginTop: 3, color: accent ? 'rgba(255,255,255,0.8)' : 'var(--color-text-tertiary)' }}>
+                        {cellLabel(i, j)}
+                      </span>
+                    )}
                   </div>
                 )
               })}
               {/* Row total */}
-              <div className="ax-cm-total">{rowSums[i].toLocaleString()}</div>
-            </React.Fragment>
-          ))}
-
-          {/* Bottom row: column totals */}
-          <div className="ax-cm-corner" style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>Σ</div>
-          {colSums.map((s, j) => (
-            <div key={`ct-${j}`} className="ax-cm-total">{s.toLocaleString()}</div>
-          ))}
-          <div className="ax-cm-total" style={{ fontWeight: 800 }}>{total.toLocaleString()}</div>
-        </div>
-
-        {/* Accuracy badge */}
-        <div className="ax-cm-accuracy">
-          <span className="ax-cm-accuracy-lbl">Overall</span>
-          {(accuracy * 100).toFixed(1)}%
-        </div>
-      </div>
-
-      {/* Right: Per-class precision/recall bars */}
-      {is2x2 && (
-        <div className="ax-cm-class-stats">
-          {classStats.map((cs) => (
-            <div key={cs.cls} className="ax-cm-class-block">
-              <div className="ax-cm-class-title">Class {cs.cls}</div>
-              <div className="ax-cm-stat-row">
-                <span className="ax-cm-stat-label">Precision</span>
-                <div className="ax-cm-stat-bar">
-                  <div
-                    className={`ax-cm-stat-bar-fill ${cs.precision >= 0.7 ? 'green' : 'amber'}`}
-                    style={{ width: `${Math.round(cs.precision * 100)}%` }}
-                  />
-                </div>
-                <span className="ax-cm-stat-val">{(cs.precision * 100).toFixed(1)}%</span>
-              </div>
-              <div className="ax-cm-stat-row">
-                <span className="ax-cm-stat-label">Recall</span>
-                <div className="ax-cm-stat-bar">
-                  <div
-                    className={`ax-cm-stat-bar-fill ${cs.recall >= 0.7 ? 'green' : 'amber'}`}
-                    style={{ width: `${Math.round(cs.recall * 100)}%` }}
-                  />
-                </div>
-                <span className="ax-cm-stat-val">{(cs.recall * 100).toFixed(1)}%</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                {rowSums[i]}
               </div>
             </div>
           ))}
+
+          {/* Column totals row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '72px repeat(2, 100px) 44px', gap: 4, marginTop: 2 }}>
+            <div />
+            {colSums.map((s, j) => (
+              <div key={j} style={{ textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{s}</div>
+            ))}
+            <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{total}</div>
+          </div>
+
+          {/* Overall accuracy bar */}
+          <div style={{ marginTop: 14, padding: '10px 14px', background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>OVERALL</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)' }}>{(accuracy * 100).toFixed(1)}% accuracy</span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>{correctTotal} correct of {total}</span>
+          </div>
         </div>
-      )}
+
+        {/* RIGHT: Class precision/recall cards + TP/TN/FP/FN breakdown */}
+        {is2x2 && (
+          <div style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Class 0 */}
+            <div style={{ border: '1.5px solid var(--color-border-tertiary)', borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>{className0}</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{rowSums[0]} rows</span>
+              </div>
+              {/* Precision row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', width: 64, flexShrink: 0 }}>PRECISION</span>
+                <div style={{ flex: 1, height: 6, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.round(c0precision * 100)}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(c0precision * 100).toFixed(1)}%</span>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', width: 44, flexShrink: 0 }}>RECALL</span>
+                <div style={{ flex: 1, height: 6, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.round(c0recall * 100)}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(c0recall * 100).toFixed(1)}%</span>
+              </div>
+            </div>
+
+            {/* Class 1 */}
+            <div style={{ border: '1.5px solid var(--color-border-tertiary)', borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>{className1}</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{rowSums[1]} rows</span>
+              </div>
+              {/* Precision row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', width: 64, flexShrink: 0 }}>PRECISION</span>
+                <div style={{ flex: 1, height: 6, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.round(c1precision * 100)}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(c1precision * 100).toFixed(1)}%</span>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', width: 44, flexShrink: 0 }}>RECALL</span>
+                <div style={{ flex: 1, height: 6, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.round(c1recall * 100)}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(c1recall * 100).toFixed(1)}%</span>
+              </div>
+            </div>
+
+            {/* TP/TN/FP/FN breakdown cards */}
+            {[
+              { label: 'True positives', count: tp, pct: total > 0 ? Math.round(tp/total*100) : 0, desc: 'Predicted Yes · actually Yes', orange: true },
+              { label: 'True negatives', count: tn, pct: total > 0 ? Math.round(tn/total*100) : 0, desc: 'Predicted No · actually No', orange: true },
+              { label: 'False positives', count: fp, pct: total > 0 ? Math.round(fp/total*100) : 0, desc: 'Predicted Yes · actually No', orange: false },
+              { label: 'False negatives', count: fn, pct: total > 0 ? Math.round(fn/total*100) : 0, desc: 'Predicted No · actually Yes', orange: false },
+            ].map((item) => (
+              <div key={item.label} style={{ border: '1.5px solid var(--color-border-tertiary)', borderRadius: 10, padding: '10px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.orange ? 'var(--color-accent)' : 'var(--color-text-tertiary)', flexShrink: 0, display: 'inline-block' }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{item.count}</span>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{item.pct}%</span>
+                </div>
+                <div style={{ height: 5, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
+                  <div style={{ width: `${item.pct}%`, height: '100%', background: item.orange ? 'var(--color-accent)' : 'var(--color-border-secondary)', borderRadius: 3 }} />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{item.desc}</div>
+              </div>
+            ))}
+
+            {/* Threshold label */}
+            {threshold != null && (
+              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>p ≥ {threshold.toFixed(2)}</div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
