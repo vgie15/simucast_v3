@@ -186,6 +186,7 @@ export default function DescribePage({ dataset }) {
   const totalRecords = dataset.row_count || 0
   const avgValidN = result ? Math.round((result.stats || []).reduce((a, b) => a + (b.n || 0), 0) / Math.max((result.stats || []).length, 1)) : 0
   const skewedVarsList = result ? (result.stats || []).filter(s => s.kind === 'numeric' && Math.abs(Number(s.skew) || 0) >= 1.0).map(s => s.variable) : []
+  const skewedCount = skewedVarsList.length
   const strongestCorr = corrResult?.strongest_pair
 
   // Quality Flags list
