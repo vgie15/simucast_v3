@@ -399,8 +399,15 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory, _setShowHistory] = useState(() => {
+    try { return sessionStorage.getItem('simucast.showHistory') === 'true' } catch { return false }
+  })
+  const setShowHistory = (val) => {
+    try { sessionStorage.setItem('simucast.showHistory', String(val)) } catch {}
+    _setShowHistory(val)
+  }
   const [showChecksDetail, setShowChecksDetail] = useState(false)
+
 
   const planBlocked = plan && (plan.validation_checks || []).some((c) => c.status === 'block')
   const blockedCount = plan ? (plan.validation_checks || []).filter((c) => c.status === 'block').length : 0
