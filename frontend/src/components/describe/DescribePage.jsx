@@ -191,6 +191,67 @@ export default function DescribePage({ dataset }) {
   // Quality Flags list
   const qualityFlags = result ? getDataQualityFlags(numericStats, categoricalStats, corrResult) : []
 
+  const renderLiveChart = () => {
+    const chartData = prepareChartData(
+      datasetRows,
+      chartBuilderType,
+      chartBuilderX,
+      chartBuilderY,
+      chartBuilderGroupBy,
+      chartBuilderAgg,
+      chartBuilderColor
+    )
+
+    if (!chartData) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', color: '#9ca3af', gap: '12px' }}>
+          <BarChart3 size={48} strokeWidth={1} />
+          <span style={{ fontSize: '13px', fontWeight: '500', color: '#6b7280' }}>Assign required fields to see a preview</span>
+        </div>
+      )
+    }
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { font: { size: 10 } }
+        }
+      },
+      scales: chartBuilderType !== 'pie' && chartBuilderType !== 'radar' ? {
+        x: { ticks: { font: { size: 10 } } },
+        y: { ticks: { font: { size: 10 } } }
+      } : undefined
+    }
+
+    if (chartBuilderType === 'horizontal bar') {
+      options.indexAxis = 'y'
+    }
+
+    switch (chartBuilderType) {
+      case 'bar':
+      case 'horizontal bar':
+        return <Bar data={chartData} options={options} style={{ maxHeight: '300px' }} />
+      case 'line':
+        return <Line data={chartData} options={options} style={{ maxHeight: '300px' }} />
+      case 'scatter':
+        return <Scatter data={chartData} options={options} style={{ maxHeight: '300px' }} />
+      case 'pie':
+        return <Pie data={chartData} options={options} style={{ maxHeight: '300px' }} />
+      case 'histogram':
+        return <Bar data={chartData} options={options} style={{ maxHeight: '300px' }} />
+      case 'radar':
+        return <Radar data={chartData} options={options} style={{ maxHeight: '300px' }} />
+      case 'bubble':
+        return <Bubble data={chartData} options={options} style={{ maxHeight: '300px' }} />
+      default:
+        return null
+    }
+  }
+
   return (
     <>
       <h1 className="ax-page-title">Descriptive statistics</h1>
@@ -1229,4 +1290,10 @@ function fmt(v) {
   if (v === null || v === undefined) return '-'
   if (typeof v !== 'number') return v
   return Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(3)
+}
+
+// Returns count divided by total formatted as a one-decimal percentage string.
+function pctOf(count, total) {
+  if (!total) return '0.0%'
+  return `${((Number(count || 0) / Number(total)) * 100).toFixed(1)}%`
 }
