@@ -397,11 +397,59 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   }
 
   const [showHistory, setShowHistory] = useState(false)
+  const [showChecksDetail, setShowChecksDetail] = useState(false)
 
   const planBlocked = plan && (plan.validation_checks || []).some((c) => c.status === 'block')
   const blockedCount = plan ? (plan.validation_checks || []).filter((c) => c.status === 'block').length : 0
 
-  const checks = plan?.validation_checks || []
+  const checks = useMemo(() => {
+    const baseChecks = plan?.validation_checks ? [...plan.validation_checks] : []
+    if (!plan) return baseChecks
+
+    // Add custom scaling check
+    const hasScalingNeeds = selectedAlgos.some(a => a === 'logistic' || a === 'linear')
+    const hasNonScalingNeeds = selectedAlgos.some(a => a === 'tree' || a === 'rf')
+
+    let detail = ''
+    if (hasScalingNeeds && hasNonScalingNeeds) {
+      detail = 'Feature scaling (StandardScaler) will be applied for Logistic/Linear models and skipped for tree-based models.'
+    } else if (hasScalingNeeds) {
+      detail = 'Feature scaling (StandardScaler) will be applied to numeric features for Logistic/Linear models.'
+    } else {
+      detail = 'Feature scaling is skipped as it is not needed for tree-based models.'
+    }
+
+    baseChecks.push({
+      key: 'feature_scaling_check',
+      label: 'Feature scaling',
+      status: 'ok',
+      detail: detail,
+      type: 'modeling',
+      causes: [],
+      fixes: []
+    })
+
+    // Add custom encoding check
+    let encodingDetail = ''
+    if (plan.encoding && plan.encoding.length > 0) {
+      encodingDetail = `${plan.encoding.length} categorical feature(s) will be automatically one-hot encoded.`
+    } else {
+      encodingDetail = 'No categorical features selected; encoding is not required.'
+    }
+
+    baseChecks.push({
+      key: 'categorical_encoding_check',
+      label: 'Categorical encoding',
+      status: 'ok',
+      detail: encodingDetail,
+      type: 'modeling',
+      causes: [],
+      fixes: []
+    })
+
+    return baseChecks
+  }, [plan, selectedAlgos])
+
   const issueCount = checks.filter((c) => {
     const dismissed = (dismissedChecks || []).includes(c.key)
     const effective = dismissed && c.status === 'warning' ? 'ok' : c.status
@@ -604,32 +652,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           )}
         </ConfigDropdown>
 
-        {/* ENCODING Dropdown */}
-        <ConfigDropdown label="Encoding" value={`One-hot · ${numericPreprocessing.scaling === 'auto' ? 'Auto-scale' : numericPreprocessing.scaling === 'none' ? 'No scale' : 'Scale'}`}>
-          {() => (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Categorical features</label>
-                <select disabled value="one_hot" style={{ width: '100%', fontSize: 12, height: 32, minHeight: 32 }}>
-                  <option value="one_hot">One-hot encoding</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Numeric scaling</label>
-                <select
-                  value={numericPreprocessing.scaling || 'auto'}
-                  onChange={(e) => setNumericPreprocessing((cur) => ({ ...cur, scaling: e.target.value }))}
-                  style={{ width: '100%', fontSize: 12, height: 32, minHeight: 32 }}
-                >
-                  <option value="auto">Auto recommended</option>
-                  <option value="standard">Standard scaling</option>
-                  <option value="minmax">Min-max scaling</option>
-                  <option value="none">No scaling</option>
-                </select>
-              </div>
-            </div>
-          )}
-        </ConfigDropdown>
+
 
         {/* VALIDATION Dropdown */}
         <ConfigDropdown
@@ -784,7 +807,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         <div
           className="models-issue-bar"
           style={{
-            margin: '12px 0 16px',
+            margin: '12px 0 12px',
             padding: '8px 12px',
             background: activeIssue.status === 'block' ? 'var(--color-background-danger)' : 'var(--color-background-warning)',
             border: `1.5px solid ${activeIssue.status === 'block' ? 'var(--color-text-danger)' : 'var(--color-border-info)'}`,
@@ -835,6 +858,56 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
               />
             )}
           </div>
+        </div>
+      )}
+
+      {/* Collapsible Readiness & Preprocessing Checklist */}
+      {plan && (
+        <div
+          className="ax-card"
+          style={{
+            padding: '12px 16px',
+            marginBottom: 16,
+            background: 'var(--color-background-primary)',
+            border: '1.5px solid var(--color-border-tertiary)',
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-card)',
+            transition: 'all 0.2s'
+          }}
+        >
+          <div
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+            onClick={() => setShowChecksDetail(!showChecksDetail)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                Readiness & Preprocessing Checklist
+              </span>
+              {issueCount > 0 ? (
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', background: '#FEF3C7', color: '#D97706', borderRadius: '4px' }}>
+                  {issueCount} issue{issueCount === 1 ? '' : 's'} to review
+                </span>
+              ) : (
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', background: '#DCFCE7', color: '#16A34A', borderRadius: '4px' }}>
+                  Ready to train
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-accent)' }}>
+              {showChecksDetail ? 'Hide details ▲' : 'Show details ▼'}
+            </span>
+          </div>
+          {showChecksDetail && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--color-border-tertiary)' }}>
+              <PreprocessingPlan
+                plan={plan}
+                checks={checks}
+                onFixAction={handleFixAction}
+                dismissedChecks={dismissedChecks}
+                onDismissCheck={(key) => setDismissedChecks((d) => [...d, key])}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1153,10 +1226,10 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams }) {
 }
 
 // Panel that summarizes the training preprocessing plan and lists detected validation issues.
-function PreprocessingPlan({ plan, onFixAction, dismissedChecks, onDismissCheck }) {
+function PreprocessingPlan({ plan, checks: propChecks, onFixAction, dismissedChecks, onDismissCheck }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
 
-  const checks = plan.validation_checks || []
+  const checks = propChecks || plan.validation_checks || []
   const correlatedPairs = plan.correlated_pairs || plan.multicollinearity || []
   const issueCount = checks.filter((c) => {
     const dismissed = (dismissedChecks || []).includes(c.key)
