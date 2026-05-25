@@ -695,6 +695,7 @@ function DataToolsToolbar({
 function ToolbarButton({ tool, active, onClick }) {
   return (
     <button
+      id={`tool-button-${tool.key}`}
       type="button"
       className={`ax-data-tool-btn ${active ? 'active' : ''}`}
       data-tip={tool.tip}

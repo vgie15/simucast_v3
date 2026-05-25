@@ -591,7 +591,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 
       {/* Inline Configuration Card */}
       <div
-
+        id="fix-target-handling"
         className="ax-card"
         style={{
           padding: '12px 16px',
@@ -607,159 +607,166 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         }}
       >
         {/* TARGET Dropdown */}
-        <ConfigDropdown label="Target" value={target || 'Select Target'}>
-          {(close) => (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '0 0 4px', fontWeight: 600, textTransform: 'uppercase' }}>Select target variable</p>
-              {variables.map((v) => (
-                <button
-                  key={v.name}
-                  type="button"
-                  onClick={() => {
-                    setTarget(v.name)
-                    setTargetMode('auto')
-                    setPositiveClass('')
-                    setFeatures(features.filter((f) => f !== v.name))
-                    setResults(null)
-                    close()
-                  }}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', fontSize: 12,
-                    background: target === v.name ? 'var(--color-accent-light)' : 'none',
-                    border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: target === v.name ? 700 : 400,
-                    color: target === v.name ? 'var(--color-accent-dark)' : 'var(--color-text-primary)'
-                  }}
-                  onMouseEnter={(e) => { if (target !== v.name) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
-                  onMouseLeave={(e) => { if (target !== v.name) e.currentTarget.style.background = 'none' }}
-                >
-                  {v.name} <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 4, fontWeight: 400 }}>({v.dtype})</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </ConfigDropdown>
+        <div id="models-step-1" style={{ display: 'flex', alignItems: 'stretch' }}>
+          <ConfigDropdown label="Target" value={target || 'Select Target'}>
+            {(close) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '0 0 4px', fontWeight: 600, textTransform: 'uppercase' }}>Select target variable</p>
+                {variables.map((v) => (
+                  <button
+                    key={v.name}
+                    type="button"
+                    onClick={() => {
+                      setTarget(v.name)
+                      setTargetMode('auto')
+                      setPositiveClass('')
+                      setFeatures(features.filter((f) => f !== v.name))
+                      setResults(null)
+                      close()
+                    }}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', fontSize: 12,
+                      background: target === v.name ? 'var(--color-accent-light)' : 'none',
+                      border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: target === v.name ? 700 : 400,
+                      color: target === v.name ? 'var(--color-accent-dark)' : 'var(--color-text-primary)'
+                    }}
+                    onMouseEnter={(e) => { if (target !== v.name) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
+                    onMouseLeave={(e) => { if (target !== v.name) e.currentTarget.style.background = 'none' }}
+                  >
+                    {v.name} <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 4, fontWeight: 400 }}>({v.dtype})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </ConfigDropdown>
+        </div>
 
         {/* FEATURES Dropdown */}
-        <ConfigDropdown label="Features" value={`${features.length} of ${allFeatureNames.length}`}>
-          {() => (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Select features</span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="ax-btn mini" onClick={selectAll} type="button">All</button>
-                  <button className="ax-btn mini" onClick={selectNone} type="button" disabled={features.length === 0}>None</button>
+        <div id="fix-feature-selection" style={{ display: 'flex', alignItems: 'stretch' }}>
+          <ConfigDropdown label="Features" value={`${features.length} of ${allFeatureNames.length}`}>
+            {() => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Select features</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="ax-btn mini" onClick={selectAll} type="button">All</button>
+                    <button className="ax-btn mini" onClick={selectNone} type="button" disabled={features.length === 0}>None</button>
+                  </div>
                 </div>
+                {candidateFeatures.map((v) => (
+                  <label
+                    key={v.name}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                      background: features.includes(v.name) ? 'var(--color-accent-light)' : 'none'
+                    }}
+                    onMouseEnter={(e) => { if (!features.includes(v.name)) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
+                    onMouseLeave={(e) => { if (!features.includes(v.name)) e.currentTarget.style.background = 'none' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={features.includes(v.name)}
+                      onChange={() => toggleFeature(v.name)}
+                      style={{ margin: 0 }}
+                    />
+                    <span style={{ fontWeight: features.includes(v.name) ? 600 : 400, color: 'var(--color-text-primary)' }}>
+                      {v.name} <span style={{ color: 'var(--color-text-tertiary)', fontSize: 10, fontWeight: 400 }}>({v.dtype})</span>
+                    </span>
+                  </label>
+                ))}
               </div>
-              {candidateFeatures.map((v) => (
-                <label
-                  key={v.name}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
-                    background: features.includes(v.name) ? 'var(--color-accent-light)' : 'none'
-                  }}
-                  onMouseEnter={(e) => { if (!features.includes(v.name)) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
-                  onMouseLeave={(e) => { if (!features.includes(v.name)) e.currentTarget.style.background = 'none' }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={features.includes(v.name)}
-                    onChange={() => toggleFeature(v.name)}
-                    style={{ margin: 0 }}
-                  />
-                  <span style={{ fontWeight: features.includes(v.name) ? 600 : 400, color: 'var(--color-text-primary)' }}>
-                    {v.name} <span style={{ color: 'var(--color-text-tertiary)', fontSize: 10, fontWeight: 400 }}>({v.dtype})</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </ConfigDropdown>
+            )}
+          </ConfigDropdown>
+        </div>
 
 
 
         {/* VALIDATION Dropdown */}
-        <ConfigDropdown
-          label="Validation"
-          value={
-            validationMethod === 'standard_split'
-              ? `${Math.round((1 - testSize) * 100)}/${Math.round(testSize * 100)} Split`
-              : `${cvFolds}-fold CV`
-          }
-        >
-          {() => (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 280 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Method</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-                    <input
-                      type="radio"
-                      name="validation-method-bar"
-                      value="standard_split"
-                      checked={validationMethod === 'standard_split'}
-                      onChange={() => setValidationMethod('standard_split')}
-                    />
-                    Train/test split
-                  </label>
-                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-                    <input
-                      type="radio"
-                      name="validation-method-bar"
-                      value="cross_validation"
-                      checked={validationMethod === 'cross_validation'}
-                      onChange={() => setValidationMethod('cross_validation')}
-                    />
-                    Cross-validation
-                  </label>
+        <div id="models-step-4" style={{ display: 'flex', alignItems: 'stretch' }}>
+          <ConfigDropdown
+            label="Validation"
+            value={
+              validationMethod === 'standard_split'
+                ? `${Math.round((1 - testSize) * 100)}/${Math.round(testSize * 100)} Split`
+                : `${cvFolds}-fold CV`
+            }
+          >
+            {() => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 280 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Method</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                      <input
+                        type="radio"
+                        name="validation-method-bar"
+                        value="standard_split"
+                        checked={validationMethod === 'standard_split'}
+                        onChange={() => setValidationMethod('standard_split')}
+                      />
+                      Train/test split
+                    </label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                      <input
+                        type="radio"
+                        name="validation-method-bar"
+                        value="cross_validation"
+                        checked={validationMethod === 'cross_validation'}
+                        onChange={() => setValidationMethod('cross_validation')}
+                      />
+                      Cross-validation
+                    </label>
+                  </div>
                 </div>
+                {validationMethod === 'standard_split' ? (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
+                      Test Split: {Math.round(testSize * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0.05"
+                      max="0.5"
+                      step="0.05"
+                      value={testSize}
+                      onChange={(e) => setTestSize(Number(e.target.value))}
+                      style={{ width: '100%', height: 16 }}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Folds</label>
+                    <select
+                      value={cvFolds}
+                      onChange={(e) => setCvFolds(Number(e.target.value))}
+                      style={{ width: '100%', fontSize: 12, height: 32, minHeight: 32 }}
+                    >
+                      <option value={3}>3 folds</option>
+                      <option value={5}>5 folds (recommended)</option>
+                      <option value={10}>10 folds</option>
+                    </select>
+                  </div>
+                )}
+                {plan?.task === 'classification' && (
+                  <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                      <input type="checkbox" checked={stratify} onChange={(e) => setStratify(e.target.checked)} />
+                      Keep class proportions
+                    </label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                      <input type="checkbox" checked={classWeight} onChange={(e) => setClassWeight(e.target.checked)} />
+                      Balanced class weights
+                    </label>
+                  </div>
+                )}
               </div>
-              {validationMethod === 'standard_split' ? (
-                <div>
-                  <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Test Split: {Math.round(testSize * 100)}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0.05"
-                    max="0.5"
-                    step="0.05"
-                    value={testSize}
-                    onChange={(e) => setTestSize(Number(e.target.value))}
-                    style={{ width: '100%', height: 16 }}
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Folds</label>
-                  <select
-                    value={cvFolds}
-                    onChange={(e) => setCvFolds(Number(e.target.value))}
-                    style={{ width: '100%', fontSize: 12, height: 32, minHeight: 32 }}
-                  >
-                    <option value={3}>3 folds</option>
-                    <option value={5}>5 folds (recommended)</option>
-                    <option value={10}>10 folds</option>
-                  </select>
-                </div>
-              )}
-              {plan?.task === 'classification' && (
-                <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                    <input type="checkbox" checked={stratify} onChange={(e) => setStratify(e.target.checked)} />
-                    Keep class proportions
-                  </label>
-                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                    <input type="checkbox" checked={classWeight} onChange={(e) => setClassWeight(e.target.checked)} />
-                    Balanced class weights
-                  </label>
-                </div>
-              )}
-            </div>
-          )}
-        </ConfigDropdown>
+            )}
+          </ConfigDropdown>
+        </div>
 
         {/* ALGORITHMS Dropdown */}
-        <ConfigDropdown label="Algorithms" value={`${selectedAlgos.length} selected`}>
+        <div id="models-step-5" style={{ display: 'flex', alignItems: 'stretch' }}>
+          <ConfigDropdown label="Algorithms" value={`${selectedAlgos.length} selected`}>
           {() => (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 240 }}>
               <label style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontWeight: 650, textTransform: 'uppercase', marginBottom: 4 }}>Select algorithms</label>
@@ -789,6 +796,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             </div>
           )}
         </ConfigDropdown>
+      </div>
 
         {/* Action Button */}
         <div style={{ display: 'flex', alignItems: 'center', minWidth: '180px', flex: 1 }}>
@@ -2955,7 +2963,7 @@ function fixTargetFromBackendFix(fix) {
   }
   const mapped = sectionMap[fix.section]
   if (mapped) return mapped
-  if (page === 'models') return { page: 'models', section: 'models-step-3' }
+  if (page === 'models') return { page: 'models', section: 'models-step-1' }
   if (page === 'data') return { page: 'data', section: 'fix-cleaning-suggestions' }
   if (page === 'tests') return { page: 'tests', section: 'fix-correlation-test' }
   return null

@@ -83,14 +83,30 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
     setSpotlight(null)
     setCoachStyle(null)
 
+    let lastRectString = ''
     const place = () => {
-      const el = document.getElementById(focusTarget)
+      let el = document.getElementById(focusTarget)
       if (!el) {
-        setSpotlight(null)
-        setCoachStyle(null)
+        if (focusTarget.startsWith('fix-cleaning-')) {
+          const suffix = focusTarget.replace('fix-cleaning-', '').split('-')[0]
+          el = document.getElementById(`tool-button-${suffix}`)
+        } else if (focusTarget === 'data-section-category_standardization') {
+          el = document.getElementById('tool-button-labels')
+        }
+      }
+      if (!el) {
+        if (lastRectString !== 'null') {
+          setSpotlight(null)
+          setCoachStyle(null)
+          lastRectString = 'null'
+        }
         return
       }
       const rect = el.getBoundingClientRect()
+      const rectKey = `${rect.top},${rect.left},${rect.width},${rect.height}`
+      if (rectKey === lastRectString) return
+      lastRectString = rectKey
+
       const viewportPad = 12
       const width = Math.min(390, window.innerWidth - viewportPad * 2)
       const rectCenter = rect.left + rect.width / 2
@@ -105,10 +121,12 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
 
     let placementTimer = null
     let listening = false
+    let intervalId = null
     const startPlacement = () => {
       place()
       window.addEventListener('resize', place)
       window.addEventListener('scroll', place, true)
+      intervalId = window.setInterval(place, 250)
       listening = true
     }
     const timer = window.setTimeout(() => {
@@ -122,6 +140,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
       if (listening) {
         window.removeEventListener('resize', place)
         window.removeEventListener('scroll', place, true)
+        if (intervalId) window.clearInterval(intervalId)
       }
       clearFocusSection(focusTarget)
     }

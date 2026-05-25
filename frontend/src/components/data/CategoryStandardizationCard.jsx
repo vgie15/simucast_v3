@@ -204,7 +204,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
   }
   if (!suggestions.length || visibleSuggestions.length === 0) {
     return (
-      <div className={`ax-card ax-module-card ax-card-prep ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
+      <div id="data-section-category_standardization" className={`ax-card ax-module-card ax-card-prep ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
         {!compact && <div className="ax-module-head" style={{ marginBottom: appliedSummary ? 10 : 0 }}>
           <div className="ax-module-head-main">
             <div className="ax-module-copy">
@@ -247,7 +247,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
   }
 
   return (
-    <div className={`ax-card ax-module-card ax-card-prep ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
+    <div id="data-section-category_standardization" className={`ax-card ax-module-card ax-card-prep ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
       {!compact && <div className="ax-module-head" style={{ marginBottom: 10 }}>
         <div className="ax-module-head-main">
           <div className="ax-module-copy">
