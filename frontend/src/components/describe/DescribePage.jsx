@@ -766,7 +766,7 @@ export default function DescribePage({ dataset }) {
           {/* Original Summary Tables inside Collapsible Detail Panel */}
           <details style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '12px 20px', cursor: 'pointer' }}>
             <summary style={{ fontSize: 13, fontWeight: 700, color: '#374151', outline: 'none' }}>
-              Show raw SPSS-style statistical tables
+              Show detailed statistical summary tables
             </summary>
             <div style={{ marginTop: 16 }} onClick={e => e.stopPropagation() /* prevent toggling on click inside */}>
               {numericStats.length > 0 && (
