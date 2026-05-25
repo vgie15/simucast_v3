@@ -644,7 +644,7 @@ export default function DataDetailView({
             <tr className="ax-dd-colhead">
               <th className="ax-dd-rowhead">Row</th>
               {visibleVariables.map((v) => (
-                <th key={v.name} className={viewMode === 'highlight' && changedColumns.has(v.name) ? 'ax-dd-new-column' : ''}>
+                <th key={v.name} className={viewMode === 'highlight' && changedColumns.has(v.name) && (changeType === 'all' || changeType === 'generated') ? 'ax-dd-new-column' : ''}>
                   <button
                     type="button"
                     className="ax-dd-col-button"
@@ -693,7 +693,7 @@ export default function DataDetailView({
                         readOnly || removedRow ? 'readonly' : '',
                         removedRow ? 'ax-dd-removed-cell' : '',
                         change ? `ax-dd-changed-cell ax-dd-change-${change.change_kind || 'converted'}` : '',
-                        viewMode === 'highlight' && changedColumns.has(col) ? 'ax-dd-new-column-cell' : '',
+                        viewMode === 'highlight' && changedColumns.has(col) && (changeType === 'all' || changeType === 'generated') ? 'ax-dd-new-column-cell' : '',
                       ].filter(Boolean).join(' ')}
                     >
                       {renderCellValue(row, col)}
@@ -851,7 +851,7 @@ function changeMatchesType(change, type, changedColumns = new Set()) {
   if (type === 'missing') return text.includes('missing') || text.includes('fill')
   if (type === 'outlier') return text.includes('outlier') || text.includes('cap') || text.includes('clip')
   if (type === 'converted') return text.includes('convert') || text.includes('encode') || text.includes('standardize') || text.includes('category')
-  if (type === 'scaled') return text.includes('scale') || text.includes('standardize_numeric') || text.includes('normalize')
+  if (type === 'scaled') return text.includes('scale') || text.includes('standardize_numeric') || text.includes('normalize') || text.includes('zscore') || text.includes('minmax')
   if (type === 'generated') return changedColumns.has(change.column) || text.includes('generated') || text.includes('new_column')
   return true
 }

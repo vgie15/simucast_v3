@@ -2,11 +2,9 @@
  * PAGE: EXPAND / FEATURE ENGINEERING
  * Keywords: expand, feature engineering, derived features, transform
  * ============================================================ */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
-import HelpButton from '../common/HelpButton'
-import PageGuide from '../common/PageGuide'
 
 /**
  * ExpandPage
@@ -17,7 +15,7 @@ export default function ExpandPage({ dataset, setDataset }) {
   const dialog = useDialog()
   const [method, setMethod] = useState('bootstrap')
   const [targetRows, setTargetRows] = useState(() => Math.max(500, (dataset?.row_count || 100) * 2))
-  const [noisePct, setNoisePct] = useState(0)
+  const [noisePct, setNoisePct] = useState(5) // default to 5% noise as in mockup
   const [preview, setPreview] = useState(null)
   const [previewing, setPreviewing] = useState(false)
   const [error, setError] = useState(null)
@@ -84,6 +82,22 @@ export default function ExpandPage({ dataset, setDataset }) {
     }
   }
 
+  const avgDrift = useMemo(() => {
+    if (!preview?.drift?.length) return 0
+    const valid = preview.drift.filter((d) => d.mean_pct_change != null)
+    if (!valid.length) return 0
+    const sum = valid.reduce((acc, curr) => acc + Math.abs(curr.mean_pct_change), 0)
+    return sum / valid.length
+  }, [preview])
+
+  const distinctRows = useMemo(() => {
+    if (!dataset) return 0
+    if (method === 'synthetic' || noisePct > 0) {
+      return targetRows
+    }
+    return dataset.row_count
+  }, [method, noisePct, targetRows, dataset?.row_count])
+
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
   }
@@ -92,209 +106,455 @@ export default function ExpandPage({ dataset, setDataset }) {
   const targetTooLow = !Number.isFinite(targetRows) || targetRows <= dataset.row_count
 
   return (
-    <>
-      <h1 className="ax-page-title">Expand data</h1>
-      <p className="ax-page-sub">
+    <div style={{ paddingBottom: 60 }}>
+      {/* Inline styles for grid and multipliers */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .ax-expand-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 24px;
+          align-items: start;
+        }
+        @media (min-width: 900px) {
+          .ax-expand-grid {
+            grid-template-columns: 380px 1fr;
+          }
+        }
+        .ax-expand-method-card {
+          text-align: left;
+          border-radius: 12px;
+          padding: 16px;
+          cursor: pointer;
+          transition: all 0.15s ease-in-out;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          width: 100%;
+        }
+        .ax-expand-multiplier-pill {
+          padding: 5px 12px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.12s ease-in-out;
+        }
+      `}} />
+
+      {/* Page Header metadata */}
+      <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        EXPAND - ROW GENERATION
+      </span>
+      <h1 className="ax-page-title" style={{ margin: '4px 0 0', fontSize: '26px', fontWeight: 800 }}>Expand data</h1>
+      <p style={{ margin: '4px 0 20px', color: 'var(--color-text-secondary)', fontSize: 13 }}>
         Grow a small dataset by resampling (preserves correlations) or synthesis (per-column independent).
       </p>
-      <PageGuide
-        title="Only expand when it helps the analysis"
-        meta={isSmall ? 'Recommended review' : 'Optional step'}
-        steps={['Check need', 'Choose method', 'Preview drift', 'Apply']}
-      >
-        Bootstrap is usually safer when relationships matter. Synthetic rows are more varied, but should be previewed carefully before using them downstream.
-      </PageGuide>
 
-      <div className="ax-card" style={{ marginBottom: 12, padding: 14, background: isSmall ? 'var(--color-accent-light)' : 'var(--color-background-secondary)' }}>
+      {/* Recommendation alert box (removed star-like icon square, styled exactly like mockup) */}
+      <div 
+        style={{ 
+          marginBottom: 24, 
+          padding: '16px 20px', 
+          background: isSmall ? '#FFF8F2' : '#F9FAFB',
+          border: isSmall ? '1px solid #FED7AA' : '1px solid #E5E7EB',
+          borderRadius: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6
+        }}
+      >
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <strong style={{ fontSize: 13 }}>{isSmall ? 'Expansion may help' : 'Expansion is optional'}</strong>
-          <HelpButton
-            title="Expansion recommendation"
-            text="This card explains whether row expansion is useful for the current dataset. Expansion is optional: bootstrap is safer for preserving relationships, while synthetic generation adds more varied rows but may weaken relationships."
-          />
-          <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
+          <strong style={{ fontSize: 13, fontWeight: 700, color: isSmall ? '#C2410C' : '#374151' }}>
+            {isSmall ? 'Expansion is likely to help' : 'Expansion is optional'}
+          </strong>
+          <span 
+            style={{ 
+              fontSize: 9, 
+              fontWeight: 800, 
+              padding: '2px 8px', 
+              borderRadius: 999, 
+              background: isSmall ? '#FFEDD5' : '#F3F4F6', 
+              color: isSmall ? '#EA580C' : '#4B5563',
+              letterSpacing: '0.04em'
+            }}
+          >
+            SYSTEM RECOMMENDED
+          </span>
         </div>
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-          {isSmall
-            ? `This dataset has ${dataset.row_count.toLocaleString()} rows, so expansion can help demonstration and scenario testing. Start with bootstrap if preserving relationships matters.`
-            : `This dataset already has ${dataset.row_count.toLocaleString()} rows, so expansion is usually unnecessary for modeling. Use it only for demo scenarios or stress-testing.`}
-        </p>
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-          Target rows: current {dataset.row_count.toLocaleString()} + {Math.max(0, targetRows - dataset.row_count).toLocaleString()} generated = {Math.max(targetRows, dataset.row_count).toLocaleString()} total.
+        <p style={{ fontSize: 12, color: isSmall ? '#7C2D12' : '#6B7280', margin: 0, lineHeight: 1.5 }}>
+          This dataset has <strong>{dataset.row_count.toLocaleString()} rows</strong>. Bootstrap is safer when relationships matter; synthetic adds variety but breaks cross-column correlations.
         </p>
       </div>
 
-      {!isSmall && (
-        <div
-          className="ax-card"
-          style={{
-            padding: '8px 12px',
-            marginBottom: 12,
-            borderColor: 'var(--color-text-warning, #B07000)',
-          }}
-        >
-          <p style={{ fontSize: 12, margin: 0 }}>
-            Heads up — this dataset already has {dataset.row_count.toLocaleString()} rows. Expansion is
-            mainly useful for datasets under ~500 rows. You can still use it for what-if exploration,
-            but don't use synthetic rows for held-out evaluation.
-          </p>
-        </div>
-      )}
-
-      <div id="expand-section-controls" className="ax-card" style={{ marginBottom: 16 }}>
-        <p className="ax-lbl" style={{ margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
-          Method
-          <HelpButton
-            title="Expansion controls"
-            text="Use this card to choose the expansion method, target row count, and preview drift before applying. The preview helps check whether generated rows still resemble the original dataset."
-          />
-        </p>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <MethodCard
-            active={method === 'bootstrap'}
-            onClick={() => setMethod('bootstrap')}
-            title="Bootstrap"
-            desc="Sample with replacement from the existing rows. Preserves cross-column correlations exactly. New rows are duplicates unless you add noise."
-          />
-          <MethodCard
-            active={method === 'synthetic'}
-            onClick={() => setMethod('synthetic')}
-            title="Synthetic"
-            desc="Numeric columns sampled from a kernel-density fit; categoricals from observed frequencies. Diverse rows, but column correlations are NOT preserved."
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <label style={{ flex: 1 }}>
-            <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>Target row count</span>
-            <input
-              type="number"
-              min={dataset.row_count + 1}
-              value={targetRows}
-              onChange={(e) => setTargetRows(parseInt(e.target.value, 10) || 0)}
-              style={{ width: '100%' }}
-            />
-            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
-              currently {dataset.row_count.toLocaleString()} rows · adding {Math.max(0, targetRows - dataset.row_count).toLocaleString()}
+      {/* Main layout grid */}
+      <div className="ax-expand-grid">
+        
+        {/* Left Column: Controls (no wrapping ax-card border as in mockup) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* 1 - Method */}
+          <div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
+              1 - METHOD
             </span>
-          </label>
-          {method === 'bootstrap' && (
-            <label style={{ flex: 1 }}>
-              <span className="ax-lbl" style={{ display: 'block', marginBottom: 4 }}>
-                Noise on numeric columns: {noisePct}% of std dev
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Bootstrap button */}
+              <button
+                type="button"
+                onClick={() => setMethod('bootstrap')}
+                className="ax-expand-method-card"
+                style={{
+                  background: method === 'bootstrap' ? '#FFF8F2' : '#FFFFFF',
+                  border: method === 'bootstrap' ? '1.5px solid #F97316' : '1.5px solid #E5E7EB',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-text-primary)' }}>
+                    Bootstrap <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)', marginLeft: 4, fontSize: 11 }}>Sample with replacement</span>
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: '#FFEDD5', color: '#EA580C' }}>
+                    Safer
+                  </span>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.4 }}>
+                  Preserves cross-column correlations exactly. Add noise to avoid exact duplicates.
+                </p>
+              </button>
+
+              {/* Synthetic button */}
+              <button
+                type="button"
+                onClick={() => setMethod('synthetic')}
+                className="ax-expand-method-card"
+                style={{
+                  background: method === 'synthetic' ? '#FFF8F2' : '#FFFFFF',
+                  border: method === 'synthetic' ? '1.5px solid #F97316' : '1.5px solid #E5E7EB',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-text-primary)' }}>
+                    Synthetic <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)', marginLeft: 4, fontSize: 11 }}>KDE / frequency sampling</span>
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: '#F3F4F6', color: '#4B5563' }}>
+                    More varied
+                  </span>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.4 }}>
+                  Diverse rows from each column's distribution. Correlations between columns are NOT preserved.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* 2 - Target Rows */}
+          <div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
+              2 - TARGET ROWS
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
               <input
                 type="range"
-                min={0}
-                max={20}
-                step={1}
-                value={noisePct}
-                onChange={(e) => setNoisePct(parseInt(e.target.value, 10))}
-                style={{ width: '100%' }}
+                min={dataset.row_count + 1}
+                max={Math.max(2000, dataset.row_count * 10)}
+                step={10}
+                value={targetRows}
+                onChange={(e) => setTargetRows(parseInt(e.target.value, 10) || 0)}
+                style={{ flex: 1, accentColor: '#F97316', cursor: 'pointer' }}
               />
-              <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
-                {noisePct === 0 ? 'no noise — bootstrap rows will be exact duplicates' : 'jitter prevents exact duplicates'}
+              <input
+                type="number"
+                min={dataset.row_count + 1}
+                value={targetRows}
+                onChange={(e) => setTargetRows(parseInt(e.target.value, 10) || 0)}
+                style={{
+                  width: 80,
+                  height: 38,
+                  borderRadius: 8,
+                  border: '1.5px solid #E5E7EB',
+                  textAlign: 'center',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  outline: 'none',
+                  background: '#FFFFFF'
+                }}
+              />
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
+              Current {dataset.row_count.toLocaleString()} · adding <span style={{ color: '#EA580C', fontWeight: 700 }}>+{Math.max(0, targetRows - dataset.row_count).toLocaleString()}</span> · total {Math.max(targetRows, dataset.row_count).toLocaleString()}
+            </p>
+            {/* Multipliers */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[2, 4, 8, 16].map((mult) => {
+                const val = dataset.row_count * mult
+                const isSelected = targetRows === val
+                return (
+                  <button
+                    key={mult}
+                    type="button"
+                    onClick={() => setTargetRows(val)}
+                    className="ax-expand-multiplier-pill"
+                    style={{
+                      border: isSelected ? '1.5px solid #F97316' : '1.5px solid #E5E7EB',
+                      background: isSelected ? '#FFF8F2' : '#FFFFFF',
+                      color: isSelected ? '#C2410C' : '#4B5563',
+                      fontWeight: isSelected ? 700 : 500,
+                    }}
+                  >
+                    x{mult}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 3 - Noise on numerics */}
+          {method === 'bootstrap' && (
+            <div>
+              <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
+                3 - NOISE ON NUMERICS
               </span>
-            </label>
-          )}
-        </div>
-        {targetTooLow && (
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-            Target rows must exceed {dataset.row_count.toLocaleString()}.
-          </p>
-        )}
-        {error && (
-          <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '4px 0 0' }}>{error}</p>
-        )}
-      </div>
-
-      {preview && (
-        <>
-          <p className="ax-lbl">
-            Preview {previewing && <span style={{ color: 'var(--color-text-tertiary)' }}>· refreshing…</span>}
-          </p>
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
-            {preview.summary}
-          </p>
-
-          {preview.drift?.length > 0 && (
-            <div className="ax-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
-              <table className="ax-tbl" style={{ fontSize: 12 }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left' }}>Numeric column</th>
-                    <th style={{ textAlign: 'right' }}>Mean before</th>
-                    <th style={{ textAlign: 'right' }}>Mean after</th>
-                    <th style={{ textAlign: 'right' }}>Δ mean</th>
-                    <th style={{ textAlign: 'right' }}>Std before</th>
-                    <th style={{ textAlign: 'right' }}>Std after</th>
-                    <th style={{ textAlign: 'right' }}>Δ std</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.drift.map((d) => (
-                    <tr key={d.column}>
-                      <td style={{ fontFamily: 'var(--font-mono)', textAlign: 'left' }}>{d.column}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(d.before_mean)}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(d.after_mean)}</td>
-                      <td style={{ color: pctColor(d.mean_pct_change), textAlign: 'right' }}>{fmtPct(d.mean_pct_change)}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(d.before_std)}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(d.after_std)}</td>
-                      <td style={{ color: pctColor(d.std_pct_change), textAlign: 'right' }}>{fmtPct(d.std_pct_change)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={20}
+                  step={1}
+                  value={noisePct}
+                  onChange={(e) => setNoisePct(parseInt(e.target.value, 10))}
+                  style={{ flex: 1, accentColor: '#F97316', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', minWidth: 45, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {noisePct}% σ
+                </span>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                {noisePct === 0 ? 'No noise — bootstrap rows will be exact duplicates.' : `Numeric values jittered up to ${noisePct}% of column std-dev.`}
+              </p>
             </div>
           )}
 
-          <p className="ax-lbl">Sample of new rows ({preview.added_rows} added)</p>
-          <div
-            className="ax-card"
-            style={{ padding: 0, overflow: 'auto', maxHeight: 300, marginBottom: 12 }}
-          >
-            <table className="ax-grid" style={{ minWidth: '100%' }}>
-              <thead>
-                <tr>
-                  {preview.columns.map((c) => <th key={c}>{c}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {preview.sample.map((row, i) => (
-                  <tr key={i}>
-                    {preview.columns.map((c) => {
-                      const v = row[c]
-                      const missing = v === null || v === undefined || v === ''
-                      return (
-                        <td key={c} className={missing ? 'missing' : ''}>
-                          {missing ? '—' : String(v)}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* Action button inside Left Column */}
+          <div style={{ marginTop: 8 }}>
+            {error && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>{error}</p>
+            )}
+            <button
+              className="ax-btn prim"
+              disabled={busy || previewing || targetTooLow || !preview}
+              onClick={apply}
+              style={{
+                width: '100%',
+                height: 42, // Adjusted button size to look neat and clean, standard premium height
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: (busy || previewing || targetTooLow || !preview) ? 'var(--color-background-tertiary)' : '#F97316',
+                color: '#fff',
+                border: 'none',
+                boxShadow: (busy || previewing || targetTooLow || !preview) ? 'none' : '0 4px 10px rgba(249, 115, 22, 0.15)',
+                cursor: (busy || previewing || targetTooLow || !preview) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s'
+              }}
+              type="button"
+            >
+              {busy ? 'Expanding…' : `Apply — add ${Math.max(0, targetRows - dataset.row_count).toLocaleString()} rows`}
+            </button>
+            
+            {expandedApplied && (
+              <a 
+                className="ax-btn" 
+                href={api.exportCsvUrl(dataset.id)} 
+                download 
+                style={{ 
+                  textDecoration: 'none', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  marginTop: 10,
+                  height: 38,
+                  fontSize: 12,
+                  borderRadius: 8
+                }}
+              >
+                Export expanded CSV
+              </a>
+            )}
           </div>
-        </>
-      )}
+        </div>
 
-      <div className="ax-row" style={{ justifyContent: 'flex-end' }}>
-        {expandedApplied && (
-          <a className="ax-btn" href={api.exportCsvUrl(dataset.id)} download style={{ textDecoration: 'none' }}>
-            Export expanded CSV
-          </a>
-        )}
-        <button
-          className="ax-btn prim"
-          disabled={busy || previewing || targetTooLow || !preview}
-          onClick={apply}
-          type="button"
-        >
-          {busy ? 'Expanding…' : `Apply — add ${Math.max(0, targetRows - dataset.row_count).toLocaleString()} rows`}
-        </button>
+        {/* Right Column: Preview & Stats */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {preview ? (
+            <>
+              {/* Summary stats cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                {/* Rows Card */}
+                <div 
+                  style={{ 
+                    padding: '14px 16px', 
+                    background: '#FFFFFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: 12
+                  }}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    ROWS
+                  </span>
+                  <p style={{ fontSize: 18, fontWeight: 800, margin: '6px 0 0', color: 'var(--color-text-primary)' }}>
+                    {dataset.row_count} <span style={{ color: '#F97316', fontWeight: 800 }}>→ {targetRows}</span>
+                  </p>
+                </div>
+
+                {/* Avg Drift Card */}
+                <div 
+                  style={{ 
+                    padding: '14px 16px', 
+                    background: '#FFFFFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: 12
+                  }}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    AVG DRIFT
+                  </span>
+                  <p style={{ fontSize: 18, fontWeight: 800, margin: '6px 0 2px', color: avgDrift === 0 ? 'var(--color-text-secondary)' : (avgDrift < 5 ? '#10B981' : '#F59E0B') }}>
+                    ±{avgDrift.toFixed(1)}%
+                  </p>
+                  <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', display: 'block' }}>
+                    across {preview.drift?.length || 0} columns
+                  </span>
+                </div>
+
+                {/* Distinct Rows Card */}
+                <div 
+                  style={{ 
+                    padding: '14px 16px', 
+                    background: '#FFFFFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: 12
+                  }}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    DISTINCT ROWS
+                  </span>
+                  <p style={{ fontSize: 18, fontWeight: 800, margin: '6px 0 2px', color: 'var(--color-text-primary)' }}>
+                    {distinctRows.toLocaleString()}
+                  </p>
+                  <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', display: 'block' }}>
+                    unique generated rows
+                  </span>
+                </div>
+              </div>
+
+              {/* Drift Table */}
+              {preview.drift?.length > 0 && (
+                <div style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      DISTRIBUTION DRIFT · NUMERIC COLUMNS
+                    </span>
+                    <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+                      {previewing ? 'refreshing…' : 'refreshing on change'}
+                    </span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="ax-tbl" style={{ fontSize: 12, minWidth: '100%' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
+                          <th style={{ textAlign: 'left', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>COLUMN</th>
+                          <th style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>MEAN BEFORE</th>
+                          <th style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>MEAN AFTER</th>
+                          <th style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>DRIFT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.drift.map((d) => (
+                          <tr key={d.column} style={{ borderBottom: '1px solid #F3F4F6' }}>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 650, textAlign: 'left', padding: '10px 0', color: 'var(--color-text-primary)' }}>{d.column}</td>
+                            <td style={{ textAlign: 'right', padding: '10px 0' }}>{fmt(d.before_mean)}</td>
+                            <td style={{ textAlign: 'right', padding: '10px 0' }}>{fmt(d.after_mean)}</td>
+                            <td style={{ textAlign: 'right', padding: '10px 0' }}>
+                              <DriftSparkline value={d.mean_pct_change} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Sample Table */}
+              <div style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    SAMPLE OF NEW ROWS · {preview.sample?.length || 0} OF {preview.added_rows}
+                  </span>
+                  <span style={{ fontSize: 9, fontWeight: 800, background: '#FFEDD5', color: '#EA580C', padding: '2px 8px', borderRadius: 4 }}>
+                    NEW
+                  </span>
+                </div>
+                <div style={{ overflowX: 'auto', maxHeight: 240 }}>
+                  <table className="ax-grid" style={{ minWidth: '100%', fontSize: 11 }}>
+                    <thead style={{ background: '#FAF6F0' }}>
+                      <tr>
+                        <th style={{ width: 45, padding: '8px 10px', background: '#FAF6F0' }}>#</th>
+                        {preview.columns.map((c) => <th key={c} style={{ padding: '8px 10px', background: '#FAF6F0' }}>{c}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.sample.map((row, i) => {
+                        const rowNum = dataset.row_count + i + 1
+                        return (
+                          <tr key={i}>
+                            <td style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)', padding: '8px 10px' }}>{rowNum}</td>
+                            {preview.columns.map((c) => {
+                              const v = row[c]
+                              const missing = v === null || v === undefined || v === ''
+                              return (
+                                <td key={c} className={missing ? 'missing' : ''} style={{ fontFamily: 'var(--font-mono)', padding: '8px 10px' }}>
+                                  {missing ? '—' : String(v)}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div 
+              style={{ 
+                padding: '40px 20px', 
+                background: 'var(--color-background-secondary)', 
+                border: '1.5px dashed var(--color-border-tertiary)',
+                borderRadius: 12,
+                textAlign: 'center',
+                color: 'var(--color-text-tertiary)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                height: '100%',
+                minHeight: 280
+              }}
+            >
+              <span style={{ fontSize: 24 }}>📈</span>
+              <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>No expansion preview active</p>
+              <p style={{ fontSize: 11, maxWidth: 260, margin: 0 }}>Adjust the target row count above to generate and inspect drift statistics.</p>
+            </div>
+          )}
+        </div>
+
       </div>
-    </>
+    </div>
   )
 }
 
@@ -317,6 +577,40 @@ function MethodCard({ active, onClick, title, desc }) {
       <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{title}</p>
       <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>{desc}</p>
     </button>
+  )
+}
+
+// Zero-centered Drift sparkline representation component
+function DriftSparkline({ value }) {
+  const numVal = Number(value)
+  if (!Number.isFinite(numVal)) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+  
+  // Cap drift at +/- 5% for visualization scaling
+  const capped = Math.max(-5, Math.min(5, numVal))
+  const isPositive = capped >= 0
+  const widthPct = Math.abs(capped) * 10 // 5% maps to 50% width
+  
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+      <div style={{ position: 'relative', width: 60, height: 6, background: '#E5E7EB', borderRadius: 3, overflow: 'hidden' }}>
+        {/* Zero center marker line */}
+        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1.5, background: '#9CA3AF' }} />
+        {/* Bar */}
+        <div
+          style={{
+            position: 'absolute',
+            left: isPositive ? '50%' : `calc(50% - ${widthPct}%)`,
+            width: `${widthPct}%`,
+            top: 0,
+            bottom: 0,
+            background: isPositive ? '#10B981' : '#EF4444',
+          }}
+        />
+      </div>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: numVal === 0 ? 'inherit' : (isPositive ? '#10B981' : '#EF4444'), minWidth: 45, textAlign: 'right' }}>
+        {numVal > 0 ? '+' : ''}{numVal.toFixed(1)}%
+      </span>
+    </div>
   )
 }
 

@@ -433,7 +433,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                     <tr className="ax-dd-colhead">
                       <th className="ax-floating-dataset-rowhead">Row</th>
                       {visibleVariables.map((variable) => (
-                        <th key={variable.name} className={viewMode === 'highlight' && changedColumns.has(variable.name) ? 'ax-dd-new-column' : ''}>
+                        <th key={variable.name} className={viewMode === 'highlight' && changedColumns.has(variable.name) && (changeType === 'all' || changeType === 'generated') ? 'ax-dd-new-column' : ''}>
                           <span className="ax-dd-typeicon" data-type={variable.dtype}>{TYPE_ICON[variable.dtype] || '?'}</span>
                           <span className="ax-dd-colname">{variable.name}</span>
                           <small className="ax-dd-coltype">{TYPE_LABEL[variable.dtype] || variable.dtype}</small>
@@ -458,7 +458,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                                 'readonly',
                                 removedRow ? 'ax-dd-removed-cell' : '',
                                 change ? `ax-dd-changed-cell ax-dd-change-${change.change_kind || 'converted'}` : '',
-                                viewMode === 'highlight' && changedColumns.has(column) ? 'ax-dd-new-column-cell' : '',
+                                viewMode === 'highlight' && changedColumns.has(column) && (changeType === 'all' || changeType === 'generated') ? 'ax-dd-new-column-cell' : '',
                               ].filter(Boolean).join(' ')}
                             >
                               {formatValue(row[column])}
@@ -608,7 +608,7 @@ function changeMatchesType(change, type, changedColumns = new Set()) {
   if (type === 'missing') return text.includes('missing') || text.includes('fill')
   if (type === 'outlier') return text.includes('outlier') || text.includes('cap') || text.includes('clip')
   if (type === 'converted') return text.includes('convert') || text.includes('encode') || text.includes('standardize') || text.includes('category')
-  if (type === 'scaled') return text.includes('scale') || text.includes('standardize_numeric') || text.includes('normalize')
+  if (type === 'scaled') return text.includes('scale') || text.includes('standardize_numeric') || text.includes('normalize') || text.includes('zscore') || text.includes('minmax')
   if (type === 'generated') return changedColumns.has(change.column) || text.includes('generated') || text.includes('new_column')
   return true
 }
