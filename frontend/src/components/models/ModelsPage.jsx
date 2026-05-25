@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
+import { ChevronDown, Check, RotateCcw, History, ArrowUpRight, AlertTriangle } from 'lucide-react'
 import { api } from '../../api'
 import { AIInsightCard, ExplainButton } from '../ai/AIExplainers'
 import { useDialog } from '../common/DialogProvider'
@@ -395,18 +396,87 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const [showHistory, setShowHistory] = useState(false)
+
+  const planBlocked = plan && (plan.validation_checks || []).some((c) => c.status === 'block')
+  const blockedCount = plan ? (plan.validation_checks || []).filter((c) => c.status === 'block').length : 0
+
+  const checks = plan?.validation_checks || []
+  const issueCount = checks.filter((c) => {
+    const dismissed = (dismissedChecks || []).includes(c.key)
+    const effective = dismissed && c.status === 'warning' ? 'ok' : c.status
+    return effective === 'block' || effective === 'warning'
+  }).length
+
+  const activeIssue = checks.find((c) => {
+    const dismissed = (dismissedChecks || []).includes(c.key)
+    const effective = dismissed && c.status === 'warning' ? 'ok' : c.status
+    return effective === 'block' || effective === 'warning'
+  })
+
+  const highlightActiveIssue = () => {
+    const bar = document.querySelector('.models-issue-bar')
+    if (bar) {
+      bar.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      bar.classList.add('ax-fix-highlight')
+      setTimeout(() => bar.classList.remove('ax-fix-highlight'), 2600)
+    }
+  }
+
   return (
-    <div className={`ax-busy-host ax-operation-busy ${training ? 'is-busy' : ''}`}>
+    <div className={`ax-busy-host ax-operation-busy ${training ? 'is-busy' : ''}`} style={{ paddingBottom: 60 }}>
       <BusyOverlay
         active={training}
         title={`Training ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}...`}
         detail="Applying preprocessing, splitting the data, fitting models, and calculating evaluation metrics."
         steps={['Preparing model inputs', 'Training selected algorithms', 'Saving results for What-if and reports']}
       />
-      <h1 className="ax-page-title">Build a model</h1>
-      <p className="ax-page-sub">
-        Pick a target, select features, choose algorithms, and train them all in one click.
-      </p>
+
+      {/* Title block with Reset and History toggles */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div>
+          <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {plan?.task ? `MODELS · ${plan.task.toUpperCase()}` : 'MODELS'}
+          </span>
+          <h1 className="ax-page-title" style={{ margin: '4px 0 0', fontSize: '26px', fontWeight: 800 }}>Build a model</h1>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="ax-btn mini"
+            onClick={() => {
+              setTarget('')
+              setTargetMode('auto')
+              setPositiveClass('')
+              setFeatures([])
+              setChosenAlgos(['logistic', 'rf'])
+              setResults(null)
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, height: 32 }}
+            type="button"
+          >
+            <RotateCcw size={13} /> Reset
+          </button>
+          {models.length > 0 && (
+            <button
+              className="ax-btn mini"
+              onClick={() => setShowHistory(!showHistory)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                height: 32,
+                background: showHistory ? 'var(--color-accent-light)' : 'var(--color-background-primary)',
+                borderColor: showHistory ? 'var(--color-accent)' : 'var(--color-border-secondary)',
+                color: showHistory ? 'var(--color-accent-dark)' : 'var(--color-text-primary)'
+              }}
+              type="button"
+            >
+              <History size={13} /> History · {models.length}
+            </button>
+          )}
+        </div>
+      </div>
+
       <PageGuide
         title="Modeling works best after a clean question"
         meta="Models"
@@ -415,346 +485,360 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         SimuCast helps choose sensible targets and features, then compares train and test performance so overfitting is visible.
       </PageGuide>
 
-      {/* Step 1 — target */}
-      <Step n={1} id="models-step-1" title="Pick a target — what to predict">
-        <select
-          id="fix-target-handling"
-          value={target}
-          onChange={(e) => {
-            setTarget(e.target.value)
-            setTargetMode('auto')
-            setPositiveClass('')
-            setFeatures(features.filter((f) => f !== e.target.value))
-            setResults(null)
-          }}
-          style={{ width: '100%', maxWidth: 320 }}
-        >
-          <option value="">— select —</option>
-          {variables.map((v) => (
-            <option key={v.name} value={v.name}>
-              {v.name} ({v.dtype})
-            </option>
-          ))}
-        </select>
-        {targetRecommendations.length > 0 && (
-          <RecommendationPanel title="Recommended targets" source="System recommended">
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {targetRecommendations.map((rec) => (
+      {/* History Collapsible list */}
+      {showHistory && models.length > 0 && (
+        <div className="ax-card" style={{ padding: 14, marginBottom: 16, border: '1.5px solid var(--color-accent-soft)', background: 'var(--color-background-tertiary)' }}>
+          <p className="ax-lbl" style={{ margin: '0 0 10px' }}>Previous models</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {models.map((m) => (
+              <div key={m.id} className="ax-card" style={{ padding: '10px 12px', background: 'var(--color-background-primary)' }}>
+                <div className="ax-row">
+                  <div>
+                    <p style={{ fontSize: 12, fontWeight: 700, margin: 0, color: 'var(--color-text-primary)' }}>
+                      {algoLabelForTask(m.algorithm, m.metrics?.task)} - {m.target}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+                      {formatMetrics(m.metrics)}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <button className="ax-btn mini" onClick={() => { restoreModelSettings(m); setShowHistory(false); }} type="button">
+                      Restore settings
+                    </button>
+                    <button className="ax-btn mini" onClick={() => prepareAndUseInWhatIf(m)} type="button">
+                      Use in What-if
+                    </button>
+                    <button className="ax-btn mini danger" onClick={() => deleteSavedModel(m)} type="button">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Inline Configuration Card */}
+      <div
+        className="ax-card"
+        style={{
+          padding: '12px 16px',
+          background: 'var(--color-background-primary)',
+          border: '1.5px solid var(--color-border-tertiary)',
+          borderRadius: '12px',
+          boxShadow: 'var(--shadow-card)',
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: 12,
+          flexWrap: 'wrap',
+          marginBottom: 16
+        }}
+      >
+        {/* TARGET Dropdown */}
+        <ConfigDropdown label="Target" value={target || 'Select Target'}>
+          {(close) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '0 0 4px', fontWeight: 600, textTransform: 'uppercase' }}>Select target variable</p>
+              {variables.map((v) => (
                 <button
-                  key={rec.name}
-                  className="ax-btn mini"
+                  key={v.name}
                   type="button"
                   onClick={() => {
-                    setTarget(rec.name)
+                    setTarget(v.name)
                     setTargetMode('auto')
                     setPositiveClass('')
-                    setFeatures(features.filter((f) => f !== rec.name))
+                    setFeatures(features.filter((f) => f !== v.name))
+                    setResults(null)
+                    close()
                   }}
-                  title={rec.why}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', fontSize: 12,
+                    background: target === v.name ? 'var(--color-accent-light)' : 'none',
+                    border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: target === v.name ? 700 : 400,
+                    color: target === v.name ? 'var(--color-accent-dark)' : 'var(--color-text-primary)'
+                  }}
+                  onMouseEnter={(e) => { if (target !== v.name) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
+                  onMouseLeave={(e) => { if (target !== v.name) e.currentTarget.style.background = 'none' }}
                 >
-                  {rec.name}
+                  {v.name} <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 4, fontWeight: 400 }}>({v.dtype})</span>
                 </button>
               ))}
             </div>
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-              Recommended targets are columns that look like outcomes, scores, statuses, or meaningful prediction goals.
-            </p>
-          </RecommendationPanel>
-        )}
-        {plan && (
-          <>
-            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
-              Detected task: <strong>{plan.task}</strong>
-              {plan.class_balance && ` - classes: ${Object.entries(plan.class_balance).map(([k, v]) => `${k} (${v})`).join(', ')}`}
-            </p>
-            {plan.task === 'classification' && (
-              <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12 }}>
-                <label style={{ color: 'var(--color-text-secondary)' }}>Target handling</label>
-                <select value={targetMode} onChange={(e) => setTargetMode(e.target.value)}>
-                  <option value="auto">Automatic</option>
-                  <option value="multiclass">Keep categories</option>
-                  <option value="binary">Binary: selected vs others</option>
-                </select>
-                {(targetMode === 'binary' || plan.target_mode === 'binary') && (
-                  <>
-                    <label style={{ color: 'var(--color-text-secondary)' }}>Positive class</label>
-                    <select value={positiveClass || plan.positive_class || ''} onChange={(e) => setPositiveClass(e.target.value)}>
-                      {(plan.target_classes || []).map((cls) => (
-                        <option key={cls} value={cls}>{cls}</option>
-                      ))}
-                    </select>
-                  </>
-                )}
+          )}
+        </ConfigDropdown>
+
+        {/* FEATURES Dropdown */}
+        <ConfigDropdown label="Features" value={`${features.length} of ${allFeatureNames.length}`}>
+          {() => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Select features</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="ax-btn mini" onClick={selectAll} type="button">All</button>
+                  <button className="ax-btn mini" onClick={selectNone} type="button" disabled={features.length === 0}>None</button>
+                </div>
               </div>
-            )}
-          </>
-        )}
-      </Step>
-
-      {/* Step 2 — features */}
-      <div id="fix-feature-selection">
-      <Step n={2} title="Select features" disabled={!target}>
-        <div className="ax-row" style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-            {features.length} of {allFeatureNames.length} selected
-          </span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button className="ax-btn" onClick={selectAll} type="button" disabled={!target}>Select all</button>
-            <button className="ax-btn" onClick={selectNone} type="button" disabled={!target || features.length === 0}>
-              Clear
-            </button>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {candidateFeatures.map((v) => (
-            <span
-              key={v.name}
-              className={`ax-chip ${features.includes(v.name) ? 'active' : ''}`}
-              onClick={() => toggleFeature(v.name)}
-              style={{ cursor: 'pointer' }}
-            >
-              {v.name} <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 4 }}>{v.dtype}</span>
-            </span>
-          ))}
-        </div>
-        {featureRecommendations.length > 0 && (
-          <RecommendationPanel title="Recommended features" source="System recommended">
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>
-              Excludes likely IDs and the selected target. Watch for leakage: avoid columns that directly reveal the answer.
-            </p>
-            <button
-              className="ax-btn mini"
-              type="button"
-              onClick={() => setFeatures(featureRecommendations.map((v) => v.name))}
-              disabled={!target}
-            >
-              Use recommended features
-            </button>
-          </RecommendationPanel>
-        )}
-      </Step>
-      </div>
-
-      {/* Step 3 — preprocessing plan */}
-      <Step n={3} id="models-step-3" title="Preprocessing plan &amp; readiness" disabled={!target || features.length === 0}>
-        <div id="fix-numeric-preprocessing" className="ax-card ax-module-card ax-card-prep" style={{ padding: 12, marginBottom: 12, background: 'var(--color-background-primary)' }}>
-          <div className="ax-module-head ax-model-inner-head">
-            <div className="ax-module-head-main">
-              <p className="ax-module-title">
-                Encoding and scaling choices
-                <HelpButton
-                  title="Encoding and scaling choices"
-                  text="This card controls model preprocessing. Categorical features are encoded for model input; numeric scaling is recommended for linear/logistic models and optional for tree-based models."
-                />
-              </p>
+              {candidateFeatures.map((v) => (
+                <label
+                  key={v.name}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                    background: features.includes(v.name) ? 'var(--color-accent-light)' : 'none'
+                  }}
+                  onMouseEnter={(e) => { if (!features.includes(v.name)) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
+                  onMouseLeave={(e) => { if (!features.includes(v.name)) e.currentTarget.style.background = 'none' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={features.includes(v.name)}
+                    onChange={() => toggleFeature(v.name)}
+                    style={{ margin: 0 }}
+                  />
+                  <span style={{ fontWeight: features.includes(v.name) ? 600 : 400, color: 'var(--color-text-primary)' }}>
+                    {v.name} <span style={{ color: 'var(--color-text-tertiary)', fontSize: 10, fontWeight: 400 }}>({v.dtype})</span>
+                  </span>
+                </label>
+              ))}
             </div>
-            <span className="ax-chip" style={{ color: 'var(--color-primary)' }}>System recommended</span>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
-            Categorical features are encoded for modeling. Scaling helps linear/logistic models compare numeric features fairly; tree models are less sensitive.
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px minmax(0, 1fr)', gap: 10, alignItems: 'center', fontSize: 12 }}>
-            <label style={{ color: 'var(--color-text-secondary)' }}>Encoding</label>
-            <select disabled value="one_hot" style={{ width: '100%' }}>
-              <option value="one_hot">One-hot encoding for categorical features</option>
-            </select>
-            <label style={{ color: 'var(--color-text-secondary)' }}>Scaling</label>
-            <select
-              value={numericPreprocessing.scaling || 'auto'}
-              onChange={(e) => setNumericPreprocessing((cur) => ({ ...cur, scaling: e.target.value }))}
-              style={{ width: '100%' }}
-            >
-              <option value="auto">Auto recommended</option>
-              <option value="standard">Standard scaling</option>
-              <option value="minmax">Min-max scaling</option>
-              <option value="none">No scaling</option>
-            </select>
-          </div>
-        </div>
-        {planLoading && (
-          plan ? (
-            <InlineSpinner label="Refreshing readiness checks..." />
-          ) : (
-            <SkeletonCards count={2} />
-          )
-        )}
-        {planError && (
-          <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: 0 }}>{planError}</p>
-        )}
-        {plan && (
-          <PreprocessingPlan
-            plan={plan}
-            onFixAction={handleFixAction}
-            dismissedChecks={dismissedChecks}
-            onDismissCheck={(key) => setDismissedChecks((d) => [...d, key])}
-          />
-        )}
-      </Step>
+          )}
+        </ConfigDropdown>
 
-      {/* Step 4 — algorithms */}
-      <Step n={4} id="models-step-4" title="Configure validation split" disabled={!plan}>
-        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '10px 12px', alignItems: 'center', fontSize: 12 }}>
-          <label style={{ color: 'var(--color-text-secondary)' }}>Validation method</label>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="radio"
-                name="validation-method"
-                value="standard_split"
-                checked={validationMethod === 'standard_split'}
-                onChange={() => setValidationMethod('standard_split')}
-              />
-              Standard train/test split
-              <span className="ax-chip" style={{ fontSize: 10 }}>Faster</span>
-            </label>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="radio"
-                name="validation-method"
-                value="cross_validation"
-                checked={validationMethod === 'cross_validation'}
-                onChange={() => setValidationMethod('cross_validation')}
-              />
-              {cvFolds}-fold cross-validation
-              <HelpButton
-                title="Cross-validation"
-                text="The dataset is divided into several parts. The model trains multiple times using different combinations of training and testing data. This helps detect unstable or overfit results."
-              />
-              <span className="ax-chip" style={{ fontSize: 10 }}>Recommended for small datasets</span>
-              <span className="ax-chip" style={{ fontSize: 10 }}>More stable evaluation</span>
-            </label>
-          </div>
-          {validationMethod === 'standard_split' ? (
-            <>
-              <span />
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-                The model trains once using one train/test split. Adjust the holdout size to choose how much data is reserved for testing.
-              </p>
-              <label style={{ color: 'var(--color-text-secondary)' }}>Test set</label>
+        {/* ENCODING Dropdown */}
+        <ConfigDropdown label="Encoding" value={`One-hot · ${numericPreprocessing.scaling === 'auto' ? 'Auto-scale' : numericPreprocessing.scaling === 'none' ? 'No scale' : 'Scale'}`}>
+          {() => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
-                <input
-                  type="range"
-                  min="0.05"
-                  max="0.5"
-                  step="0.05"
-                  value={testSize}
-                  onChange={(e) => setTestSize(Number(e.target.value))}
-                  style={{ width: 'min(280px, 100%)' }}
-                />
-                <span style={{ marginLeft: 10, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                  Train {Math.round((1 - testSize) * 100)}% / Test {Math.round(testSize * 100)}%
-                </span>
-              </div>
-            </>
-          ) : (
-            <>
-              <label style={{ color: 'var(--color-text-secondary)' }}>Folds</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <select value={cvFolds} onChange={(e) => setCvFolds(Number(e.target.value))} style={{ width: 170 }}>
-                  <option value={3}>3 folds</option>
-                  <option value={5}>5 folds (recommended)</option>
-                  <option value={10}>10 folds</option>
+                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Categorical features</label>
+                <select disabled value="one_hot" style={{ width: '100%', fontSize: 12, height: 32, minHeight: 32 }}>
+                  <option value="one_hot">One-hot encoding</option>
                 </select>
-                <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                  5 folds works well for most datasets; 10 folds can give steadier estimates on smaller datasets.
-                </span>
               </div>
-              <span />
-              <div className="ax-card" style={{ padding: '10px 12px', background: 'var(--color-background-primary)', borderColor: 'var(--color-border-tertiary)' }}>
-                <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>Cross-validation rotates training and testing across {cvFolds} folds.</p>
-                <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-                  Cross-validation automatically rotates training and testing across {cvFolds} folds to produce more stable evaluation results.
-                </p>
+              <div>
+                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Numeric scaling</label>
+                <select
+                  value={numericPreprocessing.scaling || 'auto'}
+                  onChange={(e) => setNumericPreprocessing((cur) => ({ ...cur, scaling: e.target.value }))}
+                  style={{ width: '100%', fontSize: 12, height: 32, minHeight: 32 }}
+                >
+                  <option value="auto">Auto recommended</option>
+                  <option value="standard">Standard scaling</option>
+                  <option value="minmax">Min-max scaling</option>
+                  <option value="none">No scaling</option>
+                </select>
               </div>
-            </>
-          )}
-          {plan?.task === 'classification' && (
-            <>
-              <label style={{ color: 'var(--color-text-secondary)' }}>Classification split</label>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={stratify} onChange={(e) => setStratify(e.target.checked)} />
-                Keep class proportions in train and test sets
-              </label>
-              <label style={{ color: 'var(--color-text-secondary)' }}>Imbalance handling</label>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={classWeight} onChange={(e) => setClassWeight(e.target.checked)} />
-                Use balanced class weights where supported
-              </label>
-            </>
-          )}
-        </div>
-      </Step>
-
-      <Step n={5} id="models-step-5" title="Choose algorithms" disabled={!plan || (plan.validation_checks || []).some((c) => c.status === 'block')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <RecommendationPanel title="Algorithm guidance" source="System recommended">
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-              Use a simple interpretable baseline first, then compare with tree-based models. Random Forest can perform well but needs model-health checks for overfitting.
-            </p>
-          </RecommendationPanel>
-          {auth.isGuest && (
-            <div className="ax-card" style={{ padding: '10px 12px', borderColor: 'var(--color-border-tertiary)', background: 'var(--color-background-primary)' }}>
-              <div className="ax-row">
-                <strong style={{ fontSize: 12 }}>Guest training usage</strong>
-                <span className="ax-chip" style={{ fontSize: 11 }}>{guestTrainingUsed}/{GUEST_MODEL_LIMIT} guest trainings used</span>
-              </div>
-              <p style={{ fontSize: 11, color: guestModelLimitReached ? '#9E2524' : 'var(--color-text-secondary)', margin: '6px 0 0' }}>
-                Guest mode includes up to {GUEST_MODEL_LIMIT} total model trainings for this temporary session. Deleting models will not reset the limit. {guestModelLimitReached ? 'Guest training limit reached. Create an account to remove guest training restrictions.' : `${guestModelsRemaining} training attempt${guestModelsRemaining === 1 ? '' : 's'} remaining.`}
-              </p>
             </div>
           )}
-          {visibleAlgos.map((a) => (
-            <label
-              key={a.key}
-              className="ax-card"
-              style={{
-                padding: '10px 12px',
-                cursor: auth.isGuest && !chosenAlgos.includes(a.key) && guestModelsRemaining <= selectedAlgos.length ? 'not-allowed' : 'pointer',
-                opacity: auth.isGuest && !chosenAlgos.includes(a.key) && guestModelsRemaining <= selectedAlgos.length ? 0.55 : 1,
-                background: chosenAlgos.includes(a.key) ? 'var(--color-accent-light)' : undefined,
-                borderColor: chosenAlgos.includes(a.key) ? 'var(--color-accent)' : undefined,
-              }}
-            >
-              <div className="ax-row">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        </ConfigDropdown>
+
+        {/* VALIDATION Dropdown */}
+        <ConfigDropdown
+          label="Validation"
+          value={
+            validationMethod === 'standard_split'
+              ? `${Math.round((1 - testSize) * 100)}/${Math.round(testSize * 100)} Split`
+              : `${cvFolds}-fold CV`
+          }
+        >
+          {() => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 280 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Method</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                    <input
+                      type="radio"
+                      name="validation-method-bar"
+                      value="standard_split"
+                      checked={validationMethod === 'standard_split'}
+                      onChange={() => setValidationMethod('standard_split')}
+                    />
+                    Train/test split
+                  </label>
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                    <input
+                      type="radio"
+                      name="validation-method-bar"
+                      value="cross_validation"
+                      checked={validationMethod === 'cross_validation'}
+                      onChange={() => setValidationMethod('cross_validation')}
+                    />
+                    Cross-validation
+                  </label>
+                </div>
+              </div>
+              {validationMethod === 'standard_split' ? (
+                <div>
+                  <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
+                    Test Split: {Math.round(testSize * 100)}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="0.5"
+                    step="0.05"
+                    value={testSize}
+                    onChange={(e) => setTestSize(Number(e.target.value))}
+                    style={{ width: '100%', height: 16 }}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>Folds</label>
+                  <select
+                    value={cvFolds}
+                    onChange={(e) => setCvFolds(Number(e.target.value))}
+                    style={{ width: '100%', fontSize: 12, height: 32, minHeight: 32 }}
+                  >
+                    <option value={3}>3 folds</option>
+                    <option value={5}>5 folds (recommended)</option>
+                    <option value={10}>10 folds</option>
+                  </select>
+                </div>
+              )}
+              {plan?.task === 'classification' && (
+                <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                    <input type="checkbox" checked={stratify} onChange={(e) => setStratify(e.target.checked)} />
+                    Keep class proportions
+                  </label>
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                    <input type="checkbox" checked={classWeight} onChange={(e) => setClassWeight(e.target.checked)} />
+                    Balanced class weights
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+        </ConfigDropdown>
+
+        {/* ALGORITHMS Dropdown */}
+        <ConfigDropdown label="Algorithms" value={`${selectedAlgos.length} selected`}>
+          {() => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 240 }}>
+              <label style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontWeight: 650, textTransform: 'uppercase', marginBottom: 4 }}>Select algorithms</label>
+              {visibleAlgos.map((a) => (
+                <label
+                  key={a.key}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                    background: chosenAlgos.includes(a.key) ? 'var(--color-accent-light)' : 'none',
+                    opacity: auth.isGuest && !chosenAlgos.includes(a.key) && guestModelsRemaining <= selectedAlgos.length ? 0.5 : 1
+                  }}
+                  onMouseEnter={(e) => { if (!chosenAlgos.includes(a.key)) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
+                  onMouseLeave={(e) => { if (!chosenAlgos.includes(a.key)) e.currentTarget.style.background = 'none' }}
+                >
                   <input
                     type="checkbox"
                     checked={chosenAlgos.includes(a.key)}
                     disabled={auth.isGuest && !chosenAlgos.includes(a.key) && guestModelsRemaining <= selectedAlgos.length}
                     onChange={() => toggleAlgo(a.key)}
+                    style={{ margin: 0 }}
                   />
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{algoLabelForTask(a.key, plan?.task)}</p>
-                    <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{a.desc}</p>
-                  </div>
-                </div>
-                <span className="ax-chip" style={{
-                  background: a.interpretable ? '#DCFCE7' : 'var(--color-background-secondary)',
-                  color: a.interpretable ? '#16A34A' : 'var(--color-text-tertiary)',
-                  fontSize: 10,
-                }}>
-                  {a.interpretable ? '✓ interpretable' : 'complex'}
-                </span>
-              </div>
-            </label>
-          ))}
-        </div>
-      </Step>
+                  <span style={{ fontWeight: chosenAlgos.includes(a.key) ? 650 : 400, color: 'var(--color-text-primary)' }}>
+                    {algoLabelForTask(a.key, plan?.task)}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </ConfigDropdown>
 
-      {/* Step 5 — train */}
-      <div className="ax-row" style={{ margin: '8px 0 16px', justifyContent: 'flex-end' }}>
-        <button
-          id="models-train-action"
-          className="ax-btn prim"
-          disabled={training || !plan || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit || (plan.validation_checks || []).some((c) => c.status === 'block')}
-          onClick={train}
-          type="button"
-        >
-          {training ? <InlineSpinner label={`Training ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}...`} /> : `Train ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}`}
-        </button>
+        {/* Action Button */}
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: '180px', flex: 1 }}>
+          <button
+            id="models-train-action"
+            className="ax-btn prim"
+            style={{
+              width: '100%',
+              height: '42px',
+              borderRadius: '999px',
+              fontSize: '13px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: planBlocked ? '#FEF2F2' : 'var(--color-accent)',
+              color: planBlocked ? 'var(--color-text-danger)' : '#fff',
+              border: planBlocked ? '1.5px solid var(--color-text-danger)' : 'none',
+              boxShadow: planBlocked ? 'none' : '0 8px 16px rgba(249, 115, 22, 0.25)',
+              cursor: (training || !target || features.length === 0 || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit) && !planBlocked ? 'not-allowed' : 'pointer'
+            }}
+            disabled={(!planBlocked && (training || !target || features.length === 0 || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit))}
+            onClick={planBlocked ? highlightActiveIssue : train}
+            type="button"
+          >
+            {training ? (
+              <InlineSpinner label="" />
+            ) : planBlocked ? (
+              `Resolve ${blockedCount} block${blockedCount > 1 ? 's' : ''} to train`
+            ) : (
+              `Train models`
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Results */}
+      {/* Preprocessing plan issue alert */}
+      {plan && activeIssue && (
+        <div
+          className="models-issue-bar"
+          style={{
+            margin: '12px 0 16px',
+            padding: '8px 12px',
+            background: activeIssue.status === 'block' ? 'var(--color-background-danger)' : 'var(--color-background-warning)',
+            border: `1.5px solid ${activeIssue.status === 'block' ? 'var(--color-text-danger)' : 'var(--color-border-info)'}`,
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 850,
+                background: activeIssue.status === 'block' ? 'var(--color-text-danger)' : 'var(--color-accent)',
+                color: '#fff',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                letterSpacing: '0.05em'
+              }}
+            >
+              {activeIssue.status.toUpperCase()}
+            </span>
+            <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              {activeIssue.status === 'block' ? 'BLOCK' : 'WARNING'}
+            </span>
+            <span style={{ color: 'var(--color-text-secondary)' }}>
+              {activeIssue.label} on <strong>{target}</strong>
+            </span>
+            {issueCount > 1 && (
+              <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                (+ {issueCount - 1} more issue{issueCount - 1 > 1 ? 's' : ''})
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {activeIssue.fixes && activeIssue.fixes.length > 0 && (
+              <FixOptionsDropdown
+                fixes={activeIssue.fixes.map(f => {
+                  if (!f.category) return f
+                  const tag = f.category === 'recommended' ? 'Recommended' : f.category === 'alternative' ? 'Alternative' : 'Advanced'
+                  return { ...f, label: `${f.label} · ${tag}` }
+                })}
+                onAction={handleFixAction}
+                canDismiss={activeIssue.status === 'warning'}
+                onDismiss={() => setDismissedChecks((d) => [...d, activeIssue.key])}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Results panel container */}
       {results && (
         <>
           <ResultsPanel
@@ -766,20 +850,20 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             onFixAction={handleFixAction}
           />
           {(results.models || []).length > 0 && (
-            <div id="models-tuning" className="ax-card ax-module-card ax-card-model" style={{ padding: 14, marginTop: 12 }}>
+            <div id="models-tuning" className="ax-card ax-module-card ax-card-model" style={{ padding: 14, marginTop: 16 }}>
               <div className="ax-module-head ax-model-inner-head">
                 <div className="ax-module-head-main">
                   <p className="ax-module-title">
                     Tune parameters
                     <HelpButton
                       title="Tune parameters"
-                      text="This card lets you adjust meaningful algorithm settings after an initial training run. Tuning is optional and most useful when model health warns about overfitting or when candidate models perform similarly."
+                      text="Adjust algorithm settings after training. Tuning is optional and most useful when model health warns about overfitting."
                     />
                   </p>
                 </div>
               </div>
               <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 10px' }}>
-                Defaults were used for the first training run. Tuning is optional; try it when model health warns about overfitting or when metrics are close between models.
+                Defaults were used for the first training run. Adjust complexity and depth settings below to improve generalization.
               </p>
               <ParameterSettings
                 selectedAlgos={selectedAlgos}
@@ -795,71 +879,76 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           )}
         </>
       )}
-
-      {/* Previous models */}
-      {models.length > 0 && (
-        <>
-          <p className="ax-lbl" style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
-            Previous models
-            <HelpButton
-              title="Previous models"
-              text="This card lists saved trained models. You can restore their settings, send them to What-if analysis, or delete old runs to keep the project clean."
-            />
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {models.map((m) => (
-              <div key={m.id} className="ax-card" style={{ padding: '10px 12px' }}>
-                <div className="ax-row">
-                  <div>
-                    <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>
-                      {algoLabelForTask(m.algorithm, m.metrics?.task)} - {m.target}
-                    </p>
-                    <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-                      {formatMetrics(m.metrics)}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button className="ax-btn" onClick={() => restoreModelSettings(m)} type="button">
-                      Restore settings
-                    </button>
-                    <button className="ax-btn" onClick={() => prepareAndUseInWhatIf(m)} type="button">
-                      Use in What-if
-                    </button>
-                    <button className="ax-btn" onClick={() => deleteSavedModel(m)} type="button">
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   )
 }
 
-// Card wrapper that displays a numbered modeling step with title, help, and content.
-function Step({ n, title, disabled, children, id }) {
-  const help = modelStepHelp(title)
+// Dropdown menu that houses config selectors for the model build page.
+function ConfigDropdown({ label, value, children }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleClickOutside = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
+
   return (
-    <div
-      id={id}
-      className="ax-card ax-module-card ax-card-model"
-      style={{ marginBottom: 12, opacity: disabled ? 0.55 : 1, padding: 14 }}
-    >
-      <div className="ax-module-head ax-model-step-head">
-        <div className="ax-module-head-main">
-          <span className="ax-step-number" aria-hidden>
-            {n}
+    <div ref={ref} className="models-config-dropdown-container" style={{ position: 'relative', flex: 1, minWidth: 140 }}>
+      <div
+        className="models-config-box"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          padding: '8px 12px',
+          background: 'var(--color-background-primary)',
+          border: isOpen ? '1.5px solid var(--color-accent)' : '1.5px solid var(--color-border-tertiary)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          height: '100%',
+          userSelect: 'none',
+          transition: 'border-color 0.15s, box-shadow 0.15s',
+          boxShadow: isOpen ? '0 0 0 2px var(--color-accent-light)' : 'none'
+        }}
+      >
+        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+          {label}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+          <span style={{ fontSize: '13px', fontWeight: 650, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {value}
           </span>
-          <p className="ax-module-title">
-            {title}
-            {help && <HelpButton title={plainTitle(title)} text={help} />}
-          </p>
+          <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
         </div>
       </div>
-      <div style={{ pointerEvents: disabled ? 'none' : 'auto' }}>{children}</div>
+      {isOpen && (
+        <div
+          className="models-config-dropdown-content"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            zIndex: 1000,
+            background: 'var(--color-background-primary)',
+            border: '1.5px solid var(--color-border-secondary)',
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-card-hover)',
+            padding: '12px',
+            minWidth: '240px',
+            maxWidth: '360px'
+          }}
+        >
+          {children(() => setIsOpen(false))}
+        </div>
+      )}
     </div>
   )
 }
@@ -1359,46 +1448,332 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
     target: m.target,
     metrics: m.metrics,
   }))
+
+  const isClassification = active.metrics?.task === 'classification'
+  const activeHealth = assessModelHealth(active)
+  const activeTone = healthTone(activeHealth?.color)
+
+  const influenceList = useMemo(() => {
+    return normalizeInfluence(active.feature_influence || active.feature_importance)
+  }, [active])
+
+  const leaderboard = useMemo(() => {
+    const isClassification = models[0].metrics?.task === 'classification'
+
+    // Best Accuracy / R2
+    let bestAccModel = models[0]
+    let bestAccVal = -Infinity
+    for (const m of models) {
+      const val = isClassification ? (m.metrics?.accuracy ?? 0) : (m.metrics?.r2 ?? -Infinity)
+      if (val > bestAccVal) {
+        bestAccVal = val
+        bestAccModel = m
+      }
+    }
+
+    // Best AUC / RMSE
+    let bestAucModel = models[0]
+    let bestAucVal = isClassification ? -Infinity : Infinity
+    for (const m of models) {
+      if (isClassification) {
+        const val = m.metrics?.auc ?? 0
+        if (val > bestAucVal) {
+          bestAucVal = val
+          bestAucModel = m
+        }
+      } else {
+        const val = m.metrics?.rmse ?? Infinity
+        if (val < bestAucVal) {
+          bestAucVal = val
+          bestAucModel = m
+        }
+      }
+    }
+
+    // Smallest train-test gap
+    let smallestGapModel = models[0]
+    let smallestGapVal = Infinity
+    for (const m of models) {
+      const val = Math.abs(Number(m.metrics?.generalization_gap ?? 0))
+      if (val < smallestGapVal) {
+        smallestGapVal = val
+        smallestGapModel = m
+      }
+    }
+
+    // Watch Out (Severe/Moderate overfitting risk or highest generalization gap)
+    let worstModel = models[0]
+    let worstGapVal = -Infinity
+    for (const m of models) {
+      const val = Math.abs(Number(m.metrics?.generalization_gap ?? 0))
+      if (val > worstGapVal) {
+        worstGapVal = val
+        worstModel = m
+      }
+    }
+
+    return {
+      bestAccuracy: {
+        label: isClassification ? 'BEST ON ACCURACY' : 'BEST ON R²',
+        value: isClassification ? pct(bestAccModel.metrics?.accuracy) : num(bestAccModel.metrics?.r2),
+        modelName: algoLabelForTask(bestAccModel.algorithm, bestAccModel.metrics?.task)
+      },
+      bestAuc: {
+        label: isClassification ? 'BEST ON AUC' : 'SMALLEST RMSE',
+        value: isClassification ? (bestAucModel.metrics?.auc == null ? 'n/a' : num(bestAucModel.metrics?.auc)) : num(bestAucModel.metrics?.rmse),
+        modelName: algoLabelForTask(bestAucModel.algorithm, bestAucModel.metrics?.task)
+      },
+      smallestGap: {
+        label: 'SMALLEST TRAIN-TEST GAP',
+        value: isClassification ? pct(smallestGapModel.metrics?.generalization_gap) : num(smallestGapModel.metrics?.generalization_gap),
+        modelName: algoLabelForTask(smallestGapModel.algorithm, smallestGapModel.metrics?.task)
+      },
+      watchOut: {
+        label: 'WATCH OUT',
+        value: worstModel.metrics?.generalization_gap >= 0.15 ? 'Severe risk' : worstModel.metrics?.generalization_gap >= 0.08 ? 'Moderate risk' : 'Healthy',
+        modelName: algoLabelForTask(worstModel.algorithm, worstModel.metrics?.task),
+        isRisk: worstModel.metrics?.generalization_gap >= 0.08
+      }
+    }
+  }, [models])
+
   return (
     <>
-      <AIInsightCard
-        datasetId={datasetId}
-        step="models-comparison"
-        params={{ task: models[0]?.metrics?.task, target: models[0]?.target }}
-        result={{ models: compareSummary, skipped }}
-        title="AI verdict on these model results"
-        question="Which of these trained models looks most promising and why? Translate the metrics into plain English (good/mediocre/poor) and call out any red flags like overfitting or class imbalance."
-        refreshKey={JSON.stringify(compareSummary)}
-      />
-      <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        Comparison
-        <HelpButton
-          title="Model comparison"
-          text="This card compares trained models using task-appropriate metrics. The best marker highlights the strongest metric, but you should still inspect model health and feature influence."
+      {/* Leaderboard Cards Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
+        {/* Card 1: Best Accuracy */}
+        <div
+          style={{
+            padding: '16px',
+            background: 'var(--color-background-primary)',
+            border: '1.5px solid var(--color-accent)',
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-card)'
+          }}
+        >
+          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {leaderboard.bestAccuracy.label}
+          </span>
+          <p style={{ fontSize: '28px', fontWeight: 800, margin: '8px 0 4px', color: 'var(--color-accent)' }}>
+            {leaderboard.bestAccuracy.value}
+          </p>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+            {leaderboard.bestAccuracy.modelName}
+          </span>
+        </div>
+
+        {/* Card 2: Best AUC / RMSE */}
+        <div
+          style={{
+            padding: '16px',
+            background: 'var(--color-background-primary)',
+            border: '1.5px solid var(--color-border-tertiary)',
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-card)'
+          }}
+        >
+          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {leaderboard.bestAuc.label}
+          </span>
+          <p style={{ fontSize: '28px', fontWeight: 800, margin: '8px 0 4px', color: 'var(--color-text-primary)' }}>
+            {leaderboard.bestAuc.value}
+          </p>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+            {leaderboard.bestAuc.modelName}
+          </span>
+        </div>
+
+        {/* Card 3: Smallest Gap */}
+        <div
+          style={{
+            padding: '16px',
+            background: 'var(--color-background-primary)',
+            border: '1.5px solid var(--color-border-tertiary)',
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-card)'
+          }}
+        >
+          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {leaderboard.smallestGap.label}
+          </span>
+          <p style={{ fontSize: '28px', fontWeight: 800, margin: '8px 0 4px', color: 'var(--color-text-primary)' }}>
+            {leaderboard.smallestGap.value}
+          </p>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+            {leaderboard.smallestGap.modelName}
+          </span>
+        </div>
+
+        {/* Card 4: Watch Out */}
+        <div
+          style={{
+            padding: '16px',
+            background: leaderboard.watchOut.isRisk ? '#FEF2F2' : 'var(--color-background-primary)',
+            border: `1.5px solid ${leaderboard.watchOut.isRisk ? '#FEE2E2' : 'var(--color-border-tertiary)'}`,
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-card)'
+          }}
+        >
+          <span style={{ fontSize: '10px', fontWeight: 700, color: leaderboard.watchOut.isRisk ? 'var(--color-text-danger)' : 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {leaderboard.watchOut.label}
+          </span>
+          <p style={{ fontSize: '28px', fontWeight: 800, margin: '8px 0 4px', color: leaderboard.watchOut.isRisk ? 'var(--color-text-danger)' : 'var(--color-text-primary)' }}>
+            {leaderboard.watchOut.value}
+          </p>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+            {leaderboard.watchOut.modelName}
+          </span>
+        </div>
+      </div>
+
+      {/* Comparison table block */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '20px 2px 10px' }}>
+        <span style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 650 }}>
+          COMPARISON · {models.length} MODELS
+        </span>
+        <ExplainButton
+          datasetId={datasetId}
+          step="models-comparison"
+          params={{ task: models[0]?.metrics?.task, target: models[0]?.target }}
+          result={{ models: compareSummary, skipped }}
+          question="Which of these trained models looks most promising and why? Translate the metrics into plain English (good/mediocre/poor) and call out any red flags like overfitting or class imbalance."
+          label="AI explain results"
         />
-      </p>
+      </div>
+
       <ComparisonTable models={models} activeIdx={activeIdx} onPick={setActiveIdx} />
+
       {skipped?.length > 0 && (
         <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '6px 0 12px' }}>
           Skipped: {skipped.map((s) => `${s.algorithm} (${s.reason})`).join(' · ')}
         </p>
       )}
-      <ModelHealthCard model={active} datasetId={datasetId} onFixAction={onFixAction} />
 
-      <div className="ax-card" style={{ padding: 14, marginTop: 8 }}>
-        <div className="ax-row" style={{ marginBottom: 10 }}>
-          <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>{active.label} — details</p>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <ExplainButton
-              datasetId={datasetId}
-              step="model-detail"
-              params={{ algorithm: active.algorithm, target: active.target, model_params: active.metrics?.model_params }}
-              result={active.metrics}
-              question="Explain this specific model's metrics and feature influence in plain English. What are its strengths, weaknesses, and what should the user try next to improve it?"
-              label="Explain metrics"
-            />
+      {/* Model Health and Feature Influence Split Panel */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, marginTop: 20 }}>
+        {/* Left Card: Model Health */}
+        <div className="ax-card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                MODEL HEALTH
+              </span>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
+                {algoLabelForTask(active.algorithm, active.metrics?.task)}
+              </h3>
+            </div>
+            {activeHealth && (
+              <span
+                className="ax-chip"
+                style={{
+                  background: activeTone.chipBg,
+                  color: activeTone.text,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '4px 10px',
+                  borderRadius: 999
+                }}
+              >
+                {activeHealth.label}
+              </span>
+            )}
+          </div>
+
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 16px', flex: '0 0 auto' }}>
+            {activeHealth?.summary || 'Generalization stats computed on standard split.'}
+          </p>
+
+          {/* Metrics Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18, flex: 1 }}>
+            {/* Metric 1: Train */}
+            <div style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px' }}>
+              <span style={{ fontSize: '9px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                TRAIN
+              </span>
+              <p style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
+                {isClassification ? pct(active.metrics?.train_accuracy) : num(active.metrics?.train_r2)}
+              </p>
+            </div>
+
+            {/* Metric 2: Test */}
+            <div style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px' }}>
+              <span style={{ fontSize: '9px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                TEST
+              </span>
+              <p style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
+                {isClassification ? pct(active.metrics?.accuracy) : num(active.metrics?.r2)}
+              </p>
+            </div>
+
+            {/* Metric 3: Gap */}
+            <div style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px' }}>
+              <span style={{ fontSize: '9px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                GAP
+              </span>
+              <p style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0 0', color: Math.abs(active.metrics?.generalization_gap) >= 0.08 ? 'var(--color-text-warning)' : 'var(--color-text-primary)' }}>
+                {isClassification ? pct(Math.abs(active.metrics?.generalization_gap)) : num(Math.abs(active.metrics?.generalization_gap))}
+              </p>
+            </div>
+
+            {/* Metric 4: Test Rows */}
+            <div style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px' }}>
+              <span style={{ fontSize: '9px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                TEST ROWS
+              </span>
+              <p style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
+                {active.metrics?.split_rows?.test?.toLocaleString() || active.metrics?.split_rows?.total?.toLocaleString() || 'n/a'}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Actions Buttons */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 14 }}>
+            <button className="ax-btn mini" onClick={() => onFixAction?.({ route: 'models.features' })} type="button">
+              Review features
+            </button>
             <button
-              className="ax-btn"
+              className="ax-btn mini"
+              onClick={() => {
+                const tuningEl = document.getElementById('models-tuning')
+                if (tuningEl) {
+                  tuningEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+              }}
+              type="button"
+            >
+              Simpler model
+            </button>
+            <button
+              className="ax-btn mini"
+              onClick={() => {
+                const tuningEl = document.getElementById('models-tuning')
+                if (tuningEl) {
+                  tuningEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+              }}
+              type="button"
+            >
+              Tune complexity
+            </button>
+            <button className="ax-btn mini" onClick={() => onFixAction?.({ route: 'tests.correlation' })} type="button">
+              Check correlations
+            </button>
+          </div>
+        </div>
+
+        {/* Right Card: Feature Influence */}
+        <div className="ax-card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                FEATURE INFLUENCE
+              </span>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
+                {algoLabelForTask(active.algorithm, active.metrics?.task)}
+              </h3>
+            </div>
+            <button
+              className="ax-btn mini prim"
               onClick={async () => {
                 if (active.has_whatif) {
                   onUseInWhatIf(active)
@@ -1412,13 +1787,69 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
                 }
               }}
               type="button"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 32 }}
             >
-              Use in What-if
+              Use in What If <ArrowUpRight size={14} />
             </button>
           </div>
+
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 16px', flex: '0 0 auto' }}>
+            Direction is shown when available: increases raise the prediction/probability, decreases lower it.
+          </p>
+
+          {/* Features directional bar list */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, justifyContent: 'center' }}>
+            {influenceList.length > 0 ? (
+              influenceList.map((item) => {
+                const isPositive = item.direction === 'positive'
+                const isNegative = item.direction === 'negative'
+                const strengthPercent = Math.round((item.relative_strength ?? item.strength ?? 0) * 100)
+                
+                // Bar colors matching screenshot: raises gets orange, lowers gets dark slate/grey, default gets light grey/accent
+                const barColor = isPositive ? 'var(--color-accent)' : isNegative ? '#334155' : 'var(--color-border-primary)'
+                
+                return (
+                  <div key={item.feature} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
+                    <strong style={{ width: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--color-text-primary)' }}>
+                      {item.feature}
+                    </strong>
+                    <div style={{ flex: 1, height: '8px', background: 'var(--color-background-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ width: `${strengthPercent}%`, height: '100%', background: barColor, borderRadius: '4px' }} />
+                    </div>
+                    <span style={{ width: '38px', textAlign: 'right', fontWeight: 650, color: 'var(--color-text-primary)' }}>
+                      {strengthPercent}%
+                    </span>
+                    <span
+                      style={{
+                        width: '78px',
+                        textAlign: 'left',
+                        fontWeight: 700,
+                        color: isPositive ? 'var(--color-text-success)' : isNegative ? 'var(--color-text-danger)' : 'var(--color-text-secondary)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 2
+                      }}
+                    >
+                      {isPositive ? '↑ raises' : isNegative ? '↓ lowers' : 'Model-derived'}
+                    </span>
+                  </div>
+                )
+              })
+            ) : (
+              <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '20px 0', textAlign: 'center' }}>
+                No feature influence values calculated for this model.
+              </p>
+            )}
+          </div>
         </div>
-        <ModelDetail model={active} />
       </div>
+
+      {active.metrics?.confusion_matrix && (
+        <div className="ax-card" style={{ padding: 18, marginTop: 20 }}>
+          <p className="ax-lbl" style={{ margin: '0 0 12px' }}>Confusion matrix</p>
+          <ConfusionMatrix cm={active.metrics.confusion_matrix} />
+        </div>
+      )}
     </>
   )
 }
@@ -1474,19 +1905,19 @@ function ComparisonTable({ models, activeIdx, onPick }) {
                 }}
               >
                 <td>
-                  <strong>{m.label}</strong>
+                  <strong style={{ color: 'var(--color-text-primary)' }}>{m.label}</strong>
                   {isBest && (
                     <span
                       className="ax-chip"
-                      style={{ marginLeft: 6, background: 'var(--color-accent)', color: 'var(--color-background-primary)' }}
+                      style={{ marginLeft: 6, background: 'var(--color-accent)', color: '#fff', fontSize: 10, padding: '2px 6px', borderRadius: 4 }}
                     >
-                      best
+                      BEST
                     </span>
                   )}
                 </td>
                 <td>
                   {health ? (
-                    <span className="ax-chip" style={{ background: healthStyle.chipBg, color: healthStyle.text }}>
+                    <span className="ax-chip" style={{ background: healthStyle.chipBg, color: healthStyle.text, fontSize: 11, padding: '2px 8px', borderRadius: 999 }}>
                       {health.label}
                     </span>
                   ) : (
@@ -1510,7 +1941,8 @@ function ComparisonTable({ models, activeIdx, onPick }) {
                 )}
                 <td>
                   <button
-                    className="ax-btn"
+                    className="ax-btn mini"
+                    style={{ background: 'var(--color-background-primary)', border: '1.5px solid var(--color-border-secondary)' }}
                     onClick={(e) => {
                       e.stopPropagation()
                       onPick(i)
@@ -1526,168 +1958,6 @@ function ComparisonTable({ models, activeIdx, onPick }) {
         </tbody>
       </table>
     </div>
-  )
-}
-
-// Returns background, chip, text, and border colors for a model health status color key.
-function healthTone(color) {
-  const tones = {
-    green: { bg: '#F0FDF4', chipBg: '#DCFCE7', text: '#15803D', border: '#22C55E' },
-    yellow: { bg: '#FEFCE8', chipBg: '#FEF3C7', text: '#A16207', border: '#EAB308' },
-    orange: { bg: '#FFF7ED', chipBg: '#FFEDD5', text: '#C2410C', border: '#F97316' },
-    red: { bg: '#FEF2F2', chipBg: '#FEE2E2', text: '#B91C1C', border: '#EF4444' },
-    blue: { bg: '#EFF6FF', chipBg: '#DBEAFE', text: '#1D4ED8', border: '#3B82F6' },
-    gray: { bg: 'var(--color-background-primary)', chipBg: 'var(--color-background-secondary)', text: 'var(--color-text-secondary)', border: 'var(--color-border-tertiary)' },
-  }
-  return tones[color] || tones.gray
-}
-
-// Card that summarizes a trained model's health, possible causes, and recommended fix actions.
-function ModelHealthCard({ model, datasetId, onFixAction }) {
-  const health = assessModelHealth(model)
-  if (!health) return null
-  const tone = healthTone(health.color)
-  return (
-    <div
-      className="ax-card"
-      style={{
-        padding: 14,
-        margin: '10px 0',
-        borderLeft: `4px solid ${tone.border}`,
-        background: tone.bg,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        <p style={{ fontSize: 13, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-          Model health
-          <HelpButton
-            title="Model health"
-            text="This card checks whether a trained model looks reliable. It flags possible overfitting, underfitting, class imbalance, weak test performance, or small-sample risk and suggests next actions."
-          />
-        </p>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="ax-chip" style={{ background: tone.chipBg, color: tone.text }}>
-            {health.label}
-          </span>
-          <ExplainButton
-            datasetId={datasetId}
-            step="model-health"
-            params={{ algorithm: model.algorithm, target: model.target, health: health.status }}
-            result={{ metrics: model.metrics, health }}
-            question="Explain this model health result in plain English. Say whether overfitting or underfitting is likely, why it matters, and which SimuCast fixes make sense next."
-            label="AI explain"
-          />
-        </div>
-      </div>
-      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
-        {health.summary}
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 6, marginBottom: 8 }}>
-        {health.metrics.map((item) => (
-          <div key={item.label} style={{ background: 'var(--color-background-secondary)', borderRadius: 6, padding: '7px 9px' }}>
-            <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {item.label}
-              {item.help && <HelpButton title={item.label} text={item.help} />}
-            </p>
-            <p style={{ fontSize: 13, fontWeight: 650, margin: '2px 0 0' }}>{item.value}</p>
-          </div>
-        ))}
-      </div>
-      <div style={{ background: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, margin: '0 0 3px' }}>Why this matters</p>
-        <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-          Overfitting means a model memorizes training rows too closely and may struggle on new data. Underfitting means the model is too weak or missing useful predictors.
-        </p>
-      </div>
-      {health.causes.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, margin: '0 0 4px' }}>Possible causes</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {health.causes.map((cause) => (
-              <p key={cause} style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>- {cause}</p>
-            ))}
-          </div>
-        </div>
-      )}
-      {health.actions.length > 0 && (
-        <div>
-          <p style={{ fontSize: 11, fontWeight: 700, margin: '0 0 6px' }}>Recommended fixes</p>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {health.actions.map((action) => (
-              <button
-                key={action.label || action}
-                className="ax-btn mini"
-                type="button"
-                title={action.why || ''}
-                onClick={() => onFixAction?.({ route: action.route, section: action.section })}
-              >
-                {action.label || action}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Component that renders feature-influence chart and confusion matrix for the selected model.
-function ModelDetail({ model }) {
-  const influence = normalizeInfluence(model.feature_influence || model.feature_importance)
-  const impLabels = influence.map((item) => item.feature)
-  const impValues = influence.map((item) => item.relative_strength ?? item.strength)
-  const cm = model.metrics?.confusion_matrix
-
-  return (
-    <>
-      {impLabels.length > 0 && (
-        <>
-          <p className="ax-lbl" style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-            Feature influence
-            <HelpButton
-              title="Feature influence"
-              text="This card ranks original dataset columns by how much they influenced the selected model. Direction is shown when meaningful: increases raise the prediction/probability, decreases lower it."
-            />
-          </p>
-          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '-4px 0 8px' }}>
-            Influence is aggregated to original dataset columns. "Increases" means higher values tend to raise the predicted value/probability; "Decreases" means they tend to lower it. Tree models show model-derived influence without a simple direction. Correlated features can affect these patterns.
-          </p>
-          <div style={{ height: Math.max(200, impLabels.length * 22), marginBottom: 14 }}>
-            <Bar
-              data={{
-                labels: impLabels,
-                datasets: [{ label: 'Influence', data: impValues, backgroundColor: '#7F77DD', borderRadius: 2 }],
-              }}
-              options={{
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                  x: { beginAtZero: true, ticks: { font: { size: 10 } } },
-                  y: { ticks: { font: { size: 10 } } },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
-            {influence.map((item) => (
-              <div key={item.feature} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px', gap: 8, fontSize: 11 }}>
-                <strong>{item.feature}</strong>
-                <span>{Math.round((item.relative_strength ?? 0) * 100)}%</span>
-                <span style={{ color: directionColor(item.direction) }}>{directionLabel(item.direction)}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      {cm && (
-        <>
-          <p className="ax-lbl">Confusion matrix</p>
-          <ConfusionMatrix cm={cm} />
-        </>
-      )}
-    </>
   )
 }
 
