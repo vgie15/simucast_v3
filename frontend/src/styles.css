@@ -4898,7 +4898,7 @@ button.ax-module-head:focus-visible {
 .ax-data-detail {
   display: flex;
   flex-direction: column;
-  max-height: 80vh;
+  max-height: calc(100vh - 110px);
   border: 0.5px solid var(--color-border-tertiary);
   border-radius: 8px;
   background: var(--color-background-primary);
