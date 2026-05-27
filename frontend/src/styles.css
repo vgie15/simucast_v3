@@ -7766,3 +7766,636 @@ button.ax-module-head:focus-visible {
   padding-top: 14px;
   border-top: 0.5px solid var(--color-border-tertiary);
 }
+
+/* --- Redesigned Guided Workflow Right Panel --- */
+.ax-plan-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ax-plan-goal-header {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 16px;
+  background: linear-gradient(135deg, #f97316, #fb923c, #fdba74);
+  color: #fff;
+  border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+  margin: 0 0 14px 0;
+}
+
+.ax-plan-goal-circle-1 {
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  top: -30px;
+  right: -40px;
+  pointer-events: none;
+}
+
+.ax-plan-goal-circle-2 {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  bottom: -15px;
+  right: 50px;
+  pointer-events: none;
+}
+
+.ax-plan-goal-header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.ax-plan-goal-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.ax-plan-goal-value {
+  font-size: 17px;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.25;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.ax-plan-goal-stats {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.ax-plan-goal-change-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  appearance: none;
+  border: none;
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.ax-plan-goal-change-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.ax-plan-goal-change-btn:active {
+  transform: scale(0.97);
+}
+
+.ax-plan-goal-header-collapse-trigger {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  padding: 4px;
+  cursor: pointer;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ax-plan-goal-header-collapse-trigger:hover {
+  color: #fff;
+}
+
+/* Toggle context notes */
+.ax-plan-mode-note {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+  margin: 8px 14px 12px;
+}
+
+.ax-plan-progress-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 14px 14px;
+  padding-bottom: 12px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+
+.ax-plan-progress-bar-track {
+  flex: 1;
+  height: 3px;
+  background: var(--color-background-secondary);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ax-plan-progress-bar-fill {
+  height: 100%;
+  background: #f97316;
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ax-plan-progress-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Card Visual Redesign */
+.ax-plan-step-redesigned {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 12px;
+  background: var(--color-background-primary);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.ax-plan-step-redesigned.state-active {
+  border-color: rgba(249, 115, 22, 0.4);
+  border-left: 3px solid #f97316;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.1);
+}
+
+.ax-plan-step-redesigned.state-completed {
+  opacity: 0.75;
+  border-color: var(--color-border-tertiary);
+}
+
+.ax-plan-step-redesigned.state-pending {
+  border-color: var(--color-border-tertiary);
+}
+
+/* Step Card Header */
+.ax-plan-step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.ax-plan-step-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--color-text-primary);
+  margin: 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ax-plan-step-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ax-plan-step-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.ax-plan-step-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Card Body */
+.ax-plan-step-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+}
+
+.ax-plan-affects-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.ax-plan-affects-label {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ax-plan-column-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ax-plan-column-chip {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 4px;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* Toolbar Pointer Row */
+.ax-plan-pointer-box {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 250, 241, 0.7);
+  border: 0.5px solid rgba(249, 115, 22, 0.25);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.ax-plan-pointer-icon-wrap {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FFF2E6;
+  border-radius: 6px;
+  color: #f97316;
+  font-size: 14px;
+}
+
+.ax-plan-pointer-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ax-plan-pointer-tool {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--color-text-primary);
+}
+
+.ax-plan-pointer-path {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  margin-top: 1px;
+}
+
+.ax-plan-pointer-open-btn {
+  appearance: none;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-secondary);
+  color: #f97316;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ax-plan-pointer-open-btn:hover {
+  background: #FFF8F0;
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+/* Why This Matters */
+.ax-plan-why-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.ax-plan-why-link:hover {
+  color: var(--color-primary);
+}
+
+.ax-plan-why-content {
+  font-size: 10.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+  margin-top: 4px;
+  background: var(--color-background-secondary);
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-left: 2px solid var(--color-border-secondary);
+}
+
+/* Mark Done Pill Button */
+.ax-plan-mark-done-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: none;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ax-plan-mark-done-btn.done {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.ax-plan-mark-done-btn:hover {
+  background: #dcfce7;
+}
+
+.ax-plan-mark-done-btn.done:hover {
+  background: #16a34a;
+}
+
+.ax-plan-card-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  gap: 8px;
+}
+
+/* Footer Section */
+.ax-plan-footer {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+}
+
+.ax-plan-footer-expand-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  appearance: none;
+  border: 0.5px solid var(--color-border-secondary);
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.ax-plan-footer-expand-btn:not(:disabled):hover {
+  background: var(--color-background-secondary);
+  border-color: var(--color-text-tertiary);
+}
+
+.ax-plan-footer-expand-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Floating Pill & Card Redesign --- */
+.ax-floating-pill-container {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000; /* Float above other contents */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none; /* Let card and pill capture events, but outer container is click-through */
+}
+
+/* Collapsed Pill Button */
+.ax-floating-pill {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  padding: 8px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  height: 32px;
+}
+
+.ax-floating-pill:hover {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #ea580c;
+}
+
+.ax-floating-pill svg {
+  transition: transform 0.2s ease;
+}
+
+/* Expanded Card */
+.ax-floating-pill-card {
+  pointer-events: auto;
+  width: 320px;
+  background: var(--color-background-primary);
+  border-radius: 12px;
+  border: 0.5px solid var(--color-border-secondary);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  margin-bottom: 8px;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.ax-floating-pill-card.expanded {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Progress Tracker */
+.ax-floating-progress-tracker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  margin-bottom: 22px;
+  padding: 0 6px;
+}
+
+.ax-tracker-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+  cursor: default;
+}
+
+.ax-tracker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-background-primary);
+  border: 1.5px solid var(--color-border-secondary);
+  transition: all 0.2s ease;
+}
+
+.ax-tracker-node.done .ax-tracker-dot {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+.ax-tracker-node.active .ax-tracker-dot {
+  background: #f97316;
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.25);
+}
+
+.ax-tracker-label {
+  position: absolute;
+  top: 12px;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  left: 50%;
+  transition: color 0.2s ease;
+}
+
+.ax-tracker-node.done .ax-tracker-label {
+  color: #16a34a;
+}
+
+.ax-tracker-node.active .ax-tracker-label {
+  color: #f97316;
+}
+
+.ax-tracker-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border-tertiary);
+  margin: 0 -2px;
+  z-index: 1;
+  transition: background-color 0.2s ease;
+}
+
+.ax-tracker-line.done {
+  background: #16a34a;
+}
+
+/* CTA Row inside Floating Card */
+.ax-pill-card-cta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ax-pill-card-cta-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ax-pill-card-cta-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.ax-pill-card-cta-subtitle {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin: 2px 0 0;
+  line-height: 1.35;
+}
+
+.ax-pill-card-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  border: none;
+  background: #f97316;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+  text-decoration: none;
+}
+
+.ax-pill-card-cta-btn:hover {
+  background: #ea580c;
+}
+
+/* Warning area */
+.ax-pill-card-warning {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  margin-top: 10px;
+  text-align: center;
+}
+
+.ax-pill-card-warning-link {
+  color: #f97316;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ax-pill-card-warning-link:hover {
+  text-decoration: underline;
+}
+
+

@@ -607,7 +607,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         }}
       >
         {/* TARGET Dropdown */}
-        <div id="models-step-1" style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div id="models-step-1" style={{ display: 'flex', alignItems: 'stretch', flex: 1, minWidth: 140 }}>
           <ConfigDropdown label="Target" value={target || 'Select Target'}>
             {(close) => (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -642,7 +642,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         </div>
 
         {/* FEATURES Dropdown */}
-        <div id="fix-feature-selection" style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div id="fix-feature-selection" style={{ display: 'flex', alignItems: 'stretch', flex: 1, minWidth: 140 }}>
           <ConfigDropdown label="Features" value={`${features.length} of ${allFeatureNames.length}`}>
             {() => (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
@@ -682,7 +682,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 
 
         {/* VALIDATION Dropdown */}
-        <div id="models-step-4" style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div id="models-step-4" style={{ display: 'flex', alignItems: 'stretch', flex: 1, minWidth: 140 }}>
           <ConfigDropdown
             label="Validation"
             value={
@@ -765,7 +765,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         </div>
 
         {/* ALGORITHMS Dropdown */}
-        <div id="models-step-5" style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div id="models-step-5" style={{ display: 'flex', alignItems: 'stretch', flex: 1, minWidth: 140 }}>
           <ConfigDropdown label="Algorithms" value={`${selectedAlgos.length} selected`}>
           {() => (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 240 }}>
@@ -799,7 +799,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       </div>
 
         {/* Action Button */}
-        <div style={{ display: 'flex', alignItems: 'center', minWidth: '180px', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: '180px', flex: '0 0 200px' }}>
           <button
             id="models-train-action"
             className="ax-btn prim"

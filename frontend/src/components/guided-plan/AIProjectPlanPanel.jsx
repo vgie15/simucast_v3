@@ -77,6 +77,12 @@ export default function AIProjectPlanPanel({
   const [activity, setActivity] = useState([])
   const [collapsed, setCollapsed] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [expandedCardId, setExpandedCardId] = useState(null)
+
+  const goToExpandPage = () => {
+    if (!datasetId) return
+    navigate(`/projects/${datasetId}/expand`)
+  }
 
   const loadActivity = async () => {
     if (!datasetId) return
@@ -290,194 +296,263 @@ export default function AIProjectPlanPanel({
     })
   }
 
+  const completedCount = planItems.filter((item) => item.state.status === 'completed').length
+  const totalCount = planItems.length
+
+  const goalName = guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'prediction')
+  const goalCleaned = goalName.toLowerCase().startsWith('predict ') ? goalName.slice(8) + ' prediction' : goalName
+
+  const activeExpandedId = expandedCardId !== null ? expandedCardId : nextStepState?.step?.id
+
   return (
     <section
       className={`ax-card ax-module-card ax-card-ai ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}
       style={!collapsed && planH ? { height: planH, maxHeight: 'none' } : undefined}
     >
-      <div className="ax-panel-sticky-header">
-        <div className="ax-plan-panel-head" style={{ marginBottom: collapsed ? 0 : 8 }}>
-          <div className="ax-plan-title-wrap">
+      {collapsed ? (
+        <div className="ax-panel-sticky-header collapsed">
+          <div className="ax-plan-panel-head" style={{ marginBottom: 0 }}>
+            <div className="ax-plan-title-wrap">
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-expanded={false}
+                className="ax-plan-title-button"
+              >
+                <Chevron open={false} />
+                <span>Guided Workflow</span>
+              </button>
+              <HelpButton
+                title="Guided Plan"
+                text="This card orders the recommended workflow for the current project. The orange card is the current step; completed, stale, optional, and skipped steps are kept calmer so you can focus on what to do next."
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* 1. Goal Header */}
+          <div className="ax-plan-goal-header">
+            <div className="ax-plan-goal-circle-1" />
+            <div className="ax-plan-goal-circle-2" />
             <button
               type="button"
+              className="ax-plan-goal-header-collapse-trigger"
               onClick={toggleCollapsed}
-              aria-expanded={!collapsed}
-              className="ax-plan-title-button"
+              title="Collapse Guided Workflow"
+              aria-label="Collapse Guided Workflow"
             >
-              <Chevron open={!collapsed} />
-              <span>Guided Workflow</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: 'rotate(90deg)' }}>
+                <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+              </svg>
             </button>
-            <HelpButton
-              title="Guided Plan"
-              text="This card orders the recommended workflow for the current project. The orange card is the current step; completed, stale, optional, and skipped steps are kept calmer so you can focus on what to do next."
-            />
-          </div>
-          {!collapsed && (
-            <div className="ax-plan-head-actions">
-              <button className="ax-btn mini" type="button" onClick={() => setExpanded(true)} disabled={!plan}>
-                Expand plan
+            <div className="ax-plan-goal-header-content">
+              <div className="ax-plan-goal-label">Prediction goal</div>
+              <div className="ax-plan-goal-value">
+                {guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'Choose a project question')}
+              </div>
+              <div className="ax-plan-goal-stats">
+                {Number(dataset?.row_count || 0).toLocaleString()} rows · {dataset?.col_count || 0} variables{plan?.task ? ` · ${plan.task}` : ''}
+              </div>
+              <button className="ax-plan-goal-change-btn" type="button" onClick={onOpenGuidanceSetup}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
+                </svg>
+                Change goal
               </button>
-              {mode === 'auto' && (
-                <button className="ax-btn mini" type="button" onClick={() => load(true)} disabled={loading}>
-                  {loading ? 'Generating...' : 'Retry AI'}
-                </button>
+            </div>
+          </div>
+
+          {/* 2. AI Assisted / Built-in Toggle */}
+          <div style={{ padding: '0 14px' }}>
+            <div className="ax-plan-mode" aria-label="Guidance mode" style={{ margin: '0 0 8px' }}>
+              <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => handleModeChange('auto')}>
+                AI assisted
+              </button>
+              <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => handleModeChange('system')}>
+                Built-in
+              </button>
+            </div>
+            <div className="ax-plan-mode-note">
+              {mode === 'auto' ? (
+                "AI analyzes your dataset and suggests steps tailored to its specific patterns."
+              ) : (
+                <>
+                  Workflow based on <strong>{goalCleaned}</strong>. Steps auto-update as you clean data.
+                </>
               )}
             </div>
-          )}
-        </div>
-
-        {!collapsed && (
-          <div className="ax-plan-mode" aria-label="Guidance mode" style={{ marginBottom: 0 }}>
-            <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => handleModeChange('auto')}>
-              AI assisted
-            </button>
-            <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => handleModeChange('system')}>
-              Built-in
-            </button>
           </div>
-        )}
-      </div>
 
-      {!collapsed && (
-        <>
+          {/* 3. Progress Bar */}
+          <div className="ax-plan-progress-container">
+            <div className="ax-plan-progress-bar-track">
+              <div
+                className="ax-plan-progress-bar-fill"
+                style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+              />
+            </div>
+            <span className="ax-plan-progress-label">
+              {completedCount} of {totalCount} done
+            </span>
+          </div>
+
+          {/* Fallbacks, loading note & summary */}
           {(plan?.error || error || isAutoFallback) && (
-            <div className="ax-plan-fallback">
+            <div className="ax-plan-fallback" style={{ margin: '0 14px 10px' }}>
               <strong>AI plan unavailable.</strong>
               <span>Using built-in guided workflow.</span>
             </div>
           )}
 
-          {loading && !plan && <SkeletonCards count={3} />}
+          {loading && !plan && (
+            <div style={{ padding: '0 14px' }}>
+              <SkeletonCards count={3} />
+            </div>
+          )}
 
           {loading && plan && (
-            <div className="ax-plan-loading-note">
+            <div className="ax-plan-loading-note" style={{ margin: '0 14px 10px' }}>
               {mode === 'auto' ? 'Updating AI guided plan...' : 'Updating built-in workflow...'}
             </div>
           )}
 
           {plan?.summary && (
-            <p className="ax-plan-summary">
+            <p className="ax-plan-summary" style={{ padding: '0 14px 10px' }}>
               {plan.summary}
             </p>
           )}
 
-          <div className="ax-plan-goal">
-            <div>
-              <span>{guidance.question_text ? 'Question' : 'Path'}</span>
-              <strong>{guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'Choose a project question')}</strong>
-              <small>
-                {guidance.goal && guidance.question_text && `${goalLabel(guidance.goal)}. `}
-                {guidance.guided_mode
-                  ? 'Guided Mode is focusing the next required task.'
-                  : 'The workflow stays visible while you explore.'}
-              </small>
-            </div>
-            <div className="ax-plan-goal-actions">
-              <button className="ax-link-btn" type="button" onClick={onOpenGuidanceSetup}>
-                {guidance.goal ? 'Change question' : 'Choose question'}
-              </button>
-              {guidance.goal && (
-                <button className="ax-link-btn" type="button" onClick={toggleGuidedMode}>
-                  {guidance.guided_mode ? 'Turn off guidance' : 'Turn on step-by-step guidance'}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {mode === 'system' && plan && (
-            <p className="ax-plan-helper">
-              {auth.isGuest
-                ? 'Built-in guidance works without an account. AI assistance is available after signing up.'
-                : 'Built-in workflow updates automatically with project changes.'}
-            </p>
-          )}
-
+          {/* 4. Step Cards */}
           {plan && (
-            <div className="ax-plan-list">
-              {planItems
-                .map(({ step, state }, position) => {
-                  const isCompleted = state.status === 'completed'
-                  const isNext = nextStepState?.step?.id === step.id
-                  const displayStatus = isNext && !isCompleted ? 'active' : state.status
-                  const target = targetForStep(step)
-                  const requirement = requirementForStep(step)
-                  const canSkip = requirement !== 'required' && !isCompleted
-                  return (
-                    <React.Fragment key={`${step.id}-${position}`}>
-                      <article className={`ax-plan-step ${displayStatus} ${isNext ? 'next' : ''}`}>
-                        <button
-                          className="ax-plan-check"
-                          onClick={() => toggleDone(step.id)}
-                          type="button"
-                          aria-label={isCompleted ? 'Mark step incomplete' : 'Mark step complete'}
-                        >
-                          {position + 1}
-                        </button>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <p style={{ fontSize: 13, fontWeight: 750, margin: 0 }}>{step.title}</p>
-                            <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
-                            <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
+            <div className="ax-plan-list" style={{ padding: '0 14px' }}>
+              {planItems.map(({ step, state }, position) => {
+                const isCompleted = state.status === 'completed'
+                const isNext = nextStepState?.step?.id === step.id
+                const displayStatus = isNext && !isCompleted ? 'active' : state.status
+                const isCardExpanded = activeExpandedId === step.id
+                const target = targetForStep(step)
+                const requirement = requirementForStep(step)
+
+                const cardClass = `ax-plan-step-redesigned state-${isCompleted ? 'completed' : isNext ? 'active' : 'pending'}`
+
+                return (
+                  <article key={`${step.id}-${position}`} className={cardClass}>
+                    {/* Card Header (always visible) */}
+                    <div className="ax-plan-step-header" onClick={() => setExpandedCardId(isCardExpanded ? 'none' : step.id)}>
+                      <span className="ax-plan-check">
+                        {isCompleted ? '✓' : position + 1}
+                      </span>
+                      <p className="ax-plan-step-title">{step.title}</p>
+                      <div className="ax-plan-step-badges">
+                        <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
+                        <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
+                      </div>
+                      <div className={`ax-plan-step-chevron${isCardExpanded ? ' open' : ''}`}>
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <path d="M1 3.5L5 7.5L9 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Card Body (only visible if expanded) */}
+                    {isCardExpanded && (
+                      <div className="ax-plan-step-body">
+                        {/* Affects Section */}
+                        {step.columns?.length > 0 && (
+                          <div className="ax-plan-affects-container">
+                            <span className="ax-plan-affects-label">Affects:</span>
+                            <div className="ax-plan-column-chips">
+                              {step.columns.map((col, idx) => (
+                                <span key={idx} className="ax-plan-column-chip">
+                                  {col}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                          {state.status === 'stale' && (
-                            <p style={{ fontSize: 11, color: 'var(--color-text-warning)', margin: '3px 0 0' }}>
-                              Re-run recommended because the dataset changed after this step.
-                            </p>
-                          )}
-                          {step.columns?.length > 0 && (
-                            <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>
-                              {step.columns.slice(0, 4).join(', ')}
-                            </p>
-                          )}
-                          <p style={{ fontSize: 10, color: 'var(--color-primary)', fontWeight: 750, margin: '5px 0 0' }}>
-                            {isAI ? 'AI recommended' : 'System recommended'}
+                        )}
+
+                        {/* Stale Warning */}
+                        {state.status === 'stale' && (
+                          <p style={{ fontSize: 11, color: 'var(--color-text-warning)', margin: '0 0 8px', fontWeight: 500 }}>
+                            Re-run recommended because the dataset changed after this step.
                           </p>
-                          <div className="ax-plan-target">
-                            <span>Use</span>
-                            <strong>{target.label}</strong>
-                            <small>{target.hint}</small>
+                        )}
+
+                        {/* Toolbar Pointer Row */}
+                        <div className="ax-plan-pointer-box">
+                          <div className="ax-plan-pointer-icon-wrap">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                              <line x1="12" y1="9" x2="12" y2="13" />
+                              <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
                           </div>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                            {state.status !== 'skipped' && (
-                              <button className="ax-btn mini" onClick={() => goToStep(step)} type="button">
-                                {state.status === 'stale' ? 'Re-run ' : 'Open '}{target.shortLabel}
-                              </button>
-                            )}
-                            {canSkip && state.status !== 'skipped' && (
-                              <button className="ax-btn mini" onClick={() => toggleSkip(step.id)} type="button">
-                                Skip
-                              </button>
-                            )}
-                            {state.status === 'skipped' && (
-                              <button className="ax-btn mini" onClick={() => toggleSkip(step.id)} type="button">
-                                Undo skip
-                              </button>
-                            )}
+                          <div className="ax-plan-pointer-info">
+                            <div className="ax-plan-pointer-tool">{target.shortLabel || step.title}</div>
+                            <div className="ax-plan-pointer-path">{target.label}</div>
                           </div>
-                          {step.rationale && <WhyThisMatters text={step.rationale} />}
+                          <button
+                            className="ax-plan-pointer-open-btn"
+                            type="button"
+                            onClick={() => goToStep(step)}
+                          >
+                            Open ↑
+                          </button>
                         </div>
-                      </article>
-                    </React.Fragment>
-                  )
-                })}
+
+                        {/* Actions Row */}
+                        <div className="ax-plan-card-actions-row">
+                          {step.rationale ? (
+                            <WhyThisMattersInline text={step.rationale} />
+                          ) : (
+                            <div />
+                          )}
+                          <button
+                            className={`ax-plan-mark-done-btn${isCompleted ? ' done' : ''}`}
+                            type="button"
+                            onClick={() => toggleDone(step.id)}
+                          >
+                            {isCompleted ? '✓ Done' : 'Mark done'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </article>
+                )
+              })}
             </div>
           )}
+
+          {/* 5. Navigation Footer */}
+          <div className="ax-plan-footer">
+            <button
+              className="ax-plan-footer-expand-btn"
+              type="button"
+              disabled={completedCount < 3}
+              onClick={goToExpandPage}
+            >
+              Go to Expand →
+            </button>
+          </div>
         </>
       )}
+
       {expanded && plan && createPortal(
         <GuidedPlanModal
-            isAI={isAI}
-            mode={mode}
-            error={plan?.error || error || isAutoFallback}
-            summary={plan.summary}
-            items={planItems}
-            nextStepId={nextStepState?.step?.id}
-            onClose={() => setExpanded(false)}
-            onGo={(step) => {
-              setExpanded(false)
-              goToStep(step)
-            }}
-          />,
+          isAI={isAI}
+          mode={mode}
+          error={plan?.error || error || isAutoFallback}
+          summary={plan.summary}
+          items={planItems}
+          nextStepId={nextStepState?.step?.id}
+          onClose={() => setExpanded(false)}
+          onGo={(step) => {
+            setExpanded(false)
+            goToStep(step)
+          }}
+        />,
         document.body,
       )}
     </section>
@@ -673,6 +748,26 @@ function WhyThisMatters({ text }) {
         <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
           {text}
         </p>
+      )}
+    </div>
+  )
+}
+
+function WhyThisMattersInline({ text }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+      <button
+        className="ax-plan-why-link"
+        type="button"
+        onClick={() => setOpen(!open)}
+      >
+        {open ? '▾' : '▸'} Why this matters
+      </button>
+      {open && (
+        <div className="ax-plan-why-content">
+          {text}
+        </div>
       )}
     </div>
   )

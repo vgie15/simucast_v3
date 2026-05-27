@@ -106,6 +106,36 @@ export default function ProjectWorkspace() {
   const [aiWidth, setAiWidth] = useState(360)
   const [resizing, setResizing] = useState(null) // 'ai' | null
   const [guidedLockNotice, setGuidedLockNotice] = useState('')
+  const [pillExpanded, setPillExpanded] = useState(false)
+  const [issueCount, setIssueCount] = useState(0)
+
+  useEffect(() => {
+    if (!id) return
+    api.aiProjectPlan(id, 'system')
+      .then(p => {
+        const steps = p.steps || []
+        const stageKey = dataset?.current_stage_id || 'original'
+        const doneKey = `simucast.aiPlan.done.${id}.${stageKey}`
+        let done = []
+        try {
+          done = JSON.parse(window.localStorage.getItem(doneKey) || '[]')
+        } catch {}
+        const openSteps = steps.filter(s => !done.includes(s.id))
+        setIssueCount(openSteps.length)
+      })
+      .catch(() => {})
+  }, [id, dataset?.current_stage_id, pillExpanded])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setPillExpanded(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
 
   const aiKey = id ? `simucast.aiRail.collapsed.${id}` : ''
@@ -289,9 +319,129 @@ export default function ProjectWorkspace() {
         </div>
         <div className={`ax-workspace-content ${guidedStep?.page === activeTab ? 'ax-guided-focus-mode' : ''}`}>
           {page}
-          {!guidedLocksFuture && <NextPagePrompt activeTab={activeTab} datasetId={id} />}
         </div>
       </div>
+
+      {/* Floating interactive progress pill + card */}
+      {!guidedLocksFuture && activeTab !== 'report' && (
+        <div className="ax-floating-pill-container" onClick={(e) => e.stopPropagation()}>
+          {/* Expanded Card */}
+          <div className={`ax-floating-pill-card${pillExpanded ? ' expanded' : ''}`}>
+            {/* 1. Progress tracker */}
+            <div className="ax-floating-progress-tracker">
+              {(() => {
+                const trackerTabs = [
+                  { key: 'data', label: 'Data' },
+                  { key: 'expand', label: 'Expand' },
+                  { key: 'describe', label: 'Describe' },
+                  { key: 'tests', label: 'Analysis' },
+                  { key: 'models', label: 'Models' },
+                  { key: 'report', label: 'Report' }
+                ];
+                
+                const getTrackerStatus = (tabKey) => {
+                  const tabOrder = ['data', 'expand', 'describe', 'tests', 'models', 'whatif', 'report'];
+                  const activeIdx = tabOrder.indexOf(activeTab);
+                  const tabIdx = tabOrder.indexOf(tabKey);
+                  
+                  if (activeTab === tabKey) return 'active';
+                  if (tabKey === 'models' && activeTab === 'whatif') return 'done';
+                  if (tabIdx < activeIdx) return 'done';
+                  return 'pending';
+                };
+
+                return trackerTabs.map((tNode, idx) => {
+                  const status = getTrackerStatus(tNode.key);
+                  const nextNode = trackerTabs[idx + 1];
+                  const lineDone = status === 'done' && (nextNode ? getTrackerStatus(nextNode.key) !== 'pending' : false);
+                  
+                  return (
+                    <React.Fragment key={tNode.key}>
+                      <div className={`ax-tracker-node ${status}`} title={tNode.label}>
+                        <div className="ax-tracker-dot" />
+                        <span className="ax-tracker-label">{tNode.label}</span>
+                      </div>
+                      {idx < trackerTabs.length - 1 && (
+                        <div className={`ax-tracker-line ${lineDone ? 'done' : ''}`} />
+                      )}
+                    </React.Fragment>
+                  );
+                });
+              })()}
+            </div>
+            
+            {/* Divider */}
+            <div style={{ height: '0.5px', background: 'var(--color-border-tertiary)', margin: '12px 0' }} />
+            
+            {/* CTA Row */}
+            {(() => {
+              const idx = TABS.findIndex((t) => t.key === activeTab)
+              const next = TABS[idx + 1]
+              if (!next) return null
+              const copy = {
+                data: 'Move forward when the dataset has been inspected and major issues are handled.',
+                expand: 'Summarize the prepared dataset before choosing tests or models.',
+                describe: 'Use statistical analysis to check relationships and group differences.',
+                tests: 'Train models after you understand the strongest candidate variables.',
+                models: 'Try what-if scenarios using the model that best fits your goal.',
+                whatif: 'Generate a report with saved outputs, explanations, history, and scenarios.',
+              }
+              return (
+                <div className="ax-pill-card-cta-row">
+                  <div className="ax-pill-card-cta-left">
+                    <p className="ax-pill-card-cta-title">Ready for {next.label}?</p>
+                    <p className="ax-pill-card-cta-subtitle">{copy[activeTab] || 'Continue the workflow on the next page.'}</p>
+                  </div>
+                  <Link
+                    className="ax-pill-card-cta-btn"
+                    to={`/projects/${id}/${next.key}`}
+                    onClick={() => setPillExpanded(false)}
+                  >
+                    {next.label} →
+                  </Link>
+                </div>
+              )
+            })()}
+            
+            {/* Optional Warning */}
+            {issueCount > 0 && (
+              <div className="ax-pill-card-warning">
+                {issueCount} issue{issueCount > 1 ? 's' : ''} still open —{' '}
+                <span
+                  className="ax-pill-card-warning-link"
+                  onClick={() => {
+                    setAiCollapsed(false)
+                  }}
+                >
+                  review before continuing
+                </span>
+              </div>
+            )}
+          </div>
+          
+          {/* Collapsed Pill Button */}
+          <button
+            type="button"
+            className="ax-floating-pill"
+            onClick={() => setPillExpanded(!pillExpanded)}
+            aria-expanded={pillExpanded}
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              style={{
+                transform: pillExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                marginRight: '6px'
+              }}
+            >
+              <path d="M1 6.5L5 2.5L9 6.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+            </svg>
+            <span>{pillExpanded ? 'Hide' : 'Next step'}</span>
+          </button>
+        </div>
+      )}
       <ProjectAIRail
         dataset={dataset}
         activeTab={activeTab}
@@ -386,33 +536,6 @@ function highlightSection(section) {
 }
 
 
-// Card prompting the user to proceed to the next workflow tab with contextual copy.
-function NextPagePrompt({ activeTab, datasetId }) {
-  const idx = TABS.findIndex((t) => t.key === activeTab)
-  const next = TABS[idx + 1]
-  if (!next) return null
-  const copy = {
-    data: 'Move forward when the dataset has been inspected and major issues are handled.',
-    expand: 'Summarize the prepared dataset before choosing tests or models.',
-    describe: 'Use statistical analysis to check relationships and group differences.',
-    tests: 'Train models after you understand the strongest candidate variables.',
-    models: 'Try what-if scenarios using the model that best fits your goal.',
-    whatif: 'Generate a report with saved outputs, explanations, history, and scenarios.',
-  }
-  return (
-    <div className="ax-card ax-next-card">
-      <div>
-        <p className="ax-next-title">
-          Ready for the next step?
-        </p>
-        <p className="ax-next-copy">
-          {copy[activeTab] || 'Continue the workflow on the next page.'}
-        </p>
-      </div>
-      <Link className="ax-btn prim" to={`/projects/${datasetId}/${next.key}`}>Go to {next.label} {'>'}</Link>
-    </div>
-  )
-}
 
 // Switch helper that selects and renders the page component for the active tab.
 function renderTab(tab, props) {
