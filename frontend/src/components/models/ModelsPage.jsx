@@ -79,6 +79,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [models, setModels] = useState([])
   const [draftReady, setDraftReady] = useState(false)
   const [dismissedChecks, setDismissedChecks] = useState([])
+  const [isIssueBarExpanded, setIsIssueBarExpanded] = useState(false)
 
   const handleFixAction = (fix) => {
     if (!fix?.route) return
@@ -493,17 +494,16 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     return baseChecks
   }, [plan, selectedAlgos])
 
-  const issueCount = checks.filter((c) => {
-    const dismissed = (dismissedChecks || []).includes(c.key)
-    const effective = dismissed && c.status === 'warning' ? 'ok' : c.status
-    return effective === 'block' || effective === 'warning'
-  }).length
+  const activeIssues = useMemo(() => {
+    return checks.filter((c) => {
+      const dismissed = (dismissedChecks || []).includes(c.key)
+      const effective = dismissed && c.status === 'warning' ? 'ok' : c.status
+      return effective === 'block' || effective === 'warning'
+    })
+  }, [checks, dismissedChecks])
 
-  const activeIssue = checks.find((c) => {
-    const dismissed = (dismissedChecks || []).includes(c.key)
-    const effective = dismissed && c.status === 'warning' ? 'ok' : c.status
-    return effective === 'block' || effective === 'warning'
-  })
+  const issueCount = activeIssues.length
+  const activeIssue = activeIssues[0]
 
   const highlightActiveIssue = () => {
     const bar = document.querySelector('.models-issue-bar')
@@ -834,61 +834,162 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       </div>
 
       {/* Preprocessing plan issue alert */}
-      {plan && activeIssue && (
+      {plan && activeIssues.length > 0 && (
         <div
           className="models-issue-bar"
           style={{
             margin: '12px 0 12px',
-            padding: '8px 12px',
-            background: activeIssue.status === 'block' ? 'var(--color-background-danger)' : 'var(--color-background-warning)',
-            border: `1.5px solid ${activeIssue.status === 'block' ? 'var(--color-text-danger)' : 'var(--color-border-info)'}`,
+            padding: isIssueBarExpanded ? '12px 16px' : '8px 12px',
+            background: activeIssues.some((c) => c.status === 'block') ? 'var(--color-background-danger)' : 'var(--color-background-warning)',
+            border: `1.5px solid ${activeIssues.some((c) => c.status === 'block') ? 'var(--color-text-danger)' : 'var(--color-border-info)'}`,
             borderRadius: '8px',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12
+            flexDirection: 'column',
+            gap: 12,
+            transition: 'all 0.3s ease-in-out'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 850,
-                background: activeIssue.status === 'block' ? 'var(--color-text-danger)' : 'var(--color-accent)',
-                color: '#fff',
-                padding: '2px 6px',
-                borderRadius: '4px',
-                letterSpacing: '0.05em'
-              }}
-            >
-              {activeIssue.status.toUpperCase()}
-            </span>
-            <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {activeIssue.status === 'block' ? 'BLOCK' : 'WARNING'}
-            </span>
-            <span style={{ color: 'var(--color-text-secondary)' }}>
-              {activeIssue.label} on <strong>{target}</strong>
-            </span>
-            {issueCount > 1 && (
-              <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                (+ {issueCount - 1} more issue{issueCount - 1 > 1 ? 's' : ''})
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {activeIssue.fixes && activeIssue.fixes.length > 0 && (
-              <FixOptionsDropdown
-                fixes={activeIssue.fixes.map(f => {
-                  if (!f.category) return f
-                  const tag = f.category === 'recommended' ? 'Recommended' : f.category === 'alternative' ? 'Alternative' : 'Advanced'
-                  return { ...f, label: `${f.label} · ${tag}` }
-                })}
-                onAction={handleFixAction}
-                canDismiss={activeIssue.status === 'warning'}
-                onDismiss={() => setDismissedChecks((d) => [...d, activeIssue.key])}
-              />
-            )}
-          </div>
+          {isIssueBarExpanded ? (
+            <>
+              {/* Header Row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                    Preprocessing Plan Issues
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', background: activeIssues.some((c) => c.status === 'block') ? '#FEE2E2' : '#FEF3C7', color: activeIssues.some((c) => c.status === 'block') ? '#EF4444' : '#D97706', borderRadius: '4px' }}>
+                    {issueCount} issue{issueCount === 1 ? '' : 's'} detected
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="ax-btn"
+                  style={{ fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => setIsIssueBarExpanded(false)}
+                >
+                  Collapse ▲
+                </button>
+              </div>
+
+              {/* List of active issues */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {activeIssues.map((issue, idx) => (
+                  <div
+                    key={issue.key || idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      paddingBottom: idx < activeIssues.length - 1 ? 12 : 0,
+                      borderBottom: idx < activeIssues.length - 1 ? '1px dashed var(--color-border-tertiary)' : 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 850,
+                          background: issue.status === 'block' ? 'var(--color-text-danger)' : 'var(--color-accent)',
+                          color: '#fff',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          letterSpacing: '0.05em'
+                        }}
+                      >
+                        {issue.status.toUpperCase()}
+                      </span>
+                      <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                        {issue.status === 'block' ? 'BLOCK' : 'WARNING'}
+                      </span>
+                      <span style={{ color: 'var(--color-text-secondary)' }}>
+                        {issue.label} on <strong>{target}</strong>
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {issue.fixes && issue.fixes.length > 0 && (
+                        <FixOptionsDropdown
+                          fixes={issue.fixes.map(f => {
+                            if (!f.category) return f
+                            const tag = f.category === 'recommended' ? 'Recommended' : f.category === 'alternative' ? 'Alternative' : 'Advanced'
+                            return { ...f, label: `${f.label} · ${tag}` }
+                          })}
+                          onAction={handleFixAction}
+                          canDismiss={issue.status === 'warning'}
+                          onDismiss={() => setDismissedChecks((d) => [...d, issue.key])}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            /* Collapsed view (the default alert bar) */
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 850,
+                    background: activeIssue.status === 'block' ? 'var(--color-text-danger)' : 'var(--color-accent)',
+                    color: '#fff',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.05em'
+                  }}
+                >
+                  {activeIssue.status.toUpperCase()}
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  {activeIssue.status === 'block' ? 'BLOCK' : 'WARNING'}
+                </span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>
+                  {activeIssue.label} on <strong>{target}</strong>
+                </span>
+                {issueCount > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsIssueBarExpanded(true)}
+                    style={{
+                      background: 'rgba(0, 0, 0, 0.05)',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '2px 8px',
+                      fontSize: '11px',
+                      color: 'var(--color-text-secondary)',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontWeight: 600,
+                      transition: 'background 0.2s',
+                      marginLeft: 4,
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'}
+                  >
+                    (+ {issueCount - 1} more issue{issueCount - 1 > 1 ? 's' : ''})
+                    <span style={{ fontSize: '8px' }}>▼</span>
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {activeIssue.fixes && activeIssue.fixes.length > 0 && (
+                  <FixOptionsDropdown
+                    fixes={activeIssue.fixes.map(f => {
+                      if (!f.category) return f
+                      const tag = f.category === 'recommended' ? 'Recommended' : f.category === 'alternative' ? 'Alternative' : 'Advanced'
+                      return { ...f, label: `${f.label} · ${tag}` }
+                    })}
+                    onAction={handleFixAction}
+                    canDismiss={activeIssue.status === 'warning'}
+                    onDismiss={() => setDismissedChecks((d) => [...d, activeIssue.key])}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1403,6 +1504,13 @@ function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
   }, [open])
 
   const allOptions = [...(fixes || [])]
+  if (canDismiss) {
+    allOptions.push({
+      label: 'Dismiss warning',
+      description: 'Temporarily hide this warning from the preprocessing checklist.',
+      action: 'dismiss'
+    })
+  }
   if (!allOptions.length) return null
 
   return (
