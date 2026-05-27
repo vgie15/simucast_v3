@@ -2684,6 +2684,21 @@ function ConfusionMatrix({ cm, metrics, active, datasetId }) {
     const fpPct = total > 0 ? Math.round((fp / total) * 100) : 0
     const fnPct = total > 0 ? Math.round((fn / total) * 100) : 0
 
+    // Style dynamically depending on which count is higher
+    const tnStyle = tn >= tp
+      ? { bg: 'var(--color-accent)', text: '#FFFFFF', label: 'rgba(255, 255, 255, 0.85)' }
+      : { bg: '#FFD9C0', text: '#C2410C', label: '#C2410C' }
+    const tpStyle = tp >= tn
+      ? { bg: 'var(--color-accent)', text: '#FFFFFF', label: 'rgba(255, 255, 255, 0.85)' }
+      : { bg: '#FFD9C0', text: '#C2410C', label: '#C2410C' }
+
+    const fpStyle = fp >= fn && fp > 0
+      ? { bg: '#B3B3B3', text: '#1F2937', label: '#4B5563' }
+      : { bg: '#F3F4F6', text: '#1F2937', label: '#4B5563' }
+    const fnStyle = fn >= fp && fn > 0
+      ? { bg: '#B3B3B3', text: '#1F2937', label: '#4B5563' }
+      : { bg: '#F3F4F6', text: '#1F2937', label: '#4B5563' }
+
     return (
       <div>
         <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -2707,14 +2722,14 @@ function ConfusionMatrix({ cm, metrics, active, datasetId }) {
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 borderRadius: 14, minHeight: 120,
-                background: '#FFD9C0', // Soft peach/orange
+                background: tnStyle.bg,
                 border: 'none',
               }}
             >
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#C2410C', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: tnStyle.text, fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
                 {tn}
               </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#C2410C', textTransform: 'uppercase', marginTop: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: tnStyle.label, textTransform: 'uppercase', marginTop: 4 }}>
                 TN
               </span>
             </div>
@@ -2723,14 +2738,14 @@ function ConfusionMatrix({ cm, metrics, active, datasetId }) {
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 borderRadius: 14, minHeight: 120,
-                background: '#B3B3B3', // Medium gray
+                background: fpStyle.bg,
                 border: 'none',
               }}
             >
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#1F2937', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: fpStyle.text, fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
                 {fp}
               </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', marginTop: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: fpStyle.label, textTransform: 'uppercase', marginTop: 4 }}>
                 FP
               </span>
             </div>
@@ -2747,14 +2762,14 @@ function ConfusionMatrix({ cm, metrics, active, datasetId }) {
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 borderRadius: 14, minHeight: 120,
-                background: '#F3F4F6', // Very light grey
+                background: fnStyle.bg,
                 border: 'none',
               }}
             >
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#1F2937', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: fnStyle.text, fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
                 {fn}
               </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', marginTop: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: fnStyle.label, textTransform: 'uppercase', marginTop: 4 }}>
                 FN
               </span>
             </div>
@@ -2763,14 +2778,14 @@ function ConfusionMatrix({ cm, metrics, active, datasetId }) {
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 borderRadius: 14, minHeight: 120,
-                background: 'var(--color-accent)', // Strong vibrant orange
+                background: tpStyle.bg,
                 border: 'none',
               }}
             >
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#FFFFFF', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: tpStyle.text, fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
                 {tp}
               </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255, 255, 255, 0.85)', textTransform: 'uppercase', marginTop: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: tpStyle.label, textTransform: 'uppercase', marginTop: 4 }}>
                 TP
               </span>
             </div>
