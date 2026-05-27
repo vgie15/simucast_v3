@@ -4145,25 +4145,30 @@ button.ax-module-head:focus-visible {
 .ax-plan-mode {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin: 8px 0 4px;
-  padding: 4px;
+  border: 1px solid var(--color-border-secondary);
   border-radius: 10px;
-  background: var(--color-background-secondary);
+  background: var(--color-background-primary);
+  overflow: hidden;
+  padding: 0;
+  margin: 8px 0 12px;
 }
 .ax-plan-mode button {
-  min-height: 30px;
+  min-height: 36px;
   border: none;
-  border-radius: 8px;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ax-plan-mode button:first-child {
+  border-right: 1px solid var(--color-border-secondary);
 }
 .ax-plan-mode button.active {
-  background: var(--color-background-primary);
-  color: var(--color-accent-dark);
-  box-shadow: 0 1px 4px rgba(17, 24, 39, 0.08);
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
+  font-weight: 800;
 }
 .ax-plan-fallback {
   display: grid;
@@ -7841,9 +7846,9 @@ button.ax-module-head:focus-visible {
   align-items: center;
   gap: 6px;
   appearance: none;
-  border: none;
-  background: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+  border: 1px solid #1e293b;
+  background: rgba(255, 255, 255, 0.8);
+  color: #1e293b;
   font-size: 11px;
   font-weight: 600;
   padding: 6px 14px;
@@ -7853,7 +7858,7 @@ button.ax-module-head:focus-visible {
 }
 
 .ax-plan-goal-change-btn:hover {
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .ax-plan-goal-change-btn:active {
@@ -8093,27 +8098,32 @@ button.ax-module-head:focus-visible {
 .ax-plan-why-link {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  padding: 0;
+  justify-content: center;
+  gap: 6px;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 8px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 750;
   color: var(--color-text-secondary);
+  padding: 8px 16px;
   cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 32px;
 }
 
 .ax-plan-why-link:hover {
-  color: var(--color-primary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
 }
 
 .ax-plan-why-content {
   font-size: 10.5px;
   color: var(--color-text-secondary);
   line-height: 1.45;
-  margin-top: 4px;
+  margin-top: 6px;
   background: var(--color-background-secondary);
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-radius: 6px;
   border-left: 2px solid var(--color-border-secondary);
 }
@@ -8123,29 +8133,63 @@ button.ax-module-head:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  border: none;
-  background: #f0fdf4;
-  color: #166534;
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 999px;
+  gap: 6px;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--color-text-secondary);
+  padding: 8px 16px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.ax-plan-mark-done-btn.done {
-  background: #22c55e;
-  color: #ffffff;
+  transition: all 0.15s ease;
+  min-height: 32px;
 }
 
 .ax-plan-mark-done-btn:hover {
-  background: #dcfce7;
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
 }
 
-.ax-plan-mark-done-btn.done:hover {
-  background: #16a34a;
+/* Redesigned card check-circle overrides */
+.ax-plan-step-header .ax-plan-check {
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border-secondary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.ax-plan-step-redesigned.state-completed .ax-plan-step-header .ax-plan-check {
+  background: #dcfce7 !important;
+  border-color: #dcfce7 !important;
+  color: #16a34a !important;
+}
+
+.ax-plan-step-redesigned.state-active .ax-plan-step-header .ax-plan-check {
+  background: #f97316 !important;
+  border-color: #f97316 !important;
+  color: #ffffff !important;
+}
+
+.ax-plan-step-redesigned .ax-plan-status.completed {
+  background: #e6f4ea !important;
+  color: #137333 !important;
+}
+
+.ax-plan-step-redesigned .ax-plan-requirement.required {
+  background: #fff7ed !important;
+  color: #c2410c !important;
+  border: 1px solid #fed7aa !important;
 }
 
 .ax-plan-card-actions-row {
@@ -8274,6 +8318,19 @@ button.ax-module-head:focus-visible {
   align-items: center;
   z-index: 2;
   cursor: default;
+  user-select: none;
+}
+
+.ax-tracker-node.clickable {
+  cursor: pointer;
+}
+
+.ax-tracker-node.clickable:hover .ax-tracker-dot {
+  transform: scale(1.3);
+}
+
+.ax-tracker-node.clickable:hover .ax-tracker-label {
+  filter: brightness(0.8);
 }
 
 .ax-tracker-dot {

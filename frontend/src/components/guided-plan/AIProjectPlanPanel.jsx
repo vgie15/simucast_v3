@@ -442,12 +442,22 @@ export default function AIProjectPlanPanel({
                     {/* Card Header (always visible) */}
                     <div className="ax-plan-step-header" onClick={() => setExpandedCardId(isCardExpanded ? 'none' : step.id)}>
                       <span className="ax-plan-check">
-                        {isCompleted ? '✓' : position + 1}
+                        {isCompleted ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : position + 1}
                       </span>
-                      <p className="ax-plan-step-title">{step.title}</p>
-                      <div className="ax-plan-step-badges">
-                        <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
-                        <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <p className="ax-plan-step-title" style={{ fontSize: '13px', fontWeight: '750', color: 'var(--color-text-primary)', margin: 0, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}>
+                          {step.title}
+                        </p>
+                        {isCardExpanded && (
+                          <div className="ax-plan-step-badges" style={{ display: 'flex', gap: '4px' }}>
+                            <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
+                            <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
+                          </div>
+                        )}
                       </div>
                       <div className={`ax-plan-step-chevron${isCardExpanded ? ' open' : ''}`}>
                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -483,15 +493,43 @@ export default function AIProjectPlanPanel({
                         {/* Toolbar Pointer Row */}
                         <div className="ax-plan-pointer-box">
                           <div className="ax-plan-pointer-icon-wrap">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                              <line x1="12" y1="9" x2="12" y2="13" />
-                              <line x1="12" y1="17" x2="12.01" y2="17" />
-                            </svg>
+                            {(() => {
+                              const text = `${step.id} ${step.title}`.toLowerCase();
+                              if (text.includes('missing')) {
+                                return (
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="3 3">
+                                    <circle cx="12" cy="12" r="10" />
+                                  </svg>
+                                );
+                              }
+                              if (text.includes('outlier')) {
+                                return (
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                    <line x1="12" y1="9" x2="12" y2="13" />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                  </svg>
+                                );
+                              }
+                              return (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                                  <path d="M9 17V7l7 5-7 5z" />
+                                </svg>
+                              );
+                            })()}
                           </div>
                           <div className="ax-plan-pointer-info">
                             <div className="ax-plan-pointer-tool">{target.shortLabel || step.title}</div>
-                            <div className="ax-plan-pointer-path">{target.label}</div>
+                            <div className="ax-plan-pointer-path">
+                              {target.label.includes(' → ') ? (
+                                <>
+                                  {target.label.split(' → ')[0]} →
+                                  <br />
+                                  {target.label.split(' → ')[1]}
+                                </>
+                              ) : target.label}
+                            </div>
                           </div>
                           <button
                             className="ax-plan-pointer-open-btn"
@@ -509,13 +547,19 @@ export default function AIProjectPlanPanel({
                           ) : (
                             <div />
                           )}
-                          <button
-                            className={`ax-plan-mark-done-btn${isCompleted ? ' done' : ''}`}
-                            type="button"
-                            onClick={() => toggleDone(step.id)}
-                          >
-                            {isCompleted ? '✓ Done' : 'Mark done'}
-                          </button>
+                          {isCompleted ? (
+                            <span style={{ color: '#16a34a', fontSize: '11px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
+                              ✓ Completed
+                            </span>
+                          ) : (
+                            <button
+                              className="ax-plan-mark-done-btn"
+                              type="button"
+                              onClick={() => toggleDone(step.id)}
+                            >
+                              ✓ Mark done
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -762,7 +806,7 @@ function WhyThisMattersInline({ text }) {
         type="button"
         onClick={() => setOpen(!open)}
       >
-        {open ? '▾' : '▸'} Why this matters
+        {open ? '▼' : '▶'} Why this matters
       </button>
       {open && (
         <div className="ax-plan-why-content">
@@ -894,11 +938,27 @@ function targetForStep(step) {
         hint: 'Review grouped labels, rename labels, then apply the mapping.',
       }
     }
-    if (text.includes('missing') || text.includes('outlier') || text.includes('duplicate')) {
+    if (text.includes('missing')) {
       return {
         section: 'fix-cleaning-suggestions',
-        label: 'Data > Suggested fixes by issue type',
-        shortLabel: 'suggested fixes',
+        label: 'Quality group → Missing',
+        shortLabel: 'Missing',
+        hint: 'Choose the issue group, select the method, then apply the grouped fix.',
+      }
+    }
+    if (text.includes('outlier')) {
+      return {
+        section: 'fix-cleaning-suggestions',
+        label: 'Quality group → Outliers',
+        shortLabel: 'Outliers',
+        hint: 'Choose the issue group, select the method, then apply the grouped fix.',
+      }
+    }
+    if (text.includes('duplicate')) {
+      return {
+        section: 'fix-cleaning-suggestions',
+        label: 'Quality group → Duplicates',
+        shortLabel: 'Duplicates',
         hint: 'Choose the issue group, select the method, then apply the grouped fix.',
       }
     }

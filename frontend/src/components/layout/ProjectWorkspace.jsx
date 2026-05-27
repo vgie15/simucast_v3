@@ -354,10 +354,26 @@ export default function ProjectWorkspace() {
                   const status = getTrackerStatus(tNode.key);
                   const nextNode = trackerTabs[idx + 1];
                   const lineDone = status === 'done' && (nextNode ? getTrackerStatus(nextNode.key) !== 'pending' : false);
+                  const tabIndex = TABS.findIndex((item) => item.key === tNode.key);
+                  const locked = guidedLocksFuture && tabIndex > guidedTabIndex;
+
+                  const handleClick = () => {
+                    if (locked) {
+                      setGuidedLockNotice('Complete the current guided task first.');
+                      window.setTimeout(() => setGuidedLockNotice(''), 2600);
+                      return;
+                    }
+                    setPillExpanded(false);
+                    navigate(`/projects/${id}/${tNode.key}`);
+                  };
                   
                   return (
                     <React.Fragment key={tNode.key}>
-                      <div className={`ax-tracker-node ${status}`} title={tNode.label}>
+                      <div
+                        className={`ax-tracker-node ${status} ${locked ? 'locked' : 'clickable'}`}
+                        title={locked ? 'Complete the current required guided step first' : tNode.label}
+                        onClick={handleClick}
+                      >
                         <div className="ax-tracker-dot" />
                         <span className="ax-tracker-label">{tNode.label}</span>
                       </div>
