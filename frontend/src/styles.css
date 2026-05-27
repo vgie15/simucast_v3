@@ -541,10 +541,13 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 999px;
   background: var(--color-background-secondary);
   color: var(--color-text-secondary);
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
   user-select: none;
   font-weight: 650;
+  vertical-align: middle;
 }
 .ax-chip.active {
   background: var(--color-accent-light);
@@ -3460,6 +3463,8 @@ a.ax-btn {
   box-shadow: none !important;
 }
 .ax-data-toolbar-popover .ax-chip {
+  display: inline-flex;
+  align-items: center;
   min-height: 24px;
   padding: 3px 8px !important;
   border-radius: 999px !important;

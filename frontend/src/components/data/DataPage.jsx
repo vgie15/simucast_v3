@@ -572,7 +572,8 @@ function DataToolsToolbar({
       tools: [
         { key: 'labels', label: 'Labels', icon: 'tag', tip: 'Standardize labels', issue: hasIssue.labels },
         { key: 'bin', label: 'Bin', icon: 'chart-histogram', tip: 'Create binned columns' },
-        { key: 'scale', label: 'Scale', icon: 'ruler-measure', tip: 'Scale or round numeric values' },
+        { key: 'scale', label: 'Scale', icon: 'ruler-measure', tip: 'Scale numeric values' },
+        { key: 'format', label: 'Format', icon: 'hash', tip: 'Numeric formatting (decimals)' },
         { key: 'encode', label: 'Encode', icon: 'hash', tip: 'Prepare encoded values' },
       ],
     },
@@ -599,7 +600,7 @@ function DataToolsToolbar({
   const activeTool = openTool === 'columns'
     ? { key: 'columns', label: 'Columns', icon: 'eye' }
     : toolMap[openTool]
-  const recommendationTools = new Set(['missing', 'outliers', 'duplicates', 'labels', 'bin', 'scale', 'encode'])
+  const recommendationTools = new Set(['missing', 'outliers', 'duplicates', 'labels', 'bin', 'scale', 'format', 'encode'])
   const hasRecommendationToggle = recommendationTools.has(openTool)
   const openFromButton = (toolKey, event) => {
     const shell = event.currentTarget.closest('.ax-data-toolbar-shell')
@@ -759,13 +760,15 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
   if (toolKey === 'scale') {
     return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="scale" compact showRecommendations={showRecommendations} />
   }
+  if (toolKey === 'format') {
+    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="format" compact showRecommendations={showRecommendations} />
+  }
   if (toolKey === 'encode') {
     return (
       <div className="ax-data-toolbar-panel">
         <p className="ax-data-toolbar-note">
           Encoding is currently applied automatically in Models during preprocessing. Use Labels first to standardize source categories before training.
         </p>
-        <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} compact showRecommendations={showRecommendations} />
       </div>
     )
   }
@@ -1553,18 +1556,20 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
 
       {open && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-            {[['bins','Create bins'],['scale','Scale values'],['format','Numeric formatting']].map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className={`ax-tab ${tool === key ? 'active' : ''}`}
-                onClick={() => { setTool(key); setMsg(null) }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {!compact && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+              {[['bins','Create bins'],['scale','Scale values'],['format','Numeric formatting']].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`ax-tab ${tool === key ? 'active' : ''}`}
+                  onClick={() => { setTool(key); setMsg(null) }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {tool === 'bins' && (
             <div>
