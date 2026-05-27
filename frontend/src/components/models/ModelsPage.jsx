@@ -798,6 +798,110 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         </ConfigDropdown>
       </div>
 
+      {/* PREPROCESSING Dropdown */}
+      <div id="models-step-6" style={{ display: 'flex', alignItems: 'stretch', flex: 1, minWidth: 140 }}>
+        <ConfigDropdown
+          label="Preprocessing"
+          value={
+            numericPreprocessing.scaling === 'auto'
+              ? 'Auto'
+              : numericPreprocessing.scaling === 'standard'
+              ? 'Standard'
+              : numericPreprocessing.scaling === 'minmax'
+              ? 'MinMax'
+              : 'None'
+          }
+        >
+          {() => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 280 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>
+                  Numeric Scaling
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="scaling-method"
+                      value="auto"
+                      checked={numericPreprocessing.scaling === 'auto'}
+                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: 'auto' }))}
+                      style={{ marginTop: 2 }}
+                    />
+                    <div>
+                      <span style={{ fontWeight: numericPreprocessing.scaling === 'auto' ? 650 : 400 }}>Auto (Recommended)</span>
+                      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0', whiteSpace: 'normal' }}>
+                        StandardScale for Linear/Logistic/SVM, none for Trees.
+                      </p>
+                    </div>
+                  </label>
+                  
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="scaling-method"
+                      value="standard"
+                      checked={numericPreprocessing.scaling === 'standard'}
+                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: 'standard' }))}
+                      style={{ marginTop: 2 }}
+                    />
+                    <div>
+                      <span style={{ fontWeight: numericPreprocessing.scaling === 'standard' ? 650 : 400 }}>StandardScaler</span>
+                      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0', whiteSpace: 'normal' }}>
+                        Standardize features (zero mean, unit variance).
+                      </p>
+                    </div>
+                  </label>
+
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="scaling-method"
+                      value="minmax"
+                      checked={numericPreprocessing.scaling === 'minmax'}
+                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: 'minmax' }))}
+                      style={{ marginTop: 2 }}
+                    />
+                    <div>
+                      <span style={{ fontWeight: numericPreprocessing.scaling === 'minmax' ? 650 : 400 }}>MinMaxScaler</span>
+                      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0', whiteSpace: 'normal' }}>
+                        Scale features to [0, 1] range.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="scaling-method"
+                      value="none"
+                      checked={numericPreprocessing.scaling === 'none'}
+                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: 'none' }))}
+                      style={{ marginTop: 2 }}
+                    />
+                    <div>
+                      <span style={{ fontWeight: numericPreprocessing.scaling === 'none' ? 650 : 400 }}>No scaling</span>
+                      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0', whiteSpace: 'normal' }}>
+                        Train model on raw numeric values.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 10 }}>
+                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
+                  Categorical Encoding
+                </label>
+                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.4, whiteSpace: 'normal' }}>
+                  One-Hot Encoding is applied automatically to all categorical features.
+                </div>
+              </div>
+            </div>
+          )}
+        </ConfigDropdown>
+      </div>
+
         {/* Action Button */}
         <div style={{ display: 'flex', alignItems: 'center', minWidth: '180px', flex: '0 0 200px' }}>
           <button
