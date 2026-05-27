@@ -162,6 +162,8 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             try:
                 y_proba = clf.predict_proba(X_test)[:, 1]
                 metrics["auc"] = float(roc_auc_score(y_test, y_proba))
+                metrics["y_test"] = y_test.tolist()
+                metrics["y_proba"] = y_proba.tolist()
             except Exception:
                 pass
         metrics["confusion_matrix"] = confusion_matrix(y_test, y_pred).tolist()

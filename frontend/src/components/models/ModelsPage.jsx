@@ -2357,7 +2357,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
               Confusion matrix
             </h3>
             <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: 0 }}>
-              {algoLabelForTask(active.algorithm, active.metrics?.task)} · test set · {active.metrics.confusion_matrix.flat().reduce((a,b)=>a+b,0)} rows
+              {algoLabelForTask(active.algorithm, active.metrics?.task)} · {active.metrics?.y_proba ? 'interactive threshold' : `test set · ${active.metrics.confusion_matrix.flat().reduce((a,b)=>a+b,0)} rows`}
             </p>
           </div>
 
@@ -2634,194 +2634,329 @@ function assessModelHealth(model) {
 
 // Renders a classification confusion matrix with cells shaded by intensity and diagonal emphasis.
 function ConfusionMatrix({ cm, metrics, active, datasetId }) {
-  const n = cm.length
+  const [threshold, setThreshold] = useState(metrics?.threshold ?? 0.5)
+
+  // Sync threshold when model changes
+  useEffect(() => {
+    setThreshold(metrics?.threshold ?? 0.5)
+  }, [metrics])
+
+  const hasProbas = Boolean(metrics?.y_test && metrics?.y_proba)
+
+  // Recalculate Confusion Matrix if we have y_test and y_proba
+  const computedCm = useMemo(() => {
+    if (!hasProbas) {
+      return cm
+    }
+    const nextCm = [[0, 0], [0, 0]]
+    for (let i = 0; i < metrics.y_test.length; i++) {
+      const actual = metrics.y_test[i] // 0 or 1
+      const prob = metrics.y_proba[i] // float [0, 1]
+      const pred = prob >= threshold ? 1 : 0
+      if (actual === 0 || actual === 1) {
+        nextCm[actual][pred]++
+      }
+    }
+    return nextCm
+  }, [cm, metrics?.y_test, metrics?.y_proba, threshold, hasProbas])
+
+  const n = computedCm.length
   const is2x2 = n === 2
-  const total = cm.flat().reduce((a, b) => a + b, 0)
-  const correctTotal = cm.reduce((acc, row, i) => acc + row[i], 0)
+  const total = computedCm.flat().reduce((a, b) => a + b, 0)
+  const correctTotal = computedCm.reduce((acc, row, i) => acc + row[i], 0)
   const accuracy = total > 0 ? correctTotal / total : 0
 
-  const rowSums = cm.map((row) => row.reduce((a, b) => a + b, 0))
-  const colSums = cm[0].map((_, j) => cm.reduce((a, row) => a + row[j], 0))
+  const rowSums = computedCm.map((row) => row.reduce((a, b) => a + b, 0))
+  const colSums = computedCm[0].map((_, j) => computedCm.reduce((a, row) => a + row[j], 0))
 
-  // For 2x2: TN=cm[0][0], FP=cm[0][1], FN=cm[1][0], TP=cm[1][1]
-  const cellLabel = (i, j) => {
-    if (i === 0 && j === 0) return 'TN'
-    if (i === 0 && j === 1) return 'FP'
-    if (i === 1 && j === 0) return 'FN'
-    return 'TP'
-  }
-  const isAccent = (i, j) => is2x2 && i === 1 && j === 1 // TP — orange filled
-  const isGray = (i, j) => is2x2 && i === 0 && j === 1  // FP — gray filled
-
-  // Per-class stats for 2x2
-  // Class 0: TN=cm[0][0], FP=cm[0][1] → precision=TN/(TN+FN col0), recall=TN/(TN+FP row0)
-  const tn = is2x2 ? cm[0][0] : 0
-  const fp = is2x2 ? cm[0][1] : 0
-  const fn = is2x2 ? cm[1][0] : 0
-  const tp = is2x2 ? cm[1][1] : 0
-
-  // Class 0 precision = TN / (TN + FN), recall = TN / (TN + FP)
-  const c0precision = (tn + fn) > 0 ? tn / (tn + fn) : 0
-  const c0recall    = (tn + fp) > 0 ? tn / (tn + fp) : 0
-  // Class 1 precision = TP / (TP + FP), recall = TP / (TP + FN)
-  const c1precision = (tp + fp) > 0 ? tp / (tp + fp) : 0
-  const c1recall    = (tp + fn) > 0 ? tp / (tp + fn) : 0
-
-  // Use class names from metrics if available, else generic
   const className0 = metrics?.class_names?.[0] ?? 'Class 0'
   const className1 = metrics?.class_names?.[1] ?? 'Class 1'
 
-  const threshold = metrics?.threshold ?? 0.5
+  // If binary (2x2), render exactly like the 2nd image
+  if (is2x2) {
+    const tn = computedCm[0][0]
+    const fp = computedCm[0][1]
+    const fn = computedCm[1][0]
+    const tp = computedCm[1][1]
 
-  return (
-    <div>
-      {/* Top section: grid left, class cards right */}
-      <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+    const tpPct = total > 0 ? Math.round((tp / total) * 100) : 0
+    const tnPct = total > 0 ? Math.round((tn / total) * 100) : 0
+    const fpPct = total > 0 ? Math.round((fp / total) * 100) : 0
+    const fnPct = total > 0 ? Math.round((fn / total) * 100) : 0
 
-        {/* LEFT: Grid */}
-        <div style={{ flexShrink: 0 }}>
-          {/* Column headers row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '72px repeat(2, 100px) 44px', gap: 4, marginBottom: 4 }}>
+    return (
+      <div>
+        <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* LEFT SECTION: Matrix + Slider */}
+          <div style={{ display: 'flex', flexDirection: 'column', width: 440, flexShrink: 0 }}>
+          {/* Columns header row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 170px 170px', gap: 10, marginBottom: 8 }}>
             <div />
             <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PRED 0</div>
             <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PRED 1</div>
-            <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</div>
           </div>
 
-          {/* Data rows */}
-          {cm.map((row, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '72px repeat(2, 100px) 44px', gap: 4, marginBottom: 4 }}>
-              {/* Row label */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', paddingRight: 8, gap: 2 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTUAL</span>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{i}</span>
+          {/* Row 0 (ACTUAL 0) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 170px 170px', gap: 10, marginBottom: 10, alignItems: 'center' }}>
+            <div style={{ textAlign: 'right', paddingRight: 12, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTUAL</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{className0}</span>
+            </div>
+            {/* TN Cell */}
+            <div
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 14, minHeight: 120,
+                background: '#FFD9C0', // Soft peach/orange
+                border: 'none',
+              }}
+            >
+              <span style={{ fontSize: 36, fontWeight: 800, color: '#C2410C', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+                {tn}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#C2410C', textTransform: 'uppercase', marginTop: 4 }}>
+                TN
+              </span>
+            </div>
+            {/* FP Cell */}
+            <div
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 14, minHeight: 120,
+                background: '#B3B3B3', // Medium gray
+                border: 'none',
+              }}
+            >
+              <span style={{ fontSize: 36, fontWeight: 800, color: '#1F2937', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+                {fp}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', marginTop: 4 }}>
+                FP
+              </span>
+            </div>
+          </div>
+
+          {/* Row 1 (ACTUAL 1) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 170px 170px', gap: 10, marginBottom: 10, alignItems: 'center' }}>
+            <div style={{ textAlign: 'right', paddingRight: 12, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTUAL</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{className1}</span>
+            </div>
+            {/* FN Cell */}
+            <div
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 14, minHeight: 120,
+                background: '#F3F4F6', // Very light grey
+                border: 'none',
+              }}
+            >
+              <span style={{ fontSize: 36, fontWeight: 800, color: '#1F2937', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+                {fn}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', marginTop: 4 }}>
+                FN
+              </span>
+            </div>
+            {/* TP Cell */}
+            <div
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 14, minHeight: 120,
+                background: 'var(--color-accent)', // Strong vibrant orange
+                border: 'none',
+              }}
+            >
+              <span style={{ fontSize: 36, fontWeight: 800, color: '#FFFFFF', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
+                {tp}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255, 255, 255, 0.85)', textTransform: 'uppercase', marginTop: 4 }}>
+                TP
+              </span>
+            </div>
+          </div>
+
+          {/* Slider Card (Decision Threshold) */}
+          {hasProbas && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: '14px 18px',
+                background: '#F9FAFB',
+                border: '1px solid var(--color-border-secondary)',
+                borderRadius: 12,
+                width: '100%',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  DECISION THRESHOLD
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>
+                  p ≥ {threshold.toFixed(2)}
+                </span>
               </div>
-              {/* Cells */}
-              {row.map((v, j) => {
-                const accent = isAccent(i, j)
-                const gray = isGray(i, j)
-                return (
-                  <div
-                    key={j}
-                    style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: 10, padding: '14px 8px', minHeight: 74,
-                      background: accent ? 'var(--color-accent)' : gray ? '#E5E7EB' : 'var(--color-background-secondary)',
-                      border: accent ? 'none' : '1.5px solid var(--color-border-tertiary)',
-                    }}
-                  >
-                    <span style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.1, color: accent ? '#fff' : 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>
-                      {v}
-                    </span>
-                    {is2x2 && (
-                      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginTop: 3, color: accent ? 'rgba(255,255,255,0.8)' : 'var(--color-text-tertiary)' }}>
-                        {cellLabel(i, j)}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-              {/* Row total */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                {rowSums[i]}
+              <input
+                type="range"
+                min="0.00"
+                max="1.00"
+                step="0.01"
+                value={threshold}
+                onChange={(e) => setThreshold(Number(e.target.value))}
+                style={{
+                  width: '100%',
+                  height: '6px',
+                  borderRadius: '3px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  accentColor: 'var(--color-accent)',
+                  margin: '10px 0',
+                }}
+              />
+              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+                Slide to trade precision for recall on Class 1.
               </div>
             </div>
-          ))}
+          )}
 
-          {/* Column totals row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '72px repeat(2, 100px) 44px', gap: 4, marginTop: 2 }}>
-            <div />
-            {colSums.map((s, j) => (
-              <div key={j} style={{ textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{s}</div>
-            ))}
-            <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{total}</div>
-          </div>
-
-          {/* Overall accuracy bar */}
-          <div style={{ marginTop: 14, padding: '10px 14px', background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>OVERALL</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)' }}>{(accuracy * 100).toFixed(1)}% accuracy</span>
+          {/* Simple Overall Accuracy display for binary classifier */}
+          <div style={{ marginTop: 12, padding: '10px 14px', background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>OVERALL</span>
+            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text-primary)' }}>{(accuracy * 100).toFixed(1)}% accuracy</span>
             <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>{correctTotal} correct of {total}</span>
           </div>
         </div>
 
-        {/* RIGHT: Class precision/recall cards + TP/TN/FP/FN breakdown */}
-        {is2x2 && (
-          <div style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {/* Class 0 */}
-            <div style={{ border: '1.5px solid var(--color-border-tertiary)', borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>{className0}</span>
-                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{rowSums[0]} rows</span>
+        {/* RIGHT SECTION: Breakdown Cards */}
+        <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[
+            { label: 'True positives', count: tp, pct: tpPct, desc: `Predicted ${className1} · actually ${className1}`, orange: true },
+            { label: 'True negatives', count: tn, pct: tnPct, desc: `Predicted ${className0} · actually ${className0}`, orange: true },
+            { label: 'False positives', count: fp, pct: fpPct, desc: `Predicted ${className1} · actually ${className0}`, orange: false },
+            { label: 'False negatives', count: fn, pct: fnPct, desc: `Predicted ${className0} · actually ${className1}`, orange: false },
+          ].map((item) => (
+            <div
+              key={item.label}
+              style={{
+                border: '1px solid var(--color-border-secondary)',
+                borderRadius: 12,
+                padding: '12px 18px',
+                background: '#FFFFFF',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: item.orange ? 'var(--color-accent)' : '#9CA3AF',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                    {item.label}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                    {item.count}
+                  </span>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  {item.pct}%
+                </span>
               </div>
-              {/* Precision row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', width: 64, flexShrink: 0 }}>PRECISION</span>
-                <div style={{ flex: 1, height: 6, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.round(c0precision * 100)}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 3 }} />
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(c0precision * 100).toFixed(1)}%</span>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', width: 44, flexShrink: 0 }}>RECALL</span>
-                <div style={{ flex: 1, height: 6, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.round(c0recall * 100)}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 3 }} />
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(c0recall * 100).toFixed(1)}%</span>
+
+              {/* Progress bar */}
+              <div style={{ height: 6, background: '#F3F4F6', borderRadius: 3, overflow: 'hidden', margin: '8px 0' }}>
+                <div
+                  style={{
+                    width: `${item.pct}%`,
+                    height: '100%',
+                    background: item.orange ? 'var(--color-accent)' : '#9CA3AF',
+                    borderRadius: 3,
+                  }}
+                />
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+                {item.desc}
               </div>
             </div>
-
-            {/* Class 1 */}
-            <div style={{ border: '1.5px solid var(--color-border-tertiary)', borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>{className1}</span>
-                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{rowSums[1]} rows</span>
-              </div>
-              {/* Precision row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', width: 64, flexShrink: 0 }}>PRECISION</span>
-                <div style={{ flex: 1, height: 6, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.round(c1precision * 100)}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 3 }} />
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(c1precision * 100).toFixed(1)}%</span>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', width: 44, flexShrink: 0 }}>RECALL</span>
-                <div style={{ flex: 1, height: 6, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.round(c1recall * 100)}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 3 }} />
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(c1recall * 100).toFixed(1)}%</span>
-              </div>
-            </div>
-
-            {/* TP/TN/FP/FN breakdown cards */}
-            {[
-              { label: 'True positives', count: tp, pct: total > 0 ? Math.round(tp/total*100) : 0, desc: 'Predicted Yes · actually Yes', orange: true },
-              { label: 'True negatives', count: tn, pct: total > 0 ? Math.round(tn/total*100) : 0, desc: 'Predicted No · actually No', orange: true },
-              { label: 'False positives', count: fp, pct: total > 0 ? Math.round(fp/total*100) : 0, desc: 'Predicted Yes · actually No', orange: false },
-              { label: 'False negatives', count: fn, pct: total > 0 ? Math.round(fn/total*100) : 0, desc: 'Predicted No · actually Yes', orange: false },
-            ].map((item) => (
-              <div key={item.label} style={{ border: '1.5px solid var(--color-border-tertiary)', borderRadius: 10, padding: '10px 14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.orange ? 'var(--color-accent)' : 'var(--color-text-tertiary)', flexShrink: 0, display: 'inline-block' }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{item.count}</span>
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{item.pct}%</span>
-                </div>
-                <div style={{ height: 5, background: 'var(--color-background-secondary)', borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
-                  <div style={{ width: `${item.pct}%`, height: '100%', background: item.orange ? 'var(--color-accent)' : 'var(--color-border-secondary)', borderRadius: 3 }} />
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{item.desc}</div>
-              </div>
-            ))}
-
-            {/* Threshold label */}
-            {threshold != null && (
-              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>p ≥ {threshold.toFixed(2)}</div>
-            )}
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   )
+}
+
+// Multiclass Fallback (same as original clean table with totals)
+return (
+  <div>
+    <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div style={{ flexShrink: 0 }}>
+        {/* Column headers row */}
+        <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 90px) 44px`, gap: 4, marginBottom: 4 }}>
+          <div />
+          {computedCm[0].map((_, j) => (
+            <div key={j} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PRED {j}</div>
+          ))}
+          <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</div>
+        </div>
+
+        {/* Data rows */}
+        {computedCm.map((row, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 90px) 44px`, gap: 4, marginBottom: 4 }}>
+            {/* Row label */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', paddingRight: 8, gap: 2 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTUAL</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)' }}>{i}</span>
+            </div>
+            {/* Cells */}
+            {row.map((v, j) => {
+              const isDiag = i === j
+              return (
+                <div
+                  key={j}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 10, padding: '14px 8px', minHeight: 74,
+                    background: isDiag ? 'rgba(249, 115, 22, 0.15)' : 'var(--color-background-secondary)',
+                    border: isDiag ? '1.5px solid var(--color-accent)' : '1.5px solid var(--color-border-tertiary)',
+                  }}
+                >
+                  <span style={{ fontSize: 22, fontWeight: 800, color: isDiag ? 'var(--color-accent-dark)' : 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>
+                    {v}
+                  </span>
+                </div>
+              )
+            })}
+            {/* Row total */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+              {rowSums[i]}
+            </div>
+          </div>
+        ))}
+
+        {/* Column totals row */}
+        <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 90px) 44px`, gap: 4, marginTop: 2 }}>
+          <div />
+          {colSums.map((s, j) => (
+            <div key={j} style={{ textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{s}</div>
+          ))}
+          <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{total}</div>
+        </div>
+
+        {/* Overall accuracy bar */}
+        <div style={{ marginTop: 14, padding: '10px 14px', background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>OVERALL</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)' }}>{(accuracy * 100).toFixed(1)}% accuracy</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>{correctTotal} correct of {total}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+)
 }
 
 
