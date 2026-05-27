@@ -376,15 +376,11 @@ export default function AIProjectPlanPanel({
                   Built-in
                 </button>
               </div>
+              {mode === 'auto' && (
               <div className="ax-plan-mode-note">
-                {mode === 'auto' ? (
-                  "AI analyzes your dataset and suggests steps tailored to its specific patterns."
-                ) : (
-                  <>
-                    Workflow based on <strong>{goalCleaned}</strong>. Steps auto-update as you clean data.
-                  </>
-                )}
+                AI analyzes your dataset and suggests steps tailored to its specific patterns.
               </div>
+            )}
             </div>
 
             {/* 3. Progress Bar */}
