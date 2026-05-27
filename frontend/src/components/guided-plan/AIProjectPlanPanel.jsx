@@ -330,244 +330,250 @@ export default function AIProjectPlanPanel({
           </div>
         </div>
       ) : (
-        <>
-          {/* 1. Goal Header */}
-          <div className="ax-plan-goal-header">
-            <div className="ax-plan-goal-circle-1" />
-            <div className="ax-plan-goal-circle-2" />
-            <button
-              type="button"
-              className="ax-plan-goal-header-collapse-trigger"
-              onClick={toggleCollapsed}
-              title="Collapse Guided Workflow"
-              aria-label="Collapse Guided Workflow"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: 'rotate(90deg)' }}>
-                <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
-              </svg>
-            </button>
-            <div className="ax-plan-goal-header-content">
-              <div className="ax-plan-goal-label">Prediction goal</div>
-              <div className="ax-plan-goal-value">
-                {guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'Choose a project question')}
-              </div>
-              <div className="ax-plan-goal-stats">
-                {Number(dataset?.row_count || 0).toLocaleString()} rows · {dataset?.col_count || 0} variables{plan?.task ? ` · ${plan.task}` : ''}
-              </div>
-              <button className="ax-plan-goal-change-btn" type="button" onClick={onOpenGuidanceSetup}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
+        <div className="ax-plan-wrapper-fixed">
+          {/* Pinned Top Header */}
+          <div className="ax-plan-header-fixed">
+            {/* 1. Goal Header */}
+            <div className="ax-plan-goal-header">
+              <div className="ax-plan-goal-circle-1" />
+              <div className="ax-plan-goal-circle-2" />
+              <button
+                type="button"
+                className="ax-plan-goal-header-collapse-trigger"
+                onClick={toggleCollapsed}
+                title="Collapse Guided Workflow"
+                aria-label="Collapse Guided Workflow"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: 'rotate(90deg)' }}>
+                  <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
                 </svg>
-                Change goal
               </button>
+              <div className="ax-plan-goal-header-content">
+                <div className="ax-plan-goal-label">Prediction goal</div>
+                <div className="ax-plan-goal-value">
+                  {guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'Choose a project question')}
+                </div>
+                <div className="ax-plan-goal-stats">
+                  {Number(dataset?.row_count || 0).toLocaleString()} rows · {dataset?.col_count || 0} variables{plan?.task ? ` · ${plan.task}` : ''}
+                </div>
+                <button className="ax-plan-goal-change-btn" type="button" onClick={onOpenGuidanceSetup}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
+                  </svg>
+                  Change goal
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* 2. AI Assisted / Built-in Toggle */}
-          <div style={{ padding: '0 14px' }}>
-            <div className="ax-plan-mode" aria-label="Guidance mode" style={{ margin: '0 0 8px' }}>
-              <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => handleModeChange('auto')}>
-                AI assisted
-              </button>
-              <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => handleModeChange('system')}>
-                Built-in
-              </button>
-            </div>
-            <div className="ax-plan-mode-note">
-              {mode === 'auto' ? (
-                "AI analyzes your dataset and suggests steps tailored to its specific patterns."
-              ) : (
-                <>
-                  Workflow based on <strong>{goalCleaned}</strong>. Steps auto-update as you clean data.
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* 3. Progress Bar */}
-          <div className="ax-plan-progress-container">
-            <div className="ax-plan-progress-bar-track">
-              <div
-                className="ax-plan-progress-bar-fill"
-                style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
-              />
-            </div>
-            <span className="ax-plan-progress-label">
-              {completedCount} of {totalCount} done
-            </span>
-          </div>
-
-          {/* Fallbacks, loading note & summary */}
-          {(plan?.error || error || isAutoFallback) && (
-            <div className="ax-plan-fallback" style={{ margin: '0 14px 10px' }}>
-              <strong>AI plan unavailable.</strong>
-              <span>Using built-in guided workflow.</span>
-            </div>
-          )}
-
-          {loading && !plan && (
+            {/* 2. AI Assisted / Built-in Toggle */}
             <div style={{ padding: '0 14px' }}>
-              <SkeletonCards count={3} />
+              <div className="ax-plan-mode" aria-label="Guidance mode" style={{ margin: '0 0 8px' }}>
+                <button type="button" className={mode === 'auto' ? 'active' : ''} onClick={() => handleModeChange('auto')}>
+                  AI assisted
+                </button>
+                <button type="button" className={mode === 'system' ? 'active' : ''} onClick={() => handleModeChange('system')}>
+                  Built-in
+                </button>
+              </div>
+              <div className="ax-plan-mode-note">
+                {mode === 'auto' ? (
+                  "AI analyzes your dataset and suggests steps tailored to its specific patterns."
+                ) : (
+                  <>
+                    Workflow based on <strong>{goalCleaned}</strong>. Steps auto-update as you clean data.
+                  </>
+                )}
+              </div>
             </div>
-          )}
 
-          {loading && plan && (
-            <div className="ax-plan-loading-note" style={{ margin: '0 14px 10px' }}>
-              {mode === 'auto' ? 'Updating AI guided plan...' : 'Updating built-in workflow...'}
+            {/* 3. Progress Bar */}
+            <div className="ax-plan-progress-container">
+              <div className="ax-plan-progress-bar-track">
+                <div
+                  className="ax-plan-progress-bar-fill"
+                  style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+                />
+              </div>
+              <span className="ax-plan-progress-label">
+                {completedCount} of {totalCount} done
+              </span>
             </div>
-          )}
+          </div>
 
-          {plan?.summary && (
-            <p className="ax-plan-summary" style={{ padding: '0 14px 10px' }}>
-              {plan.summary}
-            </p>
-          )}
+          {/* Scrollable Body Content */}
+          <div className="ax-plan-body-scrollable">
+            {/* Fallbacks, loading note & summary */}
+            {(plan?.error || error || isAutoFallback) && (
+              <div className="ax-plan-fallback" style={{ margin: '0 14px 10px' }}>
+                <strong>AI plan unavailable.</strong>
+                <span>Using built-in guided workflow.</span>
+              </div>
+            )}
 
-          {/* 4. Step Cards */}
-          {plan && (
-            <div className="ax-plan-list" style={{ padding: '0 14px' }}>
-              {planItems.map(({ step, state }, position) => {
-                const isCompleted = state.status === 'completed'
-                const isNext = nextStepState?.step?.id === step.id
-                const displayStatus = isNext && !isCompleted ? 'active' : state.status
-                const isCardExpanded = activeExpandedId === step.id
-                const target = targetForStep(step)
-                const requirement = requirementForStep(step)
+            {loading && !plan && (
+              <div style={{ padding: '0 14px' }}>
+                <SkeletonCards count={3} />
+              </div>
+            )}
 
-                const cardClass = `ax-plan-step-redesigned state-${isCompleted ? 'completed' : isNext ? 'active' : 'pending'}`
+            {loading && plan && (
+              <div className="ax-plan-loading-note" style={{ margin: '0 14px 10px' }}>
+                {mode === 'auto' ? 'Updating AI guided plan...' : 'Updating built-in workflow...'}
+              </div>
+            )}
 
-                return (
-                  <article key={`${step.id}-${position}`} className={cardClass}>
-                    {/* Card Header (always visible) */}
-                    <div className="ax-plan-step-header" onClick={() => setExpandedCardId(isCardExpanded ? 'none' : step.id)}>
-                      <span className="ax-plan-check">
-                        {isCompleted ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        ) : position + 1}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                        <p className="ax-plan-step-title" style={{ fontSize: '13px', fontWeight: '750', color: 'var(--color-text-primary)', margin: 0, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}>
-                          {step.title}
-                        </p>
-                        {isCardExpanded && (
-                          <div className="ax-plan-step-badges" style={{ display: 'flex', gap: '4px' }}>
-                            <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
-                            <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className={`ax-plan-step-chevron${isCardExpanded ? ' open' : ''}`}>
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                          <path d="M1 3.5L5 7.5L9 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                        </svg>
-                      </div>
-                    </div>
+            {plan?.summary && (
+              <p className="ax-plan-summary" style={{ padding: '0 14px 10px' }}>
+                {plan.summary}
+              </p>
+            )}
 
-                    {/* Card Body (only visible if expanded) */}
-                    {isCardExpanded && (
-                      <div className="ax-plan-step-body">
-                        {/* Affects Section */}
-                        {step.columns?.length > 0 && (
-                          <div className="ax-plan-affects-container">
-                            <span className="ax-plan-affects-label">Affects:</span>
-                            <div className="ax-plan-column-chips">
-                              {step.columns.map((col, idx) => (
-                                <span key={idx} className="ax-plan-column-chip">
-                                  {col}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+            {/* 4. Step Cards */}
+            {plan && (
+              <div className="ax-plan-list" style={{ padding: '0 14px' }}>
+                {planItems.map(({ step, state }, position) => {
+                  const isCompleted = state.status === 'completed'
+                  const isNext = nextStepState?.step?.id === step.id
+                  const displayStatus = isNext && !isCompleted ? 'active' : state.status
+                  const isCardExpanded = activeExpandedId === step.id
+                  const target = targetForStep(step)
+                  const requirement = requirementForStep(step)
 
-                        {/* Stale Warning */}
-                        {state.status === 'stale' && (
-                          <p style={{ fontSize: 11, color: 'var(--color-text-warning)', margin: '0 0 8px', fontWeight: 500 }}>
-                            Re-run recommended because the dataset changed after this step.
+                  const cardClass = `ax-plan-step-redesigned state-${isCompleted ? 'completed' : isNext ? 'active' : 'pending'}`
+
+                  return (
+                    <article key={`${step.id}-${position}`} className={cardClass}>
+                      {/* Card Header (always visible) */}
+                      <div className="ax-plan-step-header" onClick={() => setExpandedCardId(isCardExpanded ? 'none' : step.id)}>
+                        <span className="ax-plan-check">
+                          {isCompleted ? (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          ) : position + 1}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <p className="ax-plan-step-title" style={{ fontSize: '13px', fontWeight: '750', color: 'var(--color-text-primary)', margin: 0, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}>
+                            {step.title}
                           </p>
-                        )}
+                          {isCardExpanded && (
+                            <div className="ax-plan-step-badges" style={{ display: 'flex', gap: '4px' }}>
+                              <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
+                              <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className={`ax-plan-step-chevron${isCardExpanded ? ' open' : ''}`}>
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <path d="M1 3.5L5 7.5L9 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                          </svg>
+                        </div>
+                      </div>
 
-                        {/* Toolbar Pointer Row */}
-                        <div className="ax-plan-pointer-box">
-                          <div className="ax-plan-pointer-icon-wrap">
-                            {(() => {
-                              const text = `${step.id} ${step.title}`.toLowerCase();
-                              if (text.includes('missing')) {
-                                return (
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="3 3">
-                                    <circle cx="12" cy="12" r="10" />
-                                  </svg>
-                                );
-                              }
-                              if (text.includes('outlier')) {
+                      {/* Card Body (only visible if expanded) */}
+                      {isCardExpanded && (
+                        <div className="ax-plan-step-body">
+                          {/* Affects Section */}
+                          {step.columns?.length > 0 && (
+                            <div className="ax-plan-affects-container">
+                              <span className="ax-plan-affects-label">Affects:</span>
+                              <div className="ax-plan-column-chips">
+                                {step.columns.map((col, idx) => (
+                                  <span key={idx} className="ax-plan-column-chip">
+                                    {col}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Stale Warning */}
+                          {state.status === 'stale' && (
+                            <p style={{ fontSize: 11, color: 'var(--color-text-warning)', margin: '0 0 8px', fontWeight: 500 }}>
+                              Re-run recommended because the dataset changed after this step.
+                            </p>
+                          )}
+
+                          {/* Toolbar Pointer Row */}
+                          <div className="ax-plan-pointer-box">
+                            <div className="ax-plan-pointer-icon-wrap">
+                              {(() => {
+                                const text = `${step.id} ${step.title}`.toLowerCase();
+                                if (text.includes('missing')) {
+                                  return (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="3 3">
+                                      <circle cx="12" cy="12" r="10" />
+                                    </svg>
+                                  );
+                                }
+                                if (text.includes('outlier')) {
+                                  return (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                      <line x1="12" y1="9" x2="12" y2="13" />
+                                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
+                                  );
+                                }
                                 return (
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                    <line x1="12" y1="9" x2="12" y2="13" />
-                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                                    <path d="M9 17V7l7 5-7 5z" />
                                   </svg>
                                 );
-                              }
-                              return (
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                                  <path d="M9 17V7l7 5-7 5z" />
-                                </svg>
-                              );
-                            })()}
-                          </div>
-                          <div className="ax-plan-pointer-info">
-                            <div className="ax-plan-pointer-tool">{target.shortLabel || step.title}</div>
-                            <div className="ax-plan-pointer-path">
-                              {target.label.includes(' → ') ? (
-                                <>
-                                  {target.label.split(' → ')[0]} →
-                                  <br />
-                                  {target.label.split(' → ')[1]}
-                                </>
-                              ) : target.label}
+                              })()}
                             </div>
-                          </div>
-                          <button
-                            className="ax-plan-pointer-open-btn"
-                            type="button"
-                            onClick={() => goToStep(step)}
-                          >
-                            Open ↑
-                          </button>
-                        </div>
-
-                        {/* Actions Row */}
-                        <div className="ax-plan-card-actions-row">
-                          {step.rationale ? (
-                            <WhyThisMattersInline text={step.rationale} />
-                          ) : (
-                            <div />
-                          )}
-                          {isCompleted ? (
-                            <span style={{ color: '#16a34a', fontSize: '11px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
-                              ✓ Completed
-                            </span>
-                          ) : (
+                            <div className="ax-plan-pointer-info">
+                              <div className="ax-plan-pointer-tool">{target.shortLabel || step.title}</div>
+                              <div className="ax-plan-pointer-path">
+                                {target.label.includes(' → ') ? (
+                                  <>
+                                    {target.label.split(' → ')[0]} →
+                                    <br />
+                                    {target.label.split(' → ')[1]}
+                                  </>
+                                ) : target.label}
+                              </div>
+                            </div>
                             <button
-                              className="ax-plan-mark-done-btn"
+                              className="ax-plan-pointer-open-btn"
                               type="button"
-                              onClick={() => toggleDone(step.id)}
+                              onClick={() => goToStep(step)}
                             >
-                              ✓ Mark done
+                              Open ↑
                             </button>
-                          )}
+                          </div>
+
+                          {/* Actions Row */}
+                          <div className="ax-plan-card-actions-row">
+                            {step.rationale ? (
+                              <WhyThisMattersInline text={step.rationale} />
+                            ) : (
+                              <div />
+                            )}
+                            {isCompleted ? (
+                              <span style={{ color: '#16a34a', fontSize: '11px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
+                                ✓ Completed
+                              </span>
+                            ) : (
+                              <button
+                                className="ax-plan-mark-done-btn"
+                                type="button"
+                                onClick={() => toggleDone(step.id)}
+                              >
+                                ✓ Mark done
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </article>
-                )
-              })}
-            </div>
-          )}
+                      )}
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
           {/* 5. Navigation Footer */}
           <div className="ax-plan-footer">
@@ -580,7 +586,7 @@ export default function AIProjectPlanPanel({
               Go to Expand →
             </button>
           </div>
-        </>
+        </div>
       )}
 
       {expanded && plan && createPortal(

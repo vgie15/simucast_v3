@@ -4394,8 +4394,26 @@ button.ax-module-head:focus-visible {
 .ax-plan-panel {
   flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 0;
+  overscroll-behavior: contain;
+}
+
+.ax-plan-wrapper-fixed {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ax-plan-header-fixed {
+  flex: 0 0 auto;
+}
+
+.ax-plan-body-scrollable {
+  flex: 1 1 0%;
+  overflow-y: auto;
+  min-height: 0;
   overscroll-behavior: contain;
 }
 .ax-plan-panel.ax-plan-collapsed {
@@ -8202,7 +8220,8 @@ button.ax-module-head:focus-visible {
 
 /* Footer Section */
 .ax-plan-footer {
-  margin-top: 14px;
+  flex: 0 0 auto;
+  margin-top: auto;
   padding: 12px 14px;
   border-top: 0.5px solid var(--color-border-tertiary);
   background: var(--color-background-primary);
