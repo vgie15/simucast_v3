@@ -2906,12 +2906,19 @@ function ConfusionMatrix({ cm, metrics, active, datasetId }) {
 }
 
 // Multiclass Fallback (same as original clean table with totals)
+const diagValues = computedCm.map((row, idx) => row[idx])
+const maxDiag = Math.max(...diagValues)
+const offDiagValues = computedCm.flatMap((row, rIdx) => row.filter((_, cIdx) => rIdx !== cIdx))
+const maxOffDiag = Math.max(...offDiagValues)
+
 return (
   <div>
     <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      
+      {/* LEFT SECTION: Matrix Grid */}
       <div style={{ flexShrink: 0 }}>
         {/* Column headers row */}
-        <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 90px) 44px`, gap: 4, marginBottom: 4 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 100px) 60px`, gap: 10, marginBottom: 8 }}>
           <div />
           {computedCm[0].map((_, j) => (
             <div key={j} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PRED {j}</div>
@@ -2921,54 +2928,145 @@ return (
 
         {/* Data rows */}
         {computedCm.map((row, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 90px) 44px`, gap: 4, marginBottom: 4 }}>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 100px) 60px`, gap: 10, marginBottom: 10, alignItems: 'center' }}>
             {/* Row label */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', paddingRight: 8, gap: 2 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', paddingRight: 12, gap: 2 }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTUAL</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)' }}>{i}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>
+                {metrics?.class_names?.[i] ?? i}
+              </span>
             </div>
             {/* Cells */}
             {row.map((v, j) => {
               const isDiag = i === j
+              // Styling logic: diagonal cells styled orange, off-diagonal gray
+              let bg = '#F3F4F6'
+              let color = '#1F2937'
+              let fontWeight = 500
+
+              if (isDiag) {
+                fontWeight = 800
+                if (v === maxDiag && maxDiag > 0) {
+                  bg = 'var(--color-accent)'
+                  color = '#FFFFFF'
+                } else {
+                  bg = '#FFD9C0'
+                  color = '#C2410C'
+                }
+              } else {
+                if (v === maxOffDiag && maxOffDiag > 0) {
+                  bg = '#B3B3B3'
+                  color = '#1F2937'
+                  fontWeight = 700
+                } else {
+                  bg = '#F3F4F6'
+                  color = '#4B5563'
+                }
+              }
+
               return (
                 <div
                   key={j}
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    borderRadius: 10, padding: '14px 8px', minHeight: 74,
-                    background: isDiag ? 'rgba(249, 115, 22, 0.15)' : 'var(--color-background-secondary)',
-                    border: isDiag ? '1.5px solid var(--color-accent)' : '1.5px solid var(--color-border-tertiary)',
+                    borderRadius: 12, minHeight: 74,
+                    background: bg,
+                    border: 'none',
                   }}
                 >
-                  <span style={{ fontSize: 22, fontWeight: 800, color: isDiag ? 'var(--color-accent-dark)' : 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>
+                  <span style={{ fontSize: 22, fontWeight: fontWeight, color: color, fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>
                     {v}
                   </span>
                 </div>
               )
             })}
             {/* Row total */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
               {rowSums[i]}
             </div>
           </div>
         ))}
 
         {/* Column totals row */}
-        <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 90px) 44px`, gap: 4, marginTop: 2 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${n}, 100px) 60px`, gap: 10, marginTop: 4, alignItems: 'center' }}>
           <div />
           {colSums.map((s, j) => (
-            <div key={j} style={{ textAlign: 'center', fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{s}</div>
+            <div key={j} style={{ textAlign: 'center', fontSize: 14, fontWeight: 700, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{s}</div>
           ))}
-          <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{total}</div>
+          <div style={{ textAlign: 'center', fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{total}</div>
         </div>
 
         {/* Overall accuracy bar */}
-        <div style={{ marginTop: 14, padding: '10px 14px', background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>OVERALL</span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)' }}>{(accuracy * 100).toFixed(1)}% accuracy</span>
+        <div style={{ marginTop: 16, padding: '10px 14px', background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>OVERALL</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text-primary)' }}>{(accuracy * 100).toFixed(1)}% accuracy</span>
           <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>{correctTotal} correct of {total}</span>
         </div>
       </div>
+
+      {/* RIGHT SECTION: Stacked cards for each class */}
+      <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {computedCm.map((_, i) => {
+          const className = metrics?.class_names?.[i] ?? `Class ${i}`
+          const correct = computedCm[i][i]
+          const totalRows = rowSums[i]
+          const recallPct = totalRows > 0 ? Math.round((correct / totalRows) * 100) : 0
+          const precisionPct = colSums[i] > 0 ? Math.round((correct / colSums[i]) * 100) : 0
+          const correctPctOfTotal = total > 0 ? Math.round((correct / total) * 100) : 0
+
+          return (
+            <div
+              key={i}
+              style={{
+                border: '1px solid var(--color-border-secondary)',
+                borderRadius: 12,
+                padding: '12px 18px',
+                background: '#FFFFFF',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: 'var(--color-accent)',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                    {className}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 650, color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                    {correct}/{totalRows} correct
+                  </span>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  {recallPct}% recall
+                </span>
+              </div>
+
+              {/* Progress bar representing recall */}
+              <div style={{ height: 6, background: '#F3F4F6', borderRadius: 3, overflow: 'hidden', margin: '8px 0' }}>
+                <div
+                  style={{
+                    width: `${recallPct}%`,
+                    height: '100%',
+                    background: 'var(--color-accent)',
+                    borderRadius: 3,
+                  }}
+                />
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+                {precisionPct}% precision · accounts for {correctPctOfTotal}% of all dataset samples
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
     </div>
   </div>
 )
