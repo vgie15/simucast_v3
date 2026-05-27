@@ -8,7 +8,7 @@ import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { BusyOverlay } from '../common/LoadingStates'
 import { useAuth } from '../providers/AuthProvider'
 import { useDatasetTableState } from './useDatasetTableState'
-import { Download, Maximize2, Minimize2, X } from 'lucide-react'
+import { Download, Maximize2, Minimize2, X, Undo, Redo } from 'lucide-react'
 
 const PAGE_SIZE = 100
 const TYPE_ICON = {
@@ -106,6 +106,23 @@ export default function DataDetailView({
   const [savingEdits, setSavingEdits] = useState(false)
   const [cellError, setCellError] = useState(null)
   const cancelBlurRef = useRef(false)
+  const [undoStack, setUndoStack] = useState([])
+  const [redoStack, setRedoStack] = useState([])
+
+  const modifiedRows = useMemo(() => {
+    if (undoStack.length === 0) return rows
+    return rows.map((row) => {
+      let updatedRow = { ...row }
+      let hasChange = false
+      undoStack.forEach((edit) => {
+        if (edit.rowIndex === row.__row_index) {
+          updatedRow[edit.column] = edit.newValue === '' ? null : edit.newValue
+          hasChange = true
+        }
+      })
+      return hasChange ? updatedRow : row
+    })
+  }, [rows, undoStack])
 
   const [headerEdit, setHeaderEdit] = useState(null)
   const [savingHeader, setSavingHeader] = useState(false)
@@ -159,6 +176,8 @@ export default function DataDetailView({
     setHeaderEdit(null)
     setCellError(null)
     setRowError(null)
+    setUndoStack([])
+    setRedoStack([])
   }, [datasetId, effectiveStageId, refreshKey, viewMode])
 
   // load rows page
@@ -314,8 +333,8 @@ export default function DataDetailView({
     setCellError(null)
   }
 
-  const saveEditing = async (edit) => {
-    if (!edit || savingEdits) return
+  const saveEditing = (edit) => {
+    if (!edit) return
     if (cancelBlurRef.current) {
       cancelBlurRef.current = false
       return
@@ -325,23 +344,62 @@ export default function DataDetailView({
       setCellError(null)
       return
     }
+
+    const newEdit = {
+      rowIndex: edit.rowIndex,
+      column: edit.column,
+      oldValue: edit.original,
+      newValue: edit.value
+    }
+
+    setUndoStack((prev) => [...prev, newEdit])
+    setRedoStack([])
+    setEditing(null)
+    setCellError(null)
+  }
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return
+    const lastEdit = undoStack[undoStack.length - 1]
+    setUndoStack((prev) => prev.slice(0, -1))
+    setRedoStack((prev) => [...prev, lastEdit])
+  }
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return
+    const nextEdit = redoStack[redoStack.length - 1]
+    setRedoStack((prev) => prev.slice(0, -1))
+    setUndoStack((prev) => [...prev, nextEdit])
+  }
+
+  const handleDiscard = () => {
+    setUndoStack([])
+    setRedoStack([])
+  }
+
+  const handleSaveEdits = async () => {
+    if (undoStack.length === 0 || savingEdits) return
     setSavingEdits(true)
     setCellError(null)
+
+    const netEditsMap = {}
+    undoStack.forEach((edit) => {
+      netEditsMap[`${edit.rowIndex}:${edit.column}`] = edit
+    })
+
+    const editsToSave = Object.values(netEditsMap).map((edit) => ({
+      row_index: edit.rowIndex,
+      column: edit.column,
+      value: edit.newValue,
+    }))
+
     try {
-      await api.updateCell(datasetId, {
-        row_index: edit.rowIndex,
-        column: edit.column,
-        value: edit.value,
-      })
-      setRows((current) =>
-        current.map((row) =>
-          row.__row_index === edit.rowIndex ? { ...row, [edit.column]: edit.value === '' ? null : edit.value } : row,
-        ),
-      )
-      setEditing(null)
+      await api.updateCells(datasetId, editsToSave)
+      setUndoStack([])
+      setRedoStack([])
       await onDataChanged?.()
     } catch (err) {
-      setCellError(err.message || 'Cell update failed')
+      setCellError(err.message || 'Saving edits failed')
     } finally {
       setSavingEdits(false)
     }
@@ -427,9 +485,9 @@ export default function DataDetailView({
 
   const containerCls = `ax-data-detail ax-module-card ax-card-data ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
   const latestStage = scopedChangeStages[scopedChangeStages.length - 1] || null
-  const hasBaseRows = rows.length > 0
+  const hasBaseRows = modifiedRows.length > 0
   const displayRows = applyViewTools(
-    mergeRemovedRows(rows, hasBaseRows ? removedRows : [], viewMode),
+    mergeRemovedRows(modifiedRows, hasBaseRows ? removedRows : [], viewMode),
     viewSort,
     viewFilter,
   )
@@ -494,6 +552,75 @@ export default function DataDetailView({
               </section>
             </>
           )}
+          {/* Local edits controls: Undo, Redo, Discard, Save */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}>
+            <button
+              type="button"
+              className="ax-dd-icon-btn"
+              onClick={handleUndo}
+              disabled={undoStack.length === 0}
+              title="Undo edit"
+              aria-label="Undo edit"
+              style={{ opacity: undoStack.length === 0 ? 0.35 : 1, cursor: undoStack.length === 0 ? 'not-allowed' : 'pointer' }}
+            >
+              <Undo size={15} />
+            </button>
+            <button
+              type="button"
+              className="ax-dd-icon-btn"
+              onClick={handleRedo}
+              disabled={redoStack.length === 0}
+              title="Redo edit"
+              aria-label="Redo edit"
+              style={{ opacity: redoStack.length === 0 ? 0.35 : 1, cursor: redoStack.length === 0 ? 'not-allowed' : 'pointer' }}
+            >
+              <Redo size={15} />
+            </button>
+            {undoStack.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="ax-btn mini"
+                  onClick={handleDiscard}
+                  style={{
+                    fontSize: 11,
+                    padding: '3px 8px',
+                    color: 'var(--color-text-danger)',
+                    border: '1px solid var(--color-border-tertiary)',
+                    borderRadius: 4,
+                    height: 24,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  disabled={savingEdits}
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  className="ax-btn mini prim"
+                  onClick={handleSaveEdits}
+                  style={{
+                    fontSize: 11,
+                    padding: '3px 8px',
+                    background: 'var(--color-accent)',
+                    color: '#fff',
+                    borderRadius: 4,
+                    height: 24,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: 'none',
+                  }}
+                  disabled={savingEdits}
+                >
+                  {savingEdits ? 'Saving...' : 'Save'}
+                </button>
+              </>
+            )}
+          </div>
+
           <a
             href={api.exportCsvUrl(datasetId, effectiveStageId)}
             download={(dataset.filename || dataset.name || 'dataset').replace(/\.[^.]+$/, '') + '.csv'}
