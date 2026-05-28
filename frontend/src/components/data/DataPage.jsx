@@ -572,9 +572,7 @@ function DataToolsToolbar({
       tools: [
         { key: 'labels', label: 'Labels', icon: 'tag', tip: 'Standardize labels', issue: hasIssue.labels },
         { key: 'bin', label: 'Bin', icon: 'chart-histogram', tip: 'Create binned columns' },
-        { key: 'scale', label: 'Scale', icon: 'ruler-measure', tip: 'Scale numeric values' },
         { key: 'format', label: 'Format', icon: 'hash', tip: 'Numeric formatting (decimals)' },
-        { key: 'encode', label: 'Encode', icon: 'hash', tip: 'Prepare encoded values' },
       ],
     },
     {
@@ -600,7 +598,7 @@ function DataToolsToolbar({
   const activeTool = openTool === 'columns'
     ? { key: 'columns', label: 'Columns', icon: 'eye' }
     : toolMap[openTool]
-  const recommendationTools = new Set(['missing', 'outliers', 'duplicates', 'labels', 'bin', 'scale', 'format', 'encode'])
+  const recommendationTools = new Set(['missing', 'outliers', 'duplicates', 'labels', 'bin', 'format'])
   const hasRecommendationToggle = recommendationTools.has(openTool)
   const openFromButton = (toolKey, event) => {
     const shell = event.currentTarget.closest('.ax-data-toolbar-shell')
@@ -757,20 +755,8 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
   if (toolKey === 'bin') {
     return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="bins" compact showRecommendations={showRecommendations} />
   }
-  if (toolKey === 'scale') {
-    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="scale" compact showRecommendations={showRecommendations} />
-  }
   if (toolKey === 'format') {
     return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="format" compact showRecommendations={showRecommendations} />
-  }
-  if (toolKey === 'encode') {
-    return (
-      <div className="ax-data-toolbar-panel">
-        <p className="ax-data-toolbar-note">
-          Encoding is currently applied automatically in Models during preprocessing. Use Labels first to standardize source categories before training.
-        </p>
-      </div>
-    )
   }
   if (toolKey === 'sort') {
     return <SortTool variables={dataset.variables || []} visibilityProps={visibilityProps} close={close} />
@@ -1402,7 +1388,7 @@ function FeatureRecommendationCard({ recommendation }) {
 function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', compact = false, showRecommendations = false }) {
   const auth = useAuth()
   const [open, setOpen] = useState(compact)
-  const [tool, setTool] = useState(initialTool) // 'bins' | 'scale' | 'format'
+  const [tool, setTool] = useState(initialTool) // 'bins' | 'format'
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
@@ -1423,9 +1409,6 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
   const [fmtOp, setFmtOp] = useState('round')
   const [fmtParam, setFmtParam] = useState('2')
   const [fmtNewName, setFmtNewName] = useState('')
-  const [scaleCol, setScaleCol] = useState('')
-  const [scaleMethod, setScaleMethod] = useState('minmax')
-  const [scaleNewName, setScaleNewName] = useState('')
   const binRecommendation = recommendBinning(numericVariables)
   const formatRecommendation = recommendNumericFormatting(numericVariables)
 
@@ -1450,12 +1433,6 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
   }, [formatRecommendation?.column, fmtCol])
 
   useEffect(() => {
-    if (!scaleCol && numericVariables[0]?.name) {
-      setScaleCol(numericVariables[0].name)
-    }
-  }, [numericVariables[0]?.name, scaleCol])
-
-  useEffect(() => {
     setAiSuggestion(null)
   }, [tool, dataset?.current_stage_id])
 
@@ -1475,11 +1452,9 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
         system_recommendation: activeRecommendation || null,
         selected_options: tool === 'bins'
           ? { column: binCol, bins: binCount, labels: binLabels, new_name: binNewName || `${binCol || 'column'}_bin` }
-          : tool === 'scale'
-          ? { column: scaleCol, method: scaleMethod, new_name: scaleNewName || `${scaleCol}_${scaleMethod}` }
           : { column: fmtCol, operation: fmtOp, decimals: fmtParam, new_name: fmtNewName || fmtCol },
         numeric_columns: numericVariables.map((v) => ({ name: v.name, type: v.dtype, unique: v.unique })),
-        supported_actions: ['create bins', 'scale numeric values', 'numeric formatting'],
+        supported_actions: ['create bins', 'numeric formatting'],
       }
       const r = await api.aiExplain(
         dataset.id,
@@ -1504,11 +1479,6 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
       if (tool === 'bins') {
         if (!binCol) { setMsg('Select a column to bin.'); setBusy(false); return }
         body = { operation: 'bin', column: binCol, bins: Number(binCount), labels: binLabels ? binLabels.split(',').map((s) => s.trim()) : null, new_name: binNewName || `${binCol}_bin` }
-      } else if (tool === 'scale') {
-        if (!scaleCol) { setMsg('Select a column.'); setBusy(false); return }
-        body = scaleMethod === 'decimal'
-          ? { operation: 'round', column: scaleCol, param: '2', new_name: scaleNewName || scaleCol }
-          : { operation: scaleMethod, column: scaleCol, new_name: scaleNewName || `${scaleCol}_${scaleMethod}` }
       } else if (tool === 'format') {
         if (!fmtCol) { setMsg('Select a column.'); setBusy(false); return }
         body = { operation: 'round', column: fmtCol, param: fmtParam, new_name: fmtNewName || fmtCol }
@@ -1558,7 +1528,7 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
         <div style={{ marginTop: 12 }}>
           {!compact && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-              {[['bins','Create bins'],['scale','Scale values'],['format','Numeric formatting']].map(([key, label]) => (
+              {[['bins','Create bins'],['format','Numeric formatting']].map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
