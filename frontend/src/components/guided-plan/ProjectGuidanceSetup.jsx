@@ -583,6 +583,7 @@ export function coachStepsForGoal(goal, dataset) {
       'Review the label groups only when SimuCast detects values that should be merged.',
       'You can skip this recommendation when labels are already consistent.',
       'recommended',
+      'categories',
     ),
   ]
   const paths = {

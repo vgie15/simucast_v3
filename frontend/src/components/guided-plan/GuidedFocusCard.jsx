@@ -127,7 +127,10 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   useEffect(() => {
     if (!dataset?.id || !config) return
     setSuggestionData(null)
-    api.cleanSuggestions(dataset.id)
+    const requestPromise = config.toolKey === 'labels'
+      ? api.categorySuggestions(dataset.id)
+      : api.cleanSuggestions(dataset.id)
+    requestPromise
       .then(res => setSuggestionData(res))
       .catch(err => console.error(err))
   }, [dataset?.id, dataset?.current_stage_id, config])
@@ -406,7 +409,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
 }
 
 function isIssueTool(toolKey) {
-  return ['missing', 'outliers', 'duplicates'].includes(toolKey)
+  return ['missing', 'outliers', 'duplicates', 'labels'].includes(toolKey)
 }
 
 function issuePendingForTool(toolKey, suggestionData, dataset) {
@@ -417,6 +420,7 @@ function issuePendingForTool(toolKey, suggestionData, dataset) {
   }
   if (toolKey === 'outliers') return Boolean((suggestionData?.groups?.outliers?.columns || []).length)
   if (toolKey === 'duplicates') return Number(suggestionData?.groups?.duplicates?.count || 0) > 0
+  if (toolKey === 'labels') return Boolean((suggestionData?.suggestions || []).length)
   return true
 }
 
@@ -425,6 +429,12 @@ function stepStillActionable(step, suggestionData, dataset) {
   if (step.completion === 'missing') return issuePendingForTool('missing', suggestionData, dataset)
   if (step.completion === 'outliers') return issuePendingForTool('outliers', suggestionData, dataset)
   if (step.completion === 'duplicates') return issuePendingForTool('duplicates', suggestionData, dataset)
+  if (step.completion === 'categories') {
+    if (suggestionData && 'suggestions' in suggestionData) {
+      return (suggestionData.suggestions || []).length > 0
+    }
+    return true
+  }
   return true
 }
 
