@@ -9,7 +9,7 @@ import { api } from '../../api'
 import { SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
 import { useAuth } from '../providers/AuthProvider'
-import { firstCoachStep, goalLabel } from './ProjectGuidanceSetup'
+import { coachStepsForGoal, firstCoachStep, goalLabel } from './ProjectGuidanceSetup'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
 const PLAN_CACHE_VERSION = 'v4'
@@ -293,11 +293,20 @@ export default function AIProjectPlanPanel({
       onOpenGuidanceSetup?.()
       return
     }
+    const isEnabling = !guidance.guided_mode
     const start = firstCoachStep(guidance.goal || guidance.intent, dataset)
+    const targetStepId = guidance.walkthrough_step || start?.id || null
     await updateGuidance({
-      guided_mode: !guidance.guided_mode,
-      walkthrough_step: guidance.guided_mode ? null : (guidance.walkthrough_step || start?.id || null),
+      guided_mode: isEnabling,
+      walkthrough_step: isEnabling ? targetStepId : null,
     })
+    if (isEnabling && targetStepId) {
+      const steps = coachStepsForGoal(guidance.goal || guidance.intent, dataset)
+      const targetStep = steps.find((s) => s.id === targetStepId)
+      if (targetStep && targetStep.page && targetStep.page !== activeTab) {
+        navigate(`/projects/${datasetId}/${targetStep.page}`)
+      }
+    }
   }
 
   const completedCount = planItems.filter((item) => item.state.status === 'completed').length
