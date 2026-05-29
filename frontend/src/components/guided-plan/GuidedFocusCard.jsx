@@ -275,6 +275,8 @@ export default function GuidedFocusCard({ dataset, activeTab, cleaningIssues, on
   }
 
   const currentSub = config.subSteps[subStep]
+  const shouldOffsetForRail = typeof window !== 'undefined' && window.innerWidth >= 1180
+  const coachRight = shouldOffsetForRail ? 'calc(var(--ai-w, 360px) + 18px)' : '16px'
 
   return (
     <aside
@@ -282,7 +284,7 @@ export default function GuidedFocusCard({ dataset, activeTab, cleaningIssues, on
       style={{
         position: 'fixed',
         bottom: '16px',
-        right: '16px',
+        right: coachRight,
         zIndex: 10000,
         width: '340px',
         maxHeight: '400px',
