@@ -583,25 +583,59 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     const viewW = window.innerWidth
     const viewH = window.innerHeight
 
-    // Position logic: Prefer placing card BELOW target
-    let top = targetRect.top + targetRect.height + margin
-    let left = targetRect.left
+    const selector = config?.subSteps[subStep]?.spotlight
+    const isPopover = selector === '.ax-data-toolbar-popover'
+
+    let top = 0
+    let left = 0
     let arrowSide = 'top'
 
-    // If too close to bottom, place ABOVE
-    if (top + cardH > viewH - 20) {
-      top = targetRect.top - cardH - margin
-      arrowSide = 'bottom'
-    }
+    if (isPopover) {
+      // Place card on the LEFT or RIGHT of the popover
+      const leftPos = targetRect.left - cardW - margin
+      const rightPos = targetRect.left + targetRect.width + margin
 
-    // If too close to right edge, shift left
-    if (left + cardW > viewW - 20) {
-      left = viewW - cardW - 20
-    }
+      if (leftPos >= 20) {
+        left = leftPos
+        arrowSide = 'right'
+      } else if (rightPos + cardW <= viewW - 20) {
+        left = rightPos
+        arrowSide = 'left'
+      } else {
+        // Fallback: place on whichever side has more space
+        if (leftPos + cardW / 2 > viewW - rightPos - cardW / 2) {
+          left = Math.max(20, leftPos)
+          arrowSide = 'right'
+        } else {
+          left = Math.min(viewW - cardW - 20, rightPos)
+          arrowSide = 'left'
+        }
+      }
 
-    // Clamp to viewport boundaries
-    top = Math.max(20, top)
-    left = Math.max(20, left)
+      // Vertically align to the center of the popover
+      top = targetRect.top + targetRect.height / 2 - cardH / 2
+      top = Math.max(20, Math.min(viewH - cardH - 20, top))
+    } else {
+      // Position logic: Prefer placing card BELOW target
+      top = targetRect.top + targetRect.height + margin
+      left = targetRect.left
+      arrowSide = 'top'
+
+      // If too close to bottom, place ABOVE
+      if (top + cardH > viewH - 20) {
+        top = targetRect.top - cardH - margin
+        arrowSide = 'bottom'
+      }
+
+      // If too close to right edge, shift left
+      if (left + cardW > viewW - 20) {
+        left = viewW - cardW - 20
+      }
+
+      // Clamp to viewport boundaries
+      top = Math.max(20, top)
+      left = Math.max(20, left)
+    }
 
     // Calculate arrow offsets relative to the card
     let arrowLeft = (targetRect.left + targetRect.width / 2) - left
@@ -611,7 +645,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     arrowTop = Math.max(16, Math.min(cardH - 16, arrowTop))
 
     setCardPosition({ top, left, arrowSide, arrowLeft, arrowTop })
-  }, [targetRect])
+  }, [targetRect, config, subStep])
 
   // Attach window event listeners for scroll and resize
   useEffect(() => {
