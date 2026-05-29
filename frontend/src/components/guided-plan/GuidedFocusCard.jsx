@@ -726,23 +726,6 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     }
   }, [])
 
-  // Dismiss spotlight tour on click outside of targeted element or card
-  useEffect(() => {
-    if (!targetRect || !guidance.guided_mode) return
-
-    const handleWindowClick = (e) => {
-      const cardEl = document.querySelector('.guided-focus-card')
-      if (cardEl?.contains(e.target)) return
-
-      const targetEl = activeElementRef.current
-      if (targetEl?.contains(e.target)) return
-
-      closeCardAndPersist({ guided_mode: false })
-    }
-
-    window.addEventListener('click', handleWindowClick, true)
-    return () => window.removeEventListener('click', handleWindowClick, true)
-  }, [targetRect, guidance.guided_mode])
 
   // Reset sub-step when active step changes
   useEffect(() => {
