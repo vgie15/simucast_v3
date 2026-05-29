@@ -329,6 +329,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   return (
     <>
       {coach}
+      {spotlight && <SpotlightMask rect={spotlight} />}
     </>
   )
 }

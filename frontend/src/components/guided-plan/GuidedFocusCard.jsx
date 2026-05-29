@@ -471,6 +471,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
 
     const selector = config?.subSteps[subStep]?.spotlight
     const isPopover = selector === '.ax-data-toolbar-popover'
+    const isTable = selector === '.ax-data-detail'
 
     let top = 0
     let left = 0
@@ -501,6 +502,14 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       // Vertically align to the center of the popover
       top = targetRect.top + targetRect.height / 2 - cardH / 2
       top = Math.max(20, Math.min(viewH - cardH - 20, top))
+    } else if (isTable) {
+      // Place card on the right side of the table
+      left = targetRect.left + targetRect.width - cardW - 24
+      top = targetRect.top + 100 // Pinned vertically to a nice upper section of the table
+      arrowSide = 'left' // Arrow on the left side pointing left to the table
+
+      left = Math.max(20, Math.min(viewW - cardW - 20, left))
+      top = Math.max(20, Math.min(viewH - cardH - 20, top))
     } else {
       // Position logic: Prefer placing card BELOW target
       top = targetRect.top + targetRect.height + margin
@@ -527,7 +536,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     let arrowLeft = (targetRect.left + targetRect.width / 2) - left
     arrowLeft = Math.max(16, Math.min(cardW - 16, arrowLeft))
 
-    let arrowTop = (targetRect.top + targetRect.height / 2) - top
+    let arrowTop = isTable ? (cardH / 2) : ((targetRect.top + targetRect.height / 2) - top)
     arrowTop = Math.max(16, Math.min(cardH - 16, arrowTop))
 
     setCardPosition({ top, left, arrowSide, arrowLeft, arrowTop })
@@ -1045,8 +1054,52 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
           </button>
         </div>
       </aside>
+      {targetRect && !showModal && !cardDismissed && (
+        <SpotlightMask rect={targetRect} />
+      )}
       {renderModal()}
     </>
+  )
+}
+
+function SpotlightMask({ rect }) {
+  if (!rect) return null
+  return (
+    <svg
+      className="spotlight-overlay show"
+      width="100%"
+      height="100%"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        pointerEvents: 'none'
+      }}
+    >
+      <defs>
+        <mask id="spotlight-mask-focus">
+          <rect width="100%" height="100%" fill="white" />
+          <rect
+            id="spotlight-hole-focus"
+            style={{
+              transition: 'x 150ms ease, y 150ms ease, width 150ms ease, height 150ms ease'
+            }}
+            x={rect.left - 8}
+            y={rect.top - 8}
+            width={rect.width + 16}
+            height={rect.height + 16}
+            rx="8"
+            fill="black"
+          />
+        </mask>
+      </defs>
+      <rect
+        width="100%"
+        height="100%"
+        fill="rgba(0,0,0,0.6)"
+        mask="url(#spotlight-mask-focus)"
+      />
+    </svg>
   )
 }
 
