@@ -9,7 +9,7 @@ import { api } from '../../api'
 import { SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
 import { useAuth } from '../providers/AuthProvider'
-import { currentCoachStep, firstCoachStep, goalLabel } from './ProjectGuidanceSetup'
+import { firstCoachStep, goalLabel } from './ProjectGuidanceSetup'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
 const PLAN_CACHE_VERSION = 'v4'
@@ -291,15 +291,10 @@ export default function AIProjectPlanPanel({
 
   const toggleGuidedMode = async () => {
     const start = firstCoachStep(guidance.goal, dataset, cleaningIssues)
-    const activeStep = currentCoachStep(guidance, dataset, cleaningIssues) || start
-    const nextGuidedMode = !guidance.guided_mode
     await updateGuidance({
-      guided_mode: nextGuidedMode,
-      walkthrough_step: nextGuidedMode ? (activeStep?.id || start?.id || null) : null,
+      guided_mode: !guidance.guided_mode,
+      walkthrough_step: guidance.guided_mode ? null : (guidance.walkthrough_step || start?.id || null),
     })
-    if (nextGuidedMode && activeStep) {
-      window.setTimeout(() => goToStep(activeStep), 80)
-    }
   }
 
   const completedCount = planItems.filter((item) => item.state.status === 'completed').length
