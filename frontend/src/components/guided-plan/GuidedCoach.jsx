@@ -89,9 +89,9 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
       if (!el) {
         if (focusTarget.startsWith('fix-cleaning-')) {
           const suffix = focusTarget.replace('fix-cleaning-', '').split('-')[0]
-          el = document.getElementById(`tool-button-${suffix}`)
+          el = document.getElementById(`tb-${suffix}`)
         } else if (focusTarget === 'data-section-category_standardization') {
-          el = document.getElementById('tool-button-labels')
+          el = document.getElementById('tb-labels')
         }
       }
       if (!el) {

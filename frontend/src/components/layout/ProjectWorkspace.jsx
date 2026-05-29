@@ -467,7 +467,7 @@ export default function ProjectWorkspace() {
         onOpenGuidanceSetup={() => setGuidanceSetupOpen(true)}
         onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
       />
-      {activeTab === 'data' ? (
+      {activeTab === 'data' && guidedStep && ['data.suggested_fixes', 'data.outliers', 'data.duplicates', 'data.categories'].includes(guidedStep.id) ? (
         <GuidedFocusCard
           dataset={dataset}
           activeTab={activeTab}
