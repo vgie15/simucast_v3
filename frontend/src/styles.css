@@ -2136,7 +2136,7 @@ a.ax-btn {
 }
 
 .ax-main-project {
-  padding: 0 8px 14px;
+  padding: 0 8px 0;
 }
 
 .ax-flow-context {
@@ -4903,8 +4903,7 @@ button.ax-module-head:focus-visible {
 .ax-data-detail {
   display: flex;
   flex-direction: column;
-  min-height: 480px;
-  max-height: calc(100vh - 110px);
+  height: calc(100vh - 88px);
   border: 0.5px solid var(--color-border-tertiary);
   border-radius: 8px;
   background: var(--color-background-primary);

@@ -239,7 +239,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
         Review the table and column types first. Then use the toolbar tools for issues detected in the current stage.
       </PageGuide>
 
-      <div id="data-section-raw_data" className={dataChangePulse ? 'ax-data-stage-updated' : ''} style={{ marginBottom: 16 }}>
+      <div id="data-section-raw_data" className={dataChangePulse ? 'ax-data-stage-updated' : ''}>
         <DataDetailView
           key={`${dataset.id}:${dataset.current_stage_id}:${historyKey}`}
           dataset={dataset}
