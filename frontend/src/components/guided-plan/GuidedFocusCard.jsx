@@ -382,63 +382,6 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     }
     const handleApplySuccess = () => {
       setSubStep(3)
-      
-      const toolKey = config?.toolKey
-      if (!toolKey) return
-
-      // Compute next step
-      const dismissed = guidance.dismissed_tips || []
-      const nextStepObj = nextActionableCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed, suggestionData)
-      
-      const isAllComplete = !nextStepObj || nextStepObj.page !== 'data'
-
-      let type = toolKey
-      if (isAllComplete) {
-        type = 'all'
-      }
-
-      const activeContent = completionModalConfig[type]
-      if (!activeContent) return
-
-      // Compute stats
-      const stats = typeof activeContent.stats === 'function'
-        ? activeContent.stats(suggestionData, dataset)
-        : activeContent.stats
-
-      let finalTitle = activeContent.title
-      let finalSub = activeContent.subtitle || activeContent.sub
-      let finalStats = stats
-      let finalNext = activeContent.next
-      let finalCont = activeContent.continueLabel || activeContent.cont
-      let finalStep = activeContent.stepIndex
-      let isFinalSuccess = isAllComplete
-
-      if (isAllComplete) {
-        if (nextStepObj) {
-          const pageTitle = nextStepObj.page.charAt(0).toUpperCase() + nextStepObj.page.slice(1)
-          const icoName = nextStepObj.page === 'describe' ? 'BarChart2' : nextStepObj.page === 'models' ? 'Sliders' : 'ArrowRight'
-          finalNext = {
-            icon: icoName,
-            title: nextStepObj.title,
-            description: nextStepObj.unlocks || nextStepObj.action,
-            badge: "Next",
-            cls: "ax-completion-nb-next"
-          }
-          finalCont = `Go to ${pageTitle}`
-        }
-      }
-
-      setModalConfig({
-        type,
-        title: finalTitle,
-        sub: finalSub,
-        stats: finalStats,
-        next: finalNext,
-        cont: finalCont,
-        step: finalStep,
-        nextStepObj,
-        isFinalSuccess
-      })
     }
 
     window.addEventListener('simucast:popover-open', handlePopoverOpen)
@@ -447,7 +390,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       window.removeEventListener('simucast:popover-open', handlePopoverOpen)
       window.removeEventListener('simucast:apply-success', handleApplySuccess)
     }
-  }, [config, suggestionData, dataset, current, guidance])
+  }, [config])
 
   // Dynamic spotlight layout measurements and class triggers
   const updateSpotlight = () => {
@@ -917,7 +860,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   }
 
   const handleDoneReviewingChanges = () => {
-    if (!modalConfig && config) {
+    if (config) {
       const toolKey = config.toolKey
       const dismissed = guidance.dismissed_tips || []
       const nextStepObj = nextActionableCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed, suggestionData)
@@ -939,17 +882,46 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
         let finalStep = activeContent.stepIndex
         let isFinalSuccess = isAllComplete
 
-        if (isAllComplete && nextStepObj) {
-          const pageTitle = nextStepObj.page.charAt(0).toUpperCase() + nextStepObj.page.slice(1)
-          const icoName = nextStepObj.page === 'describe' ? 'BarChart2' : nextStepObj.page === 'models' ? 'Sliders' : 'ArrowRight'
-          finalNext = {
-            icon: icoName,
-            title: nextStepObj.title,
-            description: nextStepObj.unlocks || nextStepObj.action,
-            badge: "Next",
-            cls: "ax-completion-nb-next"
+        if (nextStepObj) {
+          if (nextStepObj.id === 'data.outliers') {
+            finalNext = {
+              icon: "AlertTriangle",
+              title: "Review outliers in numeric columns",
+              description: "Some columns have extreme values that may affect accuracy.",
+              badge: "Recommended",
+              cls: "ax-completion-nb-rec"
+            }
+            finalCont = "Go to Outliers"
+          } else if (nextStepObj.id === 'data.duplicates') {
+            finalNext = {
+              icon: "FileCheck",
+              title: "Remove duplicate rows",
+              description: "Repeated rows can overcount records and skew statistical patterns.",
+              badge: "Required",
+              cls: "ax-completion-nb-req"
+            }
+            finalCont = "Go to Duplicates"
+          } else if (nextStepObj.id === 'data.categories') {
+            finalNext = {
+              icon: "Tag",
+              title: "Standardize categorical labels",
+              description: "Inconsistent labels like True/Yes/graduated need to be unified.",
+              badge: "Required",
+              cls: "ax-completion-nb-req"
+            }
+            finalCont = "Go to Labels"
+          } else {
+            const pageTitle = nextStepObj.page.charAt(0).toUpperCase() + nextStepObj.page.slice(1)
+            const icoName = nextStepObj.page === 'describe' ? 'BarChart2' : nextStepObj.page === 'models' ? 'Sliders' : 'ArrowRight'
+            finalNext = {
+              icon: icoName,
+              title: nextStepObj.title,
+              description: nextStepObj.unlocks || nextStepObj.action,
+              badge: "Next",
+              cls: "ax-completion-nb-next"
+            }
+            finalCont = `Go to ${pageTitle}`
           }
-          finalCont = `Go to ${pageTitle}`
         }
 
         setModalConfig({
@@ -1063,8 +1035,8 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
           )}
 
           {displaySubStep === 3 && (
-            <button className="ax-btn mini prim" type="button" disabled={busy} onClick={handleDoneReviewingChanges} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
-              Done reviewing
+            <button className="ax-btn mini prim" type="button" disabled={busy || !suggestionData} onClick={handleDoneReviewingChanges} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
+              {!suggestionData ? 'Loading...' : 'Done reviewing'}
             </button>
           )}
 
