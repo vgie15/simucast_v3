@@ -8583,8 +8583,7 @@ button.ax-module-head:focus-visible {
   to   { opacity: 1; transform: translateY(0);   }
 }
 .pop-section {
-  animation: section-in 200ms ease forwards;
-  opacity: 0;
+  animation: section-in 200ms ease both;
 }
 
 /* Dim Overlay Transition */
