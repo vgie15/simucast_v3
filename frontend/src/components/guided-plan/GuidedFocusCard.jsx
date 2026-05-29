@@ -23,8 +23,8 @@ const STEP_CONFIGS = {
       },
       2: {
         title: 'Review and apply the fix',
-        action: 'Check the recommended methods and click Apply',
-        spotlight: '.papply'
+        action: 'Review recommended cleaning methods, choose columns, or configure overrides. Click Apply when ready.',
+        spotlight: '.ax-data-toolbar-popover'
       },
       3: {
         title: 'Review your changes',
@@ -46,8 +46,8 @@ const STEP_CONFIGS = {
       },
       2: {
         title: 'Review and apply the fix',
-        action: 'Check the recommended methods and click Apply',
-        spotlight: '.papply'
+        action: 'Check the suggested outlier bounds, select columns to adjust, and review overrides. Click Apply when ready.',
+        spotlight: '.ax-data-toolbar-popover'
       },
       3: {
         title: 'Review your changes',
@@ -69,8 +69,8 @@ const STEP_CONFIGS = {
       },
       2: {
         title: 'Review and apply the fix',
-        action: 'Choose which occurrence to keep and click Remove',
-        spotlight: '.papply'
+        action: 'Choose which occurrence to keep, select key columns to check, and click Remove when ready.',
+        spotlight: '.ax-data-toolbar-popover'
       },
       3: {
         title: 'Review your changes',
@@ -92,8 +92,8 @@ const STEP_CONFIGS = {
       },
       2: {
         title: 'Review and apply the fix',
-        action: 'Standardize similar category labels and click Apply',
-        spotlight: '.papply'
+        action: 'Inspect the suggested grouping mappings, rename group values if needed, and click Apply when ready.',
+        spotlight: '.ax-data-toolbar-popover'
       },
       3: {
         title: 'Review your changes',
@@ -463,7 +463,10 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
         activeElementRef.current = nextEl
         nextEl.dataset.prevPosition = nextEl.style.position || ''
         nextEl.dataset.prevZIndex = nextEl.style.zIndex || ''
-        nextEl.style.position = 'relative'
+        const currentPos = window.getComputedStyle(nextEl).position
+        if (currentPos !== 'absolute' && currentPos !== 'fixed') {
+          nextEl.style.position = 'relative'
+        }
         nextEl.style.zIndex = '101'
 
         if (prevEl) {
