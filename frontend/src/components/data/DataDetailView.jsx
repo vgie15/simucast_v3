@@ -485,8 +485,6 @@ export default function DataDetailView({
     }
   }
 
-  if (!dataset) return null
-
   const containerCls = `ax-data-detail ax-module-card ax-card-data ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
   const latestStage = scopedChangeStages[scopedChangeStages.length - 1] || null
   const highlightedRows = useMemo(() => {
@@ -502,6 +500,8 @@ export default function DataDetailView({
     viewSort,
     viewFilter,
   )
+
+  if (!dataset) return null
 
   const node = (
     <div className={containerCls}>

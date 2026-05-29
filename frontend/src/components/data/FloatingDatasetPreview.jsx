@@ -297,8 +297,6 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     return () => observer.disconnect()
   }, [hasMore, loadingRows, rows.length])
 
-  if (hidden) return null
-
   const latestStage = changeStages[changeStages.length - 1] || null
   const effectiveRows = totalRows || dataset?.row_count || 0
   const highlightedRows = useMemo(() => {
@@ -309,6 +307,8 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     return rows.filter((row) => affectedIndices.has(normalizeRowIndex(row.__row_index)))
   }, [rows, viewMode, changeScope, visibleChanges])
   const displayRows = mergeRemovedRows(highlightedRows, removedRows, viewMode)
+
+  if (hidden) return null
 
   return (
     <div className={`ax-floating-dataset ${open ? 'open' : ''}`}>
