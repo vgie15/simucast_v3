@@ -8683,7 +8683,7 @@ button.ax-module-head:focus-visible {
 }
 .spotlight-overlay.show {
   opacity: 1;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 #spotlight-hole {

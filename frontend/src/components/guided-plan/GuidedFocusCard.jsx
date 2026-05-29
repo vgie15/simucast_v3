@@ -593,6 +593,24 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     }
   }, [])
 
+  // Dismiss spotlight tour on click outside of targeted element or card
+  useEffect(() => {
+    if (!targetRect || !guidance.guided_mode) return
+
+    const handleWindowClick = (e) => {
+      const cardEl = document.querySelector('.guided-focus-card')
+      if (cardEl?.contains(e.target)) return
+
+      const targetEl = activeElementRef.current
+      if (targetEl?.contains(e.target)) return
+
+      closeCardAndPersist({ guided_mode: false })
+    }
+
+    window.addEventListener('click', handleWindowClick, true)
+    return () => window.removeEventListener('click', handleWindowClick, true)
+  }, [targetRect, guidance.guided_mode])
+
   // Reset sub-step when active step changes
   useEffect(() => {
     setSubStep(1)
@@ -943,18 +961,6 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
         className={`spotlight-overlay ${targetRect ? 'show' : ''}`}
         width="100%"
         height="100%"
-        onClick={(e) => {
-          if (!targetRect) return
-          const hx = targetRect.left - 8
-          const hy = targetRect.top - 8
-          const hw = targetRect.width + 16
-          const hh = targetRect.height + 16
-          const inHole = e.clientX >= hx && e.clientX <= hx + hw
-                      && e.clientY >= hy && e.clientY <= hy + hh
-          if (!inHole) {
-            closeCardAndPersist({ guided_mode: false })
-          }
-        }}
       >
         <defs>
           <mask id="spotlight-mask">
