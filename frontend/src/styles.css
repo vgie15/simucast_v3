@@ -2911,12 +2911,12 @@ a.ax-btn {
 
 .ax-workspace-grid {
   display: grid;
-  grid-template-columns: var(--history-w, 320px) minmax(0, 1fr) var(--ai-w, 360px);
+  grid-template-columns: var(--history-w, 320px) minmax(0, 1fr) 280px;
   gap: 10px;
   align-items: start;
 }
 .ax-workspace-grid.history-closed {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, min(var(--ai-w, 320px), 320px));
+  grid-template-columns: minmax(0, 1fr) 280px;
 }
 .ax-workspace-grid.ai-closed {
   grid-template-columns: var(--history-w, 320px) minmax(0, 1fr);
@@ -3816,6 +3816,11 @@ a.ax-btn {
   border-radius: 0;
   overflow: hidden;
   align-self: start;
+}
+.ax-ai-rail {
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
 }
 .ax-rail-header {
   display: flex;
@@ -4898,6 +4903,7 @@ button.ax-module-head:focus-visible {
 .ax-data-detail {
   display: flex;
   flex-direction: column;
+  min-height: 480px;
   max-height: calc(100vh - 110px);
   border: 0.5px solid var(--color-border-tertiary);
   border-radius: 8px;
@@ -7971,7 +7977,7 @@ button.ax-module-head:focus-visible {
 /* Step Card Header */
 .ax-plan-step-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   cursor: pointer;
   user-select: none;
@@ -7985,9 +7991,9 @@ button.ax-module-head:focus-visible {
   color: var(--color-text-primary);
   margin: 0;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .ax-plan-step-badges {
@@ -8003,6 +8009,8 @@ button.ax-module-head:focus-visible {
   color: var(--color-text-tertiary);
   flex-shrink: 0;
   transition: transform 0.2s ease;
+  align-self: flex-start;
+  margin-top: 6px;
 }
 
 .ax-plan-step-chevron.open {
@@ -8012,7 +8020,7 @@ button.ax-module-head:focus-visible {
 /* Card Body */
 .ax-plan-step-body {
   margin-top: 10px;
-  padding-top: 10px;
+  padding: 9px 10px;
   border-top: 0.5px solid var(--color-border-tertiary);
 }
 
@@ -8184,7 +8192,7 @@ button.ax-module-head:focus-visible {
   font-size: 11px;
   font-weight: 800;
   flex-shrink: 0;
-  align-self: center;
+  align-self: flex-start;
 }
 
 .ax-plan-step-redesigned.state-completed .ax-plan-step-header .ax-plan-check {

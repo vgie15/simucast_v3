@@ -605,11 +605,33 @@ function changeMatchesType(change, type, changedColumns = new Set()) {
   const action = String(change.action_type || '').toLowerCase()
   const method = String(change.method || '').toLowerCase()
   const text = `${kind} ${action} ${method}`
-  if (type === 'missing') return text.includes('missing') || text.includes('fill')
-  if (type === 'outlier') return text.includes('outlier') || text.includes('cap') || text.includes('clip')
-  if (type === 'converted') return text.includes('convert') || text.includes('encode') || text.includes('standardize') || text.includes('category')
-  if (type === 'scaled') return text.includes('scale') || text.includes('standardize_numeric') || text.includes('normalize') || text.includes('zscore') || text.includes('minmax')
-  if (type === 'generated') return changedColumns.has(change.column) || text.includes('generated') || text.includes('new_column')
+
+  if (type === 'missing') {
+    return kind === 'missing_fill' || text.includes('missing') || text.includes('fill')
+  }
+  if (type === 'outlier') {
+    return kind === 'outlier' || text.includes('outlier') || text.includes('cap') || text.includes('clip')
+  }
+  if (type === 'scaled') {
+    return kind === 'scaled' || (
+      (text.includes('scale') || text.includes('normalize') || text.includes('zscore') || text.includes('minmax') || text.includes('standardize_numeric')) &&
+      !text.includes('category') && !text.includes('standardized')
+    )
+  }
+  if (type === 'converted') {
+    if (kind === 'missing_fill' || kind === 'outlier' || kind === 'scaled') return false
+    if (kind === 'converted' || kind === 'standardized') return true
+    return (
+      (text.includes('convert') || text.includes('encode') || text.includes('standardize') || text.includes('category') || text.includes('type') || text.includes('cast')) &&
+      !(text.includes('missing') || text.includes('fill') || text.includes('outlier') || text.includes('scale') || text.includes('zscore') || text.includes('minmax'))
+    )
+  }
+  if (type === 'generated') {
+    return kind === 'new_column' || changedColumns.has(change.column) || text.includes('generated') || text.includes('new_column')
+  }
+  if (type === 'removed') {
+    return false
+  }
   return true
 }
 

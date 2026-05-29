@@ -306,65 +306,33 @@ export default function AIProjectPlanPanel({
 
   return (
     <section
-      className={`ax-card ax-module-card ax-card-ai ax-plan-panel${collapsed ? ' ax-plan-collapsed' : ''}`}
-      style={!collapsed && planH ? { height: planH, maxHeight: 'none' } : undefined}
+      className="ax-card ax-module-card ax-card-ai ax-plan-panel"
+      style={planH ? { height: planH, maxHeight: 'none' } : undefined}
     >
-      {collapsed ? (
-        <div className="ax-panel-sticky-header collapsed">
-          <div className="ax-plan-panel-head" style={{ marginBottom: 0 }}>
-            <div className="ax-plan-title-wrap">
-              <button
-                type="button"
-                onClick={toggleCollapsed}
-                aria-expanded={false}
-                className="ax-plan-title-button"
-              >
-                <Chevron open={false} />
-                <span>Guided Workflow</span>
+      <div className="ax-plan-wrapper-fixed">
+        {/* Pinned Top Header */}
+        <div className="ax-plan-header-fixed">
+          {/* 1. Goal Header */}
+          <div className="ax-plan-goal-header">
+            <div className="ax-plan-goal-circle-1" />
+            <div className="ax-plan-goal-circle-2" />
+            <div className="ax-plan-goal-header-content">
+              <div className="ax-plan-goal-label">Prediction goal</div>
+              <div className="ax-plan-goal-value">
+                {guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'Choose a project question')}
+              </div>
+              <div className="ax-plan-goal-stats">
+                {Number(dataset?.row_count || 0).toLocaleString()} rows · {dataset?.col_count || 0} variables{plan?.task ? ` · ${plan.task}` : ''}
+              </div>
+              <button className="ax-plan-goal-change-btn" type="button" onClick={onOpenGuidanceSetup}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
+                </svg>
+                Change goal
               </button>
-              <HelpButton
-                title="Guided Plan"
-                text="This card orders the recommended workflow for the current project. The orange card is the current step; completed, stale, optional, and skipped steps are kept calmer so you can focus on what to do next."
-              />
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="ax-plan-wrapper-fixed">
-          {/* Pinned Top Header */}
-          <div className="ax-plan-header-fixed">
-            {/* 1. Goal Header */}
-            <div className="ax-plan-goal-header">
-              <div className="ax-plan-goal-circle-1" />
-              <div className="ax-plan-goal-circle-2" />
-              <button
-                type="button"
-                className="ax-plan-goal-header-collapse-trigger"
-                onClick={toggleCollapsed}
-                title="Collapse Guided Workflow"
-                aria-label="Collapse Guided Workflow"
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: 'rotate(90deg)' }}>
-                  <path d="M3 1L7 5L3 9" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                </svg>
-              </button>
-              <div className="ax-plan-goal-header-content">
-                <div className="ax-plan-goal-label">Prediction goal</div>
-                <div className="ax-plan-goal-value">
-                  {guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'Choose a project question')}
-                </div>
-                <div className="ax-plan-goal-stats">
-                  {Number(dataset?.row_count || 0).toLocaleString()} rows · {dataset?.col_count || 0} variables{plan?.task ? ` · ${plan.task}` : ''}
-                </div>
-                <button className="ax-plan-goal-change-btn" type="button" onClick={onOpenGuidanceSetup}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
-                  </svg>
-                  Change goal
-                </button>
-              </div>
-            </div>
 
             {/* 2. AI Assisted / Built-in Toggle */}
             <div style={{ padding: '0 14px' }}>
@@ -496,26 +464,27 @@ export default function AIProjectPlanPanel({
                             <div className="ax-plan-pointer-icon-wrap">
                               {(() => {
                                 const text = `${step.id} ${step.title}`.toLowerCase();
+                                let path = null;
                                 if (text.includes('missing')) {
-                                  return (
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="3 3">
-                                      <circle cx="12" cy="12" r="10" />
-                                    </svg>
-                                  );
-                                }
-                                if (text.includes('outlier')) {
-                                  return (
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                      <line x1="12" y1="9" x2="12" y2="13" />
-                                      <line x1="12" y1="17" x2="12.01" y2="17" />
-                                    </svg>
-                                  );
+                                  path = <><circle cx="12" cy="12" r="8" /><path d="M12 4v.01M12 20v.01M4 12h.01M20 12h.01" /></>;
+                                } else if (text.includes('outlier')) {
+                                  path = <><path d="M12 3l9 16H3L12 3z" /><path d="M12 9v4M12 17h.01" /></>;
+                                } else if (text.includes('duplicate')) {
+                                  path = <><path d="M8 8h8v8H8z" /><path d="M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1M4 4l16 16" /></>;
+                                } else if (text.includes('categor') || text.includes('label')) {
+                                  path = <><path d="M4 4h6l10 10-6 6L4 10V4z" /><circle cx="8" cy="8" r="1" /></>;
+                                } else if (text.includes('bin')) {
+                                  path = <><path d="M4 19h16" /><path d="M7 16V9M12 16V5M17 16v-3" /></>;
+                                } else if (text.includes('format')) {
+                                  path = <><path d="M5 9h14M5 15h14M9 4L7 20M17 4l-2 16" /></>;
+                                } else if (step.page === 'expand') {
+                                  path = <><path d="M4 15l11-11 5 5-11 11-5-5z" /><path d="M8 15l-1-1M11 12l-1-1M14 9l-1-1" /></>;
+                                } else {
+                                  path = <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 17V7l7 5-7 5z" /></>;
                                 }
                                 return (
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                                    <path d="M9 17V7l7 5-7 5z" />
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                                    {path}
                                   </svg>
                                 );
                               })()}
@@ -523,7 +492,15 @@ export default function AIProjectPlanPanel({
                             <div className="ax-plan-pointer-info">
                               <div className="ax-plan-pointer-tool">{target.shortLabel || step.title}</div>
                               <div className="ax-plan-pointer-path">
-                                {target.label.includes(' → ') ? (
+                                {target.label.includes(' — ') ? (
+                                  <>
+                                    {target.label.split(' — ')[0]} —
+                                    <br />
+                                    <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                                      {target.label.split(' — ')[1]}
+                                    </span>
+                                  </>
+                                ) : target.label.includes(' → ') ? (
                                   <>
                                     {target.label.split(' → ')[0]} →
                                     <br />
@@ -583,7 +560,6 @@ export default function AIProjectPlanPanel({
             </button>
           </div>
         </div>
-      )}
 
       {expanded && plan && createPortal(
         <GuidedPlanModal
@@ -922,36 +898,20 @@ function sectionForStep(step) {
 
 // Returns routing info (section id, label, hint) describing where a plan step should open.
 function targetForStep(step) {
-  if (step.section) {
-    return {
-      section: step.section,
-      label: `${labelForPage(step.page)} > Recommended section`,
-      shortLabel: labelForPage(step.page),
-      hint: 'Open the exact section recommended for this step.',
-    }
-  }
-  const text = `${step.id || ''} ${step.title || ''}`.toLowerCase()
+  const text = `${step.id || ''} ${step.title || ''} ${step.section || ''}`.toLowerCase()
   if (step.page === 'data') {
-    if (text.includes('categor')) {
+    if (text.includes('categor') || text.includes('label')) {
       return {
         section: 'data-section-category_standardization',
-        label: 'Data > Category standardization',
-        shortLabel: 'category standardization',
+        label: 'Labels — Transform group in toolbar',
+        shortLabel: 'Labels',
         hint: 'Review grouped labels, rename labels, then apply the mapping.',
-      }
-    }
-    if (text.includes('missing')) {
-      return {
-        section: 'fix-cleaning-suggestions',
-        label: 'Quality group → Missing',
-        shortLabel: 'Missing',
-        hint: 'Choose the issue group, select the method, then apply the grouped fix.',
       }
     }
     if (text.includes('outlier')) {
       return {
         section: 'fix-cleaning-suggestions',
-        label: 'Quality group → Outliers',
+        label: 'Outliers — Quality group in toolbar',
         shortLabel: 'Outliers',
         hint: 'Choose the issue group, select the method, then apply the grouped fix.',
       }
@@ -959,23 +919,39 @@ function targetForStep(step) {
     if (text.includes('duplicate')) {
       return {
         section: 'fix-cleaning-suggestions',
-        label: 'Quality group → Duplicates',
+        label: 'Duplicates — Quality group in toolbar',
         shortLabel: 'Duplicates',
         hint: 'Choose the issue group, select the method, then apply the grouped fix.',
       }
     }
-    if (text.includes('feature') || text.includes('engineer') || text.includes('bin') || text.includes('format')) {
+    if (text.includes('missing')) {
+      return {
+        section: 'fix-cleaning-suggestions',
+        label: 'Missing — Quality group in toolbar',
+        shortLabel: 'Missing',
+        hint: 'Choose the issue group, select the method, then apply the grouped fix.',
+      }
+    }
+    if (text.includes('bin')) {
       return {
         section: 'data-section-feature_engineering',
-        label: 'Data > Optional feature tools and numeric formatting',
-        shortLabel: 'optional feature tools',
+        label: 'Bin — Transform group in toolbar',
+        shortLabel: 'Bin',
         hint: 'Create optional binned features or format numeric precision when useful.',
+      }
+    }
+    if (text.includes('format')) {
+      return {
+        section: 'data-section-feature_engineering',
+        label: 'Format — Transform group in toolbar',
+        shortLabel: 'Format',
+        hint: 'Format numeric decimals or display precision when useful.',
       }
     }
     return {
       section: 'data-section-manual_transforms',
-      label: 'Data > Manual transforms',
-      shortLabel: 'manual transforms',
+      label: 'Manual Transforms — Structure group in toolbar',
+      shortLabel: 'Transforms',
       hint: 'Use rename, drop, type, and transform controls for direct preparation.',
     }
   }
@@ -1036,7 +1012,7 @@ function targetForStep(step) {
     }
   }
   return {
-    section: '',
+    section: step.section || '',
     label: labelForPage(step.page),
     shortLabel: labelForPage(step.page),
     hint: 'Open the recommended page and continue the workflow there.',

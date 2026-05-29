@@ -75,6 +75,7 @@ export default function ProjectGuidanceSetup({
   const [selected, setSelected] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [suggestionsAI, setSuggestionsAI] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState([])
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [mappingLoading, setMappingLoading] = useState(false)
   const [mappedIntent, setMappedIntent] = useState('')
@@ -104,30 +105,44 @@ export default function ProjectGuidanceSetup({
 
   useEffect(() => {
     if (!open || !dataset?.id) return
-    let cancelled = false
     setSuggestions(systemQuestionSuggestions(dataset))
     setSuggestionsAI(false)
-    if (auth.isGuest) return undefined
+    setAiSuggestions([])
+  }, [dataset, open])
+
+  const loadAISuggestions = () => {
+    if (!dataset?.id || suggestionsLoading) return
+    if (aiSuggestions.length > 0) {
+      setSuggestions(aiSuggestions)
+      setSuggestionsAI(true)
+      return
+    }
     setSuggestionsLoading(true)
     api.aiGuidanceQuestions(dataset.id)
       .then((response) => {
-        if (cancelled || !response?.suggestions?.length) return
-        setSuggestions(response.suggestions.map((item) => ({ ...item, source: response.ai ? 'ai' : 'system' })))
+        if (!response?.suggestions?.length) return
+        const aiList = response.suggestions.map((item) => ({ ...item, source: response.ai ? 'ai' : 'system' }))
+        setAiSuggestions(aiList)
+        setSuggestions(aiList)
         setSuggestionsAI(Boolean(response.ai))
       })
       .catch(() => {
-        if (!cancelled) {
-          setSuggestions(systemQuestionSuggestions(dataset))
-          setSuggestionsAI(false)
-        }
+        setSuggestions(systemQuestionSuggestions(dataset))
+        setSuggestionsAI(false)
       })
       .finally(() => {
-        if (!cancelled) setSuggestionsLoading(false)
+        setSuggestionsLoading(false)
       })
-    return () => {
-      cancelled = true
+  }
+
+  const toggleSuggestions = () => {
+    if (suggestionsAI) {
+      setSuggestions(systemQuestionSuggestions(dataset))
+      setSuggestionsAI(false)
+    } else {
+      loadAISuggestions()
     }
-  }, [auth.isGuest, dataset, open])
+  }
 
   const derivedIntent = useMemo(() => inferIntent(question), [question])
   const supportedIntent = mappedIntent || derivedIntent
@@ -227,9 +242,36 @@ export default function ProjectGuidanceSetup({
 
         {step === 'question' ? (
           <>
-            <div className="ax-question-suggestions-head">
-              <strong>{suggestionsAI ? 'AI suggested questions' : 'Questions SimuCast can guide'}</strong>
-              <span>{suggestionsLoading ? 'Thinking with the current dataset...' : 'Pick one or ask your own below.'}</span>
+            <div className="ax-question-suggestions-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <strong>{suggestionsAI ? 'AI suggested questions' : 'Questions SimuCast can guide'}</strong>
+                <span>{suggestionsLoading ? 'Thinking with the current dataset...' : 'Pick one or ask your own below.'}</span>
+              </div>
+              {!auth.isGuest && (
+                <button
+                  type="button"
+                  className="ax-btn mini"
+                  disabled={suggestionsLoading}
+                  onClick={toggleSuggestions}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid var(--color-border-secondary)', padding: '4px 8px', borderRadius: '6px', background: 'var(--color-background-primary)', cursor: 'pointer' }}
+                >
+                  {suggestionsAI ? (
+                    <>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ display: 'block' }}>
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                      </svg>
+                      <span style={{ fontSize: '11px', fontWeight: '750', color: 'var(--color-text-secondary)' }}>Show standard</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ display: 'block' }}>
+                        <path d="M7 1L8.3 5.1L12.5 6L8.3 8.2L7 13L5.7 8.2L1.5 6L5.7 5.1L7 1Z" fill="var(--color-accent)" />
+                      </svg>
+                      <span style={{ fontSize: '11px', fontWeight: '750', color: 'var(--color-text-secondary)' }}>Suggest with AI</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
             <div className="ax-goal-grid">
               {suggestions.slice(0, 4).map((item) => (

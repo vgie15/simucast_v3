@@ -975,11 +975,33 @@ function changeMatchesType(change, type, changedColumns = new Set()) {
   const action = String(change.action_type || '').toLowerCase()
   const method = String(change.method || '').toLowerCase()
   const text = `${kind} ${action} ${method}`
-  if (type === 'missing') return text.includes('missing') || text.includes('fill')
-  if (type === 'outlier') return text.includes('outlier') || text.includes('cap') || text.includes('clip')
-  if (type === 'converted') return text.includes('convert') || text.includes('encode') || text.includes('standardize') || text.includes('category')
-  if (type === 'scaled') return text.includes('scale') || text.includes('standardize_numeric') || text.includes('normalize') || text.includes('zscore') || text.includes('minmax')
-  if (type === 'generated') return changedColumns.has(change.column) || text.includes('generated') || text.includes('new_column')
+
+  if (type === 'missing') {
+    return kind === 'missing_fill' || text.includes('missing') || text.includes('fill')
+  }
+  if (type === 'outlier') {
+    return kind === 'outlier' || text.includes('outlier') || text.includes('cap') || text.includes('clip')
+  }
+  if (type === 'scaled') {
+    return kind === 'scaled' || (
+      (text.includes('scale') || text.includes('normalize') || text.includes('zscore') || text.includes('minmax') || text.includes('standardize_numeric')) &&
+      !text.includes('category') && !text.includes('standardized')
+    )
+  }
+  if (type === 'converted') {
+    if (kind === 'missing_fill' || kind === 'outlier' || kind === 'scaled') return false
+    if (kind === 'converted' || kind === 'standardized') return true
+    return (
+      (text.includes('convert') || text.includes('encode') || text.includes('standardize') || text.includes('category') || text.includes('type') || text.includes('cast')) &&
+      !(text.includes('missing') || text.includes('fill') || text.includes('outlier') || text.includes('scale') || text.includes('zscore') || text.includes('minmax'))
+    )
+  }
+  if (type === 'generated') {
+    return kind === 'new_column' || changedColumns.has(change.column) || text.includes('generated') || text.includes('new_column')
+  }
+  if (type === 'removed') {
+    return false
+  }
   return true
 }
 
@@ -1005,6 +1027,47 @@ function applyViewTools(rows, sort, filter) {
   let next = rows
   if (filter?.column && filter.condition) {
     const needle = String(filter.value ?? '').toLowerCase()
+    
+    // Pre-calculate outliers if the condition is 'outlier'
+    let outlierLo = -Infinity
+    let outlierHi = Infinity
+    let hasOutliersCalculated = false
+    if (filter.condition === 'outlier') {
+      const values = rows
+        .map((r) => {
+          const val = r[filter.column]
+          return (val !== null && val !== undefined && val !== '') ? Number(val) : NaN
+        })
+        .filter((v) => !Number.isNaN(v))
+        .sort((a, b) => a - b)
+      if (values.length >= 4) {
+        const q1Idx = Math.floor(values.length * 0.25)
+        const q3Idx = Math.floor(values.length * 0.75)
+        const q1 = values[q1Idx]
+        const q3 = values[q3Idx]
+        const iqr = q3 - q1
+        outlierLo = q1 - 1.5 * iqr
+        outlierHi = q3 + 1.5 * iqr
+        hasOutliersCalculated = true
+      }
+    }
+
+    // Pre-calculate duplicates (value seen more than once in the column) if condition is 'duplicate'
+    let duplicateValues = new Set()
+    if (filter.condition === 'duplicate') {
+      const seenValues = new Set()
+      rows.forEach((row) => {
+        if (row.__removed_row) return
+        const val = row[filter.column]
+        const valStr = val === null || val === undefined ? '' : String(val).trim()
+        if (seenValues.has(valStr)) {
+          duplicateValues.add(valStr)
+        } else {
+          seenValues.add(valStr)
+        }
+      })
+    }
+
     next = next.filter((row) => {
       if (row.__removed_row) return true
       const value = row[filter.column]
@@ -1014,6 +1077,15 @@ function applyViewTools(rows, sort, filter) {
       if (filter.condition === 'contains') return text.includes(needle)
       if (filter.condition === 'gt') return Number(value) > Number(filter.value)
       if (filter.condition === 'lt') return Number(value) < Number(filter.value)
+      if (filter.condition === 'outlier') {
+        if (!hasOutliersCalculated) return false
+        const numVal = Number(value)
+        return !Number.isNaN(numVal) && (numVal < outlierLo || numVal > outlierHi)
+      }
+      if (filter.condition === 'duplicate') {
+        const valStr = value === null || value === undefined ? '' : String(value).trim()
+        return duplicateValues.has(valStr)
+      }
       return true
     })
   }

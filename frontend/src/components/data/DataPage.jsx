@@ -809,10 +809,12 @@ function FilterTool({ variables, visibilityProps, close }) {
           <option value="contains">contains</option>
           <option value="equals">equals</option>
           <option value="missing">is missing</option>
+          <option value="outlier">is outlier</option>
+          <option value="duplicate">is duplicate</option>
           <option value="gt">greater than</option>
           <option value="lt">less than</option>
         </select>
-        {condition !== 'missing' && (
+        {!['missing', 'outlier', 'duplicate'].includes(condition) && (
           <>
             <label>Value</label>
             <input type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Filter value" />
