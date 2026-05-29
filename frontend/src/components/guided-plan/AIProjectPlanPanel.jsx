@@ -336,13 +336,15 @@ export default function AIProjectPlanPanel({
                   </svg>
                   Change goal
                 </button>
-                <button
-                  className={`ax-plan-goal-change-btn ax-plan-guidance-toggle${guidance.guided_mode ? ' active' : ''}`}
-                  type="button"
-                  onClick={toggleGuidedMode}
-                >
-                  {guidance.guided_mode ? 'Turn off guidance' : 'Turn on guidance'}
-                </button>
+                {!guidance.guided_mode && (
+                  <button
+                    className="ax-plan-goal-change-btn ax-plan-guidance-toggle"
+                    type="button"
+                    onClick={toggleGuidedMode}
+                  >
+                    Turn on guide
+                  </button>
+                )}
               </div>
             </div>
           </div>
