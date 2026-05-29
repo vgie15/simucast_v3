@@ -194,7 +194,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   const [cardDismissed, setCardDismissed] = useState(false)
   const activeSpotlightTimeoutRef = useRef(null)
   const [targetRect, setTargetRect] = useState(null)
-  const [cardPosition, setCardPosition] = useState({ top: 0, left: 0, arrowSide: 'top' })
+  const [cardPosition, setCardPosition] = useState({ top: 0, left: 0, arrowSide: 'top', arrowLeft: 150, arrowTop: 90 })
   const activeElementRef = useRef(null)
   const [showModal, setShowModal] = useState(false)
   const [modalConfig, setModalConfig] = useState(null)
@@ -549,7 +549,14 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     top = Math.max(20, top)
     left = Math.max(20, left)
 
-    setCardPosition({ top, left, arrowSide })
+    // Calculate arrow offsets relative to the card
+    let arrowLeft = (targetRect.left + targetRect.width / 2) - left
+    arrowLeft = Math.max(16, Math.min(cardW - 16, arrowLeft))
+
+    let arrowTop = (targetRect.top + targetRect.height / 2) - top
+    arrowTop = Math.max(16, Math.min(cardH - 16, arrowTop))
+
+    setCardPosition({ top, left, arrowSide, arrowLeft, arrowTop })
   }, [targetRect])
 
   // Attach window event listeners for scroll and resize
@@ -973,7 +980,9 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
         data-arrow-side={cardPosition.arrowSide}
         style={{
           top: `${cardPosition.top}px`,
-          left: `${cardPosition.left}px`
+          left: `${cardPosition.left}px`,
+          '--arrow-left': `${cardPosition.arrowLeft}px`,
+          '--arrow-top': `${cardPosition.arrowTop}px`
         }}
       >
         <div className={`gf-content ${contentAnimClass}`} style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
