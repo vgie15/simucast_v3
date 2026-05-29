@@ -104,75 +104,131 @@ const STEP_CONFIGS = {
   }
 }
 
-const modalContents = {
+const completionModalConfig = {
   missing: {
     title: "Missing values handled!",
-    sub: "SimuCast filled blanks across columns using median and mode — no rows were removed.",
+    subtitle: "SimuCast filled blanks using median and mode — no rows were removed.",
     stats: (snapshot, ds) => {
       const cols = snapshot?.groups?.missing?.columns || []
       const cellsFilled = cols.reduce((sum, col) => sum + (col.count || col.missing || 5), 0) || 26
       const colsFixed = cols.length || 4
       const rowsKept = ds?.row_count || 344
       return [
-        [String(cellsFilled), "Cells filled"],
-        [String(colsFixed), "Columns fixed"],
-        [String(rowsKept), "Rows kept"]
+        { value: String(cellsFilled), label: "Cells filled" },
+        { value: String(colsFixed), label: "Columns fixed" },
+        { value: String(rowsKept), label: "Rows kept" }
       ]
     },
-    next: { ico: "AlertTriangle", title: "Review outliers in numeric columns", desc: "Numeric columns have extreme values that may affect accuracy.", badge: "Recommended", cls: "nb-rec" },
-    cont: "Go to Outliers",
-    step: 1
+    stepIndex: 0,
+    next: {
+      icon: "AlertTriangle",
+      title: "Review outliers in numeric columns",
+      description: "Some columns have extreme values that may affect accuracy.",
+      badge: "Recommended",
+      badgeStyle: "orange",
+      cls: "ax-completion-nb-rec"
+    },
+    continueLabel: "Go to Outliers",
+    confetti: false
   },
   outliers: {
-    title: "Outliers capped!",
-    sub: "Extreme values were capped to IQR bounds. Your dataset is cleaner and ready for the next step.",
+    title: "Outliers fixed!",
+    subtitle: "Extreme values were capped or removed. Your dataset is cleaner for training.",
     stats: (snapshot, ds) => {
       const cols = snapshot?.groups?.outliers?.columns || []
       const valuesCapped = cols.reduce((sum, col) => sum + (col.count || 2), 0) || 2
       const rowsRemoved = 0
       const rowsRemain = ds?.row_count || 344
       return [
-        [String(valuesCapped), "Values capped"],
-        [String(rowsRemoved), "Rows removed"],
-        [String(rowsRemain), "Rows remain"]
+        { value: String(valuesCapped), label: "Values capped" },
+        { value: String(rowsRemoved), label: "Rows removed" },
+        { value: String(rowsRemain), label: "Rows remain" }
       ]
     },
-    next: { ico: "Tag", title: "Standardize categorical labels", desc: "Categorical columns have inconsistent casing or fuzzy matches.", badge: "Required", cls: "nb-req" },
-    cont: "Go to Labels",
-    step: 2
+    stepIndex: 1,
+    next: {
+      icon: "Tag",
+      title: "Standardize categorical labels",
+      description: "Inconsistent labels like True/Yes/graduated need to be unified.",
+      badge: "Required",
+      badgeStyle: "yellow",
+      cls: "ax-completion-nb-req"
+    },
+    continueLabel: "Go to Labels",
+    confetti: false
   },
   duplicates: {
     title: "Duplicates removed!",
-    sub: "Exact repeated rows were removed from the active dataset stage.",
+    subtitle: "Exact repeated rows were removed from the active dataset stage.",
     stats: (snapshot, ds) => {
       const count = snapshot?.groups?.duplicates?.count || 1
       const colsChecked = ds?.col_count || 7
       const rowsRemain = ds?.row_count || 344
       return [
-        [String(count), "Rows removed"],
-        [String(colsChecked), "Columns checked"],
-        [String(rowsRemain), "Rows remain"]
+        { value: String(count), label: "Rows removed" },
+        { value: String(colsChecked), label: "Columns checked" },
+        { value: String(rowsRemain), label: "Rows remain" }
       ]
     },
-    next: { ico: "Tag", title: "Standardize categorical labels", desc: "Categorical columns have inconsistent casing or fuzzy matches.", badge: "Required", cls: "nb-req" },
-    cont: "Go to Labels",
-    step: 3
+    stepIndex: 1,
+    next: {
+      icon: "Tag",
+      title: "Standardize categorical labels",
+      description: "Inconsistent labels like True/Yes/graduated need to be unified.",
+      badge: "Required",
+      badgeStyle: "yellow",
+      cls: "ax-completion-nb-req"
+    },
+    continueLabel: "Go to Labels",
+    confetti: false
   },
   labels: {
     title: "Labels standardized!",
-    sub: "Categories unified — values are now consistent and ready for encoding.",
+    subtitle: "All categorical columns are now consistent and ready for encoding.",
     stats: (snapshot, ds) => {
-      const cols = snapshot?.suggestions?.length || 1
-      const valuesUnified = snapshot?.suggestions?.reduce((sum, s) => sum + (s.items?.length || 4), 0) || 12
+      const cols = ds?.variables?.filter((v) => ['category', 'text', 'binary'].includes(v.dtype)).length || 5
+      const valuesGrouped = snapshot?.suggestions?.reduce((sum, s) => sum + (s.items?.length || 4), 0) || 48
       return [
-        [String(cols), "Columns cleaned"],
-        [String(valuesUnified), "Values unified"],
-        ["3", "Steps done"]
+        { value: String(cols), label: "Columns cleaned" },
+        { value: String(valuesGrouped), label: "Values grouped" },
+        { value: "3", label: "Steps done" }
       ]
     },
-    next: { ico: "ArrowRight", title: "Move to Expand", desc: "All required steps complete. Optionally engineer features before modeling.", badge: "Optional", cls: "nb-opt" },
-    cont: "Go to Expand",
-    step: 4
+    stepIndex: 2,
+    next: {
+      icon: "ArrowRight",
+      title: "Ready to move to Expand",
+      description: "Optionally engineer features before modeling.",
+      badge: "Optional",
+      badgeStyle: "blue",
+      cls: "ax-completion-nb-opt"
+    },
+    continueLabel: "Go to Expand",
+    confetti: false
+  },
+  all: {
+    title: "Dataset is ready! 🎉",
+    subtitle: "All steps complete. Your data is clean, consistent, and prepared for modeling.",
+    stats: (snapshot, ds) => {
+      const rows = ds?.row_count || 344
+      const cols = ds?.col_count || 7
+      return [
+        { value: "4/4", label: "Steps done" },
+        { value: String(rows), label: "Clean rows" },
+        { value: String(cols), label: "Columns ready" }
+      ]
+    },
+    stepIndex: 3,
+    next: {
+      icon: "Sliders",
+      title: "Train your first model",
+      description: "Head to the Models page and pick an algorithm to start training.",
+      badge: "Next",
+      badgeStyle: "green",
+      cls: "ax-completion-nb-next"
+    },
+    continueLabel: "Go to Models",
+    confetti: true
   }
 };
 
@@ -328,57 +384,45 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       const toolKey = config?.toolKey
       if (!toolKey) return
 
-      const type = toolKey
-      const activeContent = modalContents[type]
-      if (!activeContent) return
-
-      // Compute stats
-      const stats = activeContent.stats(suggestionData, dataset)
-
       // Compute next step
       const dismissed = guidance.dismissed_tips || []
       const nextStepObj = nextCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed)
       
       const isAllComplete = !nextStepObj || nextStepObj.page !== 'data'
 
+      let type = toolKey
+      if (isAllComplete) {
+        type = 'all'
+      }
+
+      const activeContent = completionModalConfig[type]
+      if (!activeContent) return
+
+      // Compute stats
+      const stats = typeof activeContent.stats === 'function'
+        ? activeContent.stats(suggestionData, dataset)
+        : activeContent.stats
+
       let finalTitle = activeContent.title
-      let finalSub = activeContent.sub
+      let finalSub = activeContent.subtitle || activeContent.sub
       let finalStats = stats
       let finalNext = activeContent.next
-      let finalCont = activeContent.cont
-      let finalStep = activeContent.step
-      let isFinalSuccess = false
+      let finalCont = activeContent.continueLabel || activeContent.cont
+      let finalStep = activeContent.stepIndex
+      let isFinalSuccess = isAllComplete
 
       if (isAllComplete) {
-        finalTitle = "Dataset is ready! 🎉"
-        finalSub = "All steps complete. Your data is clean, consistent, and prepared for modeling."
-        finalStats = [
-          ["4 / 4", "Steps done"],
-          [String(dataset?.row_count || 344), "Clean rows"],
-          [String(dataset?.col_count || 7), "Columns ready"]
-        ]
-        isFinalSuccess = true
-        
         if (nextStepObj) {
           const pageTitle = nextStepObj.page.charAt(0).toUpperCase() + nextStepObj.page.slice(1)
           const icoName = nextStepObj.page === 'describe' ? 'BarChart2' : nextStepObj.page === 'models' ? 'Sliders' : 'ArrowRight'
           finalNext = {
-            ico: icoName,
+            icon: icoName,
             title: nextStepObj.title,
-            desc: nextStepObj.unlocks || nextStepObj.action,
+            description: nextStepObj.unlocks || nextStepObj.action,
             badge: "Next",
-            cls: "nb-next"
+            cls: "ax-completion-nb-next"
           }
           finalCont = `Go to ${pageTitle}`
-        } else {
-          finalNext = {
-            ico: "FileCheck",
-            title: "Review final report",
-            desc: "Go to the Report page to check your generated findings.",
-            badge: "Complete",
-            cls: "nb-next"
-          }
-          finalCont = "Go to Report"
         }
       }
 
@@ -849,18 +893,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   const renderModal = () => {
     if (!modalConfig) return null
 
-    const nextStepObj = modalConfig.nextStepObj
-    const isFinalSuccess = modalConfig.isFinalSuccess
-
-    let activePageIndex = 0
-    if (isFinalSuccess) {
-      if (nextStepObj) {
-        activePageIndex = pages.findIndex(p => p.toLowerCase() === nextStepObj.page.toLowerCase())
-        if (activePageIndex < 0) activePageIndex = 1
-      } else {
-        activePageIndex = pages.length - 1
-      }
-    }
+    const steps = ["Missing", "Outliers", "Labels", "Optional"]
 
     return (
       <>
@@ -902,10 +935,10 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
             </div>
 
             <div className={`ax-completion-prog-track ${showProg ? 'show' : ''}`}>
-              {pages.map((p, i) => {
-                const isCurrent = i === activePageIndex
-                const isDone = i < activePageIndex
-                const showLine = i < pages.length - 1
+              {steps.map((p, i) => {
+                const isCurrent = i === modalConfig.step + 1 && modalConfig.step < 3
+                const isDone = i <= modalConfig.step
+                const showLine = i < steps.length - 1
                 return (
                   <React.Fragment key={p}>
                     <div className="ax-completion-pt-step">
@@ -913,7 +946,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
                       <div className={`ax-completion-pt-label ${isDone ? 'done' : isCurrent ? 'cur' : ''}`}>{p}</div>
                     </div>
                     {showLine && (
-                      <div className={`ax-completion-pt-line ${isDone ? 'done' : ''}`}></div>
+                      <div className={`ax-completion-pt-line ${i < modalConfig.step ? 'done' : ''}`}></div>
                     )}
                   </React.Fragment>
                 )
@@ -923,8 +956,8 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
             <div className={`ax-completion-modal-stats ${showStats ? 'show' : ''}`}>
               {modalConfig.stats.map((s, idx) => (
                 <div className="ax-completion-stat" key={idx}>
-                  <div className="ax-completion-stat-val">{s[0]}</div>
-                  <div className="ax-completion-stat-lbl">{s[1]}</div>
+                  <div className="ax-completion-stat-val">{s.value}</div>
+                  <div className="ax-completion-stat-lbl">{s.label}</div>
                 </div>
               ))}
             </div>
@@ -933,21 +966,21 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
               <div className="ax-completion-next-lbl">Up next</div>
               <div className="ax-completion-next-card">
                 <div className="ax-completion-next-ico">
-                  {renderNextIcon(modalConfig.next.ico)}
+                  {renderNextIcon(modalConfig.next.icon)}
                 </div>
                 <div className="ax-completion-next-body">
                   <div className="ax-completion-next-title">{modalConfig.next.title}</div>
-                  <div className="ax-completion-next-desc">{modalConfig.next.desc}</div>
+                  <div className="ax-completion-next-desc">{modalConfig.next.description}</div>
                 </div>
                 <span className={`ax-completion-next-badge ${modalConfig.next.cls}`}>
                   {modalConfig.next.badge}
                 </span>
               </div>
               <div className="ax-completion-modal-btns">
-                <button className="btn-p" onClick={handleContinue}>
+                <button className="ax-completion-btn-p" onClick={handleContinue}>
                   {modalConfig.cont} <ArrowRight size={16} />
                 </button>
-                <button className="btn-s" onClick={handleStayHere}>
+                <button className="ax-completion-btn-s" onClick={handleStayHere}>
                   Stay here
                 </button>
               </div>
