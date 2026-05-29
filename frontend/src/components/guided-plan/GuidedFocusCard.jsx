@@ -452,22 +452,29 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
           tempPrev.style.transition = ''
           tempPrev.style.boxShadow = ''
           tempPrev.style.opacity = ''
-          tempPrev.style.position = tempPrev.dataset.prevPosition || ''
-          tempPrev.style.zIndex = tempPrev.dataset.prevZIndex || ''
-          delete tempPrev.dataset.prevPosition
-          delete tempPrev.dataset.prevZIndex
+          if (tempPrev.dataset.prevPosition !== undefined) {
+            tempPrev.style.position = tempPrev.dataset.prevPosition || ''
+            delete tempPrev.dataset.prevPosition
+          }
+          if (tempPrev.dataset.prevZIndex !== undefined) {
+            tempPrev.style.zIndex = tempPrev.dataset.prevZIndex || ''
+            delete tempPrev.dataset.prevZIndex
+          }
         }, 150)
       }
 
       if (nextEl) {
         activeElementRef.current = nextEl
-        nextEl.dataset.prevPosition = nextEl.style.position || ''
-        nextEl.dataset.prevZIndex = nextEl.style.zIndex || ''
-        const currentPos = window.getComputedStyle(nextEl).position
-        if (currentPos !== 'absolute' && currentPos !== 'fixed') {
-          nextEl.style.position = 'relative'
+        const isPopover = selector === '.ax-data-toolbar-popover'
+        if (!isPopover) {
+          nextEl.dataset.prevPosition = nextEl.style.position || ''
+          nextEl.dataset.prevZIndex = nextEl.style.zIndex || ''
+          const currentPos = window.getComputedStyle(nextEl).position
+          if (currentPos !== 'absolute' && currentPos !== 'fixed') {
+            nextEl.style.position = 'relative'
+          }
+          nextEl.style.zIndex = '101'
         }
-        nextEl.style.zIndex = '101'
 
         if (prevEl) {
           activeSpotlightTimeoutRef.current = setTimeout(() => {
@@ -587,8 +594,12 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       if (activeElementRef.current) {
         const oldEl = activeElementRef.current
         oldEl.classList.remove('spotlight', 'idle')
-        oldEl.style.position = oldEl.dataset.prevPosition || ''
-        oldEl.style.zIndex = oldEl.dataset.prevZIndex || ''
+        if (oldEl.dataset.prevPosition !== undefined) {
+          oldEl.style.position = oldEl.dataset.prevPosition || ''
+        }
+        if (oldEl.dataset.prevZIndex !== undefined) {
+          oldEl.style.zIndex = oldEl.dataset.prevZIndex || ''
+        }
       }
     }
   }, [])
