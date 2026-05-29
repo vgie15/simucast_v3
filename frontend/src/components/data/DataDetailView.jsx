@@ -489,9 +489,16 @@ export default function DataDetailView({
 
   const containerCls = `ax-data-detail ax-module-card ax-card-data ax-busy-host ${expanded ? 'expanded' : ''} ${savingEdits || savingHeader ? 'is-busy' : ''}`
   const latestStage = scopedChangeStages[scopedChangeStages.length - 1] || null
-  const hasBaseRows = modifiedRows.length > 0
+  const highlightedRows = useMemo(() => {
+    if (viewMode !== 'highlight' || changeScope === 'all_rows') return modifiedRows
+    const affectedIndices = new Set(
+      visibleChanges.map((change) => normalizeRowIndex(change.row_index))
+    )
+    return modifiedRows.filter((row) => affectedIndices.has(normalizeRowIndex(row.__row_index)))
+  }, [modifiedRows, viewMode, changeScope, visibleChanges])
+  const hasBaseRows = highlightedRows.length > 0
   const displayRows = applyViewTools(
-    mergeRemovedRows(modifiedRows, hasBaseRows ? removedRows : [], viewMode),
+    mergeRemovedRows(highlightedRows, hasBaseRows ? removedRows : [], viewMode),
     viewSort,
     viewFilter,
   )
@@ -706,6 +713,7 @@ export default function DataDetailView({
               <select value={changeScope} onChange={(event) => setChangeScope(event.target.value)}>
                 <option value="all">All changes</option>
                 <option value="last">Last change only</option>
+                <option value="all_rows">All rows</option>
               </select>
             </label>
             <label className="ax-dd-filter-chip">

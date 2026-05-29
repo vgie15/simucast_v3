@@ -301,7 +301,14 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
   const latestStage = changeStages[changeStages.length - 1] || null
   const effectiveRows = totalRows || dataset?.row_count || 0
-  const displayRows = mergeRemovedRows(rows, removedRows, viewMode)
+  const highlightedRows = useMemo(() => {
+    if (viewMode !== 'highlight' || changeScope === 'all_rows') return rows
+    const affectedIndices = new Set(
+      visibleChanges.map((change) => normalizeRowIndex(change.row_index))
+    )
+    return rows.filter((row) => affectedIndices.has(normalizeRowIndex(row.__row_index)))
+  }, [rows, viewMode, changeScope, visibleChanges])
+  const displayRows = mergeRemovedRows(highlightedRows, removedRows, viewMode)
 
   return (
     <div className={`ax-floating-dataset ${open ? 'open' : ''}`}>
@@ -373,6 +380,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                   <select value={changeScope} onChange={(event) => setChangeScope(event.target.value)}>
                     <option value="all">All changes</option>
                     <option value="last">Last change only</option>
+                    <option value="all_rows">All rows</option>
                   </select>
                 </label>
                 <label className="ax-dd-filter-chip">
