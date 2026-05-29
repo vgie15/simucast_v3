@@ -17,6 +17,7 @@ import ActivityPanel from '../history/ActivityPanel'
 import ProjectAIRail from '../guided-plan/ProjectAIRail'
 import ProjectGuidanceSetup from '../guided-plan/ProjectGuidanceSetup'
 import GuidedCoach, { routeTarget } from '../guided-plan/GuidedCoach'
+import GuidedFocusCard from '../guided-plan/GuidedFocusCard'
 import { currentCoachStep } from '../guided-plan/ProjectGuidanceSetup'
 import { useAuth } from '../providers/AuthProvider'
 import { SimuCastLoader } from '../common/LoadingStates'
@@ -466,11 +467,19 @@ export default function ProjectWorkspace() {
         onOpenGuidanceSetup={() => setGuidanceSetupOpen(true)}
         onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
       />
-      <GuidedCoach
-        dataset={dataset}
-        activeTab={activeTab}
-        onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
-      />
+      {activeTab === 'data' ? (
+        <GuidedFocusCard
+          dataset={dataset}
+          activeTab={activeTab}
+          onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
+        />
+      ) : (
+        <GuidedCoach
+          dataset={dataset}
+          activeTab={activeTab}
+          onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
+        />
+      )}
       <FloatingDatasetPreview dataset={dataset} activeTab={activeTab} />
       <ProjectGuidanceSetup
         dataset={dataset}

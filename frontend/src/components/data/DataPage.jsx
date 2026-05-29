@@ -127,6 +127,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     setDataChangePulse(true)
     setTableViewMode('highlight')
     window.setTimeout(() => setDataChangePulse(false), 2200)
+    const event = new CustomEvent('simucast:apply-success')
+    window.dispatchEvent(event)
   }
 
   const actOnSuggestion = async (suggestion, accept) => {
@@ -403,7 +405,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
         </div>
         <button
           id={applyTargetId}
-          className="ax-btn prim"
+          className="ax-btn prim papply"
           disabled={applying || (kind !== 'duplicates' && selected.length === 0)}
           onClick={() => onApply({ kind, action, columns, overrides, options: { keep } })}
           type="button"
@@ -546,6 +548,13 @@ function DataToolsToolbar({
   const [popoverX, setPopoverX] = useState(18)
   const [showRecommendations, setShowRecommendations] = useState(false)
   const close = () => setOpenTool(null)
+
+  useEffect(() => {
+    if (openTool) {
+      const event = new CustomEvent('simucast:popover-open', { detail: { tool: openTool } })
+      window.dispatchEvent(event)
+    }
+  }, [openTool])
   const variables = dataset?.variables || []
   const missingCount = suggestionGroups.missing?.columns?.length || 0
   const outlierCount = suggestionGroups.outliers?.columns?.length || 0
@@ -694,7 +703,7 @@ function DataToolsToolbar({
 function ToolbarButton({ tool, active, onClick }) {
   return (
     <button
-      id={`tool-button-${tool.key}`}
+      id={`tb-${tool.key}`}
       type="button"
       className={`ax-data-tool-btn ${active ? 'active' : ''}`}
       data-tip={tool.tip}

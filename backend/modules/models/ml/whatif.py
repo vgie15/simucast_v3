@@ -31,6 +31,12 @@ def _whatif_input_matrix(bundle, inputs):
 
     X_raw = pd.DataFrame([row], columns=original_features)
     X_raw, _ = _apply_numeric_preprocessing_frame(X_raw, bundle.get("numeric_preprocessing"))
+    
+    from backend.modules.models.ml.preprocessing import _apply_categorical_encoding
+    encoding_plan = (bundle.get("preprocessing_pipeline") or {}).get("encoding") or []
+    mappings = bundle.get("categorical_mappings") or {}
+    X_raw, _ = _apply_categorical_encoding(X_raw, encoding_plan, mappings)
+
     X = pd.get_dummies(X_raw, drop_first=True, prefix_sep=sep)
     encoded_features = bundle.get("features") or bundle.get("encoded_features") or X.columns.tolist()
     X = X.reindex(columns=encoded_features, fill_value=0)

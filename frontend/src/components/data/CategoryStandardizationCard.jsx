@@ -418,7 +418,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
                 Skip this column
               </button>
             )}
-            <button className="ax-btn prim" onClick={apply} disabled={busy || !groups.length}>
+            <button className="ax-btn prim papply" onClick={apply} disabled={busy || !groups.length}>
               {busy ? 'Applying...' : 'Apply and go next'}
             </button>
           </div>

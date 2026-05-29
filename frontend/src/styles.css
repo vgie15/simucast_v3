@@ -8483,3 +8483,21 @@ button.ax-module-head:focus-visible {
 }
 
 
+/* Spotlight Highlight ring */
+.spotlight {
+  position: relative;
+  animation: spotlight-pulse 2s infinite ease-in-out;
+  outline: none !important;
+}
+
+@keyframes spotlight-pulse {
+  0% {
+    box-shadow: 0 0 0 0px rgba(249, 115, 22, 0.8), 0 0 0 1px rgba(249, 115, 22, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.9), 0 0 0 10px rgba(249, 115, 22, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 0px rgba(249, 115, 22, 0), 0 0 0 14px rgba(249, 115, 22, 0);
+  }
+}

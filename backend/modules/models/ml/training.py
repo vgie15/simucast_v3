@@ -95,6 +95,8 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
     X, numeric_applied = _apply_numeric_preprocessing_frame(X_raw, plan.get("numeric_preprocessing"))
     y = data[target]
 
+    from backend.modules.models.ml.preprocessing import _apply_categorical_encoding
+    X, categorical_mappings = _apply_categorical_encoding(X, plan.get("encoding") or [])
     X = pd.get_dummies(X, drop_first=True, prefix_sep="=").astype(float)
 
     is_classification = plan["task"] == "classification"
@@ -112,9 +114,19 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             class_labels = labels
             y = LabelEncoder().fit_transform(y.astype(str))
 
-    effective_scaling = (plan.get("numeric_preprocessing") or {}).get("effective_scaling")
+    numeric_preprocessing = plan.get("numeric_preprocessing") or {}
+    scaling_method = (numeric_preprocessing.get("scaling") or "auto").lower()
     needs_scaling = ALGORITHM_CATALOG.get(algo, {}).get("needs_scaling", False)
-    scaler_kind = effective_scaling if effective_scaling in ("standard", "minmax") else ("standard" if needs_scaling else "none")
+
+    if scaling_method == "standard":
+        scaler_kind = "standard"
+    elif scaling_method == "minmax":
+        scaler_kind = "minmax"
+    elif scaling_method == "none":
+        scaler_kind = "none"
+    else:  # auto
+        scaler_kind = "standard" if needs_scaling else "none"
+
     scaler = None
     if scaler_kind != "none":
         scaler = MinMaxScaler() if scaler_kind == "minmax" else StandardScaler()
@@ -225,6 +237,7 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
         "numeric_preprocessing": plan.get("numeric_preprocessing"),
         "numeric_transforms_applied": numeric_applied,
         "model_behavior": "stepwise" if algo in ("tree", "rf") else "smooth",
+        "categorical_mappings": categorical_mappings,
         "preprocessing_pipeline": {
             "encoding": plan.get("encoding"),
             "scaling": plan.get("scaling"),

@@ -80,6 +80,9 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [draftReady, setDraftReady] = useState(false)
   const [dismissedChecks, setDismissedChecks] = useState([])
   const [isIssueBarExpanded, setIsIssueBarExpanded] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [standardizedCols, setStandardizedCols] = useState(new Set())
+  const [categoricalEncoding, setCategoricalEncoding] = useState({})
 
   const handleFixAction = (fix) => {
     if (!fix?.route) return
@@ -114,6 +117,25 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 
   useEffect(() => {
     if (!dataset?.id) return
+    api.listActivity(dataset.id)
+      .then((res) => {
+        const list = res.activity || []
+        const cols = new Set()
+        list.forEach((item) => {
+          const detail = item.detail || {}
+          const action = detail.action_type || item.action_type || item.kind
+          if (action === 'category_standardization') {
+            const c = detail.column ? [detail.column] : detail.columns || []
+            c.forEach(col => cols.add(col))
+          }
+        })
+        setStandardizedCols(cols)
+      })
+      .catch(console.error)
+  }, [dataset?.id, dataset?.current_stage_id])
+
+  useEffect(() => {
+    if (!dataset?.id) return
     setDraftReady(false)
     const raw = window.localStorage.getItem(`simucast.models.${dataset.id}`)
     if (!raw) {
@@ -136,6 +158,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       setChosenAlgos(saved.chosenAlgos || ['logistic', 'rf'])
       setModelParams(saved.modelParams || defaultModelParams())
       setNumericPreprocessing(saved.numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] })
+      setCategoricalEncoding(saved.categoricalEncoding || {})
       setResults(saved.results || null)
       setActiveResultIdx(saved.activeResultIdx ?? 0)
     } catch (err) {
@@ -160,10 +183,11 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
       chosenAlgos,
       modelParams,
       numericPreprocessing,
+      categoricalEncoding,
       results,
       activeResultIdx,
     }))
-  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(results), activeResultIdx])
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(results), activeResultIdx])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -195,7 +219,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
           target,
           features,
           algorithms: chosenAlgos,
-          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing),
+          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding),
         })
         if (!cancelled) {
           setPlan(r)
@@ -267,7 +291,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         target,
         features,
         algorithms: selectedAlgos,
-        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing),
+        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding),
         model_params: modelParams,
       })
       if (r.session) auth.updateSession(r.session)
@@ -398,6 +422,10 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
     setStratify(metrics.split?.stratified ?? true)
     setClassWeight(metrics.class_weight === 'balanced')
     setNumericPreprocessing(model.preprocessing_pipeline?.numeric_preprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] })
+    setCategoricalEncoding(model.preprocessing_pipeline?.encoding?.reduce((acc, item) => {
+      acc[item.column] = item.method
+      return acc
+    }, {}) || {})
     setModelParams({
       ...defaultModelParams(),
       [model.algorithm]: metrics.model_params || defaultModelParams()[model.algorithm] || {},
@@ -798,109 +826,6 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
         </ConfigDropdown>
       </div>
 
-      {/* PREPROCESSING Dropdown */}
-      <div id="models-step-6" style={{ display: 'flex', alignItems: 'stretch', flex: 1, minWidth: 140 }}>
-        <ConfigDropdown
-          label="Preprocessing"
-          value={
-            numericPreprocessing.scaling === 'auto'
-              ? 'Auto'
-              : numericPreprocessing.scaling === 'standard'
-              ? 'Standard'
-              : numericPreprocessing.scaling === 'minmax'
-              ? 'MinMax'
-              : 'None'
-          }
-        >
-          {() => (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 280 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>
-                  Numeric Scaling
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="scaling-method"
-                      value="auto"
-                      checked={numericPreprocessing.scaling === 'auto'}
-                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: 'auto' }))}
-                      style={{ marginTop: 2 }}
-                    />
-                    <div>
-                      <span style={{ fontWeight: numericPreprocessing.scaling === 'auto' ? 650 : 400 }}>Auto (Recommended)</span>
-                      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0', whiteSpace: 'normal' }}>
-                        StandardScale for Linear/Logistic/SVM, none for Trees.
-                      </p>
-                    </div>
-                  </label>
-                  
-                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="scaling-method"
-                      value="standard"
-                      checked={numericPreprocessing.scaling === 'standard'}
-                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: 'standard' }))}
-                      style={{ marginTop: 2 }}
-                    />
-                    <div>
-                      <span style={{ fontWeight: numericPreprocessing.scaling === 'standard' ? 650 : 400 }}>StandardScaler</span>
-                      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0', whiteSpace: 'normal' }}>
-                        Standardize features (zero mean, unit variance).
-                      </p>
-                    </div>
-                  </label>
-
-                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="scaling-method"
-                      value="minmax"
-                      checked={numericPreprocessing.scaling === 'minmax'}
-                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: 'minmax' }))}
-                      style={{ marginTop: 2 }}
-                    />
-                    <div>
-                      <span style={{ fontWeight: numericPreprocessing.scaling === 'minmax' ? 650 : 400 }}>MinMaxScaler</span>
-                      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0', whiteSpace: 'normal' }}>
-                        Scale features to [0, 1] range.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="scaling-method"
-                      value="none"
-                      checked={numericPreprocessing.scaling === 'none'}
-                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: 'none' }))}
-                      style={{ marginTop: 2 }}
-                    />
-                    <div>
-                      <span style={{ fontWeight: numericPreprocessing.scaling === 'none' ? 650 : 400 }}>No scaling</span>
-                      <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0', whiteSpace: 'normal' }}>
-                        Train model on raw numeric values.
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 10 }}>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
-                  Categorical Encoding
-                </label>
-                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.4, whiteSpace: 'normal' }}>
-                  One-Hot Encoding is applied automatically to all categorical features.
-                </div>
-              </div>
-            </div>
-          )}
-        </ConfigDropdown>
-      </div>
 
         {/* Action Button */}
         <div style={{ display: 'flex', alignItems: 'center', minWidth: '180px', flex: '0 0 200px' }}>
@@ -935,6 +860,151 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Collapsible Advanced Settings (Preprocessing & Encoding) */}
+      <div
+        id="models-step-6"
+        className="ax-card"
+        style={{
+          padding: '14px 16px',
+          background: 'var(--color-background-primary)',
+          border: '1.5px solid var(--color-border-tertiary)',
+          borderRadius: '12px',
+          boxShadow: 'var(--shadow-card)',
+          marginBottom: 16
+        }}
+      >
+        <div
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => setAdvancedOpen(!advancedOpen)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              Advanced settings
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+              {advancedOpen ? '' : '• Smart defaults applied'}
+            </span>
+          </div>
+          <span style={{ fontSize: '11px', fontWeight: 650, color: 'var(--color-accent)' }}>
+            {advancedOpen ? 'Hide settings ▲' : 'Show settings ▼'}
+          </span>
+        </div>
+
+        {advancedOpen && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--color-border-tertiary)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* 1. Numeric Scaling */}
+            <div>
+              <h4 style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 8px' }}>
+                Numeric Scaling (Global)
+              </h4>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {['auto', 'standard', 'minmax', 'none'].map((val) => (
+                  <label key={val} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '12px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="scaling-option"
+                      value={val}
+                      checked={numericPreprocessing.scaling === val}
+                      onChange={() => setNumericPreprocessing(prev => ({ ...prev, scaling: val }))}
+                    />
+                    <span style={{ textTransform: 'capitalize', fontWeight: numericPreprocessing.scaling === val ? 600 : 400 }}>
+                      {val === 'auto' ? 'Auto (Recommended)' : val === 'standard' ? 'StandardScaler' : val === 'minmax' ? 'MinMaxScaler' : 'None'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Categorical Encoding (Per Column) */}
+            <div>
+              <h4 style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
+                Encoding per column
+              </h4>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+                Select how categorical variables are converted to numeric values before model training.
+              </p>
+              
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1.5px solid var(--color-border-tertiary)', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>COLUMN</th>
+                    <th style={{ padding: '6px 8px', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>VALUES / ORDER</th>
+                    <th style={{ padding: '6px 8px', color: 'var(--color-text-tertiary)', fontWeight: 600, width: 220 }}>ENCODING METHOD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const categoricalColumns = variables.filter((v) => features.includes(v.name) && ['category', 'text', 'binary', 'boolean'].includes(v.dtype));
+                    if (categoricalColumns.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={3} style={{ padding: '12px 8px', color: 'var(--color-text-tertiary)', fontStyle: 'italic', textAlign: 'center' }}>
+                            No categorical features selected.
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return categoricalColumns.map((col) => {
+                      const isStandardized = standardizedCols.has(col.name);
+                      const currentVal = isStandardized ? 'standardized' : (categoricalEncoding[col.name] || 'auto');
+                      
+                      // Auto-detected suggestions from plan.encoding
+                      const encItem = plan?.encoding?.find(e => e.column === col.name);
+                      const recLabel = encItem?.method === 'binary' ? 'Binary' : encItem?.method === 'ordinal' ? 'Ordinal' : 'One-Hot';
+                      
+                      const renderSamples = () => {
+                        if (!encItem || !encItem.sample_categories) return '';
+                        const samples = encItem.sample_categories;
+                        if (encItem.method === 'ordinal') {
+                          return samples.join(' → ');
+                        }
+                        return samples.join(' / ');
+                      };
+
+                      return (
+                        <tr key={col.name} style={{ borderBottom: '1px solid var(--color-border-tertiary)', opacity: isStandardized ? 0.72 : 1 }}>
+                          <td style={{ padding: '10px 8px', fontWeight: 600 }}>{col.name}</td>
+                          <td style={{ padding: '10px 8px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+                            {renderSamples()}
+                          </td>
+                          <td style={{ padding: '10px 8px' }}>
+                            {isStandardized ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <select disabled style={{ fontSize: '11.5px', padding: '2px 6px', background: 'var(--color-background-secondary)' }}>
+                                  <option>Standardized ✓</option>
+                                </select>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <select
+                                  value={currentVal}
+                                  onChange={(e) => {
+                                    setCategoricalEncoding(prev => ({
+                                      ...prev,
+                                      [col.name]: e.target.value
+                                    }))
+                                  }}
+                                  style={{ fontSize: '11.5px', padding: '2px 6px' }}
+                                >
+                                  <option value="auto">Auto ({recLabel})</option>
+                                  <option value="one_hot">One-Hot</option>
+                                  <option value="ordinal">Ordinal</option>
+                                  <option value="binary">Binary</option>
+                                </select>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Preprocessing plan issue alert */}
@@ -3359,7 +3429,7 @@ function algoLabelForTask(algo, task) {
 }
 
 // Builds the training target options payload from the user's validation and class-weight choices.
-function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing) {
+function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
@@ -3369,6 +3439,7 @@ function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds,
   options.stratify = stratify
   if (classWeight) options.class_weight = 'balanced'
   options.numeric_preprocessing = numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] }
+  options.categorical_encoding = categoricalEncoding || {}
   return options
 }
 

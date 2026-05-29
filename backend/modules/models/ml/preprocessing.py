@@ -32,6 +32,123 @@ _CATEGORY_ABBREVIATIONS = {
 _YES_VALUES = {"1", "1.0", "yes", "y", "true", "t", "graduated", "passed", "pass"}
 _NO_VALUES = {"0", "0.0", "no", "n", "false", "f"}
 
+ORDERED_GROUPS = [
+    ["strongly disagree", "disagree", "neutral", "agree", "strongly agree"],
+    ["disagree", "neutral", "agree"],
+    ["strongly disagree", "disagree", "agree", "strongly agree"],
+    ["disagree", "agree"],
+    ["low", "medium", "high"],
+    ["low", "middle", "high"],
+    ["low", "mid", "high"],
+    ["poor", "fair", "good", "excellent"],
+    ["poor", "good", "excellent"],
+    ["no college", "college", "postgrad"],
+    ["no college", "college", "post graduate"],
+    ["no college", "grad"],
+    ["high school", "college", "university"],
+    ["small", "medium", "large"],
+    ["none", "low", "medium", "high"],
+]
+
+def _normalize_encoding_value(val):
+    if val is None or pd.isna(val):
+        return ""
+    text = str(val).strip().lower()
+    # Map common abbreviations
+    for old, new in _CATEGORY_ABBREVIATIONS.items():
+        text = re.sub(rf"\b{re.escape(old)}\b", new, text)
+    return text
+
+def _get_binary_mapping(unique_values):
+    norm_to_raw = {_normalize_encoding_value(v): v for v in unique_values}
+    norms = list(norm_to_raw.keys())
+    
+    no_norm = None
+    for n in norms:
+        if n in _NO_VALUES or n in {"no", "false", "n", "0", "not"}:
+            no_norm = n
+            break
+            
+    if no_norm is not None:
+        other_norms = [n for n in norms if n != no_norm]
+        if other_norms:
+            sorted_norms = [no_norm, other_norms[0]]
+        else:
+            sorted_norms = sorted(norms)
+    else:
+        sorted_norms = sorted(norms)
+        
+    mapping = {}
+    for rank, norm in enumerate(sorted_norms):
+        raw_val = norm_to_raw[norm]
+        mapping[raw_val] = rank
+    return mapping
+
+def _get_ordinal_mapping(unique_values):
+    norm_to_raw = {_normalize_encoding_value(v): v for v in unique_values}
+    norms = list(norm_to_raw.keys())
+    
+    best_group = None
+    for group in ORDERED_GROUPS:
+        if all(n in group for n in norms):
+            best_group = group
+            break
+            
+    if best_group:
+        sorted_norms = sorted(norms, key=lambda n: best_group.index(n))
+    else:
+        sorted_norms = sorted(norms)
+        
+    mapping = {}
+    for rank, norm in enumerate(sorted_norms):
+        raw_val = norm_to_raw[norm]
+        mapping[raw_val] = rank
+    return mapping
+
+def _detect_encoding_suggestion(series):
+    unique_vals = [str(x) for x in series.dropna().unique()]
+    if len(unique_vals) <= 1:
+        return "one_hot"
+    if len(unique_vals) == 2:
+        return "binary"
+        
+    norms = [_normalize_encoding_value(v) for v in unique_vals]
+    for group in ORDERED_GROUPS:
+        if all(n in group for n in norms):
+            return "ordinal"
+            
+    return "one_hot"
+
+def _apply_categorical_encoding(df, plan_encoding, categorical_mappings=None):
+    df_out = df.copy()
+    mappings_to_save = {}
+    
+    for item in plan_encoding:
+        col = item["column"]
+        method = item["method"]
+        
+        if col not in df_out.columns:
+            continue
+            
+        if method == "one_hot":
+            continue
+            
+        series_str = df_out[col].astype(str)
+        unique_vals = [str(x) for x in df_out[col].dropna().unique()]
+        
+        if categorical_mappings and col in categorical_mappings:
+            mapping = categorical_mappings[col]
+        else:
+            if method == "binary":
+                mapping = _get_binary_mapping(unique_vals)
+            else:
+                mapping = _get_ordinal_mapping(unique_vals)
+            mappings_to_save[col] = mapping
+            
+        df_out[col] = series_str.map(lambda val: mapping.get(str(val), 0)).astype(float)
+        
+    return df_out, mappings_to_save
+
 
 def _build_preprocessing_plan(df, target, features, algorithms, target_options=None):
     """Inspect the data and produce a transparent preprocessing plan.
@@ -50,7 +167,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
     validation_config = _validation_config(target_options, task)
     target_info = _target_info(y, task, target_options)
 
-    encoding = _encoding_plan(sub_clean, features)
+    encoding = _encoding_plan(sub_clean, features, target_options)
     numeric_plan = _numeric_preprocessing_plan(sub_clean, features, algorithms, target_options)
     missing_report = _missing_report(sub, features, target)
 
@@ -202,20 +319,30 @@ def _target_info(y, task, target_options):
     }
 
 
-def _encoding_plan(sub_clean, features):
+def _encoding_plan(sub_clean, features, target_options=None):
+    target_options = target_options or {}
+    categorical_encoding = target_options.get("categorical_encoding") or {}
+    
     encoding = []
     for column in features:
         col = sub_clean[column]
         if pd.api.types.is_numeric_dtype(col):
             continue
         categories = col.astype(str).unique().tolist()
+        
+        # Check overrides
+        method = categorical_encoding.get(column)
+        if not method or method not in ("one_hot", "binary", "ordinal"):
+            method = _detect_encoding_suggestion(col)
+            
         encoding.append({
             "column": column,
-            "method": "one_hot",
+            "method": method,
             "n_categories": len(categories),
             "sample_categories": categories[:6],
         })
     return encoding
+
 
 
 def _numeric_preprocessing_plan(sub_clean, features, algorithms, target_options):
