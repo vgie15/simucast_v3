@@ -7864,6 +7864,13 @@ button.ax-module-head:focus-visible {
   margin-bottom: 8px;
 }
 
+.ax-plan-goal-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
 .ax-plan-goal-change-btn {
   display: inline-flex;
   align-items: center;
@@ -7886,6 +7893,22 @@ button.ax-module-head:focus-visible {
 
 .ax-plan-goal-change-btn:active {
   transform: scale(0.97);
+}
+
+.ax-plan-guidance-toggle {
+  border-color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.ax-plan-guidance-toggle:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.ax-plan-guidance-toggle.active {
+  background: #ffffff;
+  color: #c2410c;
+  border-color: #ffffff;
 }
 
 .ax-plan-goal-header-collapse-trigger {

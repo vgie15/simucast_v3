@@ -5,7 +5,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
-import { currentCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
+import { coachStepsForGoal, currentCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
 import { checkCoachCompletion, routeTarget } from './GuidedCoach'
 
 const STEP_CONFIGS = {
@@ -118,13 +118,62 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     return STEP_CONFIGS[current.id] || null
   }, [current?.id])
 
+  const issueStepPending = useMemo(() => {
+    if (!config || !suggestionData) return true
+    return issuePendingForTool(config.toolKey, suggestionData, dataset)
+  }, [config, dataset, suggestionData])
+
   // Load cleaning suggestions to count/describe issues
   useEffect(() => {
     if (!dataset?.id || !config) return
+    setSuggestionData(null)
     api.cleanSuggestions(dataset.id)
       .then(res => setSuggestionData(res))
       .catch(err => console.error(err))
   }, [dataset?.id, dataset?.current_stage_id, config])
+
+  // If the saved walkthrough points at an issue that is already resolved,
+  // move the guide to the next actionable step instead of spotlighting a dead card.
+  useEffect(() => {
+    let cancelled = false
+    if (!dataset?.id || !guidance.guided_mode || !current || !config || !suggestionData) return undefined
+    if (!isIssueTool(config.toolKey) || issueStepPending) return undefined
+
+    const dismissed = guidance.dismissed_tips || []
+    const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
+    const next = nextActionableCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed, suggestionData)
+
+    api.updateGuidance(dataset.id, {
+      completed_tips: completed,
+      walkthrough_step: next?.id || null,
+      guided_mode: Boolean(next),
+    })
+      .then((response) => {
+        if (cancelled) return
+        onGuidanceUpdated?.(response.guidance)
+        if (next) routeTarget(dataset.id, next, activeTab, navigate)
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeTab,
+    config,
+    current,
+    dataset,
+    dataset?.current_stage_id,
+    guidance.completed_tips,
+    guidance.dismissed_tips,
+    guidance.goal,
+    guidance.guided_mode,
+    guidance.intent,
+    issueStepPending,
+    navigate,
+    onGuidanceUpdated,
+    suggestionData,
+  ])
 
   // Detect popover open/close states and check if we are in sub-step 2
   useEffect(() => {
@@ -198,6 +247,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   }, [current?.id])
 
   if (!dataset?.id || !guidance.guided_mode || !current || !config || activeTab !== 'data') return null
+  if (isIssueTool(config.toolKey) && suggestionData && !issueStepPending) return null
 
   // Calculate descriptive what simucast sees text
   const getSeesText = () => {
@@ -353,4 +403,36 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       </div>
     </aside>
   )
+}
+
+function isIssueTool(toolKey) {
+  return ['missing', 'outliers', 'duplicates'].includes(toolKey)
+}
+
+function issuePendingForTool(toolKey, suggestionData, dataset) {
+  if (toolKey === 'missing') {
+    const suggested = suggestionData?.groups?.missing?.columns || []
+    if (suggested.length) return true
+    return (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
+  }
+  if (toolKey === 'outliers') return Boolean((suggestionData?.groups?.outliers?.columns || []).length)
+  if (toolKey === 'duplicates') return Number(suggestionData?.groups?.duplicates?.count || 0) > 0
+  return true
+}
+
+function stepStillActionable(step, suggestionData, dataset) {
+  if (!step?.completion) return true
+  if (step.completion === 'missing') return issuePendingForTool('missing', suggestionData, dataset)
+  if (step.completion === 'outliers') return issuePendingForTool('outliers', suggestionData, dataset)
+  if (step.completion === 'duplicates') return issuePendingForTool('duplicates', suggestionData, dataset)
+  return true
+}
+
+function nextActionableCoachStep(goal, dataset, currentId, dismissedTips, suggestionData) {
+  const hidden = new Set(dismissedTips || [])
+  const steps = coachStepsForGoal(goal, dataset)
+  const currentIndex = steps.findIndex((step) => step.id === currentId)
+  return steps
+    .slice(Math.max(currentIndex + 1, 0))
+    .find((step) => !hidden.has(step.id) && stepStillActionable(step, suggestionData, dataset)) || null
 }

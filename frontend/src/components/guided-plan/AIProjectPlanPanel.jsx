@@ -289,7 +289,11 @@ export default function AIProjectPlanPanel({
   }
 
   const toggleGuidedMode = async () => {
-    const start = firstCoachStep(guidance.goal, dataset)
+    if (!guidance.goal && !guidance.intent) {
+      onOpenGuidanceSetup?.()
+      return
+    }
+    const start = firstCoachStep(guidance.goal || guidance.intent, dataset)
     await updateGuidance({
       guided_mode: !guidance.guided_mode,
       walkthrough_step: guidance.guided_mode ? null : (guidance.walkthrough_step || start?.id || null),
@@ -324,13 +328,22 @@ export default function AIProjectPlanPanel({
               <div className="ax-plan-goal-stats">
                 {Number(dataset?.row_count || 0).toLocaleString()} rows · {dataset?.col_count || 0} variables{plan?.task ? ` · ${plan.task}` : ''}
               </div>
-              <button className="ax-plan-goal-change-btn" type="button" onClick={onOpenGuidanceSetup}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
-                </svg>
-                Change goal
-              </button>
+              <div className="ax-plan-goal-actions">
+                <button className="ax-plan-goal-change-btn" type="button" onClick={onOpenGuidanceSetup}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
+                  </svg>
+                  Change goal
+                </button>
+                <button
+                  className={`ax-plan-goal-change-btn ax-plan-guidance-toggle${guidance.guided_mode ? ' active' : ''}`}
+                  type="button"
+                  onClick={toggleGuidedMode}
+                >
+                  {guidance.guided_mode ? 'Turn off guidance' : 'Turn on guidance'}
+                </button>
+              </div>
             </div>
           </div>
 
