@@ -454,12 +454,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     if (!config) {
       setTargetRect(null)
       if (activeElementRef.current) {
-        const oldEl = activeElementRef.current
-        oldEl.classList.remove('spotlight', 'idle')
-        oldEl.style.position = oldEl.dataset.prevPosition || ''
-        oldEl.style.zIndex = oldEl.dataset.prevZIndex || ''
-        delete oldEl.dataset.prevPosition
-        delete oldEl.dataset.prevZIndex
+        activeElementRef.current.classList.remove('spotlight', 'idle')
         activeElementRef.current = null
       }
       return
@@ -477,62 +472,18 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       }
 
       if (prevEl) {
-        // Fade out previous spotlight over 150ms
-        prevEl.style.transition = 'box-shadow 150ms ease, opacity 150ms ease'
-        prevEl.style.boxShadow = 'none'
-        prevEl.style.opacity = '0'
         prevEl.classList.remove('spotlight', 'idle')
-
-        const tempPrev = prevEl
-        setTimeout(() => {
-          tempPrev.style.transition = ''
-          tempPrev.style.boxShadow = ''
-          tempPrev.style.opacity = ''
-          if (tempPrev.dataset.prevPosition !== undefined) {
-            tempPrev.style.position = tempPrev.dataset.prevPosition || ''
-            delete tempPrev.dataset.prevPosition
-          }
-          if (tempPrev.dataset.prevZIndex !== undefined) {
-            tempPrev.style.zIndex = tempPrev.dataset.prevZIndex || ''
-            delete tempPrev.dataset.prevZIndex
-          }
-        }, 150)
       }
 
       if (nextEl) {
         activeElementRef.current = nextEl
-        const isPopover = selector === '.ax-data-toolbar-popover'
-        if (!isPopover) {
-          nextEl.dataset.prevPosition = nextEl.style.position || ''
-          nextEl.dataset.prevZIndex = nextEl.style.zIndex || ''
-          const currentPos = window.getComputedStyle(nextEl).position
-          if (currentPos !== 'absolute' && currentPos !== 'fixed') {
-            nextEl.style.position = 'relative'
+        nextEl.classList.add('spotlight')
+        activeSpotlightTimeoutRef.current = setTimeout(() => {
+          if (document.body.contains(nextEl)) {
+            nextEl.classList.remove('spotlight')
+            nextEl.classList.add('spotlight', 'idle')
           }
-          nextEl.style.zIndex = '101'
-        }
-
-        if (prevEl) {
-          activeSpotlightTimeoutRef.current = setTimeout(() => {
-            if (document.body.contains(nextEl)) {
-              nextEl.classList.add('spotlight')
-              activeSpotlightTimeoutRef.current = setTimeout(() => {
-                if (document.body.contains(nextEl)) {
-                  nextEl.classList.remove('spotlight')
-                  nextEl.classList.add('spotlight', 'idle')
-                }
-              }, 350)
-            }
-          }, 150)
-        } else {
-          nextEl.classList.add('spotlight')
-          activeSpotlightTimeoutRef.current = setTimeout(() => {
-            if (document.body.contains(nextEl)) {
-              nextEl.classList.remove('spotlight')
-              nextEl.classList.add('spotlight', 'idle')
-            }
-          }, 350)
-        }
+        }, 350)
       } else {
         activeElementRef.current = null
       }
@@ -662,14 +613,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   useEffect(() => {
     return () => {
       if (activeElementRef.current) {
-        const oldEl = activeElementRef.current
-        oldEl.classList.remove('spotlight', 'idle')
-        if (oldEl.dataset.prevPosition !== undefined) {
-          oldEl.style.position = oldEl.dataset.prevPosition || ''
-        }
-        if (oldEl.dataset.prevZIndex !== undefined) {
-          oldEl.style.zIndex = oldEl.dataset.prevZIndex || ''
-        }
+        activeElementRef.current.classList.remove('spotlight', 'idle')
       }
     }
   }, [])
@@ -924,7 +868,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   }
 
   if (!dataset?.id || !guidance.guided_mode || !current || !config || activeTab !== 'data') return null
-  if (isIssueTool(config.toolKey) && suggestionData && !issueStepPending) return null
+  if (isIssueTool(config.toolKey) && suggestionData && !issueStepPending && subStep === 1 && !showModal && !cardDismissed) return null
 
   // Calculate descriptive what simucast sees text
   const getSeesText = () => {
@@ -1043,33 +987,6 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
 
   return (
     <>
-      <svg
-        className={`spotlight-overlay ${targetRect ? 'show' : ''}`}
-        width="100%"
-        height="100%"
-      >
-        <defs>
-          <mask id="spotlight-mask">
-            <rect width="100%" height="100%" fill="white" />
-            <rect
-              id="spotlight-hole"
-              x={targetRect ? targetRect.left - 8 : 0}
-              y={targetRect ? targetRect.top - 8 : 0}
-              width={targetRect ? targetRect.width + 16 : 0}
-              height={targetRect ? targetRect.height + 16 : 0}
-              rx="8"
-              fill="black"
-            />
-          </mask>
-        </defs>
-        <rect
-          width="100%"
-          height="100%"
-          fill="rgba(0,0,0,0.6)"
-          mask="url(#spotlight-mask)"
-        />
-      </svg>
-
       <aside
         className={`guided-focus-card guided-focus ${animationState}`}
         data-arrow-side={cardPosition.arrowSide}
