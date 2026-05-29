@@ -7864,7 +7864,8 @@ button.ax-module-head:focus-visible {
   margin-bottom: 8px;
 }
 
-.ax-plan-goal-change-btn {
+.ax-plan-goal-change-btn,
+.ax-plan-guide-toggle-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -7880,11 +7881,27 @@ button.ax-module-head:focus-visible {
   transition: background 0.15s ease, transform 0.1s ease;
 }
 
-.ax-plan-goal-change-btn:hover {
+.ax-plan-guide-toggle-btn {
+  margin-left: 6px;
+}
+
+.ax-plan-guide-toggle-btn.active {
+  border-color: rgba(255, 255, 255, 0.56);
+  background: rgba(30, 41, 59, 0.2);
+  color: #fff;
+}
+
+.ax-plan-goal-change-btn:hover,
+.ax-plan-guide-toggle-btn:hover {
   background: rgba(255, 255, 255, 0.95);
 }
 
-.ax-plan-goal-change-btn:active {
+.ax-plan-guide-toggle-btn.active:hover {
+  background: rgba(30, 41, 59, 0.28);
+}
+
+.ax-plan-goal-change-btn:active,
+.ax-plan-guide-toggle-btn:active {
   transform: scale(0.97);
 }
 

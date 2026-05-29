@@ -5,7 +5,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
-import { currentCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
+import { cleaningIssuesFromSuggestions, currentCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
 import { checkCoachCompletion, routeTarget } from './GuidedCoach'
 
 const STEP_CONFIGS = {
@@ -103,14 +103,15 @@ const STEP_CONFIGS = {
   }
 }
 
-export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated }) {
+export default function GuidedFocusCard({ dataset, activeTab, cleaningIssues, onGuidanceUpdated }) {
   const navigate = useNavigate()
   const guidance = dataset?.guidance || {}
-  const current = currentCoachStep(guidance, dataset)
   
   const [subStep, setSubStep] = useState(1)
   const [busy, setBusy] = useState(false)
   const [suggestionData, setSuggestionData] = useState(null)
+  const liveCleaningIssues = suggestionData ? cleaningIssuesFromSuggestions(suggestionData) : cleaningIssues
+  const current = currentCoachStep(guidance, dataset, liveCleaningIssues)
 
   // Retrieve current step configuration
   const config = useMemo(() => {
@@ -260,7 +261,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
 
     const dismissed = guidance.dismissed_tips || []
     const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
-    const next = nextCoachStep(guidance.goal, dataset, current.id, dismissed)
+    const next = nextCoachStep(guidance.goal, dataset, current.id, dismissed, liveCleaningIssues)
     
     await persist({
       completed_tips: completed,

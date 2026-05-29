@@ -50,6 +50,7 @@ export default function AIProjectPlanPanel({
   onCollapsedChange,
   onOpenGuidanceSetup,
   onGuidanceUpdated,
+  cleaningIssues,
 }) {
   const navigate = useNavigate()
   const auth = useAuth()
@@ -289,7 +290,7 @@ export default function AIProjectPlanPanel({
   }
 
   const toggleGuidedMode = async () => {
-    const start = firstCoachStep(guidance.goal, dataset)
+    const start = firstCoachStep(guidance.goal, dataset, cleaningIssues)
     await updateGuidance({
       guided_mode: !guidance.guided_mode,
       walkthrough_step: guidance.guided_mode ? null : (guidance.walkthrough_step || start?.id || null),
@@ -330,6 +331,27 @@ export default function AIProjectPlanPanel({
                   <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
                 </svg>
                 Change goal
+              </button>
+              <button
+                className={`ax-plan-guide-toggle-btn ${guidance.guided_mode ? 'active' : ''}`}
+                type="button"
+                onClick={toggleGuidedMode}
+              >
+                {guidance.guided_mode ? (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                    Stop guide
+                  </>
+                ) : (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
+                      <path d="M5 12h14M13 5l7 7-7 7" />
+                    </svg>
+                    Start guide
+                  </>
+                )}
               </button>
             </div>
           </div>
