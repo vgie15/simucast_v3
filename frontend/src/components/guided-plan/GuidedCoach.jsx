@@ -107,16 +107,60 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
       if (rectKey === lastRectString) return
       lastRectString = rectKey
 
-      const viewportPad = 12
-      const width = Math.min(390, window.innerWidth - viewportPad * 2)
-      const rectCenter = rect.left + rect.width / 2
-      const preferRight = rectCenter < window.innerWidth * 0.52
-      const sideLeft = preferRight ? rect.right + 18 : rect.left - width - 18
-      const left = clamp(sideLeft, viewportPad, window.innerWidth - width - viewportPad)
-      const topCandidate = rect.top < window.innerHeight * 0.56 ? rect.bottom + 14 : rect.top - 350
-      const top = clamp(topCandidate, viewportPad, Math.max(viewportPad, window.innerHeight - 370))
       setSpotlight(toSpotlightRect(rect))
-      setCoachStyle({ left, top, width, right: 'auto', bottom: 'auto' })
+
+      const cardW = 300
+      const cardEl = document.querySelector('.guided-focus-card')
+      const cardH = cardEl && cardEl.offsetHeight > 0 ? cardEl.offsetHeight : 180
+      const margin = 12
+      const viewW = window.innerWidth
+      const viewH = window.innerHeight
+
+      let top = 0
+      let left = 0
+      let arrowSide = 'top'
+
+      const spaceBelow = viewH - rect.bottom
+      const spaceAbove = rect.top
+
+      if (spaceBelow > cardH + 24) {
+        top = rect.bottom + margin
+        left = rect.left + rect.width / 2 - cardW / 2
+        arrowSide = 'top'
+      } else if (spaceAbove > cardH + 24) {
+        top = rect.top - cardH - margin
+        left = rect.left + rect.width / 2 - cardW / 2
+        arrowSide = 'bottom'
+      } else {
+        const spaceRight = viewW - rect.right
+        if (spaceRight > cardW + 24) {
+          left = rect.right + margin
+          top = rect.top + rect.height / 2 - cardH / 2
+          arrowSide = 'left'
+        } else {
+          left = rect.left - cardW - margin
+          top = rect.top + rect.height / 2 - cardH / 2
+          arrowSide = 'right'
+        }
+      }
+
+      left = Math.max(12, Math.min(viewW - cardW - 12, left))
+      top = Math.max(12, Math.min(viewH - cardH - 12, top))
+
+      let arrowLeft = (rect.left + rect.width / 2) - left
+      arrowLeft = Math.max(16, Math.min(cardW - 16, arrowLeft))
+
+      let arrowTop = (rect.top + rect.height / 2) - top
+      arrowTop = Math.max(16, Math.min(cardH - 16, arrowTop))
+
+      setCoachStyle({
+        top,
+        left,
+        width: cardW,
+        arrowSide,
+        arrowLeft,
+        arrowTop
+      })
     }
 
     let placementTimer = null
@@ -192,24 +236,65 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   const microAtEnd = microIndex >= focusSteps.length - 1
   const coach = (
     <aside
-      className={`ax-guided-coach ax-guided-spotlight-coach ${coachStyle ? 'anchored' : ''}`}
-      style={coachStyle || undefined}
+      className={`guided-focus-card guided-focus ${coachStyle ? '' : 'wrong-page'}`}
+      data-arrow-side={coachStyle?.arrowSide || 'none'}
+      style={coachStyle ? {
+        top: `${coachStyle.top}px`,
+        left: `${coachStyle.left}px`,
+        '--arrow-left': `${coachStyle.arrowLeft}px`,
+        '--arrow-top': `${coachStyle.arrowTop}px`,
+        width: `${coachStyle.width}px`
+      } : {
+        position: 'fixed',
+        bottom: '18px',
+        right: 'max(18px, calc(var(--ai-w, 360px) + 18px))',
+        width: '300px',
+        zIndex: 101
+      }}
       aria-live="polite"
     >
-      <div className="ax-guided-coach-step-row">
-        <p className="ax-kicker">Guided focus</p>
-        {focusSteps.length > 1 && <span>{Math.min(microIndex + 1, focusSteps.length)} of {focusSteps.length}</span>}
+      <div className="gf-content" style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+        <div className="ax-guided-coach-step-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+          <p className="ax-kicker" style={{ margin: 0, textTransform: 'uppercase', fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.08em', color: '#f97316' }}>
+            Guided Focus {focusSteps.length > 1 ? `· ${Math.min(microIndex + 1, focusSteps.length)} of ${focusSteps.length}` : ''}
+          </p>
+          <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>{current.page ? current.page.toUpperCase() : 'PLAN'}</span>
+        </div>
+
+        <strong style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-text-primary)', display: 'block', margin: '2px 0 2px' }}>
+          {focusStep.title || current.title}
+        </strong>
+
+        <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: 1.45 }}>
+          {focusStep.detected && (
+            <p style={{ margin: 0 }}>
+              <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>What SimuCast sees:</span><br />
+              {focusStep.detected}
+            </p>
+          )}
+          
+          <p className="do-this-now" style={{ margin: 0 }}>
+            <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Do this now:</span><br />
+            {focusStep.action || current.action}
+          </p>
+
+          {focusStep.why && (
+            <p style={{ margin: 0, fontSize: '11.5px', opacity: 0.85, borderLeft: '2px solid #fdba74', paddingLeft: '8px' }}>
+              <span style={{ fontWeight: 600 }}>Why:</span> {focusStep.why}
+            </p>
+          )}
+
+          {microAtEnd && current.requirement === 'required' && completion.checked && !completion.complete && (
+            <p className="ax-guided-coach-lock" style={{ margin: 0, fontSize: '11.5px', color: 'var(--color-accent-dark)', fontWeight: 600 }}>
+              Apply the required fix first. The next guided step stays locked until the dataset state confirms it.
+            </p>
+          )}
+        </div>
       </div>
-      <strong>{focusStep.title || current.title}</strong>
-      {focusStep.detected && <p><b>What SimuCast sees:</b> {focusStep.detected}</p>}
-      <p><b>Do this now:</b> {focusStep.action || current.action}</p>
-      {focusStep.why && <p className="ax-guided-coach-unlocks"><b>Why:</b> {focusStep.why}</p>}
-      {microAtEnd && current.requirement === 'required' && completion.checked && !completion.complete && (
-        <p className="ax-guided-coach-lock">Apply the required fix first. The next guided step stays locked until the dataset state confirms it.</p>
-      )}
-      <div className="ax-guided-coach-actions">
+
+      <div className="ax-guided-coach-actions" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
         {!onCurrentPage && (
-          <button className="ax-btn mini prim" type="button" onClick={routeCurrent}>
+          <button className="ax-btn mini prim" type="button" onClick={routeCurrent} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
             Open required section
           </button>
         )}
@@ -224,6 +309,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
             type="button"
             disabled={busy}
             onClick={nextMicroStep}
+            style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}
           >
             {focusStep.nextLabel || (microAtEnd ? (current.requirement === 'required' && !canFinishRequired ? 'Check and continue' : 'Next step') : 'Continue')}
           </button>
@@ -233,7 +319,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
             Skip guidance
           </button>
         )}
-        <button className="ax-link-btn" type="button" disabled={busy} onClick={() => persist({ guided_mode: false })}>
+        <button className="ax-link-btn" type="button" disabled={busy} onClick={() => persist({ guided_mode: false })} style={{ marginLeft: 'auto', fontSize: '11.5px', color: 'var(--color-text-secondary)' }}>
           Explore freely
         </button>
       </div>
@@ -249,19 +335,42 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
 }
 
 function SpotlightMask({ rect }) {
-  const top = Math.max(0, rect.top)
-  const left = Math.max(0, rect.left)
-  const right = Math.max(0, window.innerWidth - rect.right)
-  const bottom = Math.max(0, window.innerHeight - rect.bottom)
-
   return (
-    <div className="ax-guided-spotlight" aria-hidden="true">
-      <span className="top" style={{ height: top }} />
-      <span className="left" style={{ top, width: left, height: rect.height }} />
-      <span className="right" style={{ top, right: 0, width: right, height: rect.height }} />
-      <span className="bottom" style={{ top: rect.bottom, height: bottom }} />
-      <span className="ring" style={{ top, left, width: rect.width, height: rect.height }} />
-    </div>
+    <svg
+      className="spotlight-overlay show"
+      width="100%"
+      height="100%"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        pointerEvents: 'none'
+      }}
+    >
+      <defs>
+        <mask id="spotlight-mask-coach">
+          <rect width="100%" height="100%" fill="white" />
+          <rect
+            id="spotlight-hole-coach"
+            style={{
+              transition: 'x 150ms ease, y 150ms ease, width 150ms ease, height 150ms ease'
+            }}
+            x={rect ? rect.left : 0}
+            y={rect ? rect.top : 0}
+            width={rect ? rect.width : 0}
+            height={rect ? rect.height : 0}
+            rx="8"
+            fill="black"
+          />
+        </mask>
+      </defs>
+      <rect
+        width="100%"
+        height="100%"
+        fill="rgba(0,0,0,0.6)"
+        mask="url(#spotlight-mask-coach)"
+      />
+    </svg>
   )
 }
 
