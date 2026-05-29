@@ -8524,7 +8524,6 @@ button.ax-module-head:focus-visible {
 }
 
 .spotlight {
-  position: relative;
   outline: none !important;
   animation: spot-enter 350ms cubic-bezier(.34,1.56,.64,1) forwards;
 }
