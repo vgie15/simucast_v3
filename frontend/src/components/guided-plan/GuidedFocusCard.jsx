@@ -388,7 +388,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
 
       // Compute next step
       const dismissed = guidance.dismissed_tips || []
-      const nextStepObj = nextCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed)
+      const nextStepObj = nextActionableCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed, suggestionData)
       
       const isAllComplete = !nextStepObj || nextStepObj.page !== 'data'
 
@@ -920,7 +920,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     if (!modalConfig && config) {
       const toolKey = config.toolKey
       const dismissed = guidance.dismissed_tips || []
-      const nextStepObj = nextCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed)
+      const nextStepObj = nextActionableCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed, suggestionData)
       const isAllComplete = !nextStepObj || nextStepObj.page !== 'data'
       let type = toolKey
       if (isAllComplete) {
