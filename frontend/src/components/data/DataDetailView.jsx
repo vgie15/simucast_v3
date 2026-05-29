@@ -205,7 +205,11 @@ export default function DataDetailView({
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          const event = new CustomEvent('simucast:table-loaded')
+          window.dispatchEvent(event)
+        }
       })
     return () => {
       cancelled = true

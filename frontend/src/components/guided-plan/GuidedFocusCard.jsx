@@ -198,6 +198,8 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   const activeElementRef = useRef(null)
   const [showModal, setShowModal] = useState(false)
   const [modalConfig, setModalConfig] = useState(null)
+  const [isPendingModal, setIsPendingModal] = useState(false)
+  const fallbackTimerRef = useRef(null)
   
   const [typedTitle, setTypedTitle] = useState('')
   const [cursorVisible, setCursorVisible] = useState(true)
@@ -392,17 +394,26 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
         isFinalSuccess
       })
 
-      // Animate card exit before unmounting
-      setAnimationState('closing')
-      setTimeout(() => {
-        setCardDismissed(true)
-        setAnimationState('')
-        
-        // Open the modal after the remaining time
-        setTimeout(() => {
-          setShowModal(true)
-        }, 220)
-      }, 180)
+      // Instead of showing immediately, wait for datatable load event
+      setIsPendingModal(true)
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current)
+      }
+      fallbackTimerRef.current = setTimeout(() => {
+        setIsPendingModal((pending) => {
+          if (pending) {
+            setAnimationState('closing')
+            setTimeout(() => {
+              setCardDismissed(true)
+              setAnimationState('')
+              setTimeout(() => {
+                setShowModal(true)
+              }, 220)
+            }, 180)
+          }
+          return false
+        })
+      }, 4000)
     }
 
     window.addEventListener('simucast:popover-open', handlePopoverOpen)
@@ -412,6 +423,39 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       window.removeEventListener('simucast:apply-success', handleApplySuccess)
     }
   }, [config, suggestionData, dataset, current, guidance])
+
+  // Listen to table loaded event to show the task completion modal
+  useEffect(() => {
+    const handleTableLoaded = () => {
+      setIsPendingModal((pending) => {
+        if (pending) {
+          if (fallbackTimerRef.current) {
+            clearTimeout(fallbackTimerRef.current)
+            fallbackTimerRef.current = null
+          }
+          // Animate card exit before unmounting
+          setAnimationState('closing')
+          setTimeout(() => {
+            setCardDismissed(true)
+            setAnimationState('')
+            
+            // Open the modal after the remaining time
+            setTimeout(() => {
+              setShowModal(true)
+            }, 220)
+          }, 180)
+        }
+        return false
+      })
+    }
+    window.addEventListener('simucast:table-loaded', handleTableLoaded)
+    return () => {
+      window.removeEventListener('simucast:table-loaded', handleTableLoaded)
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current)
+      }
+    }
+  }, [])
 
   // Dynamic spotlight layout measurements and class triggers
   const updateSpotlight = () => {
