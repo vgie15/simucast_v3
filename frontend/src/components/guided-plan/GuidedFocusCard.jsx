@@ -187,6 +187,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   const [animationState, setAnimationState] = useState('entering')
   const [displaySubStep, setDisplaySubStep] = useState(1)
   const [contentAnimClass, setContentAnimClass] = useState('')
+  const closingPopoverRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [suggestionData, setSuggestionData] = useState(null)
   
@@ -232,10 +233,10 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   // Coordinate sub-step content cross-fade transitions
   useEffect(() => {
     if (subStep !== displaySubStep) {
-      setContentAnimClass('gf-content-fade-out')
+      setContentAnimClass('fade-out')
       const timer = setTimeout(() => {
         setDisplaySubStep(subStep)
-        setContentAnimClass('gf-content-fade-in')
+        setContentAnimClass('')
       }, 150)
       return () => clearTimeout(timer)
     }
@@ -303,6 +304,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       const btn = document.getElementById(`tb-${config.toolKey}`)
       const isBtnActive = btn?.classList.contains('active')
       setSubStep(currentSub => {
+        if (closingPopoverRef.current) return 1
         if (currentSub === 3) return 3
         return isBtnActive ? 2 : 1
       })
@@ -929,6 +931,8 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     <>
       <svg
         className={`spotlight-overlay ${targetRect ? 'show' : ''}`}
+        width="100%"
+        height="100%"
         onClick={(e) => {
           if (!targetRect) return
           const hx = targetRect.left - 8
@@ -972,7 +976,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
           left: `${cardPosition.left}px`
         }}
       >
-        <div className={contentAnimClass} style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+        <div className={`gf-content ${contentAnimClass}`} style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
           <div className="ax-guided-coach-step-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
             <p className="ax-kicker" style={{ margin: 0, textTransform: 'uppercase', fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.08em', color: '#f97316' }}>
               Guided Focus · {displaySubStep} of 3
@@ -1013,7 +1017,26 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
           )}
           
           {displaySubStep === 2 && (
-            <button className="ax-btn mini ghost" type="button" onClick={() => setSubStep(1)}>
+            <button
+              className="ax-btn mini ghost"
+              type="button"
+              onClick={() => {
+                closingPopoverRef.current = true
+                setTimeout(() => {
+                  closingPopoverRef.current = false
+                }, 400)
+                const closeBtn = document.querySelector('.ax-popover-close')
+                if (closeBtn) {
+                  closeBtn.click()
+                } else {
+                  const activeBtn = document.getElementById(`tb-${config.toolKey}`)
+                  if (activeBtn?.classList.contains('active')) {
+                    activeBtn.click()
+                  }
+                }
+                setSubStep(1)
+              }}
+            >
               Back
             </button>
           )}
