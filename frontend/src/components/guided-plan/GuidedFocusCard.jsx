@@ -29,7 +29,7 @@ const STEP_CONFIGS = {
       3: {
         title: 'Review your changes',
         action: 'Inspect the updated preview and recent changes below',
-        spotlight: null
+        spotlight: '.ax-data-detail'
       }
     }
   },
@@ -52,7 +52,7 @@ const STEP_CONFIGS = {
       3: {
         title: 'Review your changes',
         action: 'Inspect the updated preview and recent changes below',
-        spotlight: null
+        spotlight: '.ax-data-detail'
       }
     }
   },
@@ -75,7 +75,7 @@ const STEP_CONFIGS = {
       3: {
         title: 'Review your changes',
         action: 'Inspect the updated preview and recent changes below',
-        spotlight: null
+        spotlight: '.ax-data-detail'
       }
     }
   },
@@ -98,7 +98,7 @@ const STEP_CONFIGS = {
       3: {
         title: 'Review your changes',
         action: 'Inspect the updated preview and recent changes below',
-        spotlight: null
+        spotlight: '.ax-data-detail'
       }
     }
   }
@@ -254,8 +254,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   const activeElementRef = useRef(null)
   const [showModal, setShowModal] = useState(false)
   const [modalConfig, setModalConfig] = useState(null)
-  const [isPendingModal, setIsPendingModal] = useState(false)
-  const fallbackTimerRef = useRef(null)
+
   
   const [typedTitle, setTypedTitle] = useState('')
   const [cursorVisible, setCursorVisible] = useState(true)
@@ -317,7 +316,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   useEffect(() => {
     let cancelled = false
     if (!dataset?.id || !guidance.guided_mode || !current || !config || !suggestionData) return undefined
-    if (!isIssueTool(config.toolKey) || issueStepPending) return undefined
+    if (!isIssueTool(config.toolKey) || issueStepPending || subStep !== 1 || showModal || cardDismissed) return undefined
 
     const dismissed = guidance.dismissed_tips || []
     const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
@@ -353,6 +352,9 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     navigate,
     onGuidanceUpdated,
     suggestionData,
+    subStep,
+    showModal,
+    cardDismissed,
   ])
 
   // Detect popover open/close states and check if we are in sub-step 2
@@ -437,27 +439,6 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
         nextStepObj,
         isFinalSuccess
       })
-
-      // Instead of showing immediately, wait for datatable load event
-      setIsPendingModal(true)
-      if (fallbackTimerRef.current) {
-        clearTimeout(fallbackTimerRef.current)
-      }
-      fallbackTimerRef.current = setTimeout(() => {
-        setIsPendingModal((pending) => {
-          if (pending) {
-            setAnimationState('closing')
-            setTimeout(() => {
-              setCardDismissed(true)
-              setAnimationState('')
-              setTimeout(() => {
-                setShowModal(true)
-              }, 220)
-            }, 180)
-          }
-          return false
-        })
-      }, 4000)
     }
 
     window.addEventListener('simucast:popover-open', handlePopoverOpen)
@@ -467,39 +448,6 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       window.removeEventListener('simucast:apply-success', handleApplySuccess)
     }
   }, [config, suggestionData, dataset, current, guidance])
-
-  // Listen to table loaded event to show the task completion modal
-  useEffect(() => {
-    const handleTableLoaded = () => {
-      setIsPendingModal((pending) => {
-        if (pending) {
-          if (fallbackTimerRef.current) {
-            clearTimeout(fallbackTimerRef.current)
-            fallbackTimerRef.current = null
-          }
-          // Animate card exit before unmounting
-          setAnimationState('closing')
-          setTimeout(() => {
-            setCardDismissed(true)
-            setAnimationState('')
-            
-            // Open the modal after the remaining time
-            setTimeout(() => {
-              setShowModal(true)
-            }, 220)
-          }, 180)
-        }
-        return false
-      })
-    }
-    window.addEventListener('simucast:table-loaded', handleTableLoaded)
-    return () => {
-      window.removeEventListener('simucast:table-loaded', handleTableLoaded)
-      if (fallbackTimerRef.current) {
-        clearTimeout(fallbackTimerRef.current)
-      }
-    }
-  }, [])
 
   // Dynamic spotlight layout measurements and class triggers
   const updateSpotlight = () => {
@@ -786,12 +734,12 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     }
   }, [showModal, modalConfig])
 
-  // Escape key listener to dismiss modal (behaves as "Stay here")
+  // Escape key listener to dismiss modal (behaves as "Explore freely")
   useEffect(() => {
     if (!showModal) return
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        handleStayHere()
+        handleExploreFreely()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -823,9 +771,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   }
 
   const handleOverlayClick = (e) => {
-    if (e.target.classList.contains('ax-completion-overlay')) {
-      handleStayHere()
-    }
+    // Disable clicking outside to close
   }
 
   const handleContinue = async () => {
@@ -847,18 +793,16 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     }
   }
 
-  const handleStayHere = async () => {
-    const dismissed = guidance.dismissed_tips || []
+  const handleExploreFreely = async () => {
     const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
-    const next = modalConfig?.nextStepObj
 
     setShowModal(false)
     setCardDismissed(false)
 
     await persist({
       completed_tips: completed,
-      walkthrough_step: next?.id || null,
-      guided_mode: Boolean(next),
+      walkthrough_step: null,
+      guided_mode: false,
     })
   }
 
@@ -963,8 +907,8 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
                 <button className="ax-completion-btn-p" onClick={handleContinue}>
                   {modalConfig.cont} <ArrowRight size={16} />
                 </button>
-                <button className="ax-completion-btn-s" onClick={handleStayHere}>
-                  Stay here
+                <button className="ax-completion-btn-s" onClick={handleExploreFreely}>
+                  Explore freely
                 </button>
               </div>
             </div>
@@ -1028,27 +972,64 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     setSubStep(2)
   }
 
-  const handleAdvance = async () => {
-    const verifiedComplete = await checkCoachCompletion(dataset, current)
-    const canGo = verifiedComplete || subStep === 3 || current.requirement !== 'required'
+  const handleDoneReviewingChanges = () => {
+    if (!modalConfig && config) {
+      const toolKey = config.toolKey
+      const dismissed = guidance.dismissed_tips || []
+      const nextStepObj = nextCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed)
+      const isAllComplete = !nextStepObj || nextStepObj.page !== 'data'
+      let type = toolKey
+      if (isAllComplete) {
+        type = 'all'
+      }
+      const activeContent = completionModalConfig[type]
+      if (activeContent) {
+        const stats = typeof activeContent.stats === 'function'
+          ? activeContent.stats(suggestionData, dataset)
+          : activeContent.stats
+        let finalTitle = activeContent.title
+        let finalSub = activeContent.subtitle || activeContent.sub
+        let finalStats = stats
+        let finalNext = activeContent.next
+        let finalCont = activeContent.continueLabel || activeContent.cont
+        let finalStep = activeContent.stepIndex
+        let isFinalSuccess = isAllComplete
 
-    if (!canGo) {
-      return
+        if (isAllComplete && nextStepObj) {
+          const pageTitle = nextStepObj.page.charAt(0).toUpperCase() + nextStepObj.page.slice(1)
+          const icoName = nextStepObj.page === 'describe' ? 'BarChart2' : nextStepObj.page === 'models' ? 'Sliders' : 'ArrowRight'
+          finalNext = {
+            icon: icoName,
+            title: nextStepObj.title,
+            description: nextStepObj.unlocks || nextStepObj.action,
+            badge: "Next",
+            cls: "ax-completion-nb-next"
+          }
+          finalCont = `Go to ${pageTitle}`
+        }
+
+        setModalConfig({
+          type,
+          title: finalTitle,
+          sub: finalSub,
+          stats: finalStats,
+          next: finalNext,
+          cont: finalCont,
+          step: finalStep,
+          nextStepObj,
+          isFinalSuccess
+        })
+      }
     }
 
-    const dismissed = guidance.dismissed_tips || []
-    const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
-    const next = nextCoachStep(guidance.goal, dataset, current.id, dismissed)
-    
-    await persist({
-      completed_tips: completed,
-      walkthrough_step: next?.id || null,
-      guided_mode: Boolean(next),
-    })
-
-    if (next) {
-      routeTarget(dataset.id, next, activeTab, navigate)
-    }
+    setAnimationState('closing')
+    setTimeout(() => {
+      setCardDismissed(true)
+      setAnimationState('')
+      setTimeout(() => {
+        setShowModal(true)
+      }, 220)
+    }, 180)
   }
 
   const currentSub = config.subSteps[displaySubStep]
@@ -1165,8 +1146,8 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
           )}
 
           {displaySubStep === 3 && (
-            <button className="ax-btn mini prim" type="button" disabled={busy} onClick={handleAdvance} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
-              Next step
+            <button className="ax-btn mini prim" type="button" disabled={busy} onClick={handleDoneReviewingChanges} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
+              Done reviewing
             </button>
           )}
 
