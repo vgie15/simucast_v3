@@ -13,7 +13,6 @@ export default function ProjectAIRail({
   onStartResize,
   onOpenGuidanceSetup,
   onGuidanceUpdated,
-  cleaningIssues,
 }) {
   if (!dataset || collapsed) return null
 
@@ -25,7 +24,6 @@ export default function ProjectAIRail({
           activeTab={activeTab}
           onOpenGuidanceSetup={onOpenGuidanceSetup}
           onGuidanceUpdated={onGuidanceUpdated}
-          cleaningIssues={cleaningIssues}
         />
       </div>
       {onStartResize && (

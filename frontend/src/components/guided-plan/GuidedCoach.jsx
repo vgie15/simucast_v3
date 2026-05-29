@@ -5,13 +5,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
-import { cleaningIssuesFromSuggestions, coachStepsForGoal, currentCoachStep, firstCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
+import { coachStepsForGoal, currentCoachStep, firstCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
 
 // Spotlight walkthrough that routes users to exact workflow controls.
-export default function GuidedCoach({ dataset, activeTab, cleaningIssues, onGuidanceUpdated }) {
+export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   const navigate = useNavigate()
   const guidance = dataset?.guidance || {}
-  const current = currentCoachStep(guidance, dataset, cleaningIssues) || firstCoachStep(guidance.goal, dataset, cleaningIssues)
+  const current = currentCoachStep(guidance, dataset) || firstCoachStep(guidance.goal, dataset)
   const [busy, setBusy] = useState(false)
   const [completion, setCompletion] = useState({ checked: false, complete: false })
   const [microIndex, setMicroIndex] = useState(0)
@@ -56,8 +56,7 @@ export default function GuidedCoach({ dataset, activeTab, cleaningIssues, onGuid
     api.cleanSuggestions(dataset.id)
       .then(async (response) => {
         if (cancelled) return
-        const responseIssues = cleaningIssuesFromSuggestions(response)
-        const steps = coachStepsForGoal(guidance.goal, dataset, responseIssues)
+        const steps = coachStepsForGoal(guidance.goal, dataset)
         const pending = firstPendingDataStep(steps, response)
         const currentIndex = steps.findIndex((step) => step.id === current.id)
         const pendingIndex = steps.findIndex((step) => step.id === pending?.id)
@@ -170,7 +169,7 @@ export default function GuidedCoach({ dataset, activeTab, cleaningIssues, onGuid
     }
     const dismissed = skip ? [...new Set([...(guidance.dismissed_tips || []), current.id])] : (guidance.dismissed_tips || [])
     const completed = skip ? (guidance.completed_tips || []) : [...new Set([...(guidance.completed_tips || []), current.id])]
-    const next = nextCoachStep(guidance.goal, dataset, current.id, dismissed, cleaningIssues)
+    const next = nextCoachStep(guidance.goal, dataset, current.id, dismissed)
     await persist({
       dismissed_tips: dismissed,
       completed_tips: completed,

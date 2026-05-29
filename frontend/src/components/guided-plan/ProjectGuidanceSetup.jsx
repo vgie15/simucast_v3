@@ -465,21 +465,8 @@ function closestIntentChoices(question) {
   return [...new Set([inferred, 'full_workflow', 'train_model', 'prepare_data'].filter(Boolean))].slice(0, 3)
 }
 
-export function cleaningIssuesFromSuggestions(response) {
-  if (!response?.groups) return null
-  return {
-    missing: Boolean((response.groups.missing?.columns || []).length),
-    outliers: Boolean((response.groups.outliers?.columns || []).length),
-    duplicates: Number(response.groups.duplicates?.count || 0) > 0,
-  }
-}
-
-export function coachStepsForGoal(goal, dataset, cleaningIssues = null) {
-  const needsMissingFix = cleaningIssues
-    ? cleaningIssues.missing
-    : (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
-  const needsOutlierFix = cleaningIssues ? cleaningIssues.outliers : true
-  const needsDuplicateFix = cleaningIssues ? cleaningIssues.duplicates : true
+export function coachStepsForGoal(goal, dataset) {
+  const needsMissingFix = (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
   const missingStep = needsMissingFix ? coachStep(
     'data.suggested_fixes',
     'data',
@@ -503,7 +490,7 @@ export function coachStepsForGoal(goal, dataset, cleaningIssues = null) {
   )
   const dataIssueSteps = [
     ...(missingStep ? [missingStep] : []),
-    ...(needsOutlierFix ? [coachStep(
+    coachStep(
       'data.outliers',
       'data',
       'fix-cleaning-outliers',
@@ -513,8 +500,8 @@ export function coachStepsForGoal(goal, dataset, cleaningIssues = null) {
       'The guide keeps Data preparation active until detected outliers are handled.',
       'required',
       'outliers',
-    )] : []),
-    ...(needsDuplicateFix ? [coachStep(
+    ),
+    coachStep(
       'data.duplicates',
       'data',
       'fix-cleaning-duplicates',
@@ -524,7 +511,7 @@ export function coachStepsForGoal(goal, dataset, cleaningIssues = null) {
       'The guide moves on once exact duplicate rows are no longer pending.',
       'required',
       'duplicates',
-    )] : []),
+    ),
   ]
   const dataPreparationPath = dataIssueSteps.length ? dataIssueSteps : [inspectStep]
   const common = {
@@ -609,18 +596,18 @@ export function coachStepsForGoal(goal, dataset, cleaningIssues = null) {
   return paths[goal] || dataPreparationPath
 }
 
-export function firstCoachStep(goal, dataset, cleaningIssues = null) {
-  return coachStepsForGoal(goal, dataset, cleaningIssues)[0]
+export function firstCoachStep(goal, dataset) {
+  return coachStepsForGoal(goal, dataset)[0]
 }
 
-export function currentCoachStep(guidance, dataset, cleaningIssues = null) {
-  const steps = coachStepsForGoal(guidance?.goal || guidance?.intent, dataset, cleaningIssues)
+export function currentCoachStep(guidance, dataset) {
+  const steps = coachStepsForGoal(guidance?.goal || guidance?.intent, dataset)
   return steps.find((step) => step.id === guidance?.walkthrough_step) || steps[0] || null
 }
 
-export function nextCoachStep(goal, dataset, currentId, dismissedTips = [], cleaningIssues = null) {
+export function nextCoachStep(goal, dataset, currentId, dismissedTips = []) {
   const hidden = new Set(dismissedTips || [])
-  const steps = coachStepsForGoal(goal, dataset, cleaningIssues)
+  const steps = coachStepsForGoal(goal, dataset)
   const currentIndex = steps.findIndex((step) => step.id === currentId)
   return steps.slice(Math.max(currentIndex + 1, 0)).find((step) => !hidden.has(step.id)) || null
 }

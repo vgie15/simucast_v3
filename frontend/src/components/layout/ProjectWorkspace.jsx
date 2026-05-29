@@ -18,7 +18,7 @@ import ProjectAIRail from '../guided-plan/ProjectAIRail'
 import ProjectGuidanceSetup from '../guided-plan/ProjectGuidanceSetup'
 import GuidedCoach, { routeTarget } from '../guided-plan/GuidedCoach'
 import GuidedFocusCard from '../guided-plan/GuidedFocusCard'
-import { cleaningIssuesFromSuggestions, currentCoachStep } from '../guided-plan/ProjectGuidanceSetup'
+import { currentCoachStep } from '../guided-plan/ProjectGuidanceSetup'
 import { useAuth } from '../providers/AuthProvider'
 import { SimuCastLoader } from '../common/LoadingStates'
 
@@ -109,7 +109,6 @@ export default function ProjectWorkspace() {
   const [guidedLockNotice, setGuidedLockNotice] = useState('')
   const [pillExpanded, setPillExpanded] = useState(false)
   const [issueCount, setIssueCount] = useState(0)
-  const [cleaningIssues, setCleaningIssues] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -127,30 +126,6 @@ export default function ProjectWorkspace() {
       })
       .catch(() => {})
   }, [id, dataset?.current_stage_id, pillExpanded])
-
-  useEffect(() => {
-    let cancelled = false
-    if (!id || !dataset?.id) {
-      setCleaningIssues(null)
-      return undefined
-    }
-    setCleaningIssues(null)
-    const loadCleaningIssues = () => {
-      api.cleanSuggestions(id)
-        .then((response) => {
-          if (!cancelled) setCleaningIssues(cleaningIssuesFromSuggestions(response))
-        })
-        .catch(() => {
-          if (!cancelled) setCleaningIssues(null)
-        })
-    }
-    loadCleaningIssues()
-    window.addEventListener('simucast:apply-success', loadCleaningIssues)
-    return () => {
-      cancelled = true
-      window.removeEventListener('simucast:apply-success', loadCleaningIssues)
-    }
-  }, [id, dataset?.id, dataset?.current_stage_id, refreshKey])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -270,7 +245,7 @@ export default function ProjectWorkspace() {
     )
   }
 
-  const guidedStep = dataset.guidance?.guided_mode ? currentCoachStep(dataset.guidance, dataset, cleaningIssues) : null
+  const guidedStep = dataset.guidance?.guided_mode ? currentCoachStep(dataset.guidance, dataset) : null
   const guidedTabIndex = guidedStep ? TABS.findIndex((item) => item.key === guidedStep.page) : -1
   const guidedLocksFuture = Boolean(guidedStep?.requirement === 'required' && guidedTabIndex >= 0)
   const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey })
@@ -491,20 +466,17 @@ export default function ProjectWorkspace() {
         onStartResize={() => setResizing('ai')}
         onOpenGuidanceSetup={() => setGuidanceSetupOpen(true)}
         onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
-        cleaningIssues={cleaningIssues}
       />
       {activeTab === 'data' ? (
         <GuidedFocusCard
           dataset={dataset}
           activeTab={activeTab}
-          cleaningIssues={cleaningIssues}
           onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
         />
       ) : (
         <GuidedCoach
           dataset={dataset}
           activeTab={activeTab}
-          cleaningIssues={cleaningIssues}
           onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
         />
       )}
