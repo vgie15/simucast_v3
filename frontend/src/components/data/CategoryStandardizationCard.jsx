@@ -279,7 +279,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
       </div>}
 
       {compact && (
-        <div className="ax-tool-pill-tabs" role="tablist" aria-label="Columns needing label review">
+        <div className="ax-tool-pill-tabs pop-section pop-head" role="tablist" aria-label="Columns needing label review">
           {visibleSuggestions.map((s) => (
             <button
               key={s.column}
@@ -317,7 +317,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
       {current && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {showRecommendations && (
-            <>
+            <div className="pop-section rec-banner" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="ax-tool-section-head">
                 <div className="ax-tool-section-title-row">
                   <p className="ax-tool-section-title">Recommended label groups</p>
@@ -328,20 +328,20 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
                 </button>
               </div>
               <AiSuggestionBox loading={aiLoading} suggestion={aiSuggestion} />
-            </>
-          )}
-          {showRecommendations && <div className="ax-card ax-tool-values-card" style={{ padding: 10, background: 'var(--color-background-primary)' }}>
-            <p style={{ fontSize: 11, fontWeight: 500, margin: '0 0 6px' }}>Unique values detected</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {uniqueValues.map((item) => (
-                <span key={item.value} className="ax-chip">
-                  {item.value} <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 3 }}>({item.count})</span>
-                </span>
-              ))}
+              <div className="ax-card ax-tool-values-card" style={{ padding: 10, background: 'var(--color-background-primary)' }}>
+                <p style={{ fontSize: 11, fontWeight: 500, margin: '0 0 6px' }}>Unique values detected</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {uniqueValues.map((item) => (
+                    <span key={item.value} className="ax-chip">
+                      {item.value} <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 3 }}>({item.count})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>}
+          )}
           {groups.map((group, index) => (
-            <div key={index} className="ax-card ax-label-map-row" style={{ padding: 12, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)' }}>
+            <div key={index} className="ax-card ax-label-map-row pop-section pop-controls" style={{ padding: 12, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)' }}>
               {compact && !editingGroups[`${selectedColumn}:${index}`] ? (
                 <>
                   <div className="ax-label-map-summary">
@@ -409,7 +409,7 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
               )}
             </div>
           ))}
-          <div className="ax-row">
+          <div className="ax-row pop-section pop-apply">
             <button className={compact ? 'ax-text-action' : 'ax-btn'} onClick={addGroup} disabled={busy}>
               Add group
             </button>

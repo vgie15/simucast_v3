@@ -393,7 +393,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
         detail="Updating the active dataset, creating a stage, and logging the step."
       />
       <div className="ax-module-head ax-clean-group-head" style={{ alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0 }} className="pop-section pop-head">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <strong style={{ fontSize: 14 }}>{title}</strong>
             <HelpButton title={`${title}: what this card does`} text={helpTextForCleanCard(kind)} />
@@ -405,7 +405,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
         </div>
         <button
           id={applyTargetId}
-          className="ax-btn prim papply"
+          className="ax-btn prim papply pop-section pop-apply"
           disabled={applying || (kind !== 'duplicates' && selected.length === 0)}
           onClick={() => onApply({ kind, action, columns, overrides, options: { keep } })}
           type="button"
@@ -417,37 +417,33 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
       {kind === 'duplicates' ? (
         <>
           {showRecommendations && (
-            <DuplicateRecommendation
-              group={group}
-              loading={aiLoading}
-              suggestion={aiSuggestion}
-              onAsk={askAiForRecommendation}
-            />
+            <div className="pop-section rec-banner">
+              <DuplicateRecommendation
+                group={group}
+                loading={aiLoading}
+                suggestion={aiSuggestion}
+                onAsk={askAiForRecommendation}
+              />
+            </div>
           )}
-          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-            <span className="ax-tool-muted-note">
-              All duplicate rows selected
-            </span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', marginTop: 12, fontSize: 12 }}>
-            <label style={{ color: 'var(--color-text-secondary)' }}>Keep occurrence</label>
-            <select value={keep} onChange={(e) => setKeep(e.target.value)}>
-              <option value="first">First row</option>
-              <option value="last">Last row</option>
-            </select>
+          <div className="pop-section pop-controls" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <span className="ax-tool-muted-note">
+                All duplicate rows selected
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', fontSize: 12 }}>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Keep occurrence</label>
+              <select value={keep} onChange={(e) => setKeep(e.target.value)}>
+                <option value="first">First row</option>
+                <option value="last">Last row</option>
+              </select>
+            </div>
           </div>
         </>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', marginTop: 12, fontSize: 12 }}>
-            <label style={{ color: 'var(--color-text-secondary)' }}>Group method</label>
-            <select value={action} onChange={(e) => setAction(e.target.value)}>
-              {options.map((opt) => (
-                <option key={opt.action} value={opt.action}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div id={recommendationTargetId}>
+          <div id={recommendationTargetId} className="pop-section rec-banner">
             {showRecommendations && (
               <GroupedColumnRecommendations
                 kind={kind}
@@ -460,57 +456,68 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-            <button
-              className="ax-text-action"
-              type="button"
-              onClick={() => setSelected(selectedAll ? [] : items.map((item) => item.variable).filter(Boolean))}
-            >
-              {selectedAll ? 'Clear columns' : 'Select all columns'}
-            </button>
-          </div>
+          <div className="pop-section pop-controls" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', fontSize: 12 }}>
+              <label style={{ color: 'var(--color-text-secondary)' }}>Group method</label>
+              <select value={action} onChange={(e) => setAction(e.target.value)}>
+                {options.map((opt) => (
+                  <option key={opt.action} value={opt.action}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-            {items.map((item) => (
-              <label key={item.variable} className="ax-chip" style={{ cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(item.variable)}
-                  onChange={(e) => {
-                    setSelected((current) => e.target.checked
-                      ? [...current, item.variable]
-                      : current.filter((name) => name !== item.variable))
-                  }}
-                />
-                <span>{item.variable}</span>
-                <span style={{ color: 'var(--color-text-tertiary)' }}>{item.count || 0}</span>
-              </label>
-            ))}
-          </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+              <button
+                className="ax-text-action"
+                type="button"
+                onClick={() => setSelected(selectedAll ? [] : items.map((item) => item.variable).filter(Boolean))}
+              >
+                {selectedAll ? 'Clear columns' : 'Select all columns'}
+              </button>
+            </div>
 
-          <button className="ax-text-action" style={{ marginTop: 10 }} onClick={() => setAdvanced(!advanced)} type="button">
-            {advanced ? 'Hide per-column overrides' : 'Per-column overrides'}
-          </button>
-          {advanced && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-                Override only the columns that need a different method from the grouped recommendation.
-              </p>
-              {items.filter((item) => selected.includes(item.variable)).map((item) => (
-                <div key={item.variable} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(180px, 260px)', gap: 10, alignItems: 'center', fontSize: 12 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {items.map((item) => (
+                <label key={item.variable} className="ax-chip" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(item.variable)}
+                    onChange={(e) => {
+                      setSelected((current) => e.target.checked
+                        ? [...current, item.variable]
+                        : current.filter((name) => name !== item.variable))
+                    }}
+                  />
                   <span>{item.variable}</span>
-                  <select
-                    value={overrides[item.variable] || action}
-                    onChange={(e) => setOverrides((current) => ({ ...current, [item.variable]: e.target.value }))}
-                  >
-                    {(item.options || options).map((opt) => (
-                      <option key={opt.action} value={opt.action}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>{item.count || 0}</span>
+                </label>
               ))}
             </div>
-          )}
+
+            <button className="ax-text-action" style={{ marginTop: 10, alignSelf: 'flex-start' }} onClick={() => setAdvanced(!advanced)} type="button">
+              {advanced ? 'Hide per-column overrides' : 'Per-column overrides'}
+            </button>
+            {advanced && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
+                  Override only the columns that need a different method from the grouped recommendation.
+                </p>
+                {items.filter((item) => selected.includes(item.variable)).map((item) => (
+                  <div key={item.variable} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(180px, 260px)', gap: 10, alignItems: 'center', fontSize: 12 }}>
+                    <span>{item.variable}</span>
+                    <select
+                      value={overrides[item.variable] || action}
+                      onChange={(e) => setOverrides((current) => ({ ...current, [item.variable]: e.target.value }))}
+                    >
+                      {(item.options || options).map((opt) => (
+                        <option key={opt.action} value={opt.action}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -548,6 +555,36 @@ function DataToolsToolbar({
   const [popoverX, setPopoverX] = useState(18)
   const [showRecommendations, setShowRecommendations] = useState(false)
   const close = () => setOpenTool(null)
+
+  const [renderedTool, setRenderedTool] = useState(null)
+  const [popoverState, setPopoverState] = useState('')
+
+  useEffect(() => {
+    if (openTool) {
+      setRenderedTool(openTool)
+      setPopoverState('opening')
+      
+      setTimeout(() => {
+        const btn = document.getElementById(`tb-${openTool}`)
+        const popover = document.querySelector('.ax-data-toolbar-popover')
+        if (btn && popover) {
+          const btnCenter = btn.getBoundingClientRect().left + btn.offsetWidth / 2
+          const popLeft = popover.getBoundingClientRect().left
+          const originX = btnCenter - popLeft
+          popover.style.transformOrigin = `${originX}px top`
+        }
+      }, 0)
+    } else {
+      if (renderedTool) {
+        setPopoverState('closing')
+        const timer = setTimeout(() => {
+          setRenderedTool(null)
+          setPopoverState('')
+        }, 120)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [openTool])
 
   useEffect(() => {
     if (openTool) {
@@ -649,11 +686,11 @@ function DataToolsToolbar({
           />
         </div>
       </div>
-      {openTool && (
+      {renderedTool && (
         <>
-          <button className="ax-data-toolbar-overlay" type="button" aria-label="Close data tool" onClick={close} />
-          <div className={`ax-data-toolbar-popover ${openTool === 'columns' ? 'columns-popover' : ''}`} style={{ left: popoverX }}>
-            <div className="ax-data-toolbar-popover-head">
+          <button className={`ax-data-toolbar-overlay dim-overlay ${popoverState === 'closing' ? 'hiding' : 'show'}`} type="button" aria-label="Close data tool" onClick={close} />
+          <div className={`ax-data-toolbar-popover popover ${renderedTool === 'columns' ? 'columns-popover' : ''} ${popoverState}`} style={{ left: popoverX }}>
+            <div className="ax-data-toolbar-popover-head pop-section pop-head">
               <div>
                 <TablerIcon name={activeTool?.icon || 'tool'} />
                 <strong>{activeTool?.label || 'Columns'}</strong>
@@ -674,14 +711,14 @@ function DataToolsToolbar({
               </div>
             </div>
             <div className="ax-data-toolbar-popover-body">
-              {suggestionsLoading && ['missing', 'outliers', 'duplicates'].includes(openTool) ? (
+              {suggestionsLoading && ['missing', 'outliers', 'duplicates'].includes(renderedTool) ? (
                 <p className="ax-data-toolbar-note">Loading detected issues...</p>
               ) : (
                 <ToolbarPopoverContent
-                  toolKey={openTool}
+                  toolKey={renderedTool}
                   dataset={dataset}
-                  group={groupForTool(openTool, suggestionGroups)}
-                  applying={applyingGroup === openTool}
+                  group={groupForTool(renderedTool, suggestionGroups)}
+                  applying={applyingGroup === renderedTool}
                   onApplyGroup={onApplyGroup}
                   onApplied={async (...args) => {
                     close()
@@ -1724,9 +1761,43 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
 
 // Scrolls to a section element and briefly applies a highlight class for emphasis.
 function highlightSection(section) {
-  const el = document.getElementById(section)
-  if (!el) return
+  if (!section) return
+  let el = document.getElementById(section)
+  if (!el) {
+    if (section.startsWith('fix-cleaning-')) {
+      const suffix = section.replace('fix-cleaning-', '').split('-')[0]
+      const btn = document.getElementById(`tb-${suffix}`)
+      if (btn) {
+        btn.click()
+        setTimeout(() => {
+          const newEl = document.getElementById(section)
+          if (newEl) {
+            newEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            newEl.classList.add('ax-fix-highlight')
+            setTimeout(() => newEl.classList.remove('ax-fix-highlight'), 2600)
+          }
+        }, 120)
+        return
+      }
+    } else if (section === 'data-section-category_standardization') {
+      const btn = document.getElementById('tb-labels')
+      if (btn) {
+        btn.click()
+        setTimeout(() => {
+          const newEl = document.getElementById(section)
+          if (newEl) {
+            newEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            newEl.classList.add('ax-fix-highlight')
+            setTimeout(() => newEl.classList.remove('ax-fix-highlight'), 2600)
+          }
+        }, 120)
+        return
+      }
+    }
+    return
+  }
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   el.classList.add('ax-fix-highlight')
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
+

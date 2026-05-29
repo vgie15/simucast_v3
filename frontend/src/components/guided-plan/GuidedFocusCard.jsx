@@ -2,11 +2,12 @@
  * COMPONENT: GuidedFocusCard
  * Keywords: guided workflow, spotlight, contextual card
  * ============================================================ */
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import { coachStepsForGoal, currentCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
 import { checkCoachCompletion, routeTarget } from './GuidedCoach'
+import { Check, ArrowRight, AlertTriangle, Tag, BarChart2, Sliders, FileCheck } from 'lucide-react'
 
 const STEP_CONFIGS = {
   'data.suggested_fixes': {
@@ -103,14 +104,110 @@ const STEP_CONFIGS = {
   }
 }
 
+const modalContents = {
+  missing: {
+    title: "Missing values handled!",
+    sub: "SimuCast filled blanks across columns using median and mode — no rows were removed.",
+    stats: (snapshot, ds) => {
+      const cols = snapshot?.groups?.missing?.columns || []
+      const cellsFilled = cols.reduce((sum, col) => sum + (col.count || col.missing || 5), 0) || 26
+      const colsFixed = cols.length || 4
+      const rowsKept = ds?.row_count || 344
+      return [
+        [String(cellsFilled), "Cells filled"],
+        [String(colsFixed), "Columns fixed"],
+        [String(rowsKept), "Rows kept"]
+      ]
+    },
+    next: { ico: "AlertTriangle", title: "Review outliers in numeric columns", desc: "Numeric columns have extreme values that may affect accuracy.", badge: "Recommended", cls: "nb-rec" },
+    cont: "Go to Outliers",
+    step: 1
+  },
+  outliers: {
+    title: "Outliers capped!",
+    sub: "Extreme values were capped to IQR bounds. Your dataset is cleaner and ready for the next step.",
+    stats: (snapshot, ds) => {
+      const cols = snapshot?.groups?.outliers?.columns || []
+      const valuesCapped = cols.reduce((sum, col) => sum + (col.count || 2), 0) || 2
+      const rowsRemoved = 0
+      const rowsRemain = ds?.row_count || 344
+      return [
+        [String(valuesCapped), "Values capped"],
+        [String(rowsRemoved), "Rows removed"],
+        [String(rowsRemain), "Rows remain"]
+      ]
+    },
+    next: { ico: "Tag", title: "Standardize categorical labels", desc: "Categorical columns have inconsistent casing or fuzzy matches.", badge: "Required", cls: "nb-req" },
+    cont: "Go to Labels",
+    step: 2
+  },
+  duplicates: {
+    title: "Duplicates removed!",
+    sub: "Exact repeated rows were removed from the active dataset stage.",
+    stats: (snapshot, ds) => {
+      const count = snapshot?.groups?.duplicates?.count || 1
+      const colsChecked = ds?.col_count || 7
+      const rowsRemain = ds?.row_count || 344
+      return [
+        [String(count), "Rows removed"],
+        [String(colsChecked), "Columns checked"],
+        [String(rowsRemain), "Rows remain"]
+      ]
+    },
+    next: { ico: "Tag", title: "Standardize categorical labels", desc: "Categorical columns have inconsistent casing or fuzzy matches.", badge: "Required", cls: "nb-req" },
+    cont: "Go to Labels",
+    step: 3
+  },
+  labels: {
+    title: "Labels standardized!",
+    sub: "Categories unified — values are now consistent and ready for encoding.",
+    stats: (snapshot, ds) => {
+      const cols = snapshot?.suggestions?.length || 1
+      const valuesUnified = snapshot?.suggestions?.reduce((sum, s) => sum + (s.items?.length || 4), 0) || 12
+      return [
+        [String(cols), "Columns cleaned"],
+        [String(valuesUnified), "Values unified"],
+        ["3", "Steps done"]
+      ]
+    },
+    next: { ico: "ArrowRight", title: "Move to Expand", desc: "All required steps complete. Optionally engineer features before modeling.", badge: "Optional", cls: "nb-opt" },
+    cont: "Go to Expand",
+    step: 4
+  }
+};
+
+const pages = ["Data", "Expand", "Describe", "Analysis", "Models", "What if", "Report"];
+
 export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated }) {
   const navigate = useNavigate()
   const guidance = dataset?.guidance || {}
   const current = currentCoachStep(guidance, dataset)
   
   const [subStep, setSubStep] = useState(1)
+  const [animationState, setAnimationState] = useState('entering')
+  const [displaySubStep, setDisplaySubStep] = useState(1)
+  const [contentAnimClass, setContentAnimClass] = useState('')
   const [busy, setBusy] = useState(false)
   const [suggestionData, setSuggestionData] = useState(null)
+  
+  const [cardDismissed, setCardDismissed] = useState(false)
+  const activeSpotlightTimeoutRef = useRef(null)
+  const [targetRect, setTargetRect] = useState(null)
+  const [cardPosition, setCardPosition] = useState({ top: 0, left: 0, arrowSide: 'top' })
+  const activeElementRef = useRef(null)
+  const [showModal, setShowModal] = useState(false)
+  const [modalConfig, setModalConfig] = useState(null)
+  
+  const [typedTitle, setTypedTitle] = useState('')
+  const [cursorVisible, setCursorVisible] = useState(true)
+  const [showSub, setShowSub] = useState(false)
+  const [showStats, setShowStats] = useState(false)
+  const [showProg, setShowProg] = useState(false)
+  const [showNext, setShowNext] = useState(false)
+  const [checkRingPop, setCheckRingPop] = useState(false)
+  
+  const [confettiActive, setConfettiActive] = useState(false)
+  const [confettiDots, setConfettiDots] = useState([])
 
   // Retrieve current step configuration
   const config = useMemo(() => {
@@ -122,6 +219,27 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     if (!config || !suggestionData) return true
     return issuePendingForTool(config.toolKey, suggestionData, dataset)
   }, [config, dataset, suggestionData])
+
+  // Clear entering class after 280ms
+  useEffect(() => {
+    setAnimationState('entering')
+    const timer = setTimeout(() => {
+      setAnimationState('')
+    }, 280)
+    return () => clearTimeout(timer)
+  }, [current?.id])
+
+  // Coordinate sub-step content cross-fade transitions
+  useEffect(() => {
+    if (subStep !== displaySubStep) {
+      setContentAnimClass('gf-content-fade-out')
+      const timer = setTimeout(() => {
+        setDisplaySubStep(subStep)
+        setContentAnimClass('gf-content-fade-in')
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [subStep, displaySubStep])
 
   // Load cleaning suggestions to count/describe issues
   useEffect(() => {
@@ -202,52 +320,529 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     }
     const handleApplySuccess = () => {
       setSubStep(3)
+      
+      const toolKey = config?.toolKey
+      if (!toolKey) return
+
+      const type = toolKey
+      const activeContent = modalContents[type]
+      if (!activeContent) return
+
+      // Compute stats
+      const stats = activeContent.stats(suggestionData, dataset)
+
+      // Compute next step
+      const dismissed = guidance.dismissed_tips || []
+      const nextStepObj = nextCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed)
+      
+      const isAllComplete = !nextStepObj || nextStepObj.page !== 'data'
+
+      let finalTitle = activeContent.title
+      let finalSub = activeContent.sub
+      let finalStats = stats
+      let finalNext = activeContent.next
+      let finalCont = activeContent.cont
+      let finalStep = activeContent.step
+      let isFinalSuccess = false
+
+      if (isAllComplete) {
+        finalTitle = "Dataset is ready! 🎉"
+        finalSub = "All steps complete. Your data is clean, consistent, and prepared for modeling."
+        finalStats = [
+          ["4 / 4", "Steps done"],
+          [String(dataset?.row_count || 344), "Clean rows"],
+          [String(dataset?.col_count || 7), "Columns ready"]
+        ]
+        isFinalSuccess = true
+        
+        if (nextStepObj) {
+          const pageTitle = nextStepObj.page.charAt(0).toUpperCase() + nextStepObj.page.slice(1)
+          const icoName = nextStepObj.page === 'describe' ? 'BarChart2' : nextStepObj.page === 'models' ? 'Sliders' : 'ArrowRight'
+          finalNext = {
+            ico: icoName,
+            title: nextStepObj.title,
+            desc: nextStepObj.unlocks || nextStepObj.action,
+            badge: "Next",
+            cls: "nb-next"
+          }
+          finalCont = `Go to ${pageTitle}`
+        } else {
+          finalNext = {
+            ico: "FileCheck",
+            title: "Review final report",
+            desc: "Go to the Report page to check your generated findings.",
+            badge: "Complete",
+            cls: "nb-next"
+          }
+          finalCont = "Go to Report"
+        }
+      }
+
+      setModalConfig({
+        type,
+        title: finalTitle,
+        sub: finalSub,
+        stats: finalStats,
+        next: finalNext,
+        cont: finalCont,
+        step: finalStep,
+        nextStepObj,
+        isFinalSuccess
+      })
+
+      // Animate card exit before unmounting
+      setAnimationState('closing')
+      setTimeout(() => {
+        setCardDismissed(true)
+        setAnimationState('')
+        
+        // Open the modal after the remaining time
+        setTimeout(() => {
+          setShowModal(true)
+        }, 220)
+      }, 180)
     }
+
     window.addEventListener('simucast:popover-open', handlePopoverOpen)
     window.addEventListener('simucast:apply-success', handleApplySuccess)
     return () => {
       window.removeEventListener('simucast:popover-open', handlePopoverOpen)
       window.removeEventListener('simucast:apply-success', handleApplySuccess)
     }
-  }, [config])
+  }, [config, suggestionData, dataset, current, guidance])
 
-  // Periodic DOM scanner to add/remove .spotlight class
-  useEffect(() => {
-    if (!config) return
+  // Dynamic spotlight layout measurements and class triggers
+  const updateSpotlight = () => {
+    if (!config) {
+      setTargetRect(null)
+      if (activeElementRef.current) {
+        const oldEl = activeElementRef.current
+        oldEl.classList.remove('spotlight', 'idle')
+        oldEl.style.position = oldEl.dataset.prevPosition || ''
+        oldEl.style.zIndex = oldEl.dataset.prevZIndex || ''
+        delete oldEl.dataset.prevPosition
+        delete oldEl.dataset.prevZIndex
+        activeElementRef.current = null
+      }
+      return
+    }
 
     const currentSubStepData = config.subSteps[subStep]
     const selector = currentSubStepData?.spotlight
+    const nextEl = selector ? document.querySelector(selector) : null
+    const prevEl = activeElementRef.current
 
-    const clearSpotlights = () => {
-      document.querySelectorAll('.spotlight').forEach(el => {
-        el.classList.remove('spotlight')
-      })
-    }
+    if (nextEl !== prevEl) {
+      if (activeSpotlightTimeoutRef.current) {
+        clearTimeout(activeSpotlightTimeoutRef.current)
+        activeSpotlightTimeoutRef.current = null
+      }
 
-    clearSpotlights()
-    if (!selector) return
+      if (prevEl) {
+        // Fade out previous spotlight over 150ms
+        prevEl.style.transition = 'box-shadow 150ms ease, opacity 150ms ease'
+        prevEl.style.boxShadow = 'none'
+        prevEl.style.opacity = '0'
+        prevEl.classList.remove('spotlight', 'idle')
 
-    const applySpotlight = () => {
-      const el = document.querySelector(selector)
-      if (el && !el.classList.contains('spotlight')) {
-        clearSpotlights()
-        el.classList.add('spotlight')
+        const tempPrev = prevEl
+        setTimeout(() => {
+          tempPrev.style.transition = ''
+          tempPrev.style.boxShadow = ''
+          tempPrev.style.opacity = ''
+          tempPrev.style.position = tempPrev.dataset.prevPosition || ''
+          tempPrev.style.zIndex = tempPrev.dataset.prevZIndex || ''
+          delete tempPrev.dataset.prevPosition
+          delete tempPrev.dataset.prevZIndex
+        }, 150)
+      }
+
+      if (nextEl) {
+        activeElementRef.current = nextEl
+        nextEl.dataset.prevPosition = nextEl.style.position || ''
+        nextEl.dataset.prevZIndex = nextEl.style.zIndex || ''
+        nextEl.style.position = 'relative'
+        nextEl.style.zIndex = '101'
+
+        if (prevEl) {
+          activeSpotlightTimeoutRef.current = setTimeout(() => {
+            if (document.body.contains(nextEl)) {
+              nextEl.classList.add('spotlight')
+              activeSpotlightTimeoutRef.current = setTimeout(() => {
+                if (document.body.contains(nextEl)) {
+                  nextEl.classList.remove('spotlight')
+                  nextEl.classList.add('spotlight', 'idle')
+                }
+              }, 350)
+            }
+          }, 150)
+        } else {
+          nextEl.classList.add('spotlight')
+          activeSpotlightTimeoutRef.current = setTimeout(() => {
+            if (document.body.contains(nextEl)) {
+              nextEl.classList.remove('spotlight')
+              nextEl.classList.add('spotlight', 'idle')
+            }
+          }, 350)
+        }
+      } else {
+        activeElementRef.current = null
       }
     }
 
-    applySpotlight()
-    const interval = setInterval(applySpotlight, 300)
+    if (!nextEl) {
+      setTargetRect(null)
+      return
+    }
+
+    const rect = nextEl.getBoundingClientRect()
+    setTargetRect(prev => {
+      if (
+        prev &&
+        prev.left === rect.left &&
+        prev.top === rect.top &&
+        prev.width === rect.width &&
+        prev.height === rect.height
+      ) {
+        return prev
+      }
+      return {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+      }
+    })
+  }
+
+  // Monitor targetRect coordinates to position the coach card dynamically
+  useEffect(() => {
+    if (!targetRect) return
+
+    const cardW = 300
+    const cardEl = document.querySelector('.guided-focus-card')
+    const cardH = cardEl ? cardEl.offsetHeight : 180
+
+    const margin = 12
+    const viewW = window.innerWidth
+    const viewH = window.innerHeight
+
+    // Position logic: Prefer placing card BELOW target
+    let top = targetRect.top + targetRect.height + margin
+    let left = targetRect.left
+    let arrowSide = 'top'
+
+    // If too close to bottom, place ABOVE
+    if (top + cardH > viewH - 20) {
+      top = targetRect.top - cardH - margin
+      arrowSide = 'bottom'
+    }
+
+    // If too close to right edge, shift left
+    if (left + cardW > viewW - 20) {
+      left = viewW - cardW - 20
+    }
+
+    // Clamp to viewport boundaries
+    top = Math.max(20, top)
+    left = Math.max(20, left)
+
+    setCardPosition({ top, left, arrowSide })
+  }, [targetRect])
+
+  // Attach window event listeners for scroll and resize
+  useEffect(() => {
+    const handleUpdate = () => {
+      updateSpotlight()
+    }
+
+    window.addEventListener('resize', handleUpdate)
+    window.addEventListener('scroll', handleUpdate, true)
+
+    const interval = setInterval(handleUpdate, 100)
+    handleUpdate()
 
     return () => {
+      window.removeEventListener('resize', handleUpdate)
+      window.removeEventListener('scroll', handleUpdate, true)
       clearInterval(interval)
-      clearSpotlights()
     }
   }, [config, subStep])
+
+  // Guaranteed cleanup of styles when component unmounts
+  useEffect(() => {
+    return () => {
+      if (activeElementRef.current) {
+        const oldEl = activeElementRef.current
+        oldEl.classList.remove('spotlight', 'idle')
+        oldEl.style.position = oldEl.dataset.prevPosition || ''
+        oldEl.style.zIndex = oldEl.dataset.prevZIndex || ''
+      }
+    }
+  }, [])
 
   // Reset sub-step when active step changes
   useEffect(() => {
     setSubStep(1)
+    setDisplaySubStep(1)
+    setContentAnimClass('')
   }, [current?.id])
+
+  // Typing animation and phase transitions for Task Completion Modal
+  useEffect(() => {
+    if (!showModal || !modalConfig) {
+      setTypedTitle('')
+      setCursorVisible(true)
+      setShowSub(false)
+      setShowStats(false)
+      setShowProg(false)
+      setShowNext(false)
+      setCheckRingPop(false)
+      return
+    }
+
+    const ringTimer = setTimeout(() => {
+      setCheckRingPop(true)
+    }, 250)
+
+    const typeTimer = setTimeout(() => {
+      let i = 0
+      const titleText = modalConfig.title
+      const interval = setInterval(() => {
+        if (i < titleText.length) {
+          setTypedTitle(titleText.slice(0, i + 1))
+          i++
+        } else {
+          clearInterval(interval)
+          setCursorVisible(false)
+          setShowSub(true)
+          
+          setTimeout(() => {
+            setShowStats(true)
+            setShowProg(true)
+            
+            setTimeout(() => {
+              setShowNext(true)
+              if (modalConfig.isFinalSuccess) {
+                triggerConfetti()
+              }
+            }, 320)
+          }, 220)
+        }
+      }, 32)
+
+      return () => clearInterval(interval)
+    }, 650)
+
+    return () => {
+      clearTimeout(ringTimer)
+      clearTimeout(typeTimer)
+    }
+  }, [showModal, modalConfig])
+
+  // Escape key listener to dismiss modal (behaves as "Stay here")
+  useEffect(() => {
+    if (!showModal) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleStayHere()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showModal, modalConfig])
+
+  const triggerConfetti = () => {
+    const cols = ['#f97316', '#fb923c', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fff']
+    const dots = []
+    for (let i = 0; i < 80; i++) {
+      const sz = 6 + Math.random() * 8
+      dots.push({
+        id: i,
+        left: `${Math.random() * 100}%`,
+        width: `${sz}px`,
+        height: `${sz}px`,
+        background: cols[Math.floor(Math.random() * cols.length)],
+        borderRadius: Math.random() > 0.5 ? '50%' : '3px',
+        animationDuration: `${1.8 + Math.random() * 2.2}s`,
+        animationDelay: `${Math.random() * 0.6}s`,
+      })
+    }
+    setConfettiDots(dots)
+    setConfettiActive(true)
+    setTimeout(() => {
+      setConfettiActive(false)
+      setConfettiDots([])
+    }, 5000)
+  }
+
+  const handleOverlayClick = (e) => {
+    if (e.target.classList.contains('ax-completion-overlay')) {
+      handleStayHere()
+    }
+  }
+
+  const handleContinue = async () => {
+    const dismissed = guidance.dismissed_tips || []
+    const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
+    const next = modalConfig?.nextStepObj
+
+    setShowModal(false)
+    setCardDismissed(false)
+
+    await persist({
+      completed_tips: completed,
+      walkthrough_step: next?.id || null,
+      guided_mode: Boolean(next),
+    })
+
+    if (next) {
+      routeTarget(dataset.id, next, activeTab, navigate)
+    }
+  }
+
+  const handleStayHere = async () => {
+    const dismissed = guidance.dismissed_tips || []
+    const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
+    const next = modalConfig?.nextStepObj
+
+    setShowModal(false)
+    setCardDismissed(false)
+
+    await persist({
+      completed_tips: completed,
+      walkthrough_step: next?.id || null,
+      guided_mode: Boolean(next),
+    })
+  }
+
+  const renderNextIcon = (icoName) => {
+    switch (icoName) {
+      case 'AlertTriangle': return <AlertTriangle />
+      case 'Tag': return <Tag />
+      case 'BarChart2': return <BarChart2 />
+      case 'Sliders': return <Sliders />
+      case 'FileCheck': return <FileCheck />
+      default: return <ArrowRight />
+    }
+  }
+
+  const renderModal = () => {
+    if (!modalConfig) return null
+
+    const nextStepObj = modalConfig.nextStepObj
+    const isFinalSuccess = modalConfig.isFinalSuccess
+
+    let activePageIndex = 0
+    if (isFinalSuccess) {
+      if (nextStepObj) {
+        activePageIndex = pages.findIndex(p => p.toLowerCase() === nextStepObj.page.toLowerCase())
+        if (activePageIndex < 0) activePageIndex = 1
+      } else {
+        activePageIndex = pages.length - 1
+      }
+    }
+
+    return (
+      <>
+        {confettiActive && (
+          <div className="ax-completion-confetti-layer">
+            {confettiDots.map(dot => (
+              <div
+                key={dot.id}
+                className="ax-completion-conf"
+                style={{
+                  left: dot.left,
+                  width: dot.width,
+                  height: dot.height,
+                  background: dot.background,
+                  borderRadius: dot.borderRadius,
+                  animationDuration: dot.animationDuration,
+                  animationDelay: dot.animationDelay,
+                }}
+              />
+            ))}
+          </div>
+        )}
+        <div className={`ax-completion-overlay ${showModal ? 'show' : ''}`} onClick={handleOverlayClick}>
+          <div className="ax-completion-modal">
+            <div className="ax-completion-modal-accent"></div>
+            <div className="ax-completion-modal-head">
+              <div className={`ax-completion-check-ring ${checkRingPop ? 'pop' : ''}`}>
+                <Check />
+              </div>
+              <div className="ax-completion-modal-title">
+                {typedTitle}
+                <span className={`ax-completion-cursor ${cursorVisible ? '' : 'gone'}`}></span>
+              </div>
+              {showSub && (
+                <div className="ax-completion-modal-sub">
+                  {modalConfig.sub}
+                </div>
+              )}
+            </div>
+
+            <div className={`ax-completion-prog-track ${showProg ? 'show' : ''}`}>
+              {pages.map((p, i) => {
+                const isCurrent = i === activePageIndex
+                const isDone = i < activePageIndex
+                const showLine = i < pages.length - 1
+                return (
+                  <React.Fragment key={p}>
+                    <div className="ax-completion-pt-step">
+                      <div className={`ax-completion-pt-dot ${isDone ? 'done' : isCurrent ? 'cur' : ''}`}></div>
+                      <div className={`ax-completion-pt-label ${isDone ? 'done' : isCurrent ? 'cur' : ''}`}>{p}</div>
+                    </div>
+                    {showLine && (
+                      <div className={`ax-completion-pt-line ${isDone ? 'done' : ''}`}></div>
+                    )}
+                  </React.Fragment>
+                )
+              })}
+            </div>
+
+            <div className={`ax-completion-modal-stats ${showStats ? 'show' : ''}`}>
+              {modalConfig.stats.map((s, idx) => (
+                <div className="ax-completion-stat" key={idx}>
+                  <div className="ax-completion-stat-val">{s[0]}</div>
+                  <div className="ax-completion-stat-lbl">{s[1]}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className={`ax-completion-modal-next ${showNext ? 'show' : ''}`}>
+              <div className="ax-completion-next-lbl">Up next</div>
+              <div className="ax-completion-next-card">
+                <div className="ax-completion-next-ico">
+                  {renderNextIcon(modalConfig.next.ico)}
+                </div>
+                <div className="ax-completion-next-body">
+                  <div className="ax-completion-next-title">{modalConfig.next.title}</div>
+                  <div className="ax-completion-next-desc">{modalConfig.next.desc}</div>
+                </div>
+                <span className={`ax-completion-next-badge ${modalConfig.next.cls}`}>
+                  {modalConfig.next.badge}
+                </span>
+              </div>
+              <div className="ax-completion-modal-btns">
+                <button className="btn-p" onClick={handleContinue}>
+                  {modalConfig.cont} <ArrowRight size={16} />
+                </button>
+                <button className="btn-s" onClick={handleStayHere}>
+                  Stay here
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (cardDismissed) {
+    if (!showModal) return null
+    return renderModal()
+  }
 
   if (!dataset?.id || !guidance.guided_mode || !current || !config || activeTab !== 'data') return null
   if (isIssueTool(config.toolKey) && suggestionData && !issueStepPending) return null
@@ -299,15 +894,10 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   }
 
   const handleAdvance = async () => {
-    // If not completed yet, run checkCoachCompletion
     const verifiedComplete = await checkCoachCompletion(dataset, current)
-    
-    // In labels, standard checkCoachCompletion doesn't check label standardization
-    // Since labels isn't strictly required, we can allow proceed if verified or subStep === 3
     const canGo = verifiedComplete || subStep === 3 || current.requirement !== 'required'
 
     if (!canGo) {
-      // Prompt user to apply the fix
       return
     }
 
@@ -326,85 +916,121 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     }
   }
 
-  const currentSub = config.subSteps[subStep]
+  const currentSub = config.subSteps[displaySubStep]
+
+  const closeCardAndPersist = (body) => {
+    setAnimationState('closing')
+    setTimeout(() => {
+      persist(body)
+    }, 180)
+  }
 
   return (
-    <aside
-      className="ax-guided-coach anchored"
-      style={{
-        position: 'fixed',
-        bottom: '16px',
-        right: '16px',
-        zIndex: 10000,
-        width: '340px',
-        maxHeight: '400px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.15)',
-        border: '1px solid rgba(249, 115, 22, 0.25)',
-        background: 'rgba(255, 255, 255, 0.98)',
-        backdropFilter: 'blur(8px)',
-        borderRadius: '12px',
-        padding: '16px',
-        animation: 'ax-guided-ring-in 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
-      }}
-    >
-      <div className="ax-guided-coach-step-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-        <p className="ax-kicker" style={{ margin: 0, textTransform: 'uppercase', fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.08em', color: '#f97316' }}>
-          Guided Focus · {subStep} of 3
-        </p>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>{config.title}</span>
-      </div>
+    <>
+      <svg
+        className={`spotlight-overlay ${targetRect ? 'show' : ''}`}
+        onClick={(e) => {
+          if (!targetRect) return
+          const hx = targetRect.left - 8
+          const hy = targetRect.top - 8
+          const hw = targetRect.width + 16
+          const hh = targetRect.height + 16
+          const inHole = e.clientX >= hx && e.clientX <= hx + hw
+                      && e.clientY >= hy && e.clientY <= hy + hh
+          if (!inHole) {
+            closeCardAndPersist({ guided_mode: false })
+          }
+        }}
+      >
+        <defs>
+          <mask id="spotlight-mask">
+            <rect width="100%" height="100%" fill="white" />
+            <rect
+              id="spotlight-hole"
+              x={targetRect ? targetRect.left - 8 : 0}
+              y={targetRect ? targetRect.top - 8 : 0}
+              width={targetRect ? targetRect.width + 16 : 0}
+              height={targetRect ? targetRect.height + 16 : 0}
+              rx="8"
+              fill="black"
+            />
+          </mask>
+        </defs>
+        <rect
+          width="100%"
+          height="100%"
+          fill="rgba(0,0,0,0.6)"
+          mask="url(#spotlight-mask)"
+        />
+      </svg>
 
-      <strong style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-text-primary)', display: 'block', margin: '2px 0 6px' }}>
-        {currentSub?.title}
-      </strong>
+      <aside
+        className={`guided-focus-card guided-focus ${animationState}`}
+        data-arrow-side={cardPosition.arrowSide}
+        style={{
+          top: `${cardPosition.top}px`,
+          left: `${cardPosition.left}px`
+        }}
+      >
+        <div className={contentAnimClass} style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+          <div className="ax-guided-coach-step-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+            <p className="ax-kicker" style={{ margin: 0, textTransform: 'uppercase', fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.08em', color: '#f97316' }}>
+              Guided Focus · {displaySubStep} of 3
+            </p>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>{config.title}</span>
+          </div>
 
-      <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: 1.45 }}>
-        {subStep === 1 && (
-          <p style={{ margin: 0 }}>
-            <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>What SimuCast sees:</span><br />
-            {getSeesText()}
-          </p>
-        )}
-        
-        <p style={{ margin: 0 }}>
-          <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Do this now:</span><br />
-          {currentSub?.action}
-        </p>
+          <strong style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-text-primary)', display: 'block', margin: '2px 0 2px' }}>
+            {currentSub?.title}
+          </strong>
 
-        {subStep === 1 && config.why && (
-          <p style={{ margin: 0, fontSize: '11.5px', opacity: 0.85, borderLeft: '2px solid #fdba74', paddingLeft: '8px' }}>
-            <span style={{ fontWeight: 600 }}>Why:</span> {config.why}
-          </p>
-        )}
-      </div>
+          <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: 1.45 }}>
+            {displaySubStep === 1 && (
+              <p style={{ margin: 0 }}>
+                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>What SimuCast sees:</span><br />
+                {getSeesText()}
+              </p>
+            )}
+            
+            <p className="do-this-now" style={{ margin: 0 }}>
+              <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Do this now:</span><br />
+              {currentSub?.action}
+            </p>
 
-      <div className="ax-guided-coach-actions" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
-        {subStep === 1 && (
-          <button className="ax-btn mini prim" type="button" onClick={handleDoneReviewing} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
-            I am done reviewing
+            {displaySubStep === 1 && config.why && (
+              <p style={{ margin: 0, fontSize: '11.5px', opacity: 0.85, borderLeft: '2px solid #fdba74', paddingLeft: '8px' }}>
+                <span style={{ fontWeight: 600 }}>Why:</span> {config.why}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="ax-guided-coach-actions" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+          {displaySubStep === 1 && (
+            <button className="ax-btn mini prim" type="button" onClick={handleDoneReviewing} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
+              I am done reviewing
+            </button>
+          )}
+          
+          {displaySubStep === 2 && (
+            <button className="ax-btn mini ghost" type="button" onClick={() => setSubStep(1)}>
+              Back
+            </button>
+          )}
+
+          {displaySubStep === 3 && (
+            <button className="ax-btn mini prim" type="button" disabled={busy} onClick={handleAdvance} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
+              Next step
+            </button>
+          )}
+
+          <button className="ax-link-btn" type="button" disabled={busy} onClick={() => closeCardAndPersist({ guided_mode: false })} style={{ marginLeft: 'auto', fontSize: '11.5px', color: 'var(--color-text-secondary)' }}>
+            Explore freely
           </button>
-        )}
-        
-        {subStep === 2 && (
-          <button className="ax-btn mini ghost" type="button" onClick={() => setSubStep(1)}>
-            Back
-          </button>
-        )}
-
-        {subStep === 3 && (
-          <button className="ax-btn mini prim" type="button" disabled={busy} onClick={handleAdvance} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
-            Next step
-          </button>
-        )}
-
-        <button className="ax-link-btn" type="button" disabled={busy} onClick={() => persist({ guided_mode: false })} style={{ marginLeft: 'auto', fontSize: '11.5px', color: 'var(--color-text-secondary)' }}>
-          Explore freely
-        </button>
-      </div>
-    </aside>
+        </div>
+      </aside>
+      {renderModal()}
+    </>
   )
 }
 

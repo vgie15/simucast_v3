@@ -1035,8 +1035,40 @@ function targetForStep(step) {
 // Scrolls to a section by id and briefly applies a highlight class for emphasis.
 function highlightSection(section) {
   if (!section) return
-  const el = document.getElementById(section)
-  if (!el) return
+  let el = document.getElementById(section)
+  if (!el) {
+    if (section.startsWith('fix-cleaning-')) {
+      const suffix = section.replace('fix-cleaning-', '').split('-')[0]
+      const btn = document.getElementById(`tb-${suffix}`)
+      if (btn) {
+        btn.click()
+        setTimeout(() => {
+          const newEl = document.getElementById(section)
+          if (newEl) {
+            newEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            newEl.classList.add('ax-fix-highlight')
+            setTimeout(() => newEl.classList.remove('ax-fix-highlight'), 2600)
+          }
+        }, 120)
+        return
+      }
+    } else if (section === 'data-section-category_standardization') {
+      const btn = document.getElementById('tb-labels')
+      if (btn) {
+        btn.click()
+        setTimeout(() => {
+          const newEl = document.getElementById(section)
+          if (newEl) {
+            newEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            newEl.classList.add('ax-fix-highlight')
+            setTimeout(() => newEl.classList.remove('ax-fix-highlight'), 2600)
+          }
+        }, 120)
+        return
+      }
+    }
+    return
+  }
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   el.classList.add('ax-fix-highlight')
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)

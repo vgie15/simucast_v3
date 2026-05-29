@@ -150,6 +150,21 @@ def reset_project(ds_id):
         rows = jload(ds.data) or []
         ds.row_count = len(rows)
         ds.col_count = len(rows[0]) if rows else 0
+
+        # Reset guidance
+        from backend.utils import jdump
+        ds.guidance = jdump({
+            "goal": None,
+            "intent": None,
+            "question_text": None,
+            "question_source": None,
+            "setup_status": "pending",
+            "guided_mode": False,
+            "walkthrough_step": None,
+            "dismissed_tips": [],
+            "completed_tips": [],
+        })
+
         _df_cache_invalidate(ds_id)  # project reset — drop cached DataFrames
 
         # Single log entry recording the reset
