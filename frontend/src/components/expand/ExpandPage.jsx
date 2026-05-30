@@ -102,7 +102,6 @@ export default function ExpandPage({ dataset, setDataset }) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
   }
 
-  const isSmall = dataset.row_count < 500
   const targetTooLow = !Number.isFinite(targetRows) || targetRows <= dataset.row_count
 
   return (
@@ -149,42 +148,6 @@ export default function ExpandPage({ dataset, setDataset }) {
       <p style={{ margin: '4px 0 20px', color: 'var(--color-text-secondary)', fontSize: 13 }}>
         Grow a small dataset by resampling (preserves correlations) or synthesis (per-column independent).
       </p>
-
-      {/* Recommendation alert box (removed star-like icon square, styled exactly like mockup) */}
-      <div 
-        style={{ 
-          marginBottom: 24, 
-          padding: '16px 20px', 
-          background: isSmall ? '#FFF8F2' : '#F9FAFB',
-          border: isSmall ? '1px solid #FED7AA' : '1px solid #E5E7EB',
-          borderRadius: 12,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6
-        }}
-      >
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <strong style={{ fontSize: 13, fontWeight: 700, color: isSmall ? '#C2410C' : '#374151' }}>
-            {isSmall ? 'Expansion is likely to help' : 'Expansion is optional'}
-          </strong>
-          <span 
-            style={{ 
-              fontSize: 9, 
-              fontWeight: 800, 
-              padding: '2px 8px', 
-              borderRadius: 999, 
-              background: isSmall ? '#FFEDD5' : '#F3F4F6', 
-              color: isSmall ? '#EA580C' : '#4B5563',
-              letterSpacing: '0.04em'
-            }}
-          >
-            SYSTEM RECOMMENDED
-          </span>
-        </div>
-        <p style={{ fontSize: 12, color: isSmall ? '#7C2D12' : '#6B7280', margin: 0, lineHeight: 1.5 }}>
-          This dataset has <strong>{dataset.row_count.toLocaleString()} rows</strong>. Bootstrap is safer when relationships matter; synthetic adds variety but breaks cross-column correlations.
-        </p>
-      </div>
 
       {/* Main layout grid */}
       <div className="ax-expand-grid">

@@ -17,7 +17,6 @@ import ActivityPanel from '../history/ActivityPanel'
 import ProjectAIRail from '../guided-plan/ProjectAIRail'
 import ProjectGuidanceSetup from '../guided-plan/ProjectGuidanceSetup'
 import GuidedCoach, { routeTarget } from '../guided-plan/GuidedCoach'
-import GuidedFocusCard from '../guided-plan/GuidedFocusCard'
 import { currentCoachStep } from '../guided-plan/ProjectGuidanceSetup'
 import { useAuth } from '../providers/AuthProvider'
 import { SimuCastLoader } from '../common/LoadingStates'
@@ -99,6 +98,7 @@ export default function ProjectWorkspace() {
   }, [id, activeModel])
   const [viewStageRequest, setViewStageRequest] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [tabPreload, setTabPreload] = useState(null)
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -107,35 +107,6 @@ export default function ProjectWorkspace() {
   const [aiWidth, setAiWidth] = useState(360)
   const [resizing, setResizing] = useState(null) // 'ai' | null
   const [guidedLockNotice, setGuidedLockNotice] = useState('')
-  const [pillExpanded, setPillExpanded] = useState(false)
-  const [issueCount, setIssueCount] = useState(0)
-
-  useEffect(() => {
-    if (!id) return
-    api.aiProjectPlan(id, 'system')
-      .then(p => {
-        const steps = p.steps || []
-        const stageKey = dataset?.current_stage_id || 'original'
-        const doneKey = `simucast.aiPlan.done.${id}.${stageKey}`
-        let done = []
-        try {
-          done = JSON.parse(window.localStorage.getItem(doneKey) || '[]')
-        } catch {}
-        const openSteps = steps.filter(s => !done.includes(s.id))
-        setIssueCount(openSteps.length)
-      })
-      .catch(() => {})
-  }, [id, dataset?.current_stage_id, pillExpanded])
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        setPillExpanded(false)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
 
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
 
@@ -190,16 +161,28 @@ export default function ProjectWorkspace() {
   }
 
   useEffect(() => {
+    let alive = true
     setLoading(true)
     setError(null)
     api
       .getDataset(id)
-      .then((d) => {
+      .then(async (d) => {
+        if (!alive) return
+        const preloaded = await preloadWorkspaceTab(d, activeTab)
+        if (!alive) return
         setDataset(d)
+        setTabPreload(preloaded)
         setGuidanceSetupOpen(d.guidance?.setup_status === 'pending')
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
+      .catch((err) => {
+        if (alive) setError(err.message)
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
   }, [id, auth.session?.token])
 
   useEffect(() => {
@@ -248,7 +231,7 @@ export default function ProjectWorkspace() {
   const guidedStep = dataset.guidance?.guided_mode ? currentCoachStep(dataset.guidance, dataset) : null
   const guidedTabIndex = guidedStep ? TABS.findIndex((item) => item.key === guidedStep.page) : -1
   const guidedLocksFuture = Boolean(guidedStep?.requirement === 'required' && guidedTabIndex >= 0)
-  const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey })
+  const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey, initialData: tabPreload })
 
   return (
     <div
@@ -318,147 +301,11 @@ export default function ProjectWorkspace() {
           </div>
           {guidedLockNotice && <strong className="ax-guided-lock-toast">{guidedLockNotice}</strong>}
         </div>
-        <div className={`ax-workspace-content ${guidedStep?.page === activeTab ? 'ax-guided-focus-mode' : ''}`}>
+        <div className={`ax-workspace-content ax-workspace-tab-${activeTab} ${guidedStep?.page === activeTab ? 'ax-guided-focus-mode' : ''}`}>
           {page}
         </div>
       </div>
 
-      {/* Floating interactive progress pill + card */}
-      {!guidedLocksFuture && activeTab !== 'report' && (
-        <div className="ax-floating-pill-container" onClick={(e) => e.stopPropagation()}>
-          {/* Expanded Card */}
-          <div className={`ax-floating-pill-card${pillExpanded ? ' expanded' : ''}`}>
-            {/* 1. Progress tracker */}
-            <div className="ax-floating-progress-tracker">
-              {(() => {
-                const trackerTabs = [
-                  { key: 'data', label: 'Data' },
-                  { key: 'expand', label: 'Expand' },
-                  { key: 'describe', label: 'Describe' },
-                  { key: 'tests', label: 'Analysis' },
-                  { key: 'models', label: 'Models' },
-                  { key: 'report', label: 'Report' }
-                ];
-                
-                const getTrackerStatus = (tabKey) => {
-                  const tabOrder = ['data', 'expand', 'describe', 'tests', 'models', 'whatif', 'report'];
-                  const activeIdx = tabOrder.indexOf(activeTab);
-                  const tabIdx = tabOrder.indexOf(tabKey);
-                  
-                  if (activeTab === tabKey) return 'active';
-                  if (tabKey === 'models' && activeTab === 'whatif') return 'done';
-                  if (tabIdx < activeIdx) return 'done';
-                  return 'pending';
-                };
-
-                return trackerTabs.map((tNode, idx) => {
-                  const status = getTrackerStatus(tNode.key);
-                  const nextNode = trackerTabs[idx + 1];
-                  const lineDone = status === 'done' && (nextNode ? getTrackerStatus(nextNode.key) !== 'pending' : false);
-                  const tabIndex = TABS.findIndex((item) => item.key === tNode.key);
-                  const locked = guidedLocksFuture && tabIndex > guidedTabIndex;
-
-                  const handleClick = () => {
-                    if (locked) {
-                      setGuidedLockNotice('Complete the current guided task first.');
-                      window.setTimeout(() => setGuidedLockNotice(''), 2600);
-                      return;
-                    }
-                    setPillExpanded(false);
-                    navigate(`/projects/${id}/${tNode.key}`);
-                  };
-                  
-                  return (
-                    <React.Fragment key={tNode.key}>
-                      <div
-                        className={`ax-tracker-node ${status} ${locked ? 'locked' : 'clickable'}`}
-                        title={locked ? 'Complete the current required guided step first' : tNode.label}
-                        onClick={handleClick}
-                      >
-                        <div className="ax-tracker-dot" />
-                        <span className="ax-tracker-label">{tNode.label}</span>
-                      </div>
-                      {idx < trackerTabs.length - 1 && (
-                        <div className={`ax-tracker-line ${lineDone ? 'done' : ''}`} />
-                      )}
-                    </React.Fragment>
-                  );
-                });
-              })()}
-            </div>
-            
-            {/* Divider */}
-            <div style={{ height: '0.5px', background: 'var(--color-border-tertiary)', margin: '12px 0' }} />
-            
-            {/* CTA Row */}
-            {(() => {
-              const idx = TABS.findIndex((t) => t.key === activeTab)
-              const next = TABS[idx + 1]
-              if (!next) return null
-              const copy = {
-                data: 'Move forward when the dataset has been inspected and major issues are handled.',
-                expand: 'Summarize the prepared dataset before choosing tests or models.',
-                describe: 'Use statistical analysis to check relationships and group differences.',
-                tests: 'Train models after you understand the strongest candidate variables.',
-                models: 'Try what-if scenarios using the model that best fits your goal.',
-                whatif: 'Generate a report with saved outputs, explanations, history, and scenarios.',
-              }
-              return (
-                <div className="ax-pill-card-cta-row">
-                  <div className="ax-pill-card-cta-left">
-                    <p className="ax-pill-card-cta-title">Ready for {next.label}?</p>
-                    <p className="ax-pill-card-cta-subtitle">{copy[activeTab] || 'Continue the workflow on the next page.'}</p>
-                  </div>
-                  <Link
-                    className="ax-pill-card-cta-btn"
-                    to={`/projects/${id}/${next.key}`}
-                    onClick={() => setPillExpanded(false)}
-                  >
-                    {next.label} →
-                  </Link>
-                </div>
-              )
-            })()}
-            
-            {/* Optional Warning */}
-            {issueCount > 0 && (
-              <div className="ax-pill-card-warning">
-                {issueCount} issue{issueCount > 1 ? 's' : ''} still open —{' '}
-                <span
-                  className="ax-pill-card-warning-link"
-                  onClick={() => {
-                    setAiCollapsed(false)
-                  }}
-                >
-                  review before continuing
-                </span>
-              </div>
-            )}
-          </div>
-          
-          {/* Collapsed Pill Button */}
-          <button
-            type="button"
-            className="ax-floating-pill"
-            onClick={() => setPillExpanded(!pillExpanded)}
-            aria-expanded={pillExpanded}
-          >
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              fill="none"
-              style={{
-                transform: pillExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                marginRight: '6px'
-              }}
-            >
-              <path d="M1 6.5L5 2.5L9 6.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-            </svg>
-            <span>{pillExpanded ? 'Hide' : 'Next step'}</span>
-          </button>
-        </div>
-      )}
       <ProjectAIRail
         dataset={dataset}
         activeTab={activeTab}
@@ -467,19 +314,11 @@ export default function ProjectWorkspace() {
         onOpenGuidanceSetup={() => setGuidanceSetupOpen(true)}
         onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
       />
-      {activeTab === 'data' && guidedStep && ['data.suggested_fixes', 'data.outliers', 'data.duplicates', 'data.categories'].includes(guidedStep.id) ? (
-        <GuidedFocusCard
-          dataset={dataset}
-          activeTab={activeTab}
-          onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
-        />
-      ) : (
-        <GuidedCoach
-          dataset={dataset}
-          activeTab={activeTab}
-          onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
-        />
-      )}
+      <GuidedCoach
+        dataset={dataset}
+        activeTab={activeTab}
+        onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
+      />
       <FloatingDatasetPreview dataset={dataset} activeTab={activeTab} />
       <ProjectGuidanceSetup
         dataset={dataset}
@@ -494,25 +333,16 @@ export default function ProjectWorkspace() {
       {historyOpen && (
         <div className="ax-history-modal-backdrop" role="dialog" aria-modal="true" aria-label="Project history">
           <div className="ax-history-modal">
-            <div className="ax-history-modal-head">
-              <div>
-                <p>History</p>
-                <span>Project timeline, notes, undo steps, and report documentation.</span>
-              </div>
-              <button className="ax-btn" type="button" onClick={() => setHistoryOpen(false)} aria-label="Close history">
-                Close
-              </button>
-            </div>
             <ActivityPanel
+              dataset={dataset}
               datasetId={dataset.id}
+              onClose={() => setHistoryOpen(false)}
               onViewStage={(stageId) => {
                 setViewStageRequest({ stageId, nonce: Date.now() })
                 setHistoryOpen(false)
                 navigate(`/projects/${id}/data`)
               }}
               onRestored={refreshDataset}
-              title="History"
-              subtitle="Project timeline, notes, undo steps, and report-ready documentation."
             />
           </div>
         </div>
@@ -593,6 +423,54 @@ function highlightSection(section) {
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
 }
 
+async function preloadWorkspaceTab(dataset, tab) {
+  if (!dataset?.id) return null
+  const id = dataset.id
+  try {
+    if (tab === 'data') {
+      const suggestions = await api.cleanSuggestions(id)
+      return { tab, datasetId: id, suggestions }
+    }
+    if (tab === 'describe') {
+      const [corr, rows, describe] = await Promise.all([
+        api.listAnalyses(id, 'test_corr', 1).catch(() => ({ analyses: [] })),
+        api.getRows(id, 1, 10000, dataset.current_stage_id).catch(() => ({ rows: [] })),
+        api.listAnalyses(id, 'describe', 1).catch(() => ({ analyses: [] })),
+      ])
+      return { tab, datasetId: id, corr, rows, describe }
+    }
+    if (tab === 'tests') {
+      const analyses = await api.listAnalyses(id, '', 20).catch(() => ({ analyses: [] }))
+      return { tab, datasetId: id, analyses }
+    }
+    if (tab === 'models') {
+      const [models, activity] = await Promise.all([
+        api.listModels(id).catch(() => []),
+        api.listActivity(id).catch(() => ({ activity: [] })),
+      ])
+      return { tab, datasetId: id, models, activity }
+    }
+    if (tab === 'whatif') {
+      const models = await api.listModels(id).catch(() => [])
+      return { tab, datasetId: id, models }
+    }
+    if (tab === 'report') {
+      const savedRaw = window.localStorage.getItem(`simucast.savedCharts.${id}`)
+      const savedCharts = savedRaw ? JSON.parse(savedRaw) : []
+      const [activity, models, corr, rows] = await Promise.all([
+        api.listActivity(id, 'asc').catch(() => ({ activity: [] })),
+        api.listModels(id).catch(() => []),
+        api.listAnalyses(id, 'test_corr', 1).catch(() => ({ analyses: [] })),
+        api.getRows(id, 1, 10000, dataset.current_stage_id).catch(() => ({ rows: [] })),
+      ])
+      return { tab, datasetId: id, savedCharts, activity, models, corr, rows }
+    }
+  } catch (err) {
+    console.warn('Tab preload failed', err)
+  }
+  return { tab, datasetId: id }
+}
+
 
 
 // Switch helper that selects and renders the page component for the active tab.
@@ -600,13 +478,13 @@ function renderTab(tab, props) {
   const k = props.refreshKey
   switch (tab) {
     case 'data':
-      return <DataPage key={k} dataset={props.dataset} setDataset={props.setDataset} viewStageRequest={props.viewStageRequest} />
+      return <DataPage key={k} dataset={props.dataset} setDataset={props.setDataset} viewStageRequest={props.viewStageRequest} initialData={props.initialData} />
     case 'expand':
       return <ExpandPage key={k} dataset={props.dataset} setDataset={props.setDataset} />
     case 'describe':
-      return <DescribePage key={k} dataset={props.dataset} />
+      return <DescribePage key={k} dataset={props.dataset} initialData={props.initialData} />
     case 'tests':
-      return <TestsPage key={k} dataset={props.dataset} />
+      return <TestsPage key={k} dataset={props.dataset} initialData={props.initialData} />
     case 'models':
       return (
         <ModelsPage
@@ -614,6 +492,7 @@ function renderTab(tab, props) {
           dataset={props.dataset}
           setActiveModel={props.setActiveModel}
           onGo={props.go}
+          initialData={props.initialData}
         />
       )
     case 'whatif':
@@ -623,10 +502,11 @@ function renderTab(tab, props) {
           dataset={props.dataset}
           activeModel={props.activeModel}
           setActiveModel={props.setActiveModel}
+          initialData={props.initialData}
         />
       )
     case 'report':
-      return <ReportPage key={k} dataset={props.dataset} />
+      return <ReportPage key={k} dataset={props.dataset} initialData={props.initialData} />
     default:
       return <p>Unknown tab.</p>
   }

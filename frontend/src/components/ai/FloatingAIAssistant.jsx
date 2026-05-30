@@ -3,7 +3,7 @@
  * Keywords: ai, chat, assistant, floating, claude, conversation
  * ============================================================ */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import { useAuth } from '../providers/AuthProvider'
 
@@ -16,13 +16,17 @@ const TAB_LABELS = {
   whatif: 'What-if',
   report: 'Report',
 }
+const PILL_POSITION_KEY = 'simucast.floatingTools.position'
 
 // Floating chat widget that lets authenticated users ask AI about the active project.
 export default function FloatingAIAssistant() {
   const auth = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const projectContext = useMemo(() => getProjectContext(location.pathname), [location.pathname])
   const [open, setOpen] = useState(false)
+  const [dockHidden, setDockHidden] = useState(false)
+  const [datasetLauncherVisible, setDatasetLauncherVisible] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -30,11 +34,36 @@ export default function FloatingAIAssistant() {
   const [error, setError] = useState('')
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
+  const dragStateRef = useRef(null)
+  const recentDragUntilRef = useRef(0)
+  const pillPositionRef = useRef(null)
+  const [pillPosition, setPillPosition] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(PILL_POSITION_KEY)
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+  pillPositionRef.current = pillPosition
 
   const datasetId = projectContext?.datasetId
   const activeTab = projectContext?.tab || 'data'
   const hasProject = Boolean(datasetId)
   const canUseAI = hasProject && auth.isAuthenticated && !auth.loading
+
+  useEffect(() => {
+    setDockHidden(false)
+    setDatasetLauncherVisible(Boolean(datasetId))
+  }, [location.pathname, datasetId])
+
+  useEffect(() => {
+    const handleDatasetState = (event) => {
+      setDatasetLauncherVisible(Boolean(event.detail?.visible))
+    }
+    window.addEventListener('simucast:floating-dataset-state', handleDatasetState)
+    return () => window.removeEventListener('simucast:floating-dataset-state', handleDatasetState)
+  }, [])
 
   useEffect(() => {
     setError('')
@@ -72,12 +101,71 @@ export default function FloatingAIAssistant() {
   }, [input])
 
   const openAssistant = () => {
+    if (Date.now() < recentDragUntilRef.current) return
     if (auth.loading) return
     if (!auth.isAuthenticated) {
       auth.requireAccountForAI()
       return
     }
     setOpen(true)
+  }
+
+  const openDatasetPreview = () => {
+    if (Date.now() < recentDragUntilRef.current) return
+    let handled = false
+    window.dispatchEvent(new CustomEvent('simucast:open-dataset-preview', {
+      detail: {
+        onHandled: (didOpen) => {
+          handled = Boolean(didOpen)
+        },
+      },
+    }))
+    if (!handled && datasetId) {
+      navigate(`/projects/${datasetId}/data`)
+    }
+  }
+
+  const hideDock = () => {
+    if (Date.now() < recentDragUntilRef.current) return
+    setDockHidden(true)
+  }
+
+  const startPillDrag = (event) => {
+    if (event.button !== 0) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    dragStateRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      moved: false,
+    }
+  }
+
+  const movePill = (event) => {
+    const drag = dragStateRef.current
+    if (!drag) return
+    const deltaX = event.clientX - drag.startX
+    const deltaY = event.clientY - drag.startY
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 5) return
+
+    drag.moved = true
+    event.preventDefault()
+    const width = event.currentTarget.offsetWidth
+    const height = event.currentTarget.offsetHeight
+    const nextLeft = Math.min(Math.max(8, event.clientX - drag.offsetX), window.innerWidth - width - 8)
+    const nextTop = Math.min(Math.max(8, event.clientY - drag.offsetY), window.innerHeight - height - 8)
+    const nextPosition = { left: nextLeft, top: nextTop }
+    pillPositionRef.current = nextPosition
+    setPillPosition(nextPosition)
+  }
+
+  const endPillDrag = (event) => {
+    const drag = dragStateRef.current
+    dragStateRef.current = null
+    if (!drag?.moved || !pillPositionRef.current) return
+    recentDragUntilRef.current = Date.now() + 250
+    window.localStorage.setItem(PILL_POSITION_KEY, JSON.stringify(pillPositionRef.current))
   }
 
   const sendMessage = async () => {
@@ -136,7 +224,10 @@ export default function FloatingAIAssistant() {
   const status = getStatus({ auth, hasProject, loading, sending })
 
   return (
-    <div className={`ax-floating-ai ${open ? 'open' : ''}`}>
+    <div
+      className={`ax-floating-ai ${open ? 'open' : ''} ${pillPosition ? 'custom-position' : ''}`}
+      style={!open && pillPosition ? { left: pillPosition.left, top: pillPosition.top, right: 'auto', bottom: 'auto' } : undefined}
+    >
       {open && (
         <section className="ax-floating-ai-panel" aria-label="Floating AI assistant">
           <header className="ax-floating-ai-header">
@@ -221,19 +312,61 @@ export default function FloatingAIAssistant() {
         </section>
       )}
 
-      {!open && (
-        <button
-          type="button"
-          className="ax-floating-ai-launcher"
-          onClick={openAssistant}
-          aria-label="Open AI assistant"
-          title={!auth.isAuthenticated ? 'AI requires an account' : 'Open AI assistant'}
+      {!open && !dockHidden && (
+        <div
+          className="ax-floating-action-pill"
+          aria-label="Quick project tools"
+          onPointerDown={startPillDrag}
+          onPointerMove={movePill}
+          onPointerUp={endPillDrag}
+          onPointerCancel={endPillDrag}
         >
-          <SparkIcon />
-          <span>{hasProject ? 'Ask AI' : 'AI'}</span>
-        </button>
+          {hasProject && datasetLauncherVisible && (
+            <>
+              <button
+                type="button"
+                className="ax-floating-pill-action dataset"
+                onClick={openDatasetPreview}
+                aria-label="Open dataset table"
+                title="Open dataset table"
+              >
+                <RowsIcon />
+                <span>Dataset</span>
+              </button>
+              <span className="ax-floating-pill-divider" aria-hidden />
+            </>
+          )}
+          <button
+            type="button"
+            className="ax-floating-pill-action ai"
+            onClick={openAssistant}
+            aria-label="Open AI assistant"
+            title={!auth.isAuthenticated ? 'AI requires an account' : 'Open AI assistant'}
+          >
+            <SparkIcon />
+            <span>Ask AI</span>
+          </button>
+          <button
+            type="button"
+            className="ax-floating-pill-dismiss"
+            onClick={hideDock}
+            aria-label="Hide quick project tools"
+            title="Hide quick tools"
+          >
+            <CloseIcon />
+          </button>
+        </div>
       )}
     </div>
+  )
+}
+
+function RowsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="3" width="11" height="10" rx="1.5" />
+      <path d="M2.5 6.3h11M2.5 9.7h11" />
+    </svg>
   )
 }
 

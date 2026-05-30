@@ -1,33 +1,27 @@
 /* ============================================================
- * COMPONENT: ACTIVITY LOG PANEL
+ * COMPONENT: ACTIVITY LOG PANEL (Redesigned)
  * Keywords: activity, log, history, audit, undo
  * ============================================================ */
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
-import HelpButton from '../common/HelpButton'
 
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'data_prep', label: 'Data prep' },
-  { key: 'analysis', label: 'Analysis' },
-  { key: 'model', label: 'Model' },
-  { key: 'whatif', label: 'Scenario' },
-  { key: 'report', label: 'Report' },
-]
-
-// Panel showing the project audit trail with filters, notes and stage restore actions.
-export default function ActivityPanel({ datasetId, onViewStage, onRestored, title = 'Documentation', subtitle = 'Project actions for methods, audit trail, and reports.' }) {
+export default function ActivityPanel({
+  dataset,
+  datasetId,
+  onClose,
+  onViewStage,
+  onRestored
+}) {
   const dialog = useDialog()
   const [activity, setActivity] = useState([])
   const [stages, setStages] = useState([])
   const [currentStageId, setCurrentStageId] = useState('original')
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState('all')
-  const [order, setOrder] = useState('desc')
-  const [noteFor, setNoteFor] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [note, setNote] = useState('')
-  const [openDetails, setOpenDetails] = useState({})
+  const [noteFor, setNoteFor] = useState(null)
+  const [expandedId, setExpandedId] = useState(null)
   const [busy, setBusy] = useState(false)
 
   const load = async () => {
@@ -69,24 +63,41 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored, titl
       .sort((a, b) => {
         const av = new Date(a.sortDate || 0).getTime()
         const bv = new Date(b.sortDate || 0).getTime()
-        return order === 'asc' ? av - bv : bv - av
+        return bv - av // Latest first
       })
-  }, [activity, stages, order])
+  }, [activity, stages])
 
-  const filteredTimeline = timeline.filter((item) => {
-    const kind = item.category || item.kind
-    return filter === 'all' || kind === filter || item.kind === filter
-  })
+  // Filter entries in real-time by summary title text
+  const filteredTimeline = useMemo(() => {
+    return timeline.filter((item) => {
+      if (!searchQuery.trim()) return true
+      return String(item.summary || '').toLowerCase().includes(searchQuery.toLowerCase())
+    })
+  }, [timeline, searchQuery])
+
+  // Group entries by date
+  const groupedEntries = useMemo(() => {
+    const groups = {}
+    filteredTimeline.forEach((item) => {
+      const groupKey = getGroupLabel(item.sortDate)
+      if (!groups[groupKey]) {
+        groups[groupKey] = []
+      }
+      groups[groupKey].push(item)
+    })
+    return groups
+  }, [filteredTimeline])
 
   const addNote = async (item) => {
     const summary = note.trim()
     if (!summary || busy) return
     setBusy(true)
     try {
+      const notes = item.detail?.notes || []
       await api.createActivityNote(datasetId, {
         activity_id: item.id,
         summary,
-        replace: (item.detail?.notes || []).length > 0,
+        replace: notes.length > 0,
       })
       setNote('')
       setNoteFor(null)
@@ -122,36 +133,6 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored, titl
     }
   }
 
-  const resetProject = async () => {
-    if (busy) return
-    const ok = await dialog.confirm({
-      title: 'Reset Project',
-      message: 'This will permanently remove all data transformations, trained models, what-if scenarios, and documentation steps.',
-      details: 'The dataset will revert to the original uploaded state. A single log entry will be kept to record the reset.',
-      affectedItems: [
-        'All data cleaning and transformations',
-        'All trained models',
-        'All what-if scenarios',
-        'All documentation steps',
-      ],
-      requireText: 'RESET',
-      confirmLabel: 'Reset Project',
-      cancelLabel: 'Cancel',
-      variant: 'danger',
-    })
-    if (!ok) return
-    setBusy(true)
-    try {
-      await api.resetProject(datasetId)
-      await load()
-      onRestored?.()
-    } catch (err) {
-      await dialog.alert({ title: 'Reset Failed', message: err.message, variant: 'danger' })
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const undoStep = async (item) => {
     if (busy) return
     const ok = await dialog.confirm({
@@ -176,270 +157,491 @@ export default function ActivityPanel({ datasetId, onViewStage, onRestored, titl
     }
   }
 
+  const resetProject = async () => {
+    if (busy) return
+    const ok = await dialog.confirm({
+      title: 'Reset project to initial state?',
+      message: 'This will undo ALL changes and cannot be undone.',
+      confirmLabel: 'Reset',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await api.resetProject(datasetId)
+      await load()
+      onRestored?.()
+    } catch (err) {
+      await dialog.alert({ title: 'Reset Failed', message: err.message, variant: 'danger' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Stats calculation
+  const changesCount = activity.length
+  const stepsDone = dataset?.guidance?.completed_tips?.length || 0
+  const notesCount = activity.filter((item) => item.detail?.notes && item.detail.notes.length > 0).length
+
   return (
-    <div className="ax-card ax-module-card ax-card-muted ax-activity-panel">
-      <div className="ax-panel-sticky-header">
-        <div className="ax-row" style={{ marginBottom: 8, alignItems: 'flex-start', gap: 10 }}>
-          <div style={{ minWidth: 0, flex: '1 1 160px' }}>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              {title}
-              <HelpButton
-                title={title}
-                text="This card records the project audit trail: data preparation steps, analyses, model runs, scenarios, reports, notes, and undo/restore actions. These entries are used in reports and help explain what was done."
-              />
-            </p>
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-              {subtitle}
+    <div className="ax-history-drawer">
+      {/* 1. Header Section */}
+      <div className="ax-history-drawer-header">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--color-text-primary)' }}>History</h2>
+            <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+              Timeline of all changes made to this project
             </p>
           </div>
           <button
-            className="ax-btn"
-            style={{ background: 'rgba(220, 38, 38, 0.08)', borderColor: 'rgba(220, 38, 38, 0.35)', color: '#DC2626', flexShrink: 0, minWidth: 112 }}
-            onClick={resetProject}
-            disabled={busy}
+            type="button"
+            className="ax-history-close-btn"
+            onClick={onClose}
+            aria-label="Close history"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              border: 'none',
+              background: 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--color-text-secondary)',
+              transition: 'background 0.2s, color 0.2s',
+            }}
           >
-            Reset project
+            <TablerIcon name="x" size={16} />
           </button>
         </div>
 
-        <div className="ax-activity-filters" style={{ marginBottom: 0 }}>
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            {FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-          </select>
-          <select value={order} onChange={(e) => setOrder(e.target.value)}>
-            <option value="desc">Latest first</option>
-            <option value="asc">Oldest first</option>
-          </select>
+        {/* Stats Row */}
+        <div className="ax-history-stats-row">
+          <div className="ax-history-stat-col">
+            <strong>{changesCount}</strong>
+            <span>Changes</span>
+          </div>
+          <div className="ax-history-stat-col">
+            <strong>{stepsDone}</strong>
+            <span>Steps done</span>
+          </div>
+          <div className="ax-history-stat-col">
+            <strong>{notesCount}</strong>
+            <span>Notes</span>
+          </div>
         </div>
       </div>
 
-      {loading && activity.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Loading activity...</p>
-      ) : filteredTimeline.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>No matching activity.</p>
-      ) : (
-        <div className="ax-activity-list">
-          {(() => {
-            const latestStepNumber = timeline.length > 0 ? Math.max(...timeline.map((t) => t.stepNumber)) : 0
-            return filteredTimeline.map((item) => {
-            const isActive = item.related_stage_id && (currentStageId || 'original') === item.related_stage_id
-            const isLatestStep = item.stepNumber === latestStepNumber
-            const notes = item.detail?.notes || []
-            const detailsOpen = !!openDetails[item.id]
-            const detailRows = detailsForItem(item)
-            const canUndo = isLatestStep && (
-              (item.related_stage_id && item.related_stage_id !== 'original' && isActive) ||
-              (!item.related_stage_id && (item.related_model_id || item.related_analysis_id || item.kind === 'report' || item.kind === 'whatif'))
-            )
-            const canRevert = !isLatestStep && item.related_stage_id && !isActive
-            return (
-              <div
-                key={item.id}
-                className="ax-activity-item"
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--color-text-tertiary)' }}>
-                    #{item.stepNumber}
-                  </span>
-                  <span className={`ax-chip ${badgeClassFor(item.action_type || item.category || item.kind)}`}>
-                    {labelFor(item.action_type || item.category || item.kind)}
-                  </span>
-                  {item.stage?.op_type && <span className="ax-chip ax-badge-data">{item.stage.op_type}</span>}
-                  <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
-                    {item.created_at ? new Date(item.created_at).toLocaleString() : ''}
-                  </span>
-                </div>
-                <p style={{ fontSize: 12, margin: '4px 0 0', fontWeight: 650 }}>{item.summary}</p>
-                {detailRows.slice(0, 2).map((row) => (
-                  <p key={row.label} style={{ fontSize: 10.5, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-                    <strong>{row.label}:</strong> {row.value}
-                  </p>
-                ))}
-                {item.stage && (
-                  <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>
-                    Stage {item.stage.step_index} - {item.stage.row_count?.toLocaleString()} rows - {item.stage.col_count} cols
-                  </p>
-                )}
-                <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                  {detailRows.length > 0 && (
-                    <button
-                      className="ax-btn"
-                      onClick={() => setOpenDetails((current) => ({ ...current, [item.id]: !current[item.id] }))}
+      {/* 2. Search Bar */}
+      <div className="ax-history-search-container">
+        <TablerIcon name="search" size={14} className="ax-history-search-icon" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search history…"
+          className="ax-history-search-input"
+        />
+      </div>
+
+      {/* 3. Grouped Date Entries */}
+      <div className="ax-history-list-wrapper">
+        {loading && activity.length === 0 ? (
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', padding: '0 16px' }}>Loading activity...</p>
+        ) : filteredTimeline.length === 0 ? (
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', padding: '0 16px' }}>No matching activity.</p>
+        ) : (
+          Object.entries(groupedEntries).map(([groupLabel, items]) => (
+            <div key={groupLabel} className="ax-history-group">
+              <div className="ax-history-group-header">{groupLabel}</div>
+              {items.map((item) => {
+                const { type, iconName, badgeLabel } = mapActivityToEntry(item)
+                const isExpanded = expandedId === item.id
+                const notes = item.detail?.notes || []
+                const isLatestStep = item.stepNumber === timeline.length // Timeline is descending sorted, but stepNumber maps to original index
+                const isActive = item.related_stage_id && (currentStageId || 'original') === item.related_stage_id
+                
+                const canUndo = isLatestStep && (
+                  (item.related_stage_id && item.related_stage_id !== 'original' && isActive) ||
+                  (!item.related_stage_id && (item.related_model_id || item.related_analysis_id || item.kind === 'report' || item.kind === 'whatif'))
+                )
+                const canRevert = !isLatestStep && item.related_stage_id && !isActive
+                const showUndo = type !== 'reset' && (canUndo || canRevert)
+                
+                const timeString = item.created_at
+                  ? new Date(item.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                  : ''
+                const details = getExpandedDetails(item)
+
+                return (
+                  <div key={item.id} className="ax-history-card">
+                    {/* Collapsed view */}
+                    <div
+                      className="ax-history-card-header-row"
+                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
                     >
-                      {detailsOpen ? 'Hide details' : 'Details'}
-                    </button>
-                  )}
-                  {item.related_stage_id && (
-                    <button className="ax-btn" onClick={() => onViewStage?.(item.related_stage_id)}>View stage</button>
-                  )}
-                  <button
-                    className="ax-btn"
-                    onClick={() => {
-                      const isOpen = noteFor === item.id
-                      setNoteFor(isOpen ? null : item.id)
-                      setNote(isOpen ? '' : (notes[notes.length - 1]?.text || ''))
-                    }}
-                    disabled={busy}
-                  >
-                    {notes.length ? 'Edit note' : 'Add note'}
-                  </button>
-                  {canUndo && (
-                    <button
-                      className="ax-btn"
-                      style={{
-                        background: 'rgba(251, 146, 60, 0.12)',
-                        borderColor: 'rgba(251, 146, 60, 0.45)',
-                      }}
-                      onClick={() => undoStep(item)}
-                      disabled={busy}
-                    >
-                      ↩ Undo step
-                    </button>
-                  )}
-                  {canRevert && (
-                    <button className="ax-btn" onClick={() => revertToStep(item.related_stage_id)} disabled={busy}>
-                      ↺ Revert to this step
-                    </button>
-                  )}
-                </div>
-                {detailsOpen && (
-                  <div className="ax-activity-details">
-                    {detailRows.map((row) => <p key={row.label}><strong>{row.label}:</strong> {row.value}</p>)}
-                    {item.detail?.mapping && <MappingList mapping={item.detail.mapping} />}
+                      <div className={`ax-history-card-icon-container bg-${type}`}>
+                        <TablerIcon name={iconName} size={14} />
+                      </div>
+
+                      <div className="ax-history-card-title-badge">
+                        <span className="ax-history-card-title" title={item.summary}>
+                          {item.summary}
+                        </span>
+                        <span className={`ax-history-card-badge badge-${type}`}>
+                          {badgeLabel}
+                        </span>
+                      </div>
+
+                      <div className="ax-history-card-right" onClick={(e) => e.stopPropagation()}>
+                        <span className="ax-history-card-time">{timeString}</span>
+                        <div className="ax-history-card-actions">
+                          <button
+                            type="button"
+                            className="ax-history-action-btn"
+                            title="Add note"
+                            onClick={() => {
+                              setExpandedId(item.id)
+                              setNoteFor(item.id)
+                              setNote(notes[notes.length - 1]?.text || '')
+                            }}
+                          >
+                            <TablerIcon name="note" size={13} />
+                          </button>
+                          {showUndo && (
+                            <button
+                              type="button"
+                              className="ax-history-action-btn undo"
+                              title={canUndo ? 'Undo step' : 'Revert to this step'}
+                              onClick={() => {
+                                if (canUndo) {
+                                  undoStep(item)
+                                } else {
+                                  revertToStep(item.related_stage_id)
+                                }
+                              }}
+                            >
+                              <TablerIcon name="arrow-back-up" size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded details */}
+                    {isExpanded && (
+                      <div className="ax-history-card-expanded-area">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <p className="ax-history-kv-row">
+                            <strong>Action: </strong>
+                            <span>{details['Action']}</span>
+                          </p>
+                          <p className="ax-history-kv-row">
+                            <strong>Affected columns: </strong>
+                            <span>{details['Affected columns']}</span>
+                          </p>
+                          <p className="ax-history-kv-row">
+                            <strong>Rows changed: </strong>
+                            <span>{details['Rows changed']}</span>
+                          </p>
+                          <p className="ax-history-kv-row">
+                            <strong>Method used: </strong>
+                            <span>{details['Method used']}</span>
+                          </p>
+                        </div>
+
+                        {/* Existing note */}
+                        {notes.length > 0 && (
+                          <div className="ax-history-existing-note">
+                            <span style={{ fontSize: '9px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Note:</span>
+                            <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-primary)', fontStyle: 'italic', wordBreak: 'break-word' }}>
+                              {notes[notes.length - 1].text}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Add note interface */}
+                        <div style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+                          <textarea
+                            rows={2}
+                            value={noteFor === item.id ? note : ''}
+                            onChange={(e) => {
+                              setNoteFor(item.id)
+                              setNote(e.target.value)
+                            }}
+                            placeholder="Add a note about this step…"
+                            className="ax-history-note-textarea"
+                          />
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                            <button
+                              type="button"
+                              className="ax-btn mini prim"
+                              style={{
+                                background: 'var(--color-accent)',
+                                color: '#fff',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                padding: '4px 10px',
+                                border: 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => addNote(item)}
+                              disabled={busy || !note.trim() || noteFor !== item.id}
+                            >
+                              Save note
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-                {notes.length > 0 && (
-                  <div className="ax-activity-note">
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 500 }}>Note</p>
-                    {notes.map((n) => (
-                      <p key={n.id} style={{ margin: '2px 0 0', fontSize: 12 }}>{n.text}</p>
-                    ))}
-                  </div>
-                )}
-                {noteFor === item.id && (
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                    <input
-                      type="text"
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') addNote(item)
-                      }}
-                      placeholder="Note for this step..."
-                      style={{ flex: 1, minWidth: 0 }}
-                    />
-                    <button className="ax-btn prim" onClick={() => addNote(item)} disabled={busy || !note.trim()}>
-                      Save
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-            })
-          })()}
-        </div>
-      )}
+                )
+              })}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* 4. Footer Reset Section */}
+      <div className="ax-history-drawer-footer">
+        <button
+          type="button"
+          className="ax-history-reset-btn"
+          onClick={resetProject}
+          disabled={busy}
+        >
+          Reset project to initial state
+        </button>
+        <p className="ax-history-reset-warning">
+          This will undo all changes. Cannot be undone.
+        </p>
+      </div>
     </div>
   )
 }
 
-// Maps an activity kind to a human-readable phase label like Data Prep or Modeling.
-function labelFor(kind) {
-  const labels = {
-    data_prep: 'Data Prep',
-    category_standardization: 'Data Prep',
-    cell_edit: 'Data Prep',
-    impute_mean: 'Data Prep',
-    impute_median: 'Data Prep',
-    impute_mode: 'Data Prep',
-    drop_rows: 'Data Prep',
-    winsorize: 'Data Prep',
-    analysis: 'Analysis',
-    test_t: 'Evaluation',
-    test_anova: 'Evaluation',
-    test_chi: 'Evaluation',
-    test_corr: 'Evaluation',
-    cluster: 'Evaluation',
-    pca: 'Evaluation',
-    model: 'Modeling',
-    train_model: 'Modeling',
-    save_whatif_scenario: 'Scenario',
-    whatif: 'Scenario',
-    report: 'Report',
-    stage: 'Data Prep',
-    restore: 'Restore',
-    upload: 'Upload',
-    clone: 'Clone',
+// Maps activity data to standard categories
+function mapActivityToEntry(item) {
+  const kind = String(item.kind || '').toLowerCase()
+  const action = String(item.action_type || '').toLowerCase()
+  const summary = String(item.summary || '').toLowerCase()
+
+  let type = 'transform'
+  let iconName = 'chart-histogram'
+  let badgeLabel = 'Transform'
+
+  if (kind === 'reset' || action === 'reset' || summary.includes('reset')) {
+    type = 'reset'
+    iconName = 'refresh'
+    badgeLabel = 'Reset'
+  } else if (
+    kind.includes('impute') ||
+    kind.includes('winsorize') ||
+    summary.includes('missing') ||
+    summary.includes('outlier') ||
+    action.includes('missing') ||
+    action.includes('outlier')
+  ) {
+    type = 'fix'
+    iconName = 'circle-dotted'
+    badgeLabel = 'Fix'
+  } else if (
+    kind.includes('drop') ||
+    kind.includes('remove_row') ||
+    action.includes('remove_row') ||
+    summary.includes('remove') ||
+    summary.includes('duplicate')
+  ) {
+    type = 'remove'
+    iconName = 'copy-off'
+    badgeLabel = 'Remove'
+  } else if (
+    kind.includes('standard') ||
+    kind.includes('category') ||
+    kind.includes('label') ||
+    action.includes('category') ||
+    action.includes('label') ||
+    summary.includes('label')
+  ) {
+    type = 'label'
+    iconName = 'tag'
+    badgeLabel = 'Labels'
+  } else if (
+    kind.includes('column') ||
+    action.includes('column') ||
+    summary.includes('column') ||
+    summary.includes('gpa_bin')
+  ) {
+    type = 'structure'
+    iconName = 'column-remove'
+    badgeLabel = 'Structure'
   }
-  return labels[kind] || kind
+
+  return { type, iconName, badgeLabel }
 }
 
-// Renders a before-and-after list summarising up to twenty category mapping entries.
-function MappingList({ mapping }) {
-  const entries = Object.entries(mapping || {})
-  if (!entries.length) return null
-  return (
-    <div>
-      <strong>Before vs after:</strong>
-      <ul>
-        {entries.slice(0, 20).map(([from, to]) => (
-          <li key={from}><code>{from}</code> to <code>{String(to)}</code></li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-// Builds a labelled rows array describing parameters and outputs for an activity entry.
-function detailsForItem(item) {
+// Build key-value details for expanded cards
+function getExpandedDetails(item) {
   const detail = item.detail || {}
-  const rows = []
+
+  // Action
   const action = detail.action_type || item.action_type || item.kind
-  if (action) rows.push({ label: 'Action', value: humanize(action) })
-  const columns = detail.column ? [detail.column] : detail.features || detail.columns || []
-  if (Array.isArray(columns) && columns.length) rows.push({ label: 'Affected columns', value: columns.join(', ') })
-  if (detail.target) rows.push({ label: 'Target', value: detail.target })
-  if (detail.algorithm) rows.push({ label: 'Model', value: humanize(detail.algorithm) })
-  if (detail.mapping) {
-    const beforeCount = new Set(Object.keys(detail.mapping)).size
-    const afterCount = new Set(Object.values(detail.mapping).map(String)).size
-    rows.push({ label: 'Summary of changes', value: `Merged ${beforeCount} categories into ${afterCount}` })
-  } else if (item.stage) {
-    rows.push({ label: 'Summary of changes', value: `${item.stage.row_count?.toLocaleString?.() || item.stage.row_count} rows, ${item.stage.col_count} columns after this step` })
-  } else if (detail.parameters) {
-    rows.push({ label: 'Parameters', value: compactJson(detail.parameters) })
-  } else if (detail.config) {
-    rows.push({ label: 'Configuration', value: compactJson(detail.config) })
+  const actionVal = action ? humanize(action) : '—'
+
+  // Affected columns
+  const cols = detail.column ? [detail.column] : detail.features || detail.columns || []
+  const colsVal = Array.isArray(cols) && cols.length ? cols.join(', ') : '—'
+
+  // Rows changed
+  let rowsVal = '—'
+  if (detail.rows_changed !== undefined) {
+    rowsVal = String(detail.rows_changed)
+  } else if (item.stage?.row_count) {
+    rowsVal = `${item.stage.row_count.toLocaleString()} total`
+  } else if (detail.removed_rows_count !== undefined) {
+    rowsVal = `-${detail.removed_rows_count} rows`
   }
-  if (detail.inputs) rows.push({ label: 'Scenario inputs', value: compactJson(detail.inputs) })
-  if (detail.prediction) rows.push({ label: 'Prediction', value: compactJson(detail.prediction) })
-  return rows.filter((row) => row.value !== undefined && row.value !== null && String(row.value).trim() !== '')
+
+  // Method used
+  const methodVal = detail.method || detail.algorithm || item.kind || '—'
+
+  return {
+    Action: actionVal,
+    'Affected columns': colsVal,
+    'Rows changed': rowsVal,
+    'Method used': humanize(methodVal),
+  }
 }
 
-// Converts a snake_case identifier into a Title Case display string.
+// Formats a date into grouped categories
+function getGroupLabel(dateString) {
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return 'UNKNOWN DATE'
+
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+
+  const formatDateString = (d) => {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
+  }
+
+  const isSameDay = (d1, d2) => {
+    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate()
+  }
+
+  if (isSameDay(date, today)) {
+    return `TODAY — ${formatDateString(date)}`
+  } else if (isSameDay(date, yesterday)) {
+    return `YESTERDAY — ${formatDateString(date)}`
+  } else {
+    const weekday = date.toLocaleDateString('en-US', { weekday: 'long' })
+    return `${weekday.toUpperCase()} — ${formatDateString(date)}`
+  }
+}
+
+// Humanizes a snake_case keyword
 function humanize(value) {
-  return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  return String(value || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-// Serialises a value to a compact JSON string, falling back to String coercion.
-function compactJson(value) {
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return String(value)
-  }
-}
+// Custom Tabler-like inline SVG path mapper
+function TablerIcon({ name, size = 16, className = '' }) {
+  const path = {
+    search: (
+      <>
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </>
+    ),
+    'circle-dotted': (
+      <>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 4v.01M12 20v.01M4 12h.01M20 12h.01" />
+      </>
+    ),
+    'alert-triangle': (
+      <>
+        <path d="M12 3l9 16H3L12 3z" />
+        <path d="M12 9v4M12 17h.01" />
+      </>
+    ),
+    'copy-off': (
+      <>
+        <path d="M8 8h8v8H8z" />
+        <path d="M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1-1-1h10a1 1 0 0 1 1 1v1M4 4l16 16" />
+      </>
+    ),
+    tag: (
+      <>
+        <path d="M4 4h6l10 10-6 6L4 10V4z" />
+        <circle cx="8" cy="8" r="1" />
+      </>
+    ),
+    'chart-histogram': (
+      <>
+        <path d="M4 19h16" />
+        <path d="M7 16V9M12 16V5M17 16v-3" />
+      </>
+    ),
+    'ruler-measure': (
+      <>
+        <path d="M4 15l11-11 5 5-11 11-5-5z" />
+        <path d="M8 15l-1-1M11 12l-1-1M14 9l-1-1" />
+      </>
+    ),
+    columns: <path d="M6 5h5v14H6zM13 5h5v14h-5z" />,
+    'column-remove': (
+      <>
+        <path d="M5 5h14v14H5zM12 5v14M9 12h6" />
+      </>
+    ),
+    'row-remove': (
+      <>
+        <path d="M5 5h14v14H5zM5 12h14M9 16h6" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+      </>
+    ),
+    note: (
+      <>
+        <path d="M9 11h6M9 15h4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+      </>
+    ),
+    'arrow-back-up': (
+      <>
+        <path d="M9 11l-4 4 4 4M5 15h11a4 4 0 0 0 4-4v-1a4 4 0 0 0-4-4H8" />
+      </>
+    ),
+    x: (
+      <>
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </>
+    ),
+  }[name] || <path d="M5 12h14" />
 
-// Returns the CSS badge class corresponding to the activity kind's category.
-function badgeClassFor(kind) {
-  const label = labelFor(kind).toLowerCase()
-  if (label.includes('data') || label.includes('restore')) return 'ax-badge-data'
-  if (label.includes('evaluation')) return 'ax-badge-evaluation'
-  if (label.includes('analysis')) return 'ax-badge-analysis'
-  if (label.includes('model')) return 'ax-badge-model'
-  if (label.includes('scenario')) return 'ax-badge-scenario'
-  if (label.includes('report')) return 'ax-badge-report'
-  if (label.includes('upload')) return 'ax-badge-upload'
-  if (label.includes('note')) return 'ax-badge-note'
-  return 'ax-badge-default'
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      {path}
+    </svg>
+  )
 }

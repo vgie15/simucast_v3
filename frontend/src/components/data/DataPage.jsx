@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import ColumnValuesModal from './ColumnValuesModal'
 import ManualTransformsCard from './ManualTransformsCard'
-import DataDetailView from './DataDetailView'
+import DataDetailView, { pushToolUndoSnapshot, pushViewUndoSnapshot } from './DataDetailView'
 import CategoryStandardizationCard from './CategoryStandardizationCard'
 import { useDialog } from '../common/DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStates'
@@ -17,7 +17,7 @@ import { SparkleIcon } from '../ai/AIExplainers'
 import { useAuth } from '../providers/AuthProvider'
 
 // Page component for uploading, editing, cleaning, and exploring the active dataset.
-export default function DataPage({ dataset, setDataset, viewStageRequest }) {
+export default function DataPage({ dataset, setDataset, viewStageRequest, initialData }) {
   const dialog = useDialog()
   const location = useLocation()
   const navigate = useNavigate()
@@ -26,8 +26,9 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
   const [viewStageLabel, setViewStageLabel] = useState(null)
   const [activeVar, setActiveVar] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
-  const [suggestions, setSuggestions] = useState([])
-  const [suggestionGroups, setSuggestionGroups] = useState({})
+  const initialSuggestions = initialData?.tab === 'data' && initialData?.datasetId === dataset?.id ? initialData.suggestions : null
+  const [suggestions, setSuggestions] = useState(initialSuggestions?.suggestions || [])
+  const [suggestionGroups, setSuggestionGroups] = useState(initialSuggestions?.groups || {})
   const [statuses, setStatuses] = useState({})
   const [selectedActions, setSelectedActions] = useState({})
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
@@ -55,8 +56,21 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 
   useEffect(() => {
     if (!dataset) return
+    if (initialSuggestions) {
+      const nextSuggestions = initialSuggestions.suggestions || []
+      setSuggestions(nextSuggestions)
+      setSuggestionGroups(initialSuggestions.groups || {})
+      setStatuses({})
+      setSelectedActions(
+        nextSuggestions.reduce((acc, suggestion) => {
+          acc[suggestion.id] = suggestion.action
+          return acc
+        }, {}),
+      )
+      return
+    }
     loadSuggestions()
-  }, [dataset?.id])
+  }, [dataset?.id, initialData?.datasetId])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -131,6 +145,30 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     window.dispatchEvent(event)
   }
 
+  const handleToolUndo = async (stageId) => {
+    try {
+      await api.restoreStage(dataset.id, stageId)
+      setViewStageId('current')
+      setViewStageLabel(null)
+      setHistoryKey((k) => k + 1)
+      setShowChangePreview(true)
+    } catch (err) {
+      console.error('Undo failed', err)
+    }
+  }
+
+  const handleToolRedo = async (stageId) => {
+    try {
+      await api.restoreStage(dataset.id, stageId)
+      setViewStageId('current')
+      setViewStageLabel(null)
+      setHistoryKey((k) => k + 1)
+      setShowChangePreview(true)
+    } catch (err) {
+      console.error('Redo failed', err)
+    }
+  }
+
   const actOnSuggestion = async (suggestion, accept) => {
     if (!accept) {
       setStatuses((current) => ({ ...current, [suggestion.id]: 'skipped' }))
@@ -138,6 +176,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
     }
     try {
       const action = selectedActions[suggestion.id] || suggestion.action
+      const label = suggestion.description || `${cleanActionLabel(action)} on ${suggestion.variable}`
+      pushToolUndoSnapshot(dataset.id, label, dataset.current_stage_id)
       await api.cleanApply(dataset.id, { action, variable: suggestion.variable })
       setAppliedFixSummary((current) => [
         { variable: suggestion.variable, kind: suggestion.kind, action, description: suggestion.description },
@@ -162,6 +202,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
       confirmLabel: 'Apply Fixes',
     })
     if (!ok) return
+    pushToolUndoSnapshot(dataset.id, 'Applied all suggestions', dataset.current_stage_id)
     setApplyingAll(true)
     try {
       const applied = {}
@@ -210,6 +251,12 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 
   const applyGroupFix = async ({ kind, action, columns, overrides, options }) => {
     if (applyingGroup) return
+    const colDesc = columns.length > 3 ? `${columns.slice(0, 3).join(', ')} and ${columns.length - 3} more` : columns.join(', ')
+    const label = kind === 'missing' ? `Filled missing values in ${colDesc}`
+      : kind === 'outliers' ? `Capped outliers in ${colDesc}`
+      : kind === 'duplicates' ? 'Removed duplicate rows'
+      : `Applied ${kind} fix`
+    pushToolUndoSnapshot(dataset.id, label, dataset.current_stage_id)
     setApplyingGroup(kind)
     try {
       const r = await api.cleanApplyGroup(dataset.id, { kind, action, columns, overrides, options })
@@ -250,6 +297,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
           refreshKey={historyKey}
           preferredViewMode={tableViewMode}
           onDataChanged={handleApplied}
+          onToolUndo={handleToolUndo}
+          onToolRedo={handleToolRedo}
           renderToolbar={(visibilityProps) => (
             <DataToolsToolbar
               dataset={dataset}
@@ -312,7 +361,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest }) {
 }
 
 // Card that previews and applies a grouped cleaning fix for missing/outliers/duplicates/types.
-function CleanGroupCard({ datasetId, stageId, group, kind, title, description, applying, onApply, showRecommendations = false }) {
+function CleanGroupCard({ datasetId, stageId, group, kind, title, description, applying, onApply, showRecommendations = false, visibilityProps, close }) {
   const auth = useAuth()
   const items = group?.columns || []
   const [selected, setSelected] = useState(() => items.map((item) => item.variable).filter(Boolean))
@@ -393,25 +442,58 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
         detail="Updating the active dataset, creating a stage, and logging the step."
       />
       <div className="ax-module-head ax-clean-group-head" style={{ alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ minWidth: 0 }} className="pop-section pop-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <strong style={{ fontSize: 14 }}>{title}</strong>
-            <HelpButton title={`${title}: what this card does`} text={helpTextForCleanCard(kind)} />
-            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-              {kind === 'duplicates' ? `${duplicateCount} duplicate rows` : `${items.length} affected column${items.length === 1 ? '' : 's'}`}
-            </span>
+        <div style={{ minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 8 }} className="pop-section pop-head">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 14 }}>{title}</strong>
+              <HelpButton title={`${title}: what this card does`} text={helpTextForCleanCard(kind)} />
+              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                {kind === 'duplicates' ? `${duplicateCount} duplicate rows` : `${items.length} affected column${items.length === 1 ? '' : 's'}`}
+              </span>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>{description}</p>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0' }}>{description}</p>
         </div>
-        <button
-          id={applyTargetId}
-          className="ax-btn prim papply pop-section pop-apply"
-          disabled={applying || (kind !== 'duplicates' && selected.length === 0)}
-          onClick={() => onApply({ kind, action, columns, overrides, options: { keep } })}
-          type="button"
-        >
-          {applying ? <InlineSpinner label="Applying..." /> : kind === 'duplicates' ? 'Remove' : 'Apply'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'stretch' }}>
+          <button
+            id={applyTargetId}
+            className="ax-btn prim papply pop-section pop-apply"
+            disabled={applying || (kind !== 'duplicates' && selected.length === 0)}
+            onClick={() => onApply({ kind, action, columns, overrides, options: { keep } })}
+            type="button"
+          >
+            {applying ? <InlineSpinner label="Applying..." /> : kind === 'duplicates' ? 'Remove' : 'Apply'}
+          </button>
+          {kind !== 'duplicates' && selected.length > 0 && (
+            <button
+              className="ax-btn sec pop-section"
+              style={{ fontSize: 11, padding: '4px 10px' }}
+              onClick={() => {
+                const col = selected[0]
+                pushViewUndoSnapshot(datasetId, `Filtered by ${col} (${kind === 'outliers' ? 'outlier' : kind})`, { viewSort: { ...visibilityProps.viewSort }, viewFilter: { ...visibilityProps.viewFilter } })
+                visibilityProps?.setViewFilter?.({ column: col, condition: kind === 'outliers' ? 'outlier' : kind })
+                close?.()
+              }}
+              type="button"
+            >
+              Show affected rows
+            </button>
+          )}
+          {kind === 'duplicates' && duplicateCount > 0 && (
+            <button
+              className="ax-btn sec pop-section"
+              style={{ fontSize: 11, padding: '4px 10px' }}
+              onClick={() => {
+                pushViewUndoSnapshot(datasetId, 'Filtered by duplicates', { viewSort: { ...visibilityProps.viewSort }, viewFilter: { ...visibilityProps.viewFilter } })
+                visibilityProps?.setViewFilter?.({ column: '', condition: 'duplicate', value: '' })
+                close?.()
+              }}
+              type="button"
+            >
+              Show affected rows
+            </button>
+          )}
+        </div>
       </div>
 
       {kind === 'duplicates' ? (
@@ -457,15 +539,6 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
           </div>
 
           <div className="pop-section pop-controls" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', fontSize: 12 }}>
-              <label style={{ color: 'var(--color-text-secondary)' }}>Group method</label>
-              <select value={action} onChange={(e) => setAction(e.target.value)}>
-                {options.map((opt) => (
-                  <option key={opt.action} value={opt.action}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
               <button
                 className="ax-text-action"
@@ -629,6 +702,9 @@ function DataToolsToolbar({
         { key: 'drop_cols', label: 'Drop Col', icon: 'column-remove', tip: 'Drop columns' },
         { key: 'drop_rows', label: 'Drop Row', icon: 'row-remove', tip: 'Drop matching rows' },
         { key: 'rename', label: 'Rename', icon: 'pencil', tip: 'Rename columns' },
+        { key: 'transpose', label: 'Transpose', icon: 'arrows-sort', tip: 'Swap rows ↔ columns' },
+        { key: 'unpivot', label: 'Unpivot', icon: 'columns', tip: 'Unpivot / Pivot columns' },
+        { key: 'first_row_headers', label: 'Headers', icon: 'pencil', tip: 'Use first row as headers' },
       ],
     },
     {
@@ -756,6 +832,10 @@ function ToolbarButton({ tool, active, onClick }) {
 }
 
 function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup, onApplied, visibilityProps, showRecommendations, close }) {
+  const makeOnApplied = (label) => async (...args) => {
+    pushToolUndoSnapshot(dataset.id, label, dataset.current_stage_id)
+    await onApplied(...args)
+  }
   if (toolKey === 'columns') {
     return (
       <ColumnVisibilityPanel
@@ -785,6 +865,8 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
         description={description}
         applying={applying}
         showRecommendations={showRecommendations}
+        visibilityProps={visibilityProps}
+        close={close}
         onApply={async (payload) => {
           await onApplyGroup(payload)
           close?.()
@@ -793,29 +875,44 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
     )
   }
   if (toolKey === 'labels') {
-    return <CategoryStandardizationCard dataset={dataset} onApplied={onApplied} compact showRecommendations={showRecommendations} />
+    return <CategoryStandardizationCard dataset={dataset} onApplied={makeOnApplied('Standardized labels')} compact showRecommendations={showRecommendations} />
   }
   if (['merge', 'split', 'drop_cols', 'drop_rows', 'rename'].includes(toolKey)) {
-    return <ManualTransformsCard dataset={dataset} onApplied={onApplied} initialTab={toolKey} compact />
+    const labelMap = { merge: 'Merged columns', split: 'Split column', drop_cols: 'Dropped columns', drop_rows: 'Dropped rows', rename: 'Renamed column' }
+    return <ManualTransformsCard dataset={dataset} onApplied={makeOnApplied(labelMap[toolKey])} initialTab={toolKey} compact />
   }
   if (toolKey === 'bin') {
-    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="bins" compact showRecommendations={showRecommendations} />
+    return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Binned column')} initialTool="bins" compact showRecommendations={showRecommendations} />
   }
   if (toolKey === 'format') {
-    return <FeatureEngineeringCard dataset={dataset} onApplied={onApplied} initialTool="format" compact showRecommendations={showRecommendations} />
+    return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Formatted column')} initialTool="format" compact showRecommendations={showRecommendations} />
   }
   if (toolKey === 'sort') {
-    return <SortTool variables={dataset.variables || []} visibilityProps={visibilityProps} close={close} />
+    return <SortTool variables={dataset.variables || []} visibilityProps={visibilityProps} close={close} datasetId={dataset.id} />
   }
   if (toolKey === 'filter') {
-    return <FilterTool variables={dataset.variables || []} visibilityProps={visibilityProps} close={close} />
+    return <FilterTool variables={dataset.variables || []} visibilityProps={visibilityProps} close={close} datasetId={dataset.id} />
+  }
+  if (toolKey === 'transpose') {
+    return <TransposeTool dataset={dataset} onApplied={makeOnApplied('Transposed dataset')} close={close} />
+  }
+  if (toolKey === 'unpivot') {
+    return <UnpivotPivotTool dataset={dataset} onApplied={makeOnApplied('Unpivoted dataset')} close={close} />
+  }
+  if (toolKey === 'first_row_headers') {
+    return <FirstRowHeadersTool dataset={dataset} onApplied={makeOnApplied('Set columns as headers')} close={close} />
   }
   return null
 }
 
-function SortTool({ variables, visibilityProps, close }) {
+function SortTool({ variables, visibilityProps, close, datasetId }) {
   const [column, setColumn] = useState(visibilityProps.viewSort?.column || variables[0]?.name || '')
   const [order, setOrder] = useState(visibilityProps.viewSort?.order || 'asc')
+  const applySort = (col, ord) => {
+    pushViewUndoSnapshot(datasetId, `Sorted by ${col} (${ord})`, { viewSort: { ...visibilityProps.viewSort }, viewFilter: { ...visibilityProps.viewFilter } })
+    visibilityProps.setViewSort({ column: col, order: ord })
+    close?.()
+  }
   return (
     <div className="ax-data-toolbar-panel">
       <p className="ax-data-toolbar-note">Sort changes the table view only. It does not modify the dataset.</p>
@@ -831,17 +928,22 @@ function SortTool({ variables, visibilityProps, close }) {
         </select>
       </div>
       <div className="ax-row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-        <button className="ax-btn" type="button" onClick={() => visibilityProps.setViewSort({ column: '', order: 'asc' })}>Clear</button>
-        <button className="ax-btn prim" type="button" onClick={() => { visibilityProps.setViewSort({ column, order }); close?.() }}>Apply</button>
+        <button className="ax-btn" type="button" onClick={() => applySort('', 'asc')}>Clear</button>
+        <button className="ax-btn prim" type="button" onClick={() => applySort(column, order)}>Apply</button>
       </div>
     </div>
   )
 }
 
-function FilterTool({ variables, visibilityProps, close }) {
+function FilterTool({ variables, visibilityProps, close, datasetId }) {
   const [column, setColumn] = useState(visibilityProps.viewFilter?.column || variables[0]?.name || '')
   const [condition, setCondition] = useState(visibilityProps.viewFilter?.condition || 'contains')
   const [value, setValue] = useState(visibilityProps.viewFilter?.value || '')
+  const applyFilter = (col, cond, val) => {
+    pushViewUndoSnapshot(datasetId, cond === '' ? 'Cleared filter' : `Filtered by ${col} (${cond})`, { viewSort: { ...visibilityProps.viewSort }, viewFilter: { ...visibilityProps.viewFilter } })
+    visibilityProps.setViewFilter({ column: col, condition: cond, value: val })
+    close?.()
+  }
   return (
     <div className="ax-data-toolbar-panel">
       <p className="ax-data-toolbar-note">Filter changes the table view only. It does not modify the dataset.</p>
@@ -868,8 +970,164 @@ function FilterTool({ variables, visibilityProps, close }) {
         )}
       </div>
       <div className="ax-row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-        <button className="ax-btn" type="button" onClick={() => visibilityProps.setViewFilter({ column: '', condition: 'contains', value: '' })}>Clear</button>
-        <button className="ax-btn prim" type="button" onClick={() => { visibilityProps.setViewFilter({ column, condition, value }); close?.() }}>Apply</button>
+        <button className="ax-btn" type="button" onClick={() => applyFilter('', 'contains', '')}>Clear</button>
+        <button className="ax-btn prim" type="button" onClick={() => applyFilter(column, condition, value)}>Apply</button>
+      </div>
+    </div>
+  )
+}
+
+function TransposeTool({ dataset, onApplied, close }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const handleApply = async () => {
+    setBusy(true); setError(null)
+    try {
+      await api.transform(dataset.id, 'transpose', {})
+      await onApplied?.()
+      close?.()
+    } catch (err) {
+      setError(err.message || 'Transpose failed')
+    } finally { setBusy(false) }
+  }
+  return (
+    <div className="ax-data-toolbar-panel">
+      <p className="ax-data-toolbar-note">Swap rows and columns. The first column becomes the new row index.</p>
+      {error && <p className="ax-data-toolbar-error" style={{ fontSize: 11, color: 'var(--color-text-danger)' }}>{error}</p>}
+      <div className="ax-row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+        <button className="ax-btn prim" type="button" disabled={busy} onClick={handleApply}>
+          {busy ? 'Applying...' : 'Transpose'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function UnpivotPivotTool({ dataset, onApplied, close }) {
+  const variables = dataset.variables || []
+  const colNames = variables.map((v) => v.name)
+  const [mode, setMode] = useState('unpivot')
+  const [idVars, setIdVars] = useState([])
+  const [valueVars, setValueVars] = useState([])
+  const [pivotIndex, setPivotIndex] = useState('')
+  const [pivotColumn, setPivotColumn] = useState('')
+  const [pivotValue, setPivotValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  const toggleId = (name) => setIdVars((p) => p.includes(name) ? p.filter((x) => x !== name) : [...p, name])
+  const toggleValue = (name) => setValueVars((p) => p.includes(name) ? p.filter((x) => x !== name) : [...p, name])
+
+  const handleApply = async () => {
+    setBusy(true); setError(null)
+    try {
+      if (mode === 'unpivot') {
+        await api.transform(dataset.id, 'unpivot', { id_vars: idVars, value_vars: valueVars })
+      } else {
+        await api.transform(dataset.id, 'pivot', { index: pivotIndex, column: pivotColumn, value: pivotValue })
+      }
+      await onApplied?.()
+      close?.()
+    } catch (err) {
+      setError(err.message || 'Operation failed')
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="ax-data-toolbar-panel">
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <button className={`ax-tab ${mode === 'unpivot' ? 'active' : ''}`} type="button" onClick={() => setMode('unpivot')}>Unpivot</button>
+        <button className={`ax-tab ${mode === 'pivot' ? 'active' : ''}`} type="button" onClick={() => setMode('pivot')}>Pivot</button>
+      </div>
+      {error && <p className="ax-data-toolbar-error" style={{ fontSize: 11, color: 'var(--color-text-danger)' }}>{error}</p>}
+
+      {mode === 'unpivot' ? (
+        <>
+          <p className="ax-data-toolbar-note">Select ID columns to keep, and value columns to unpivot into rows.</p>
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600 }}>ID columns</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+              {colNames.map((name) => (
+                <label key={name} className="ax-chip" style={{ cursor: 'pointer' }}>
+                  <input type="checkbox" checked={idVars.includes(name)} onChange={() => toggleId(name)} />
+                  <span>{name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600 }}>Value columns</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+              {colNames.filter((n) => !idVars.includes(n)).map((name) => (
+                <label key={name} className="ax-chip" style={{ cursor: 'pointer' }}>
+                  <input type="checkbox" checked={valueVars.includes(name)} onChange={() => toggleValue(name)} />
+                  <span>{name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="ax-data-toolbar-note">Select the index, pivot column, and value column.</p>
+          <div className="ax-data-toolbar-form-grid">
+            <label>Index</label>
+            <select value={pivotIndex} onChange={(e) => setPivotIndex(e.target.value)}>
+              <option value="">—</option>
+              {colNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <label>Column</label>
+            <select value={pivotColumn} onChange={(e) => setPivotColumn(e.target.value)}>
+              <option value="">—</option>
+              {colNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <label>Value</label>
+            <select value={pivotValue} onChange={(e) => setPivotValue(e.target.value)}>
+              <option value="">—</option>
+              {colNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        </>
+      )}
+      <div className="ax-row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+        <button className="ax-btn prim" type="button" disabled={busy} onClick={handleApply}>
+          {busy ? 'Applying...' : mode === 'unpivot' ? 'Unpivot' : 'Pivot'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function FirstRowHeadersTool({ dataset, onApplied, close }) {
+  const [mode, setMode] = useState('to_headers')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const handleApply = async () => {
+    setBusy(true); setError(null)
+    try {
+      await api.transform(dataset.id, mode === 'to_headers' ? 'first_row_as_headers' : 'headers_as_first_row', {})
+      await onApplied?.()
+      close?.()
+    } catch (err) {
+      setError(err.message || 'Operation failed')
+    } finally { setBusy(false) }
+  }
+  return (
+    <div className="ax-data-toolbar-panel">
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <button className={`ax-tab ${mode === 'to_headers' ? 'active' : ''}`} type="button" onClick={() => setMode('to_headers')}>First row → headers</button>
+        <button className={`ax-tab ${mode === 'from_headers' ? 'active' : ''}`} type="button" onClick={() => setMode('from_headers')}>Headers → first row</button>
+      </div>
+      {error && <p className="ax-data-toolbar-error" style={{ fontSize: 11, color: 'var(--color-text-danger)' }}>{error}</p>}
+      <p className="ax-data-toolbar-note">
+        {mode === 'to_headers'
+          ? 'Promote the first row of data to become the column headers.'
+          : 'Move the current column headers into the first row of data.'}
+      </p>
+      <div className="ax-row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+        <button className="ax-btn prim" type="button" disabled={busy} onClick={handleApply}>
+          {busy ? 'Applying...' : mode === 'to_headers' ? 'Use as Headers' : 'Move to Row'}
+        </button>
       </div>
     </div>
   )

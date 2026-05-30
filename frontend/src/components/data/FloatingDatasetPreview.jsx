@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { useDatasetTableState } from './useDatasetTableState'
+import { Database, Sparkles, Highlighter, FileSpreadsheet } from 'lucide-react'
 
 const PAGE_SIZE = 100
 const VIEW_MODES = [
@@ -141,6 +142,25 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   useEffect(() => {
     if (!hidden) return
     setOpen(false)
+  }, [hidden])
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('simucast:floating-dataset-state', {
+      detail: { visible: !hidden, open },
+    }))
+  }, [hidden, open])
+
+  useEffect(() => {
+    const openPreview = (event) => {
+      if (!hidden) {
+        setOpen(true)
+        event.detail?.onHandled?.(true)
+        return
+      }
+      event.detail?.onHandled?.(false)
+    }
+    window.addEventListener('simucast:open-dataset-preview', openPreview)
+    return () => window.removeEventListener('simucast:open-dataset-preview', openPreview)
   }, [hidden])
 
   useEffect(() => {
@@ -345,18 +365,35 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
           </header>
 
           <div className="ax-floating-dataset-toolbar">
-            <div className="ax-floating-dataset-modes" role="tablist" aria-label="Preview dataset view">
-              {VIEW_MODES.map((mode) => (
-                <button
-                  key={mode.id}
-                  type="button"
-                  className={viewMode === mode.id ? 'active' : ''}
-                  disabled={mode.id === 'highlight' && !changeStages.length && !changeLoading}
-                  onClick={() => setViewMode(mode.id)}
-                >
-                  {mode.label}
-                </button>
-              ))}
+            <div className="ax-segmented-control ax-floating-dataset-modes" role="tablist" aria-label="Preview dataset view">
+              <button
+                type="button"
+                className={`ax-segmented-item ${viewMode === 'original' ? 'active' : ''}`}
+                onClick={() => setViewMode('original')}
+                title="Original dataset"
+              >
+                <Database size={14} className="ax-segmented-icon" />
+                {viewMode === 'original' && <span className="ax-segmented-label">Original</span>}
+              </button>
+              <button
+                type="button"
+                className={`ax-segmented-item ${viewMode === 'cleaned' ? 'active' : ''}`}
+                onClick={() => setViewMode('cleaned')}
+                title="Cleaned dataset"
+              >
+                <Sparkles size={14} className="ax-segmented-icon" />
+                {viewMode === 'cleaned' && <span className="ax-segmented-label">Cleaned</span>}
+              </button>
+              <button
+                type="button"
+                className={`ax-segmented-item ${viewMode === 'highlight' ? 'active' : ''}`}
+                disabled={!changeStages.length && !changeLoading}
+                onClick={() => setViewMode('highlight')}
+                title="Highlight changes"
+              >
+                <Highlighter size={14} className="ax-segmented-icon" />
+                {viewMode === 'highlight' && <span className="ax-segmented-label">Highlighted</span>}
+              </button>
             </div>
             <div className="ax-floating-dataset-tools">
               <ColumnVisibilityMenu allColumns={allColumns} selected={visibleColumns} onApply={setVisibleColumns} />
@@ -506,18 +543,6 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
         </section>
       )}
 
-      {!open && (
-        <button
-          type="button"
-          className="ax-floating-dataset-launcher"
-          onClick={() => setOpen(true)}
-          aria-label="Open dataset table"
-          title="Open dataset table"
-        >
-          <TableIcon />
-          <span>Dataset</span>
-        </button>
-      )}
     </div>
   )
 }

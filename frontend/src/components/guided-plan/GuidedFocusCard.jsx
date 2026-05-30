@@ -244,6 +244,8 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   const [displaySubStep, setDisplaySubStep] = useState(1)
   const [contentAnimClass, setContentAnimClass] = useState('')
   const closingPopoverRef = useRef(false)
+  const applyingRef = useRef(false)
+  const justAppliedRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [suggestionData, setSuggestionData] = useState(null)
   
@@ -254,6 +256,13 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   const activeElementRef = useRef(null)
   const [showModal, setShowModal] = useState(false)
   const [modalConfig, setModalConfig] = useState(null)
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   
   const [typedTitle, setTypedTitle] = useState('')
@@ -357,6 +366,18 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     cardDismissed,
   ])
 
+  // Listen for clicks on the Apply/Remove button with class 'papply' to detect start of cleaning operation
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      const target = e.target
+      if (target && (target.classList.contains('papply') || target.closest('.papply'))) {
+        applyingRef.current = true
+      }
+    }
+    window.addEventListener('click', handleGlobalClick, true)
+    return () => window.removeEventListener('click', handleGlobalClick, true)
+  }, [])
+
   // Detect popover open/close states and check if we are in sub-step 2
   useEffect(() => {
     if (!config) return
@@ -364,8 +385,13 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       const btn = document.getElementById(`tb-${config.toolKey}`)
       const isBtnActive = btn?.classList.contains('active')
       setSubStep(currentSub => {
-        if (closingPopoverRef.current) return 1
-        if (currentSub === 3) return 3
+        if (closingPopoverRef.current) {
+          applyingRef.current = false
+          return 1
+        }
+        if (currentSub === 3 || justAppliedRef.current) return 3
+        if (applyingRef.current && isBtnActive) return currentSub
+        applyingRef.current = false
         return isBtnActive ? 2 : 1
       })
     }, 300)
@@ -381,7 +407,12 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       }
     }
     const handleApplySuccess = () => {
+      applyingRef.current = false
+      justAppliedRef.current = true
       setSubStep(3)
+      window.setTimeout(() => {
+        justAppliedRef.current = false
+      }, 500)
     }
 
     window.addEventListener('simucast:popover-open', handlePopoverOpen)
@@ -405,7 +436,10 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
 
     const currentSubStepData = config.subSteps[subStep]
     const selector = currentSubStepData?.spotlight
-    const nextEl = selector ? document.querySelector(selector) : null
+    let nextEl = selector ? document.querySelector(selector) : null
+    if (!nextEl && (subStep === 3 || displaySubStep === 3)) {
+      nextEl = document.querySelector('.ax-data-detail')
+    }
     const prevEl = activeElementRef.current
 
     if (nextEl !== prevEl) {
@@ -471,7 +505,7 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
 
     const selector = config?.subSteps[subStep]?.spotlight
     const isPopover = selector === '.ax-data-toolbar-popover'
-    const isTable = selector === '.ax-data-detail'
+    const isTable = selector === '.ax-data-detail' || subStep === 3 || displaySubStep === 3
 
     let top = 0
     let left = 0
@@ -503,10 +537,22 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
       top = targetRect.top + targetRect.height / 2 - cardH / 2
       top = Math.max(20, Math.min(viewH - cardH - 20, top))
     } else if (isTable) {
-      // Place card on the right side of the table
-      left = targetRect.left + targetRect.width - cardW - 24
-      top = targetRect.top + 100 // Pinned vertically to a nice upper section of the table
-      arrowSide = 'left' // Arrow on the left side pointing left to the table
+      // Place card on the right side of the table/screen (outside the table container)
+      const aiRail = document.querySelector('.ax-ai-rail')
+      const aiWidth = aiRail && aiRail.offsetHeight > 0 ? aiRail.offsetWidth : 280
+      const aiCollapsed = aiRail ? aiRail.classList.contains('collapsed') : false
+      const rightBoundary = viewW - (aiCollapsed ? 0 : aiWidth)
+
+      if (!aiCollapsed) {
+        // If AI Rail is open, place the card to the LEFT of the AI Rail
+        left = rightBoundary - cardW - 12
+        arrowSide = 'right' // Arrow on the right side pointing right to the target boundary
+      } else {
+        // If AI Rail is collapsed, place the card on the right edge of the viewport
+        left = rightBoundary + 12
+        arrowSide = 'left' // Arrow on the left side pointing left to the table
+      }
+      top = targetRect ? targetRect.top + 100 : 150 // Pinned vertically to a nice upper section of the table
 
       left = Math.max(20, Math.min(viewW - cardW - 20, left))
       top = Math.max(20, Math.min(viewH - cardH - 20, top))
@@ -533,14 +579,14 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
     }
 
     // Calculate arrow offsets relative to the card
-    let arrowLeft = (targetRect.left + targetRect.width / 2) - left
+    let arrowLeft = targetRect ? (targetRect.left + targetRect.width / 2) - left : 150
     arrowLeft = Math.max(16, Math.min(cardW - 16, arrowLeft))
 
-    let arrowTop = isTable ? (cardH / 2) : ((targetRect.top + targetRect.height / 2) - top)
+    let arrowTop = isTable ? (cardH / 2) : (targetRect ? ((targetRect.top + targetRect.height / 2) - top) : 90)
     arrowTop = Math.max(16, Math.min(cardH - 16, arrowTop))
 
     setCardPosition({ top, left, arrowSide, arrowLeft, arrowTop })
-  }, [targetRect, config, subStep])
+  }, [targetRect, config, subStep, displaySubStep])
 
   // Attach window event listeners for scroll and resize
   useEffect(() => {
@@ -686,16 +732,36 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
 
     if (next) {
       routeTarget(dataset.id, next, activeTab, navigate)
+    } else {
+      const label = modalConfig?.cont || ''
+      if (label.startsWith('Go to ')) {
+        const pageName = label.slice(6).toLowerCase()
+        const pagesMapped = {
+          'data': 'data',
+          'expand': 'expand',
+          'describe': 'describe',
+          'analysis': 'tests',
+          'models': 'models',
+          'what if': 'whatif',
+          'what-if': 'whatif',
+          'report': 'report'
+        }
+        const targetPage = pagesMapped[pageName]
+        if (targetPage) {
+          navigate(`/projects/${dataset.id}/${targetPage}`)
+        }
+      }
     }
   }
 
-  const handleExploreFreely = async () => {
+  const handleExploreFreely = () => {
     const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
 
     setShowModal(false)
-    setCardDismissed(false)
+    setCardDismissed(true)
 
-    await persist({
+    // Call API in the background to avoid blocking the UI transition
+    persist({
       completed_tips: completed,
       walkthrough_step: null,
       guided_mode: false,
@@ -851,12 +917,17 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   }
 
   const persist = async (body) => {
-    setBusy(true)
+    // Optimistically update parent state so guidance modes/overlays close instantly
+    onGuidanceUpdated?.({ ...guidance, ...body })
+    if (isMountedRef.current) setBusy(true)
     try {
       const response = await api.updateGuidance(dataset.id, body)
       onGuidanceUpdated?.(response.guidance)
+    } catch (err) {
+      console.error(err)
+      onGuidanceUpdated?.(guidance)
     } finally {
-      setBusy(false)
+      if (isMountedRef.current) setBusy(false)
     }
   }
 
@@ -975,7 +1046,8 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
           top: `${cardPosition.top}px`,
           left: `${cardPosition.left}px`,
           '--arrow-left': `${cardPosition.arrowLeft}px`,
-          '--arrow-top': `${cardPosition.arrowTop}px`
+          '--arrow-top': `${cardPosition.arrowTop}px`,
+          zIndex: 2010
         }}
       >
         <div className={`gf-content ${contentAnimClass}`} style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
@@ -1072,7 +1144,7 @@ function SpotlightMask({ rect }) {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 100,
+        zIndex: 2000,
         pointerEvents: 'none'
       }}
     >

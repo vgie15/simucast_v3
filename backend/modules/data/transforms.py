@@ -205,6 +205,49 @@ def _apply_transform(df, op, params):
             out[name] = parts[i] if i < parts.shape[1] else None
         return out, f"Split '{col}' by {sep!r} into {len(into)} columns: {', '.join(into)}"
 
+    if op == "transpose":
+        out = df.transpose()
+        out.columns = [str(c) for c in out.columns]
+        out.index.name = None
+        return out, f"Transposed {len(df)} rows × {len(df.columns)} columns → {len(out)} rows × {len(out.columns)} columns"
+
+    if op == "unpivot":
+        id_vars = params.get("id_vars", [])
+        value_vars = params.get("value_vars", [])
+        if not value_vars:
+            value_vars = [c for c in df.columns if c not in id_vars] if id_vars else list(df.columns)
+        if not value_vars:
+            raise ValueError("unpivot: no columns to unpivot")
+        out = df.melt(id_vars=id_vars, value_vars=value_vars, var_name="variable", value_name="value")
+        return out, f"Unpivoted {len(value_vars)} columns ({', '.join(value_vars[:5])}{'...' if len(value_vars) > 5 else ''}) into rows"
+
+    if op == "pivot":
+        index_col = params.get("index")
+        pivot_col = params.get("column")
+        value_col = params.get("value")
+        if not all([index_col, pivot_col, value_col]):
+            raise ValueError("pivot: index, column, and value parameters are required")
+        if index_col not in df.columns or pivot_col not in df.columns or value_col not in df.columns:
+            raise ValueError("pivot: one or more specified columns not found")
+        out = df.pivot(index=index_col, columns=pivot_col, values=value_col).reset_index()
+        out.columns = [str(c) if not isinstance(c, tuple) else str(c[0]) if str(c[1]) == "" else f"{c[0]}_{c[1]}" for c in out.columns]
+        return out, f"Pivoted on '{pivot_col}' with values from '{value_col}', indexed by '{index_col}'"
+
+    if op == "first_row_as_headers":
+        if len(df) < 1:
+            raise ValueError("first_row_as_headers: dataset must have at least one row")
+        out = df.copy()
+        new_cols = [str(v) if pd.notna(v) else f"unnamed_{i}" for i, v in enumerate(out.iloc[0])]
+        out = out.iloc[1:].reset_index(drop=True)
+        out.columns = new_cols
+        return out, f"Promoted first row to column headers ({len(new_cols)} columns)"
+
+    if op == "headers_as_first_row":
+        header_row = pd.DataFrame([list(df.columns)], columns=df.columns)
+        out = pd.concat([header_row, df], ignore_index=True)
+        out.columns = [str(i) for i in range(len(out.columns))]
+        return out, "Moved column headers into first row"
+
     raise ValueError(f"unknown op '{op}'")
 
 

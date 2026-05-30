@@ -12,7 +12,7 @@ import { useAuth } from '../providers/AuthProvider'
 import { coachStepsForGoal, firstCoachStep, goalLabel } from './ProjectGuidanceSetup'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
-const PLAN_CACHE_VERSION = 'v4'
+const PLAN_CACHE_VERSION = 'v5'
 const DATA_CHANGE_ACTIONS = new Set([
   'cell_edit',
   'batch_cell_edit',
@@ -102,7 +102,8 @@ export default function AIProjectPlanPanel({
   const load = async (force = false) => {
     if (!datasetId) return
     const cacheKey = cacheKeyFor(mode, stageKey)
-    if (!force) {
+    const shouldUseCache = mode !== 'system'
+    if (shouldUseCache && !force) {
       const cached = window.localStorage.getItem(cacheKey)
       if (cached) {
         try {
@@ -123,7 +124,7 @@ export default function AIProjectPlanPanel({
       const r = await api.aiProjectPlan(datasetId, mode)
       setPlan(r)
       setPlanDatasetId(datasetId)
-      window.localStorage.setItem(cacheKey, JSON.stringify(r))
+      if (shouldUseCache) window.localStorage.setItem(cacheKey, JSON.stringify(r))
     } catch {
       setError('AI plan unavailable. Using built-in guided workflow.')
       try {
@@ -217,7 +218,26 @@ export default function AIProjectPlanPanel({
       .sort((a, b) => workflowSort(a.step, a.index) - workflowSort(b.step, b.index)),
     [steps, stepStates],
   )
-  const nextStepState = planItems.find((item) => ['blocked', 'warning', 'stale', 'pending'].includes(item.state.status))?.state
+  const nextStepState = useMemo(() => {
+    if (guidance.guided_mode && guidance.walkthrough_step) {
+      const walkToPlanId = (walkId) => {
+        if (walkId === 'data.suggested_fixes') return 'data-missing-values'
+        if (walkId === 'data.outliers') return 'data-outliers'
+        if (walkId === 'data.duplicates') return 'data-duplicates'
+        if (walkId === 'data.categories') return 'data-category-standardization'
+        if (walkId === 'describe.summaries') return 'describe-overview'
+        if (walkId === 'tests.setup') return 'tests-correlation'
+        if (walkId === 'models.target') return 'models-train'
+        if (walkId === 'whatif.controls') return 'whatif-scenario'
+        if (walkId === 'report.preview') return 'report-final'
+        return walkId
+      }
+      const pId = walkToPlanId(guidance.walkthrough_step)
+      const guidedItem = planItems.find((item) => item.step.id === pId)
+      if (guidedItem) return guidedItem.state
+    }
+    return planItems.find((item) => ['blocked', 'warning', 'stale', 'pending'].includes(item.state.status))?.state
+  }, [guidance.guided_mode, guidance.walkthrough_step, planItems])
   const isAI = plan?.ai === true
   const isAutoFallback = mode === 'auto' && plan && plan.ai !== true
   const toggleCollapsed = () => {
@@ -275,6 +295,26 @@ export default function AIProjectPlanPanel({
       section,
       ts: Date.now(),
     }))
+    // Map the plan step ID to the client-side coach step ID
+    const planIdToWalkId = (planId) => {
+      if (planId === 'data-missing-values') return 'data.suggested_fixes'
+      if (planId === 'data-outliers') return 'data.outliers'
+      if (planId === 'data-duplicates') return 'data.duplicates'
+      if (planId === 'data-category-standardization') return 'data.categories'
+      if (planId === 'describe-overview') return 'describe.summaries'
+      if (planId === 'tests-correlation') return 'tests.setup'
+      if (planId === 'models-train') return 'models.target'
+      if (planId === 'whatif-scenario') return 'whatif.controls'
+      if (planId === 'report-final') return 'report.preview'
+      return planId
+    }
+    const walkStepId = planIdToWalkId(step.id)
+
+    // Automatically turn on guide focus flow for the selected step
+    updateGuidance({
+      guided_mode: true,
+      walkthrough_step: walkStepId,
+    })
     if (step.page === activeTab) {
       window.setTimeout(() => highlightSection(section), 40)
       return
@@ -284,8 +324,14 @@ export default function AIProjectPlanPanel({
 
   const updateGuidance = async (body) => {
     if (!datasetId) return
-    const response = await api.updateGuidance(datasetId, body)
-    onGuidanceUpdated?.(response.guidance)
+    onGuidanceUpdated?.({ ...guidance, ...body })
+    try {
+      const response = await api.updateGuidance(datasetId, body)
+      onGuidanceUpdated?.(response.guidance)
+    } catch (err) {
+      console.error(err)
+      onGuidanceUpdated?.(guidance)
+    }
   }
 
   const toggleGuidedMode = async () => {
@@ -294,13 +340,29 @@ export default function AIProjectPlanPanel({
       return
     }
     const isEnabling = !guidance.guided_mode
+    const planIdToWalkId = (planId) => {
+      if (planId === 'data-missing-values') return 'data.suggested_fixes'
+      if (planId === 'data-outliers') return 'data.outliers'
+      if (planId === 'data-duplicates') return 'data.duplicates'
+      if (planId === 'data-category-standardization') return 'data.categories'
+      if (planId === 'describe-overview') return 'describe.summaries'
+      if (planId === 'tests-correlation') return 'tests.setup'
+      if (planId === 'models-train') return 'models.target'
+      if (planId === 'whatif-scenario') return 'whatif.controls'
+      if (planId === 'report-final') return 'report.preview'
+      return planId
+    }
     const start = firstCoachStep(guidance.goal || guidance.intent, dataset)
-    const targetStepId = guidance.walkthrough_step || start?.id || null
+    const targetStepId = guidance.walkthrough_step || planIdToWalkId(nextStepState?.step?.id) || start?.id || null
+    if (!isEnabling) {
+      await updateGuidance({ guided_mode: false })
+      return
+    }
     await updateGuidance({
-      guided_mode: isEnabling,
-      walkthrough_step: isEnabling ? targetStepId : null,
+      guided_mode: true,
+      walkthrough_step: targetStepId,
     })
-    if (isEnabling && targetStepId) {
+    if (targetStepId) {
       const steps = coachStepsForGoal(guidance.goal || guidance.intent, dataset)
       const targetStep = steps.find((s) => s.id === targetStepId)
       if (targetStep && targetStep.page && targetStep.page !== activeTab) {
@@ -345,15 +407,13 @@ export default function AIProjectPlanPanel({
                   </svg>
                   Change goal
                 </button>
-                {!guidance.guided_mode && (
-                  <button
-                    className="ax-plan-goal-change-btn ax-plan-guidance-toggle"
-                    type="button"
-                    onClick={toggleGuidedMode}
-                  >
-                    Turn on guide
-                  </button>
-                )}
+                <button
+                  className="ax-plan-goal-change-btn ax-plan-guidance-toggle"
+                  type="button"
+                  onClick={toggleGuidedMode}
+                >
+                  {guidance.guided_mode ? 'Turn off guide' : 'Turn on step-by-step guide'}
+                </button>
               </div>
             </div>
           </div>
@@ -572,17 +632,7 @@ export default function AIProjectPlanPanel({
             )}
           </div>
 
-          {/* 5. Navigation Footer */}
-          <div className="ax-plan-footer">
-            <button
-              className="ax-plan-footer-expand-btn"
-              type="button"
-              disabled={completedCount < 3}
-              onClick={goToExpandPage}
-            >
-              Go to Expand →
-            </button>
-          </div>
+
         </div>
 
       {expanded && plan && createPortal(

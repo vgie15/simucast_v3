@@ -8,9 +8,35 @@ import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { BusyOverlay } from '../common/LoadingStates'
 import { useAuth } from '../providers/AuthProvider'
 import { useDatasetTableState } from './useDatasetTableState'
-import { Download, Maximize2, Minimize2, X, Undo, Redo } from 'lucide-react'
+import { Download, Maximize2, Minimize2, X, Undo, Redo, Database, Sparkles, Highlighter, FileSpreadsheet } from 'lucide-react'
 
 const PAGE_SIZE = 100
+
+// Module-level cache for table data (survives component unmount/remount)
+const tablePageCache = new Map()
+
+// Module-level tool undo/redo stacks (survives component remount on stage change)
+const toolUndoByDataset = new Map()
+const toolRedoByDataset = new Map()
+
+export function pushToolUndoSnapshot(datasetId, label, beforeStageId) {
+  if (!datasetId) return
+  const stack = toolUndoByDataset.get(datasetId) || []
+  stack.push({ label, beforeStageId })
+  if (stack.length > 20) stack.shift()
+  toolUndoByDataset.set(datasetId, stack)
+  toolRedoByDataset.delete(datasetId)
+}
+
+export function pushViewUndoSnapshot(datasetId, label, beforeViewState) {
+  if (!datasetId) return
+  const stack = toolUndoByDataset.get(datasetId) || []
+  stack.push({ type: 'view', label, beforeViewState })
+  if (stack.length > 20) stack.shift()
+  toolUndoByDataset.set(datasetId, stack)
+  toolRedoByDataset.delete(datasetId)
+}
+
 const TYPE_ICON = {
   numeric: '#',
   int: '#',
@@ -50,6 +76,8 @@ export default function DataDetailView({
   preferredViewMode = 'cleaned',
   onDataChanged,
   renderToolbar,
+  onToolUndo,
+  onToolRedo,
 }) {
   const datasetId = dataset?.id
   const [rowColumns, setRowColumns] = useState([])
@@ -126,6 +154,13 @@ export default function DataDetailView({
 
   const [headerEdit, setHeaderEdit] = useState(null)
   const [savingHeader, setSavingHeader] = useState(false)
+
+  useEffect(() => {
+    if (!headerEdit) return
+    const handler = (e) => { if (e.key === 'Escape') setHeaderEdit(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [headerEdit])
   const auth = useAuth()
 
   const [expanded, setExpanded] = useState(false)
@@ -180,9 +215,43 @@ export default function DataDetailView({
     setRedoStack([])
   }, [datasetId, effectiveStageId, refreshKey, viewMode])
 
-  // load rows page
+  // Restore persisted table state on mount (runs after reset, so it overrides)
   useEffect(() => {
     if (!datasetId) return
+    try {
+      const saved = window.localStorage.getItem(`simucast.dataTable.${datasetId}`)
+      if (saved) {
+        const s = JSON.parse(saved)
+        if (s.page > 0) setPage(s.page)
+        if (s.visibleColumns?.length) setVisibleColumns(s.visibleColumns)
+        if (s.viewSort) setViewSort(s.viewSort)
+        if (s.viewFilter) setViewFilter(s.viewFilter)
+      }
+    } catch {}
+  }, [datasetId])
+
+  // Persist table state to localStorage
+  useEffect(() => {
+    if (!datasetId) return
+    window.localStorage.setItem(`simucast.dataTable.${datasetId}`, JSON.stringify({
+      page, visibleColumns, viewSort, viewFilter
+    }))
+  }, [datasetId, page, visibleColumns, viewSort, viewFilter])
+
+  // load rows page (checks module-level cache first)
+  useEffect(() => {
+    if (!datasetId) return
+    const ck = `${datasetId}|${effectiveStageId}|${refreshKey}|${viewMode}|${page}`
+    const cached = tablePageCache.get(ck)
+    if (cached) {
+      setRows(cached.rows)
+      if (cached.columns) setRowColumns(cached.columns)
+      setTotal(cached.total)
+      setHasMore(cached.hasMore)
+      setRowError(null)
+      setLoading(false)
+      return
+    }
     let cancelled = false
     setLoading(true)
     setRowError(null)
@@ -190,10 +259,10 @@ export default function DataDetailView({
       .getRows(datasetId, page, PAGE_SIZE, effectiveStageId)
       .then((r) => {
         if (cancelled) return
-        setRows((prev) => (page === 1 ? r.rows : [...prev, ...r.rows]))
-        if (page === 1 && r.rows?.[0]) {
-          setRowColumns(Object.keys(r.rows[0]).filter((key) => key !== '__row_index'))
-        }
+        const columns = r.rows?.[0] ? Object.keys(r.rows[0]).filter((key) => key !== '__row_index') : []
+        tablePageCache.set(ck, { rows: r.rows, columns, total: r.total || 0, hasMore: page * PAGE_SIZE < (r.total || 0) })
+        setRows(r.rows)
+        if (columns.length) setRowColumns(columns)
         setTotal(r.total || 0)
         setHasMore(page * PAGE_SIZE < (r.total || 0))
       })
@@ -363,17 +432,53 @@ export default function DataDetailView({
   }
 
   const handleUndo = () => {
-    if (undoStack.length === 0) return
-    const lastEdit = undoStack[undoStack.length - 1]
-    setUndoStack((prev) => prev.slice(0, -1))
-    setRedoStack((prev) => [...prev, lastEdit])
+    if (undoStack.length > 0) {
+      const lastEdit = undoStack[undoStack.length - 1]
+      setUndoStack((prev) => prev.slice(0, -1))
+      setRedoStack((prev) => [...prev, lastEdit])
+      return
+    }
+    const stack = toolUndoByDataset.get(datasetId)
+    if (!stack || stack.length === 0) return
+    const entry = stack.pop()
+    const redoStack = toolRedoByDataset.get(datasetId) || []
+    if (entry.type === 'view') {
+      redoStack.push({ type: 'view', label: entry.label, beforeViewState: entry.beforeViewState, afterViewState: { viewSort, viewFilter } })
+      toolRedoByDataset.set(datasetId, redoStack)
+      setViewSort(entry.beforeViewState.viewSort || { column: '', order: 'asc' })
+      setViewFilter(entry.beforeViewState.viewFilter || { column: '', condition: 'contains', value: '' })
+    } else {
+      redoStack.push({ label: entry.label, beforeStageId: entry.beforeStageId, afterStageId: currentStageId })
+      toolRedoByDataset.set(datasetId, redoStack)
+      onToolUndo?.(entry.beforeStageId)
+    }
+    if (stack.length === 0) toolUndoByDataset.delete(datasetId)
+    else toolUndoByDataset.set(datasetId, stack)
   }
 
   const handleRedo = () => {
-    if (redoStack.length === 0) return
-    const nextEdit = redoStack[redoStack.length - 1]
-    setRedoStack((prev) => prev.slice(0, -1))
-    setUndoStack((prev) => [...prev, nextEdit])
+    if (redoStack.length > 0) {
+      const nextEdit = redoStack[redoStack.length - 1]
+      setRedoStack((prev) => prev.slice(0, -1))
+      setUndoStack((prev) => [...prev, nextEdit])
+      return
+    }
+    const stack = toolRedoByDataset.get(datasetId)
+    if (!stack || stack.length === 0) return
+    const entry = stack.pop()
+    const undoStack = toolUndoByDataset.get(datasetId) || []
+    if (entry.type === 'view') {
+      undoStack.push({ type: 'view', label: entry.label, beforeViewState: { viewSort, viewFilter } })
+      toolUndoByDataset.set(datasetId, undoStack)
+      setViewSort(entry.afterViewState.viewSort || { column: '', order: 'asc' })
+      setViewFilter(entry.afterViewState.viewFilter || { column: '', condition: 'contains', value: '' })
+    } else {
+      undoStack.push({ label: entry.label, beforeStageId: currentStageId })
+      toolUndoByDataset.set(datasetId, undoStack)
+      onToolRedo?.(entry.afterStageId)
+    }
+    if (stack.length === 0) toolRedoByDataset.delete(datasetId)
+    else toolRedoByDataset.set(datasetId, stack)
   }
 
   const handleDiscard = () => {
@@ -512,16 +617,46 @@ export default function DataDetailView({
       />
 
       <header className="ax-dd-header">
-        <div className="ax-module-head-main">
-          <div className="ax-module-copy">
-            <p className="ax-module-title">{dataset.filename || dataset.name}</p>
-            <span className="ax-module-subtitle">
-            ({total ? total.toLocaleString() : (dataset.row_count || 0).toLocaleString()} rows · {allColumns.length} cols
-            {stageLabel ? ` · ${stageLabel}` : ''})
-            </span>
-          </div>
+        <div className="ax-dd-header-left">
+          <FileSpreadsheet className="ax-dd-file-icon" size={16} />
+          <h2 className="ax-dd-filename">{dataset.filename || dataset.name}</h2>
+          <span className="ax-dd-rowcols">
+            {total ? total.toLocaleString() : (dataset.row_count || 0).toLocaleString()} rows · {allColumns.length} cols
+            {stageLabel ? ` · ${stageLabel}` : ''}
+          </span>
         </div>
-        <div className="ax-dd-actions">
+        <div className="ax-dd-actions" style={{ alignItems: 'center' }}>
+          {/* Segmented view modes switcher */}
+          <div className="ax-segmented-control" role="tablist" aria-label="Dataset view" style={{ marginRight: 8 }}>
+            <button
+              type="button"
+              className={`ax-segmented-item ${viewMode === 'original' ? 'active' : ''}`}
+              onClick={() => setViewMode('original')}
+              title="Original dataset"
+            >
+              <Database size={14} className="ax-segmented-icon" />
+              {viewMode === 'original' && <span className="ax-segmented-label">Original</span>}
+            </button>
+            <button
+              type="button"
+              className={`ax-segmented-item ${viewMode === 'cleaned' ? 'active' : ''}`}
+              onClick={() => setViewMode('cleaned')}
+              title="Cleaned dataset"
+            >
+              <Sparkles size={14} className="ax-segmented-icon" />
+              {viewMode === 'cleaned' && <span className="ax-segmented-label">Cleaned</span>}
+            </button>
+            <button
+              type="button"
+              className={`ax-segmented-item ${viewMode === 'highlight' ? 'active' : ''}`}
+              onClick={() => setViewMode('highlight')}
+              disabled={!changeStages.length && !changeLoading}
+              title="Highlight changes"
+            >
+              <Highlighter size={14} className="ax-segmented-icon" />
+              {viewMode === 'highlight' && <span className="ax-segmented-label">Highlighted</span>}
+            </button>
+          </div>
           <button
             type="button"
             className="ax-dd-about-btn"
@@ -570,9 +705,15 @@ export default function DataDetailView({
               className="ax-dd-icon-btn"
               onClick={handleUndo}
               disabled={undoStack.length === 0}
-              title="Undo edit"
-              aria-label="Undo edit"
-              style={{ opacity: undoStack.length === 0 ? 0.35 : 1, cursor: undoStack.length === 0 ? 'not-allowed' : 'pointer' }}
+              title={
+                undoStack.length > 0
+                  ? 'Undo edit'
+                  : (toolUndoByDataset.get(datasetId) || []).length > 0
+                    ? `Undo: ${toolUndoByDataset.get(datasetId).at(-1).label}`
+                    : 'Nothing to undo'
+              }
+              aria-label="Undo"
+              style={{ opacity: undoStack.length === 0 && (toolUndoByDataset.get(datasetId) || []).length === 0 ? 0.4 : 1, cursor: undoStack.length === 0 && (toolUndoByDataset.get(datasetId) || []).length === 0 ? 'not-allowed' : 'pointer' }}
             >
               <Undo size={15} />
             </button>
@@ -581,9 +722,15 @@ export default function DataDetailView({
               className="ax-dd-icon-btn"
               onClick={handleRedo}
               disabled={redoStack.length === 0}
-              title="Redo edit"
-              aria-label="Redo edit"
-              style={{ opacity: redoStack.length === 0 ? 0.35 : 1, cursor: redoStack.length === 0 ? 'not-allowed' : 'pointer' }}
+              title={
+                redoStack.length > 0
+                  ? 'Redo edit'
+                  : (toolRedoByDataset.get(datasetId) || []).length > 0
+                    ? `Redo: ${toolRedoByDataset.get(datasetId).at(-1).label}`
+                    : 'Nothing to redo'
+              }
+              aria-label="Redo"
+              style={{ opacity: redoStack.length === 0 && (toolRedoByDataset.get(datasetId) || []).length === 0 ? 0.4 : 1, cursor: redoStack.length === 0 && (toolRedoByDataset.get(datasetId) || []).length === 0 ? 'not-allowed' : 'pointer' }}
             >
               <Redo size={15} />
             </button>
@@ -663,32 +810,8 @@ export default function DataDetailView({
         setViewFilter,
       })}
 
-      <nav className="ax-dd-tabs">
-        <div className="ax-dd-viewmodes" role="tablist" aria-label="Dataset view">
-          <button
-            type="button"
-            className={viewMode === 'original' ? 'active' : ''}
-            onClick={() => setViewMode('original')}
-          >
-            Original
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'cleaned' ? 'active' : ''}
-            onClick={() => setViewMode('cleaned')}
-          >
-            Cleaned
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'highlight' ? 'active' : ''}
-            onClick={() => setViewMode('highlight')}
-            disabled={!changeStages.length && !changeLoading}
-          >
-            Highlight Changes
-          </button>
-        </div>
-        {!renderToolbar && (
+      {!renderToolbar && (
+        <nav className="ax-dd-tabs">
           <div className="ax-dd-tabs-right">
             <ColumnVisibilityMenu
               allColumns={allColumns}
@@ -696,8 +819,8 @@ export default function DataDetailView({
               onApply={setVisibleColumns}
             />
           </div>
-        )}
-      </nav>
+        </nav>
+      )}
 
       {viewMode === 'highlight' && (
         <section className="ax-dd-changebar" aria-live="polite">
@@ -860,40 +983,82 @@ export default function DataDetailView({
       </div>
 
       {headerEdit && (
-        <div className="ax-dd-modal-backdrop" onClick={() => !savingHeader && setHeaderEdit(null)}>
-          <div className="ax-dd-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>Edit column</h4>
-            <label className="ax-lbl">
-              Name
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 200,
+            padding: 20,
+          }}
+          onClick={() => setHeaderEdit(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 400,
+              maxWidth: '100%',
+              background: '#fff',
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,.15)',
+              padding: 24,
+            }}
+          >
+            <p style={{ margin: '0 0 20px', fontSize: 14, fontWeight: 600 }}>Edit column</p>
+
+            <label style={{ display: 'block', marginBottom: 14 }}>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Name</span>
               <input
                 value={headerEdit.newName}
                 onChange={(e) => setHeaderEdit({ ...headerEdit, newName: e.target.value })}
                 disabled={savingHeader}
+                style={{
+                  width: '100%',
+                  padding: '7px 10px',
+                  fontSize: 13,
+                  border: '1px solid var(--color-border-primary)',
+                  borderRadius: 6,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#e36522'}
+                onBlur={(e) => e.target.style.borderColor = 'var(--color-border-primary)'}
               />
             </label>
-            <label className="ax-lbl">
-              Type
+
+            <label style={{ display: 'block', marginBottom: 24 }}>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Type</span>
               <select
                 value={headerEdit.dtype}
                 onChange={(e) => setHeaderEdit({ ...headerEdit, dtype: e.target.value })}
                 disabled={savingHeader}
+                style={{
+                  width: '100%',
+                  padding: '7px 10px',
+                  fontSize: 13,
+                  border: '1px solid var(--color-border-primary)',
+                  borderRadius: 6,
+                  boxSizing: 'border-box',
+                }}
               >
-                <option value="int">Integer</option>
                 <option value="float">Float</option>
+                <option value="int">Int</option>
                 <option value="category">Category</option>
-                <option value="binary">Binary</option>
                 <option value="text">Text</option>
-                <option value="datetime">Datetime</option>
               </select>
             </label>
-            <div className="ax-dd-modal-actions">
-              <button type="button" className="ax-btn" onClick={() => setHeaderEdit(null)} disabled={savingHeader}>
-                Cancel
-              </button>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className="ax-btn" onClick={() => setHeaderEdit(null)} disabled={savingHeader}>Cancel</button>
               <button type="button" className="ax-btn prim" onClick={applyHeaderEdit} disabled={savingHeader}>
                 {savingHeader ? 'Saving…' : 'Apply'}
               </button>
             </div>
+
+            {cellError && <p style={{ fontSize: 11, color: 'var(--color-text-danger)', margin: '10px 0 0' }}>{cellError}</p>}
           </div>
         </div>
       )}

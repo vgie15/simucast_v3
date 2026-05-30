@@ -14,6 +14,8 @@ import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStat
 import HelpButton from '../common/HelpButton'
 import PageGuide from '../common/PageGuide'
 
+const modelsPageCache = new Map()
+
 const ALGOS = [
   { key: 'logistic', label: 'Logistic Regression', task: 'classification', interpretable: true,
     desc: 'Linear, fast, interpretable. Good baseline for classification.' },
@@ -50,7 +52,7 @@ const PARAM_DEFS = {
 }
 
 // Page that configures targets, features, validation, algorithms, and trains predictive models.
-export default function ModelsPage({ dataset, setActiveModel, onGo }) {
+export default function ModelsPage({ dataset, setActiveModel, onGo, initialData }) {
   const dialog = useDialog()
   const auth = useAuth()
   const navigate = useNavigate()
@@ -76,7 +78,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
   const [training, setTraining] = useState(false)
   const [results, setResults] = useState(null)
   const [activeResultIdx, setActiveResultIdx] = useState(0)
-  const [models, setModels] = useState([])
+  const [models, setModels] = useState(initialData?.tab === 'models' && initialData?.datasetId === dataset?.id ? (initialData.models || []) : [])
   const [draftReady, setDraftReady] = useState(false)
   const [dismissedChecks, setDismissedChecks] = useState([])
   const [isIssueBarExpanded, setIsIssueBarExpanded] = useState(false)
@@ -112,11 +114,35 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
 
   useEffect(() => {
     if (!dataset) return
-    api.listModels(dataset.id).then(setModels).catch(console.error)
-  }, [dataset?.id])
+    if (initialData?.tab === 'models' && initialData?.datasetId === dataset.id && initialData.models) {
+      setModels(initialData.models || [])
+      return
+    }
+    const ck = `${dataset.id}|models`
+    const cached = modelsPageCache.get(ck)
+    if (cached) { setModels(cached); return }
+    api.listModels(dataset.id).then((r) => { modelsPageCache.set(ck, r); setModels(r) }).catch(console.error)
+  }, [dataset?.id, initialData?.datasetId])
 
   useEffect(() => {
     if (!dataset?.id) return
+    if (initialData?.tab === 'models' && initialData?.datasetId === dataset.id && initialData.activity) {
+      const list = initialData.activity.activity || []
+      const cols = new Set()
+      list.forEach((item) => {
+        const detail = item.detail || {}
+        const action = detail.action_type || item.action_type || item.kind
+        if (action === 'category_standardization') {
+          const c = detail.column ? [detail.column] : detail.columns || []
+          c.forEach(col => cols.add(col))
+        }
+      })
+      setStandardizedCols(cols)
+      return
+    }
+    const ck = `${dataset.id}|${dataset.current_stage_id}|activity`
+    const cached = modelsPageCache.get(ck)
+    if (cached) { setStandardizedCols(cached); return }
     api.listActivity(dataset.id)
       .then((res) => {
         const list = res.activity || []
@@ -129,6 +155,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
             c.forEach(col => cols.add(col))
           }
         })
+        modelsPageCache.set(ck, cols)
         setStandardizedCols(cols)
       })
       .catch(console.error)
@@ -651,6 +678,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo }) {
                       setFeatures(features.filter((f) => f !== v.name))
                       setResults(null)
                       close()
+                      window.dispatchEvent(new CustomEvent('simucast:target-selected'))
                     }}
                     style={{
                       display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', fontSize: 12,
@@ -1575,7 +1603,7 @@ function ConfigDropdown({ label, value, children }) {
             position: 'absolute',
             top: 'calc(100% + 4px)',
             left: 0,
-            zIndex: 1000,
+            zIndex: 2005,
             background: 'var(--color-background-primary)',
             border: '1.5px solid var(--color-border-secondary)',
             borderRadius: '12px',

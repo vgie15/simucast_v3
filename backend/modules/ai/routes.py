@@ -1273,11 +1273,31 @@ def _normalize_project_steps(steps):
         })
     return sorted(out, key=lambda step: (page_order.get(step.get("page"), 99), sub_order(step), step.get("id", "")))[:10]
 
+def _category_standardization_columns(df, variables):
+    """Return category columns with actual multi-label groups to merge."""
+    cols = []
+    for var in variables or []:
+        col = var.get("name")
+        if var.get("dtype") != "category" or col not in df.columns:
+            continue
+        groups = {}
+        for raw in df[col].dropna().astype(str):
+            stripped = raw.strip()
+            if not stripped:
+                continue
+            key = re.sub(r"[\s_\-]+", " ", stripped).strip().lower()
+            groups.setdefault(key, set()).add(stripped)
+        if any(len(values) > 1 for values in groups.values()):
+            cols.append(col)
+    return cols
+
+
 def _filter_project_steps_for_dataset(steps, df, variables):
     """Validate AI recommendations against factual dataset state before rendering."""
     variables = variables or []
     missing_cols = {v["name"] for v in variables if int(v.get("missing", 0) or 0) > 0}
     duplicate_count = int(df.duplicated().sum()) if len(df) else 0
+    category_cols = set(_category_standardization_columns(df, variables))
     numeric_cols = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]
     outlier_cols = set()
     for col in numeric_cols:
@@ -1300,19 +1320,23 @@ def _filter_project_steps_for_dataset(steps, df, variables):
             continue
         if "outlier" in text and not outlier_cols:
             continue
+        if ("categor" in text or "standard" in text) and not category_cols:
+            continue
         if step.get("page") == "expand" and len(df) >= 500:
             continue
         if "missing" in text:
             step["columns"] = [c for c in (step.get("columns") or []) if c in missing_cols] or list(missing_cols)[:5]
         if "outlier" in text:
             step["columns"] = [c for c in (step.get("columns") or []) if c in outlier_cols] or list(outlier_cols)[:5]
+        if "categor" in text or "standard" in text:
+            step["columns"] = [c for c in (step.get("columns") or []) if c in category_cols] or list(category_cols)[:5]
         filtered.append(step)
     return filtered
 
 def _rule_based_project_plan(df, variables, project_goal=None):
     """Heuristic project plan used when the AI key is unset or the call fails."""
     nums = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]
-    cats = [v["name"] for v in variables if v.get("dtype") == "category"]
+    cats = _category_standardization_columns(df, variables)
     bins = [v["name"] for v in variables if v.get("dtype") == "binary"]
     missing_cols = [v["name"] for v in variables if int(v.get("missing", 0) or 0) > 0]
     outlier_cols = []

@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
-import { coachStepsForGoal, currentCoachStep, firstCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
+import { coachStepsForGoal, currentCoachStep, firstCoachStep } from './ProjectGuidanceSetup'
 
 // Spotlight walkthrough that routes users to exact workflow controls.
 export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
@@ -18,6 +18,13 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   const [spotlight, setSpotlight] = useState(null)
   const [coachStyle, setCoachStyle] = useState(null)
   const [progressTick, setProgressTick] = useState(0)
+  const isMountedRef = React.useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   const focusSteps = useMemo(() => spotlightStepsForStep(current, dataset, completion.complete), [current, dataset, completion.complete])
   const focusStep = focusSteps[microIndex] || focusSteps[0] || fallbackSpotlightStep(current)
@@ -49,6 +56,62 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
     window.addEventListener('simucast:guided-progress', refreshCompletion)
     return () => window.removeEventListener('simucast:guided-progress', refreshCompletion)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    if (
+      !dataset?.id ||
+      !guidance.guided_mode ||
+      !current ||
+      !completion.checked ||
+      !completion.complete ||
+      current.requirement !== 'required' ||
+      !isDataIssueStep(current)
+    ) {
+      return undefined
+    }
+
+    nextActionableCoachStep(guidance.goal, dataset, current.id, guidance.dismissed_tips || [])
+      .then(async (next) => {
+        if (cancelled) return
+        const completed = [...new Set([...(guidance.completed_tips || []), current.id])]
+        const response = await api.updateGuidance(dataset.id, {
+          completed_tips: completed,
+          walkthrough_step: next?.id || null,
+          guided_mode: Boolean(next),
+        })
+        if (cancelled) return
+        onGuidanceUpdated?.(response.guidance)
+        if (next) routeTarget(dataset.id, next, activeTab, navigate)
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeTab,
+    completion.checked,
+    completion.complete,
+    current,
+    dataset,
+    guidance.completed_tips,
+    guidance.dismissed_tips,
+    guidance.goal,
+    guidance.guided_mode,
+    navigate,
+    onGuidanceUpdated,
+  ])
+
+  useEffect(() => {
+    const handleTargetSelected = () => {
+      if (current?.id === 'models.target' && microIndex === 0) {
+        setMicroIndex(1)
+      }
+    }
+    window.addEventListener('simucast:target-selected', handleTargetSelected)
+    return () => window.removeEventListener('simucast:target-selected', handleTargetSelected)
+  }, [current?.id, microIndex])
 
   useEffect(() => {
     let cancelled = false
@@ -103,7 +166,9 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
         return
       }
       const rect = el.getBoundingClientRect()
-      const rectKey = `${rect.top},${rect.left},${rect.width},${rect.height}`
+      const dropdownEl = el ? el.querySelector('.models-config-dropdown-content') : null
+      const hasOpenDropdown = Boolean(dropdownEl)
+      const rectKey = `${rect.top},${rect.left},${rect.width},${rect.height},${hasOpenDropdown}`
       if (rectKey === lastRectString) return
       lastRectString = rectKey
 
@@ -123,24 +188,48 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
       const spaceBelow = viewH - rect.bottom
       const spaceAbove = rect.top
 
-      if (spaceBelow > cardH + 24) {
-        top = rect.bottom + margin
-        left = rect.left + rect.width / 2 - cardW / 2
-        arrowSide = 'top'
-      } else if (spaceAbove > cardH + 24) {
-        top = rect.top - cardH - margin
-        left = rect.left + rect.width / 2 - cardW / 2
-        arrowSide = 'bottom'
-      } else {
+      if (hasOpenDropdown) {
+        const dropdownRect = dropdownEl.getBoundingClientRect()
         const spaceRight = viewW - rect.right
+        const spaceLeft = rect.left
+
         if (spaceRight > cardW + 24) {
           left = rect.right + margin
           top = rect.top + rect.height / 2 - cardH / 2
           arrowSide = 'left'
-        } else {
+        } else if (spaceLeft > cardW + 24) {
           left = rect.left - cardW - margin
           top = rect.top + rect.height / 2 - cardH / 2
           arrowSide = 'right'
+        } else if (viewH - dropdownRect.bottom > cardH + 24) {
+          top = dropdownRect.bottom + margin
+          left = rect.left + rect.width / 2 - cardW / 2
+          arrowSide = 'top'
+        } else {
+          top = rect.top - cardH - margin
+          left = rect.left + rect.width / 2 - cardW / 2
+          arrowSide = 'bottom'
+        }
+      } else {
+        if (spaceBelow > cardH + 24) {
+          top = rect.bottom + margin
+          left = rect.left + rect.width / 2 - cardW / 2
+          arrowSide = 'top'
+        } else if (spaceAbove > cardH + 24) {
+          top = rect.top - cardH - margin
+          left = rect.left + rect.width / 2 - cardW / 2
+          arrowSide = 'bottom'
+        } else {
+          const spaceRight = viewW - rect.right
+          if (spaceRight > cardW + 24) {
+            left = rect.right + margin
+            top = rect.top + rect.height / 2 - cardH / 2
+            arrowSide = 'left'
+          } else {
+            left = rect.left - cardW - margin
+            top = rect.top + rect.height / 2 - cardH / 2
+            arrowSide = 'right'
+          }
         }
       }
 
@@ -193,12 +282,17 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   if (!dataset?.id || !guidance.guided_mode || !guidance.goal || !current) return null
 
   const persist = async (body) => {
-    setBusy(true)
+    // Optimistically update parent state so guidance modes/overlays close instantly
+    onGuidanceUpdated?.({ ...guidance, ...body })
+    if (isMountedRef.current) setBusy(true)
     try {
       const response = await api.updateGuidance(dataset.id, body)
       onGuidanceUpdated?.(response.guidance)
+    } catch (err) {
+      console.error(err)
+      onGuidanceUpdated?.(guidance)
     } finally {
-      setBusy(false)
+      if (isMountedRef.current) setBusy(false)
     }
   }
 
@@ -213,7 +307,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
     }
     const dismissed = skip ? [...new Set([...(guidance.dismissed_tips || []), current.id])] : (guidance.dismissed_tips || [])
     const completed = skip ? (guidance.completed_tips || []) : [...new Set([...(guidance.completed_tips || []), current.id])]
-    const next = nextCoachStep(guidance.goal, dataset, current.id, dismissed)
+    const next = await nextActionableCoachStep(guidance.goal, dataset, current.id, dismissed)
     await persist({
       dismissed_tips: dismissed,
       completed_tips: completed,
@@ -243,13 +337,14 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
         left: `${coachStyle.left}px`,
         '--arrow-left': `${coachStyle.arrowLeft}px`,
         '--arrow-top': `${coachStyle.arrowTop}px`,
-        width: `${coachStyle.width}px`
+        width: `${coachStyle.width}px`,
+        zIndex: 2010
       } : {
         position: 'fixed',
         bottom: '18px',
         right: 'max(18px, calc(var(--ai-w, 360px) + 18px))',
         width: '300px',
-        zIndex: 101
+        zIndex: 2010
       }}
       aria-live="polite"
     >
@@ -334,6 +429,32 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   )
 }
 
+async function nextActionableCoachStep(goal, dataset, currentId, dismissedTips = []) {
+  const hidden = new Set(dismissedTips || [])
+  const steps = coachStepsForGoal(goal, dataset)
+  const currentIndex = steps.findIndex((step) => step.id === currentId)
+  const candidates = steps.slice(Math.max(currentIndex + 1, 0)).filter((step) => !hidden.has(step.id))
+  if (!candidates.length) return null
+
+  let cleanSuggestions = null
+  for (const step of candidates) {
+    if (!isDataIssueStep(step)) return step
+    if (!cleanSuggestions) {
+      try {
+        cleanSuggestions = await api.cleanSuggestions(dataset.id)
+      } catch {
+        return step
+      }
+    }
+    if (cleanIssuePending(cleanSuggestions, step.completion)) return step
+  }
+  return null
+}
+
+function isDataIssueStep(step) {
+  return step?.page === 'data' && ['missing', 'outliers', 'duplicates'].includes(step.completion)
+}
+
 function SpotlightMask({ rect }) {
   return (
     <svg
@@ -343,7 +464,7 @@ function SpotlightMask({ rect }) {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 100,
+        zIndex: 2000,
         pointerEvents: 'none'
       }}
     >
@@ -391,7 +512,16 @@ export function routeTarget(datasetId, target, activeTab, navigate) {
 function highlightSection(section) {
   const el = document.getElementById(section)
   if (!el) return
-  el.scrollIntoView({ behavior: spotlightScrollBehavior(), block: 'center', inline: 'nearest' })
+  const rect = el.getBoundingClientRect()
+  const isVisible = (
+    rect.top >= 0 &&
+    rect.left >= 0 &&
+    rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+  )
+  if (!isVisible) {
+    el.scrollIntoView({ behavior: spotlightScrollBehavior(), block: 'center', inline: 'nearest' })
+  }
   el.classList.add('ax-fix-highlight')
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2200)
 }
@@ -534,6 +664,26 @@ function spotlightStepsForStep(step, dataset, complete) {
         action: 'Click Remove duplicates when the keep rule looks right.',
         why: 'The guide leaves Data cleanup after exact duplicates no longer remain.',
         nextLabel: 'Check and continue',
+      },
+    ]
+  }
+  if (step.id === 'data.categories') {
+    return [
+      {
+        section: 'tb-labels',
+        title: 'Open label standardization',
+        detected: 'This is a recommended review step for categorical columns.',
+        action: 'Click Labels in the Transform group to inspect whether any category values should be merged.',
+        why: 'Split labels can create separate groups that should actually count as one category.',
+        nextLabel: 'Show label groups',
+      },
+      {
+        section: 'data-section-category_standardization',
+        title: 'Review detected label groups',
+        detected: 'The Labels tool shows any suggested groups for the current dataset stage.',
+        action: 'Apply a mapping only when the suggested grouped labels truly mean the same thing. Otherwise, mark the step done or skip it.',
+        why: 'This keeps the guide from forcing unnecessary cleanup when labels are already valid.',
+        nextLabel: 'Continue when reviewed',
       },
     ]
   }

@@ -10,10 +10,11 @@ import HelpButton from '../common/HelpButton'
 import PageGuide from '../common/PageGuide'
 
 // What-if simulation page that runs predictions on a model and saves scenarios.
-export default function WhatIfPage({ dataset, activeModel }) {
+export default function WhatIfPage({ dataset, activeModel, initialData }) {
   const dialog = useDialog()
   const [fallbackModel, setFallbackModel] = useState(null)
-  const [availableModels, setAvailableModels] = useState([])
+  const initialModels = initialData?.tab === 'whatif' && initialData?.datasetId === dataset?.id ? (initialData.models || []) : []
+  const [availableModels, setAvailableModels] = useState(initialModels)
   const [modelFull, setModelFull] = useState(null)
   const [inputs, setInputs] = useState({})
   const [pred, setPred] = useState(null)
@@ -27,13 +28,18 @@ export default function WhatIfPage({ dataset, activeModel }) {
 
   useEffect(() => {
     if (!dataset?.id || activeModel) return
+    if (initialData?.tab === 'whatif' && initialData?.datasetId === dataset.id && initialData.models) {
+      setAvailableModels(initialData.models || [])
+      setFallbackModel((initialData.models || []).find((m) => m.has_whatif) || null)
+      return
+    }
     api.listModels(dataset.id)
       .then((models) => {
         setAvailableModels(models || [])
         setFallbackModel((models || []).find((m) => m.has_whatif) || null)
       })
       .catch(console.error)
-  }, [dataset?.id, activeModel?.id])
+  }, [dataset?.id, activeModel?.id, initialData?.datasetId])
 
   useEffect(() => {
     if (!selectedModel) return

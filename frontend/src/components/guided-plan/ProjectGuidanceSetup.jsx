@@ -466,7 +466,8 @@ function closestIntentChoices(question) {
 }
 
 export function coachStepsForGoal(goal, dataset) {
-  const needsMissingFix = (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
+  const needsMissingFix =
+    (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
   const missingStep = needsMissingFix ? coachStep(
     'data.suggested_fixes',
     'data',
@@ -587,9 +588,9 @@ export function coachStepsForGoal(goal, dataset) {
     ),
   ]
   const paths = {
-    prepare_data: preparePath,
-    train_model: [...preparePath, common.describe, common.models, common.whatif],
-    compare_models: [...preparePath, common.models],
+    prepare_data: [...preparePath, common.describe],
+    train_model: [...preparePath, common.describe, common.models],
+    compare_models: [...preparePath, common.describe, common.models],
     what_if: [...preparePath, common.models, common.whatif],
     report: [...preparePath, common.describe, common.report],
     full_workflow: [...preparePath, common.describe, common.analysis, common.models, common.whatif, common.report],

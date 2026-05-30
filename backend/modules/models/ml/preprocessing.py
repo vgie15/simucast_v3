@@ -563,7 +563,10 @@ def _category_groups(values, column_name="", threshold=0.88):
                 group_norms.append(other)
                 used.add(other)
         originals = sorted({raw for item in group_norms for raw in normalized[item]})
-        if len(originals) > 1 or any(raw != _title_category_label(norm) for raw in originals):
+        # A single clean value such as "MALE" or "FEMALE" should not create a
+        # standardization task by itself. The guidance should only surface this
+        # card when there are multiple source labels that can actually be merged.
+        if len(originals) > 1:
             label_source = min(group_norms, key=len) if len(group_norms) > 1 else group_norms[0]
             groups.append({
                 "values": originals,

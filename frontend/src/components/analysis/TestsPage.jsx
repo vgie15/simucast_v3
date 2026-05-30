@@ -11,6 +11,8 @@ import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStat
 import HelpButton from '../common/HelpButton'
 import PageGuide from '../common/PageGuide'
 
+const testsPageCache = new Map()
+
 const TESTS = [
   {
     key: 't',
@@ -43,7 +45,7 @@ const TESTS = [
 ]
 
 // Page that lets users configure and run statistical hypothesis tests on the dataset.
-export default function TestsPage({ dataset }) {
+export default function TestsPage({ dataset, initialData }) {
   const dialog = useDialog()
   const [kind, setKind] = useState('t')
   const [group, setGroup] = useState('')
@@ -65,6 +67,37 @@ export default function TestsPage({ dataset }) {
   useEffect(() => {
     if (!dataset?.id) return
     let alive = true
+    if (initialData?.tab === 'tests' && initialData?.datasetId === dataset.id && initialData.analyses) {
+      const latest = (initialData.analyses.analyses || []).find((a) => String(a.kind || '').startsWith('test_'))
+      if (latest) {
+        const restoredKind = String(latest.kind || '').replace(/^test_/, '')
+        const config = latest.config || {}
+        setKind(restoredKind || 't')
+        setResult(latest.result || null)
+        setGroup(config.group || '')
+        setMeasure(config.measure || '')
+        setVarA(config.var_a || '')
+        setVarB(config.var_b || '')
+        setCorrVars(config.variables || [])
+      } else {
+        setResult(null)
+      }
+      setRestoring(false)
+      return
+    }
+    const ck = `${dataset.id}|${dataset.current_stage_id}`
+    const cached = testsPageCache.get(ck)
+    if (cached) {
+      setKind(cached.kind)
+      setResult(cached.result)
+      setGroup(cached.group)
+      setMeasure(cached.measure)
+      setVarA(cached.varA)
+      setVarB(cached.varB)
+      setCorrVars(cached.corrVars)
+      setRestoring(false)
+      return
+    }
     setRestoring(true)
     api.listAnalyses(dataset.id, '', 20)
       .then((r) => {
@@ -76,13 +109,23 @@ export default function TestsPage({ dataset }) {
         }
         const restoredKind = String(latest.kind || '').replace(/^test_/, '')
         const config = latest.config || {}
-        setKind(restoredKind || 't')
-        setResult(latest.result || null)
-        setGroup(config.group || '')
-        setMeasure(config.measure || '')
-        setVarA(config.var_a || '')
-        setVarB(config.var_b || '')
-        setCorrVars(config.variables || [])
+        const state = {
+          kind: restoredKind || 't',
+          result: latest.result || null,
+          group: config.group || '',
+          measure: config.measure || '',
+          varA: config.var_a || '',
+          varB: config.var_b || '',
+          corrVars: config.variables || [],
+        }
+        testsPageCache.set(ck, state)
+        setKind(state.kind)
+        setResult(state.result)
+        setGroup(state.group)
+        setMeasure(state.measure)
+        setVarA(state.varA)
+        setVarB(state.varB)
+        setCorrVars(state.corrVars)
       })
       .finally(() => {
         if (alive) setRestoring(false)
