@@ -3002,6 +3002,48 @@ a.ax-btn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Toast container for plan notifications */
+.ax-plan-toast-container {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.ax-plan-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fff;
+  border-left: 3px solid #16a34a;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+  animation: ax-plan-toast-in 0.25s ease-out;
+  pointer-events: auto;
+}
+@keyframes ax-plan-toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Highlight animation for changed plan cards */
+.ax-plan-step-changed {
+  animation: ax-plan-step-highlight 3s ease-out;
+}
+@keyframes ax-plan-step-highlight {
+  0% { border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.3); }
+  50% { border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.12); }
+  100% { border-color: var(--color-border-tertiary); box-shadow: none; }
+}
 .ax-workspace-main .ax-workflow-header {
   min-height: 60px;
   margin: 0 0 18px;

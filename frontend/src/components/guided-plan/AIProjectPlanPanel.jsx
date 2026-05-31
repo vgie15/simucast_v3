@@ -2,7 +2,7 @@
  * COMPONENT: AI PROJECT PLAN PANEL
  * Keywords: ai, project plan, suggested workflow, recommend
  * ============================================================ */
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
@@ -51,6 +51,7 @@ export default function AIProjectPlanPanel({
   onOpenGuidanceSetup,
   onGuidanceUpdated,
   onStartGuideFocus,
+  panelOpen,
 }) {
   const navigate = useNavigate()
   const auth = useAuth()
@@ -79,6 +80,12 @@ export default function AIProjectPlanPanel({
   const [collapsed, setCollapsed] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [expandedCardId, setExpandedCardId] = useState(null)
+  const [toasts, setToasts] = useState([])
+  const [changedStepIds, setChangedStepIds] = useState([])
+  const prevDoneSnapshotRef = useRef(null)
+  const prevGuidanceGoalRef = useRef(guidanceGoal)
+  const prevPlanColsRef = useRef(null)
+  const awaitedGuidanceRef = useRef(null)
 
   const goToExpandPage = () => {
     if (!datasetId) return
@@ -176,6 +183,18 @@ export default function AIProjectPlanPanel({
     setCollapsed(window.localStorage.getItem(collapseKey) === '1')
   }, [collapseKey])
 
+  // Save old plan columns when guidance goal changes (before re-fetch clears them)
+  useEffect(() => {
+    if (prevGuidanceGoalRef.current !== guidanceGoal) {
+      if (plan && steps.length > 0) {
+        prevPlanColsRef.current = {}
+        steps.forEach((s) => { prevPlanColsRef.current[s.id] = [...(s.columns || [])] })
+      }
+      awaitedGuidanceRef.current = guidanceGoal
+      prevGuidanceGoalRef.current = guidanceGoal
+    }
+  }, [guidanceGoal])
+
   useEffect(() => {
     if (mode === 'system') return
     if (mode === 'auto' && plan && planDatasetId === datasetId) {
@@ -262,6 +281,14 @@ export default function AIProjectPlanPanel({
     if (skipKey) window.localStorage.setItem(skipKey, JSON.stringify(next))
   }
 
+  const addToast = useCallback((message) => {
+    const id = Date.now() + Math.random()
+    setToasts((prev) => [...prev, { id, message }])
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, 3000)
+  }, [])
+
   const handleModeChange = (nextMode) => {
     if (nextMode === mode) return
     if (nextMode === 'auto' && auth.isGuest) {
@@ -342,16 +369,48 @@ export default function AIProjectPlanPanel({
 
   // Auto-detect task completion by scanning activity
   useEffect(() => {
-    const check = () => {
-      const now = Date.now()
-      planItems.forEach(({ step, state }) => {
-        if (state.status === 'completed') {
-          // Show toast if recently completed and panel is closed
+    if (planItems.length === 0) return
+    const currentCompleted = new Set(
+      planItems.filter((item) => item.state.status === 'completed').map((item) => item.step.id),
+    )
+    if (prevDoneSnapshotRef.current !== null) {
+      const newlyCompleted = [...currentCompleted].filter((id) => !prevDoneSnapshotRef.current.has(id))
+      if (!panelOpen) {
+        for (const id of newlyCompleted) {
+          const item = planItems.find((p) => p.step.id === id)
+          if (item) addToast(`✓ ${item.step.title} complete`)
         }
-      })
+      }
     }
-    if (planItems.length > 0) check()
-  }, [activity, planItems])
+    prevDoneSnapshotRef.current = currentCompleted
+  }, [activity, planItems, panelOpen, addToast])
+
+  // Compare old vs new plan columns after goal change and handle changes
+  useEffect(() => {
+    if (!prevPlanColsRef.current || !awaitedGuidanceRef.current) return
+    if (!plan || steps.length === 0) return
+    const changed = []
+    steps.forEach((step) => {
+      const oldCols = prevPlanColsRef.current[step.id]
+      if (oldCols) {
+        const newCols = step.columns || []
+        if (JSON.stringify([...oldCols].sort()) !== JSON.stringify([...newCols].sort())) {
+          changed.push(step.id)
+        }
+      }
+    })
+    awaitedGuidanceRef.current = null
+    prevPlanColsRef.current = null
+    if (changed.length === 0) return
+    setDone((prev) => {
+      const updated = prev.filter((id) => !changed.includes(id))
+      if (doneKey) window.localStorage.setItem(doneKey, JSON.stringify(updated))
+      return updated
+    })
+    addToast('Workflow updated for new goal')
+    setChangedStepIds(changed)
+    window.setTimeout(() => setChangedStepIds([]), 3000)
+  }, [plan, planDatasetId, datasetId, addToast, doneKey])
 
   const updateGuidance = async (body) => {
     if (!datasetId) return
@@ -531,7 +590,8 @@ export default function AIProjectPlanPanel({
                   const target = targetForStep(step)
                   const requirement = requirementForStep(step)
 
-                  const cardClass = `ax-plan-step-redesigned state-${isCompleted ? 'completed' : isNext ? 'active' : 'pending'}`
+                  const highlightCard = changedStepIds.includes(step.id)
+                  const cardClass = `ax-plan-step-redesigned state-${isCompleted ? 'completed' : isNext ? 'active' : 'pending'}${highlightCard ? ' ax-plan-step-changed' : ''}`
 
                   return (
                     <article key={`${step.id}-${position}`} className={cardClass}>
@@ -700,6 +760,19 @@ export default function AIProjectPlanPanel({
             goToStep(step)
           }}
         />,
+        document.body,
+      )}
+      {toasts.length > 0 && createPortal(
+        <div className="ax-plan-toast-container">
+          {toasts.map((t) => (
+            <div key={t.id} className="ax-plan-toast">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>{t.message}</span>
+            </div>
+          ))}
+        </div>,
         document.body,
       )}
     </section>

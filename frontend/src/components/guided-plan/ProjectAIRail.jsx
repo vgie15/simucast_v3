@@ -21,6 +21,7 @@ export default function ProjectAIRail({
       <AIProjectPlanPanel
         dataset={dataset}
         activeTab={activeTab}
+        panelOpen={panelOpen}
         onOpenGuidanceSetup={onOpenGuidanceSetup}
         onGuidanceUpdated={onGuidanceUpdated}
         onStartGuideFocus={onStartGuideFocus}
