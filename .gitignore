@@ -29,3 +29,9 @@ Thumbs.db
 .vscode/
 *.swp
 .codex-runtime/
+
+# Test artifacts
+.playwright-cli/
+frontend/tests/
+report-redesign.html
+scratch/
