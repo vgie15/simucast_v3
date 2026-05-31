@@ -9968,7 +9968,7 @@ button.ax-module-head:focus-visible {
 .ax-test-left-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 18px;
+  padding: 16px 18px 16px 28px;
 }
 .ax-test-title {
   font-size: 16px;
@@ -10206,8 +10206,9 @@ button.ax-module-head:focus-visible {
   overflow: hidden;
 }
 .ax-test-metric-card.hero {
-  background: linear-gradient(135deg, #1e1e2e, #2d2d44);
-  color: #fff;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  border: 1px solid #fed7aa;
+  color: var(--color-text-primary, #1f2937);
 }
 .ax-test-metric-card.sig {
   background: linear-gradient(135deg, #f0fdf4, #dcfce7);
@@ -10256,7 +10257,7 @@ button.ax-module-head:focus-visible {
 .ax-test-metric-card.hero .ax-test-metric-value {
   font-size: 12px;
   font-weight: 600;
-  opacity: 0.95;
+  color: var(--color-accent, #e36522);
   line-height: 1.3;
 }
 .ax-test-metric-card.sig .ax-test-metric-value {
@@ -10271,7 +10272,7 @@ button.ax-module-head:focus-visible {
   opacity: 0.6;
 }
 .ax-test-metric-card.hero .ax-test-metric-sub {
-  color: rgba(255,255,255,0.5);
+  color: var(--color-text-secondary, #64748b);
 }
 
 /* Section B — Verdict */
@@ -10395,10 +10396,11 @@ button.ax-module-head:focus-visible {
   margin: 0;
 }
 .ax-test-predictive {
-  background: linear-gradient(135deg, #1e1e2e, #252538);
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  border: 1px solid #fed7aa;
   border-radius: 12px;
   padding: 14px;
-  color: #fff;
+  color: var(--color-text-primary, #1f2937);
 }
 .ax-test-predictive-label {
   font-size: 10px;
@@ -10406,19 +10408,19 @@ button.ax-module-head:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 0 0 8px;
-  opacity: 0.5;
+  color: var(--color-accent, #e36522);
 }
 .ax-test-predictive-text {
   font-size: 12px;
   font-style: italic;
   line-height: 1.6;
   margin: 0 0 10px;
-  opacity: 0.85;
+  color: var(--color-text-secondary, #64748b);
 }
 .ax-test-predictive-hint {
   font-size: 10px;
   margin: 0;
-  opacity: 0.3;
+  color: var(--color-text-tertiary, #94a3b8);
 }
 
 /* Section D — Action Row */
