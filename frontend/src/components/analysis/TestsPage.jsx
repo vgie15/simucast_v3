@@ -70,9 +70,12 @@ export default function TestsPage({ dataset, initialData }) {
     if (!dataset?.id) return
     let alive = true
     if (initialData?.tab === 'tests' && initialData?.datasetId === dataset.id && initialData.analyses) {
-      const latest = (initialData.analyses.analyses || []).find((a) => String(a.kind || '').startsWith('test_'))
+      const latest = (initialData.analyses.analyses || []).find((a) => {
+        const k = String(a.kind || '')
+        return k.startsWith('test_') && k !== 'test_corr'
+      })
       if (latest) {
-        const restoredKind = String(latest.kind || '').replace(/^test_/, '')
+        const restoredKind = String(latest.kind || '').replace(/^test_/, '').replace('analysis_corr', 'corr')
         const config = latest.config || {}
         setKind(restoredKind || 't')
         setResult(latest.result || null)
@@ -104,7 +107,10 @@ export default function TestsPage({ dataset, initialData }) {
     api.listAnalyses(dataset.id, '', 20)
       .then((r) => {
         if (!alive) return
-        const latest = (r.analyses || []).find((a) => String(a.kind || '').startsWith('test_'))
+        const latest = (r.analyses || []).find((a) => {
+          const k = String(a.kind || '')
+          return k.startsWith('test_') && k !== 'test_corr'
+        })
         if (!latest) {
           setResult(null)
           return
@@ -165,7 +171,7 @@ export default function TestsPage({ dataset, initialData }) {
       let body = { kind }
       if (kind === 't' || kind === 'anova') body = { kind, group, measure }
       if (kind === 'chi') body = { kind, var_a: varA, var_b: varB }
-      if (kind === 'corr') body = { kind, variables: corrVars }
+      if (kind === 'corr') body = { kind: 'analysis_corr', variables: corrVars }
       const r = await api.runTest(dataset.id, body)
       setResult(r)
     } catch (err) {
