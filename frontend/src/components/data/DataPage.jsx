@@ -38,7 +38,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
   const [appliedFixSummary, setAppliedFixSummary] = useState([])
   const [showChangePreview, setShowChangePreview] = useState(true)
   const [dataChangePulse, setDataChangePulse] = useState(false)
-  const [tableViewMode, setTableViewMode] = useState('cleaned')
+  const [tableViewMode, setTableViewMode] = useState(() => dataset?.current_stage_id ? 'cleaned' : 'original')
 
   useEffect(() => {
     if (!openSection) return

@@ -73,7 +73,7 @@ export default function DataDetailView({
   currentStageId,
   stageLabel,
   refreshKey,
-  preferredViewMode = 'cleaned',
+  preferredViewMode = currentStageId ? 'cleaned' : 'original',
   onDataChanged,
   renderToolbar,
   onToolUndo,
