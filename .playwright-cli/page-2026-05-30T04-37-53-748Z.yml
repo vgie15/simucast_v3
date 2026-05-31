@@ -1,0 +1,91 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - complementary [ref=e21]:
+      - generic [ref=e22]:
+        - link "SimuCast logo SimuCast Predictive Analytics" [ref=e23] [cursor=pointer]:
+          - /url: /
+          - img "SimuCast logo" [ref=e25]
+          - generic [ref=e26]:
+            - paragraph [ref=e27]: SimuCast
+            - paragraph [ref=e28]: Predictive Analytics
+        - generic [ref=e29]:
+          - link "Dashboard" [ref=e30] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e31]
+            - generic [ref=e33]: Dashboard
+          - link "Projects" [ref=e34] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e35]
+            - generic [ref=e37]: Projects
+          - link "Files" [ref=e38] [cursor=pointer]:
+            - /url: /files
+            - img [ref=e39]
+            - generic [ref=e41]: Files
+      - button "VG vgie0015@gmail.com" [ref=e116] [cursor=pointer]:
+        - generic [ref=e44]: VG
+        - generic [ref=e45]: vgie0015@gmail.com
+        - img [ref=e46]
+      - separator "Resize sidebar" [ref=e48]
+    - generic [ref=e4]:
+      - main [ref=e5]:
+        - generic [ref=e55]:
+          - generic [ref=e56]:
+            - heading "Dashboard" [level=1] [ref=e57]
+            - paragraph [ref=e58]: Quick overview of your work in SimuCast.
+          - button "+ Add new project" [ref=e59] [cursor=pointer]
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - paragraph [ref=e62]: Projects
+            - paragraph [ref=e63]: "0"
+          - generic [ref=e64]:
+            - paragraph [ref=e65]: Total rows
+            - paragraph [ref=e66]: "0"
+          - generic [ref=e67]:
+            - paragraph [ref=e68]: Latest project
+            - paragraph [ref=e69]: —
+        - generic [ref=e70]:
+          - generic [ref=e71]:
+            - paragraph [ref=e72]: Recent projects
+            - link "View all →" [ref=e73] [cursor=pointer]:
+              - /url: /projects
+          - paragraph [ref=e75]:
+            - text: No projects yet. Click
+            - strong [ref=e76]: + Add new project
+            - text: to get started.
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - paragraph [ref=e79]: Recent files
+            - link "View all →" [ref=e80] [cursor=pointer]:
+              - /url: /files
+          - paragraph [ref=e82]: No files yet. Files appear here when you create a project.
+      - button "Open AI assistant" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e20]: AI
+  - generic [ref=e90]:
+    - generic [ref=e91]:
+      - button "Login" [ref=e92] [cursor=pointer]
+      - button "Sign Up" [ref=e93] [cursor=pointer]
+      - button "Close login modal" [ref=e94] [cursor=pointer]
+    - generic [ref=e97]:
+      - heading "Welcome Back" [level=2] [ref=e98]
+      - paragraph [ref=e99]: Sign in to access your saved scenarios and analysis.
+      - generic [ref=e100]:
+        - generic [ref=e101]: Email
+        - textbox "Email" [ref=e102]:
+          - /placeholder: you@example.com
+          - text: vgie0015@gmail.com
+      - generic [ref=e103]:
+        - generic [ref=e104]: Password
+        - textbox "Password" [ref=e105]:
+          - /placeholder: At least 8 characters
+          - text: "12345678"
+      - generic [ref=e106]:
+        - checkbox "Remember me" [ref=e107]
+        - generic [ref=e108]: Remember me
+    - generic [ref=e109]:
+      - button "Working..." [disabled] [ref=e117]
+      - generic [ref=e112]: OR
+      - button "Continue as Guest" [disabled] [ref=e113]
+      - paragraph [ref=e114]:
+        - text: Don't have an account?
+        - button "Sign up" [ref=e115] [cursor=pointer]

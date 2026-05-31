@@ -50,6 +50,7 @@ export default function AIProjectPlanPanel({
   onCollapsedChange,
   onOpenGuidanceSetup,
   onGuidanceUpdated,
+  onStartGuideFocus,
 }) {
   const navigate = useNavigate()
   const auth = useAuth()
@@ -309,18 +310,48 @@ export default function AIProjectPlanPanel({
       return planId
     }
     const walkStepId = planIdToWalkId(step.id)
-
-    // Automatically turn on guide focus flow for the selected step
-    updateGuidance({
-      guided_mode: true,
-      walkthrough_step: walkStepId,
-    })
+    onStartGuideFocus?.(walkStepId)
     if (step.page === activeTab) {
       window.setTimeout(() => highlightSection(section), 40)
       return
     }
     navigate(`/projects/${datasetId}/${step.page}`)
   }
+
+  const guideFocusOnStep = (step) => {
+    const planIdToWalkId = (planId) => {
+      if (planId === 'data-missing-values') return 'data.suggested_fixes'
+      if (planId === 'data-outliers') return 'data.outliers'
+      if (planId === 'data-duplicates') return 'data.duplicates'
+      if (planId === 'data-category-standardization') return 'data.categories'
+      if (planId === 'describe-overview') return 'describe.summaries'
+      if (planId === 'tests-correlation') return 'tests.setup'
+      if (planId === 'models-train') return 'models.target'
+      if (planId === 'whatif-scenario') return 'whatif.controls'
+      if (planId === 'report-final') return 'report.preview'
+      return planId
+    }
+    const walkStepId = planIdToWalkId(step.id)
+    onStartGuideFocus?.(walkStepId)
+  }
+
+  const continueWhereLeftOff = () => {
+    const firstPending = planItems.find((item) => item.state.status !== 'completed')
+    if (firstPending) guideFocusOnStep(firstPending.step)
+  }
+
+  // Auto-detect task completion by scanning activity
+  useEffect(() => {
+    const check = () => {
+      const now = Date.now()
+      planItems.forEach(({ step, state }) => {
+        if (state.status === 'completed') {
+          // Show toast if recently completed and panel is closed
+        }
+      })
+    }
+    if (planItems.length > 0) check()
+  }, [activity, planItems])
 
   const updateGuidance = async (body) => {
     if (!datasetId) return
@@ -436,16 +467,28 @@ export default function AIProjectPlanPanel({
             </div>
 
             {/* 3. Progress Bar */}
-            <div className="ax-plan-progress-container">
-              <div className="ax-plan-progress-bar-track">
-                <div
-                  className="ax-plan-progress-bar-fill"
-                  style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
-                />
+            <div style={{ padding: '0 14px' }}>
+              <div className="ax-plan-progress-container">
+                <div className="ax-plan-progress-bar-track">
+                  <div
+                    className="ax-plan-progress-bar-fill"
+                    style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="ax-plan-progress-label">
+                  {completedCount} of {totalCount} done
+                </span>
               </div>
-              <span className="ax-plan-progress-label">
-                {completedCount} of {totalCount} done
-              </span>
+              {/* Continue where you left off */}
+              {completedCount < totalCount ? (
+                <button className="ax-guide-continue-btn" type="button" onClick={continueWhereLeftOff}>
+                  ↗ Continue where you left off
+                </button>
+              ) : (
+                <button className="ax-guide-continue-btn" type="button" onClick={() => { navigate(`/projects/${datasetId}/expand`) }}>
+                  All done — Go to Expand
+                </button>
+              )}
             </div>
           </div>
 
@@ -604,11 +647,19 @@ export default function AIProjectPlanPanel({
 
                           {/* Actions Row */}
                           <div className="ax-plan-card-actions-row">
-                            {step.rationale ? (
-                              <WhyThisMattersInline text={step.rationale} />
-                            ) : (
-                              <div />
-                            )}
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              {step.rationale ? (
+                                <WhyThisMattersInline text={step.rationale} />
+                              ) : (
+                                <div />
+                              )}
+                              <button className="ax-guide-focus-btn" type="button" onClick={() => guideFocusOnStep(step)}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+                                </svg>
+                                Guide Focus
+                              </button>
+                            </div>
                             {isCompleted ? (
                               <span style={{ color: '#16a34a', fontSize: '11px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
                                 ✓ Completed

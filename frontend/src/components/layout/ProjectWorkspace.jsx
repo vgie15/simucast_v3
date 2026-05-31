@@ -102,62 +102,27 @@ export default function ProjectWorkspace() {
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [aiCollapsed, setAiCollapsed] = useState(false)
   const [guidanceSetupOpen, setGuidanceSetupOpen] = useState(false)
-  const [aiWidth, setAiWidth] = useState(360)
-  const [resizing, setResizing] = useState(null) // 'ai' | null
   const [guidedLockNotice, setGuidedLockNotice] = useState('')
+  const [guidePanelOpen, setGuidePanelOpen] = useState(() => {
+    try {
+      return window.sessionStorage.getItem('simucast.guidePanelOpen') === 'true'
+    } catch { return false }
+  })
 
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
 
-  const aiKey = id ? `simucast.aiRail.collapsed.${id}` : ''
-  const aiWidthKey = id ? `simucast.aiRail.width.${id}` : ''
-
-  useEffect(() => {
-    if (!aiKey) return
-    const saved = window.localStorage.getItem(aiKey)
-    setAiCollapsed(saved === null ? false : saved === '1')
-  }, [aiKey])
-
-  useEffect(() => {
-    if (!aiWidthKey) return
-    const saved = Number(window.localStorage.getItem(aiWidthKey))
-    if (Number.isFinite(saved) && saved > 0) setAiWidth(saved)
-  }, [aiWidthKey])
-
-  useEffect(() => {
-    if (!resizing) return
-    const onMove = (e) => {
-      e.preventDefault()
-      if (resizing === 'ai') {
-        const next = Math.max(240, Math.min(640, window.innerWidth - e.clientX))
-        setAiWidth(next)
-      }
-    }
-    const onUp = () => setResizing(null)
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'col-resize'
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-    }
-  }, [resizing])
-
-  useEffect(() => {
-    if (resizing || !aiWidthKey) return
-    window.localStorage.setItem(aiWidthKey, String(Math.round(aiWidth)))
-  }, [aiWidth, resizing, aiWidthKey])
-
-  const toggleAI = () => {
-    setAiCollapsed((c) => {
-      const next = !c
-      if (aiKey) window.localStorage.setItem(aiKey, next ? '1' : '0')
+  const toggleGuidePanel = () => {
+    setGuidePanelOpen((prev) => {
+      const next = !prev
+      try { window.sessionStorage.setItem('simucast.guidePanelOpen', next ? 'true' : 'false') } catch {}
       return next
     })
+  }
+
+  const openGuidePanel = () => {
+    setGuidePanelOpen(true)
+    try { window.sessionStorage.setItem('simucast.guidePanelOpen', 'true') } catch {}
   }
 
   useEffect(() => {
@@ -233,10 +198,19 @@ export default function ProjectWorkspace() {
   const guidedLocksFuture = Boolean(guidedStep?.requirement === 'required' && guidedTabIndex >= 0)
   const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey, initialData: tabPreload })
 
+  const startGuideFocus = async (stepId) => {
+    if (!dataset?.id || !dataset?.guidance) return
+    setGuidePanelOpen(false)
+    try { window.sessionStorage.setItem('simucast.guidePanelOpen', 'false') } catch {}
+    try {
+      await api.updateGuidance(dataset.id, { guided_mode: true, walkthrough_step: stepId })
+      setDataset((current) => ({ ...current, guidance: { ...current.guidance, guided_mode: true, walkthrough_step: stepId } }))
+    } catch {}
+  }
+
   return (
     <div
-      className={`ax-workspace-grid history-closed ${aiCollapsed ? 'ai-closed' : ''} ${guidedStep ? 'guided-focus-enabled' : ''}`}
-      style={{ '--ai-w': `${aiWidth}px` }}
+      className={`ax-workspace-grid history-closed ${guidedStep ? 'guided-focus-enabled' : ''}`}
     >
       <div className="ax-workspace-main">
         <div className="ax-workflow-header">
@@ -289,13 +263,13 @@ export default function ProjectWorkspace() {
               </button>
               <button
                 type="button"
-                className={`ax-rail-toggle ax-rail-toggle-ai ${aiCollapsed ? '' : 'active'}`}
-                onClick={toggleAI}
-                aria-pressed={!aiCollapsed}
-                aria-label={aiCollapsed ? 'Open assistant rail' : 'Close assistant rail'}
-                title={aiCollapsed ? 'Open assistant' : 'Close assistant'}
+                className={`ax-rail-toggle ax-rail-toggle-ai ${guidePanelOpen ? 'active' : ''}`}
+                onClick={toggleGuidePanel}
+                aria-pressed={guidePanelOpen}
+                aria-label={guidePanelOpen ? 'Close guide panel' : 'Open guide panel'}
+                title={guidePanelOpen ? 'Close guide panel' : 'Open guide panel'}
               >
-                <ToggleChevron direction={aiCollapsed ? 'left' : 'right'} />
+                <ToggleChevron direction={guidePanelOpen ? 'right' : 'left'} />
               </button>
             </div>
           </div>
@@ -306,14 +280,34 @@ export default function ProjectWorkspace() {
         </div>
       </div>
 
-      <ProjectAIRail
-        dataset={dataset}
-        activeTab={activeTab}
-        collapsed={aiCollapsed}
-        onStartResize={() => setResizing('ai')}
-        onOpenGuidanceSetup={() => setGuidanceSetupOpen(true)}
-        onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
-      />
+      {/* Guided workflow tab (collapsed state) */}
+      {!guidePanelOpen && (
+        <button className="ax-guide-tab" type="button" onClick={toggleGuidePanel} title="Open guided workflow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          <span className="ax-guide-tab-label">Guide</span>
+        </button>
+      )}
+
+      {/* Backdrop overlay when panel is open */}
+      <div className={`ax-guide-panel-overlay ${guidePanelOpen ? 'open' : ''}`} onClick={toggleGuidePanel} />
+
+      {/* Slide-in panel */}
+      <aside className={`ax-guide-panel ${guidePanelOpen ? 'open' : ''}`}>
+        <button className="ax-guide-panel-close" type="button" onClick={toggleGuidePanel} aria-label="Close guide panel">&times;</button>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <ProjectAIRail
+            dataset={dataset}
+            activeTab={activeTab}
+            panelOpen={guidePanelOpen}
+            onOpenGuidanceSetup={() => setGuidanceSetupOpen(true)}
+            onGuidanceUpdated={(guidance) => setDataset((current) => ({ ...current, guidance }))}
+            onStartGuideFocus={startGuideFocus}
+          />
+        </div>
+      </aside>
+
       <GuidedCoach
         dataset={dataset}
         activeTab={activeTab}

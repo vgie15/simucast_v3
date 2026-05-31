@@ -78,6 +78,7 @@ export default function DataDetailView({
   renderToolbar,
   onToolUndo,
   onToolRedo,
+  toolUndoing,
 }) {
   const datasetId = dataset?.id
   const [rowColumns, setRowColumns] = useState([])
@@ -432,6 +433,7 @@ export default function DataDetailView({
   }
 
   const handleUndo = () => {
+    if (toolUndoing) return
     if (undoStack.length > 0) {
       const lastEdit = undoStack[undoStack.length - 1]
       setUndoStack((prev) => prev.slice(0, -1))
@@ -457,6 +459,7 @@ export default function DataDetailView({
   }
 
   const handleRedo = () => {
+    if (toolUndoing) return
     if (redoStack.length > 0) {
       const nextEdit = redoStack[redoStack.length - 1]
       setRedoStack((prev) => prev.slice(0, -1))
@@ -704,9 +707,10 @@ export default function DataDetailView({
               type="button"
               className="ax-dd-icon-btn"
               onClick={handleUndo}
-              disabled={undoStack.length === 0}
+              disabled={undoStack.length === 0 && (toolUndoByDataset.get(datasetId) || []).length === 0 || toolUndoing}
               title={
-                undoStack.length > 0
+                toolUndoing ? 'Undoing…'
+                : undoStack.length > 0
                   ? 'Undo edit'
                   : (toolUndoByDataset.get(datasetId) || []).length > 0
                     ? `Undo: ${toolUndoByDataset.get(datasetId).at(-1).label}`
@@ -721,9 +725,10 @@ export default function DataDetailView({
               type="button"
               className="ax-dd-icon-btn"
               onClick={handleRedo}
-              disabled={redoStack.length === 0}
+              disabled={redoStack.length === 0 && (toolRedoByDataset.get(datasetId) || []).length === 0 || toolUndoing}
               title={
-                redoStack.length > 0
+                toolUndoing ? 'Undoing…'
+                : redoStack.length > 0
                   ? 'Redo edit'
                   : (toolRedoByDataset.get(datasetId) || []).length > 0
                     ? `Redo: ${toolRedoByDataset.get(datasetId).at(-1).label}`

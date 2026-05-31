@@ -1,0 +1,1211 @@
+- generic [ref=e230]:
+  - main [ref=e231]:
+    - generic [ref=e273]:
+      - generic [ref=e274]:
+        - generic [ref=e275]:
+          - link "SimuCast logo SimuCast" [ref=e276] [cursor=pointer]:
+            - /url: /projects
+            - img "SimuCast logo" [ref=e278]
+            - generic [ref=e279]: SimuCast
+          - generic [ref=e280]:
+            - link "Data" [ref=e281] [cursor=pointer]:
+              - /url: /projects/20/data
+            - button "Expand" [disabled] [ref=e1554]
+            - button "Describe" [disabled] [ref=e1555]
+            - button "Analysis" [disabled] [ref=e1556]
+            - button "Models" [disabled] [ref=e1557]
+            - button "What-if" [disabled] [ref=e1558]
+            - button "Report" [disabled] [ref=e1559]
+            - generic [ref=e288]:
+              - button "History" [ref=e289] [cursor=pointer]:
+                - img [ref=e290]
+                - text: History
+              - button "Close assistant rail" [pressed] [ref=e294] [cursor=pointer]:
+                - img [ref=e295]
+        - generic [ref=e298]:
+          - generic [ref=e299]:
+            - generic [ref=e300]:
+              - generic [ref=e301]:
+                - img [ref=e302]
+                - heading "penguins_size.csv" [level=2] [ref=e305]
+                - generic [ref=e306]: 344 rows · 7 cols
+              - generic [ref=e307]:
+                - tablist "Dataset view" [ref=e308]:
+                  - button "Original dataset" [ref=e309] [cursor=pointer]:
+                    - img [ref=e310]
+                  - button "Cleaned" [ref=e314] [cursor=pointer]:
+                    - img [ref=e315]
+                    - generic [ref=e318]: Cleaned
+                  - button "Highlight changes" [disabled] [ref=e319]:
+                    - img [ref=e320]
+                - button "About" [ref=e323] [cursor=pointer]
+                - generic [ref=e324]:
+                  - button "Undo edit" [disabled] [ref=e325]:
+                    - img [ref=e326]
+                  - button "Redo edit" [disabled] [ref=e329]:
+                    - img [ref=e330]
+                - link "Download CSV" [ref=e333] [cursor=pointer]:
+                  - /url: /api/datasets/20/export.csv
+                  - img [ref=e334]
+                - button "Expand to fullscreen" [ref=e337] [cursor=pointer]:
+                  - img [ref=e338]
+            - generic [ref=e343]:
+              - toolbar "Dataset tools" [ref=e344]:
+                - generic [ref=e345]: Dataset tools
+                - generic [ref=e346]:
+                  - generic [ref=e347]: Quality
+                  - button "Missing Review missing values" [ref=e348] [cursor=pointer]:
+                    - img [ref=e350]
+                    - generic [ref=e354]: Missing
+                    - text: Review missing values
+                  - button "Outliers Review outliers" [ref=e355] [cursor=pointer]:
+                    - img [ref=e357]
+                    - generic [ref=e360]: Outliers
+                    - text: Review outliers
+                  - button "Duplicates Review duplicate rows" [ref=e361] [cursor=pointer]:
+                    - img [ref=e363]
+                    - generic [ref=e366]: Duplicates
+                    - text: Review duplicate rows
+                - generic [ref=e367]:
+                  - generic [ref=e368]: Transform
+                  - button "Labels Standardize labels" [ref=e369] [cursor=pointer]:
+                    - img [ref=e371]
+                    - generic [ref=e375]: Labels
+                    - text: Standardize labels
+                  - button "Bin Create binned columns" [ref=e376] [cursor=pointer]:
+                    - img [ref=e378]
+                    - generic [ref=e380]: Bin
+                    - text: Create binned columns
+                  - button "Format Numeric formatting (decimals)" [ref=e381] [cursor=pointer]:
+                    - img [ref=e383]
+                    - generic [ref=e385]: Format
+                    - text: Numeric formatting (decimals)
+                - generic [ref=e386]:
+                  - generic [ref=e387]: Structure
+                  - button "Merge Merge columns" [ref=e388] [cursor=pointer]:
+                    - img [ref=e390]
+                    - generic [ref=e392]: Merge
+                    - text: Merge columns
+                  - button "Split Split a column" [ref=e393] [cursor=pointer]:
+                    - img [ref=e395]
+                    - generic [ref=e397]: Split
+                    - text: Split a column
+                  - button "Drop Col Drop columns" [ref=e398] [cursor=pointer]:
+                    - img [ref=e400]
+                    - generic [ref=e402]: Drop Col
+                    - text: Drop columns
+                  - button "Drop Row Drop matching rows" [ref=e403] [cursor=pointer]:
+                    - img [ref=e405]
+                    - generic [ref=e407]: Drop Row
+                    - text: Drop matching rows
+                  - button "Rename Rename columns" [ref=e408] [cursor=pointer]:
+                    - img [ref=e410]
+                    - generic [ref=e413]: Rename
+                    - text: Rename columns
+                - generic [ref=e414]:
+                  - generic [ref=e415]: View
+                  - button "Sort Sort the table view" [ref=e416] [cursor=pointer]:
+                    - img [ref=e418]
+                    - generic [ref=e420]: Sort
+                    - text: Sort the table view
+                  - button "Filter Filter the table view" [ref=e421] [cursor=pointer]:
+                    - img [ref=e423]
+                    - generic [ref=e425]: Filter
+                    - text: Filter the table view
+                - button "7/7 Show or hide columns" [ref=e427] [cursor=pointer]:
+                  - img [ref=e429]
+                  - generic [ref=e432]: 7/7
+                  - text: Show or hide columns
+              - button "Close data tool" [ref=e1582]
+              - generic [ref=e1583]:
+                - generic [ref=e1584]:
+                  - generic [ref=e1585]:
+                    - img [ref=e1586]
+                    - strong [ref=e1589]: Missing
+                  - generic [ref=e1590]:
+                    - generic [ref=e1591] [cursor=pointer]:
+                      - generic [ref=e1592]: Recommendations
+                      - checkbox "Recommendations"
+                    - button "Close tool" [ref=e1594] [cursor=pointer]: ×
+                - generic [ref=e1595]:
+                  - generic:
+                    - status:
+                      - generic:
+                        - generic:
+                          - paragraph: Applying missing values fix...
+                          - text: Updating the active dataset, creating a stage, and logging the step.
+                    - generic:
+                      - generic:
+                        - generic:
+                          - strong: Missing values
+                          - 'button "Missing values: what this card does"': "?"
+                          - generic: 5 affected columns
+                        - paragraph: Fill or drop blank values across selected columns.
+                      - button [disabled]:
+                        - status: Applying...
+                    - generic:
+                      - generic:
+                        - generic: Group method
+                        - combobox:
+                          - option "Fill with most common"
+                          - option "Drop missing rows"
+                          - option "Fill with mean" [selected]
+                          - option "Fill with median"
+                      - generic:
+                        - button "Clear columns"
+                      - generic:
+                        - generic:
+                          - checkbox "sex 10" [checked]
+                          - generic: sex
+                          - generic: "10"
+                        - generic:
+                          - checkbox "body_mass_g 2" [checked]
+                          - generic: body_mass_g
+                          - generic: "2"
+                        - generic:
+                          - checkbox "culmen_depth_mm 2" [checked]
+                          - generic: culmen_depth_mm
+                          - generic: "2"
+                        - generic:
+                          - checkbox "culmen_length_mm 2" [checked]
+                          - generic: culmen_length_mm
+                          - generic: "2"
+                        - generic:
+                          - checkbox "flipper_length_mm 2" [checked]
+                          - generic: flipper_length_mm
+                          - generic: "2"
+                      - button "Per-column overrides"
+            - table [ref=e434]:
+              - rowgroup [ref=e435]:
+                - 'row "Row A sex CATEGORY A island CATEGORY A species CATEGORY # body_mass_g INT # culmen_depth_mm FLOAT # culmen_length_mm FLOAT # flipper_length_mm INT" [ref=e436]':
+                  - columnheader "Row" [ref=e437]
+                  - columnheader "A sex CATEGORY" [ref=e438]:
+                    - button "A sex CATEGORY" [ref=e439] [cursor=pointer]:
+                      - generic [ref=e440]: A
+                      - generic [ref=e441]: sex
+                      - generic [ref=e442]: CATEGORY
+                  - columnheader "A island CATEGORY" [ref=e443]:
+                    - button "A island CATEGORY" [ref=e444] [cursor=pointer]:
+                      - generic [ref=e445]: A
+                      - generic [ref=e446]: island
+                      - generic [ref=e447]: CATEGORY
+                  - columnheader "A species CATEGORY" [ref=e448]:
+                    - button "A species CATEGORY" [ref=e449] [cursor=pointer]:
+                      - generic [ref=e450]: A
+                      - generic [ref=e451]: species
+                      - generic [ref=e452]: CATEGORY
+                  - columnheader "# body_mass_g INT" [ref=e453]:
+                    - button "# body_mass_g INT" [ref=e454] [cursor=pointer]:
+                      - generic [ref=e455]: "#"
+                      - generic [ref=e456]: body_mass_g
+                      - generic [ref=e457]: INT
+                  - columnheader "# culmen_depth_mm FLOAT" [ref=e458]:
+                    - button "# culmen_depth_mm FLOAT" [ref=e459] [cursor=pointer]:
+                      - generic [ref=e460]: "#"
+                      - generic [ref=e461]: culmen_depth_mm
+                      - generic [ref=e462]: FLOAT
+                  - columnheader "# culmen_length_mm FLOAT" [ref=e463]:
+                    - button "# culmen_length_mm FLOAT" [ref=e464] [cursor=pointer]:
+                      - generic [ref=e465]: "#"
+                      - generic [ref=e466]: culmen_length_mm
+                      - generic [ref=e467]: FLOAT
+                  - columnheader "# flipper_length_mm INT" [ref=e468]:
+                    - button "# flipper_length_mm INT" [ref=e469] [cursor=pointer]:
+                      - generic [ref=e470]: "#"
+                      - generic [ref=e471]: flipper_length_mm
+                      - generic [ref=e472]: INT
+              - rowgroup [ref=e473]:
+                - row "101 FEMALE Biscoe Adelie 3725 17.9 35 192" [ref=e633]:
+                  - rowheader "101" [ref=e634]
+                  - cell "FEMALE" [ref=e635]
+                  - cell "Biscoe" [ref=e636]
+                  - cell "Adelie" [ref=e637]
+                  - cell "3725" [ref=e638]
+                  - cell "17.9" [ref=e639]
+                  - cell "35" [ref=e640]
+                  - cell "192" [ref=e641]
+                - row "102 MALE Biscoe Adelie 4725 20 41 203" [ref=e642]:
+                  - rowheader "102" [ref=e643]
+                  - cell "MALE" [ref=e644]
+                  - cell "Biscoe" [ref=e645]
+                  - cell "Adelie" [ref=e646]
+                  - cell "4725" [ref=e647]
+                  - cell "20" [ref=e648]
+                  - cell "41" [ref=e649]
+                  - cell "203" [ref=e650]
+                - row "103 FEMALE Biscoe Adelie 3075 16 37.7 183" [ref=e651]:
+                  - rowheader "103" [ref=e652]
+                  - cell "FEMALE" [ref=e653]
+                  - cell "Biscoe" [ref=e654]
+                  - cell "Adelie" [ref=e655]
+                  - cell "3075" [ref=e656]
+                  - cell "16" [ref=e657]
+                  - cell "37.7" [ref=e658]
+                  - cell "183" [ref=e659]
+                - row "104 MALE Biscoe Adelie 4250 20 37.8 190" [ref=e660]:
+                  - rowheader "104" [ref=e661]
+                  - cell "MALE" [ref=e662]
+                  - cell "Biscoe" [ref=e663]
+                  - cell "Adelie" [ref=e664]
+                  - cell "4250" [ref=e665]
+                  - cell "20" [ref=e666]
+                  - cell "37.8" [ref=e667]
+                  - cell "190" [ref=e668]
+                - row "105 FEMALE Biscoe Adelie 2925 18.6 37.9 193" [ref=e669]:
+                  - rowheader "105" [ref=e670]
+                  - cell "FEMALE" [ref=e671]
+                  - cell "Biscoe" [ref=e672]
+                  - cell "Adelie" [ref=e673]
+                  - cell "2925" [ref=e674]
+                  - cell "18.6" [ref=e675]
+                  - cell "37.9" [ref=e676]
+                  - cell "193" [ref=e677]
+                - row "106 MALE Biscoe Adelie 3550 18.9 39.7 184" [ref=e678]:
+                  - rowheader "106" [ref=e679]
+                  - cell "MALE" [ref=e680]
+                  - cell "Biscoe" [ref=e681]
+                  - cell "Adelie" [ref=e682]
+                  - cell "3550" [ref=e683]
+                  - cell "18.9" [ref=e684]
+                  - cell "39.7" [ref=e685]
+                  - cell "184" [ref=e686]
+                - row "107 FEMALE Biscoe Adelie 3750 17.2 38.6 199" [ref=e687]:
+                  - rowheader "107" [ref=e688]
+                  - cell "FEMALE" [ref=e689]
+                  - cell "Biscoe" [ref=e690]
+                  - cell "Adelie" [ref=e691]
+                  - cell "3750" [ref=e692]
+                  - cell "17.2" [ref=e693]
+                  - cell "38.6" [ref=e694]
+                  - cell "199" [ref=e695]
+                - row "108 MALE Biscoe Adelie 3900 20 38.2 190" [ref=e696]:
+                  - rowheader "108" [ref=e697]
+                  - cell "MALE" [ref=e698]
+                  - cell "Biscoe" [ref=e699]
+                  - cell "Adelie" [ref=e700]
+                  - cell "3900" [ref=e701]
+                  - cell "20" [ref=e702]
+                  - cell "38.2" [ref=e703]
+                  - cell "190" [ref=e704]
+                - row "109 FEMALE Biscoe Adelie 3175 17 38.1 181" [ref=e705]:
+                  - rowheader "109" [ref=e706]
+                  - cell "FEMALE" [ref=e707]
+                  - cell "Biscoe" [ref=e708]
+                  - cell "Adelie" [ref=e709]
+                  - cell "3175" [ref=e710]
+                  - cell "17" [ref=e711]
+                  - cell "38.1" [ref=e712]
+                  - cell "181" [ref=e713]
+                - row "110 MALE Biscoe Adelie 4775 19 43.2 197" [ref=e714]:
+                  - rowheader "110" [ref=e715]
+                  - cell "MALE" [ref=e716]
+                  - cell "Biscoe" [ref=e717]
+                  - cell "Adelie" [ref=e718]
+                  - cell "4775" [ref=e719]
+                  - cell "19" [ref=e720]
+                  - cell "43.2" [ref=e721]
+                  - cell "197" [ref=e722]
+                - row "111 FEMALE Biscoe Adelie 3825 16.5 38.1 198" [ref=e723]:
+                  - rowheader "111" [ref=e724]
+                  - cell "FEMALE" [ref=e725]
+                  - cell "Biscoe" [ref=e726]
+                  - cell "Adelie" [ref=e727]
+                  - cell "3825" [ref=e728]
+                  - cell "16.5" [ref=e729]
+                  - cell "38.1" [ref=e730]
+                  - cell "198" [ref=e731]
+                - row "112 MALE Biscoe Adelie 4600 20.3 45.6 191" [ref=e732]:
+                  - rowheader "112" [ref=e733]
+                  - cell "MALE" [ref=e734]
+                  - cell "Biscoe" [ref=e735]
+                  - cell "Adelie" [ref=e736]
+                  - cell "4600" [ref=e737]
+                  - cell "20.3" [ref=e738]
+                  - cell "45.6" [ref=e739]
+                  - cell "191" [ref=e740]
+                - row "113 FEMALE Biscoe Adelie 3200 17.7 39.7 193" [ref=e741]:
+                  - rowheader "113" [ref=e742]
+                  - cell "FEMALE" [ref=e743]
+                  - cell "Biscoe" [ref=e744]
+                  - cell "Adelie" [ref=e745]
+                  - cell "3200" [ref=e746]
+                  - cell "17.7" [ref=e747]
+                  - cell "39.7" [ref=e748]
+                  - cell "193" [ref=e749]
+                - row "114 MALE Biscoe Adelie 4275 19.5 42.2 197" [ref=e750]:
+                  - rowheader "114" [ref=e751]
+                  - cell "MALE" [ref=e752]
+                  - cell "Biscoe" [ref=e753]
+                  - cell "Adelie" [ref=e754]
+                  - cell "4275" [ref=e755]
+                  - cell "19.5" [ref=e756]
+                  - cell "42.2" [ref=e757]
+                  - cell "197" [ref=e758]
+                - row "115 FEMALE Biscoe Adelie 3900 20.7 39.6 191" [ref=e759]:
+                  - rowheader "115" [ref=e760]
+                  - cell "FEMALE" [ref=e761]
+                  - cell "Biscoe" [ref=e762]
+                  - cell "Adelie" [ref=e763]
+                  - cell "3900" [ref=e764]
+                  - cell "20.7" [ref=e765]
+                  - cell "39.6" [ref=e766]
+                  - cell "191" [ref=e767]
+                - row "116 MALE Biscoe Adelie 4075 18.3 42.7 196" [ref=e768]:
+                  - rowheader "116" [ref=e769]
+                  - cell "MALE" [ref=e770]
+                  - cell "Biscoe" [ref=e771]
+                  - cell "Adelie" [ref=e772]
+                  - cell "4075" [ref=e773]
+                  - cell "18.3" [ref=e774]
+                  - cell "42.7" [ref=e775]
+                  - cell "196" [ref=e776]
+                - row "117 FEMALE Torgersen Adelie 2900 17 38.6 188" [ref=e777]:
+                  - rowheader "117" [ref=e778]
+                  - cell "FEMALE" [ref=e779]
+                  - cell "Torgersen" [ref=e780]
+                  - cell "Adelie" [ref=e781]
+                  - cell "2900" [ref=e782]
+                  - cell "17" [ref=e783]
+                  - cell "38.6" [ref=e784]
+                  - cell "188" [ref=e785]
+                - row "118 MALE Torgersen Adelie 3775 20.5 37.3 199" [ref=e786]:
+                  - rowheader "118" [ref=e787]
+                  - cell "MALE" [ref=e788]
+                  - cell "Torgersen" [ref=e789]
+                  - cell "Adelie" [ref=e790]
+                  - cell "3775" [ref=e791]
+                  - cell "20.5" [ref=e792]
+                  - cell "37.3" [ref=e793]
+                  - cell "199" [ref=e794]
+                - row "119 FEMALE Torgersen Adelie 3350 17 35.7 189" [ref=e795]:
+                  - rowheader "119" [ref=e796]
+                  - cell "FEMALE" [ref=e797]
+                  - cell "Torgersen" [ref=e798]
+                  - cell "Adelie" [ref=e799]
+                  - cell "3350" [ref=e800]
+                  - cell "17" [ref=e801]
+                  - cell "35.7" [ref=e802]
+                  - cell "189" [ref=e803]
+                - row "120 MALE Torgersen Adelie 3325 18.6 41.1 189" [ref=e804]:
+                  - rowheader "120" [ref=e805]
+                  - cell "MALE" [ref=e806]
+                  - cell "Torgersen" [ref=e807]
+                  - cell "Adelie" [ref=e808]
+                  - cell "3325" [ref=e809]
+                  - cell "18.6" [ref=e810]
+                  - cell "41.1" [ref=e811]
+                  - cell "189" [ref=e812]
+                - row "121 FEMALE Torgersen Adelie 3150 17.2 36.2 187" [ref=e813]:
+                  - rowheader "121" [ref=e814]
+                  - cell "FEMALE" [ref=e815]
+                  - cell "Torgersen" [ref=e816]
+                  - cell "Adelie" [ref=e817]
+                  - cell "3150" [ref=e818]
+                  - cell "17.2" [ref=e819]
+                  - cell "36.2" [ref=e820]
+                  - cell "187" [ref=e821]
+                - row "122 MALE Torgersen Adelie 3500 19.8 37.7 198" [ref=e822]:
+                  - rowheader "122" [ref=e823]
+                  - cell "MALE" [ref=e824]
+                  - cell "Torgersen" [ref=e825]
+                  - cell "Adelie" [ref=e826]
+                  - cell "3500" [ref=e827]
+                  - cell "19.8" [ref=e828]
+                  - cell "37.7" [ref=e829]
+                  - cell "198" [ref=e830]
+                - row "123 FEMALE Torgersen Adelie 3450 17 40.2 176" [ref=e831]:
+                  - rowheader "123" [ref=e832]
+                  - cell "FEMALE" [ref=e833]
+                  - cell "Torgersen" [ref=e834]
+                  - cell "Adelie" [ref=e835]
+                  - cell "3450" [ref=e836]
+                  - cell "17" [ref=e837]
+                  - cell "40.2" [ref=e838]
+                  - cell "176" [ref=e839]
+                - row "124 MALE Torgersen Adelie 3875 18.5 41.4 202" [ref=e840]:
+                  - rowheader "124" [ref=e841]
+                  - cell "MALE" [ref=e842]
+                  - cell "Torgersen" [ref=e843]
+                  - cell "Adelie" [ref=e844]
+                  - cell "3875" [ref=e845]
+                  - cell "18.5" [ref=e846]
+                  - cell "41.4" [ref=e847]
+                  - cell "202" [ref=e848]
+                - row "125 FEMALE Torgersen Adelie 3050 15.9 35.2 186" [ref=e849]:
+                  - rowheader "125" [ref=e850]
+                  - cell "FEMALE" [ref=e851]
+                  - cell "Torgersen" [ref=e852]
+                  - cell "Adelie" [ref=e853]
+                  - cell "3050" [ref=e854]
+                  - cell "15.9" [ref=e855]
+                  - cell "35.2" [ref=e856]
+                  - cell "186" [ref=e857]
+                - row "126 MALE Torgersen Adelie 4000 19 40.6 199" [ref=e858]:
+                  - rowheader "126" [ref=e859]
+                  - cell "MALE" [ref=e860]
+                  - cell "Torgersen" [ref=e861]
+                  - cell "Adelie" [ref=e862]
+                  - cell "4000" [ref=e863]
+                  - cell "19" [ref=e864]
+                  - cell "40.6" [ref=e865]
+                  - cell "199" [ref=e866]
+                - row "127 FEMALE Torgersen Adelie 3275 17.6 38.8 191" [ref=e867]:
+                  - rowheader "127" [ref=e868]
+                  - cell "FEMALE" [ref=e869]
+                  - cell "Torgersen" [ref=e870]
+                  - cell "Adelie" [ref=e871]
+                  - cell "3275" [ref=e872]
+                  - cell "17.6" [ref=e873]
+                  - cell "38.8" [ref=e874]
+                  - cell "191" [ref=e875]
+                - row "128 MALE Torgersen Adelie 4300 18.3 41.5 195" [ref=e876]:
+                  - rowheader "128" [ref=e877]
+                  - cell "MALE" [ref=e878]
+                  - cell "Torgersen" [ref=e879]
+                  - cell "Adelie" [ref=e880]
+                  - cell "4300" [ref=e881]
+                  - cell "18.3" [ref=e882]
+                  - cell "41.5" [ref=e883]
+                  - cell "195" [ref=e884]
+                - row "129 FEMALE Torgersen Adelie 3050 17.1 39 191" [ref=e885]:
+                  - rowheader "129" [ref=e886]
+                  - cell "FEMALE" [ref=e887]
+                  - cell "Torgersen" [ref=e888]
+                  - cell "Adelie" [ref=e889]
+                  - cell "3050" [ref=e890]
+                  - cell "17.1" [ref=e891]
+                  - cell "39" [ref=e892]
+                  - cell "191" [ref=e893]
+                - row "130 MALE Torgersen Adelie 4000 18 44.1 210" [ref=e894]:
+                  - rowheader "130" [ref=e895]
+                  - cell "MALE" [ref=e896]
+                  - cell "Torgersen" [ref=e897]
+                  - cell "Adelie" [ref=e898]
+                  - cell "4000" [ref=e899]
+                  - cell "18" [ref=e900]
+                  - cell "44.1" [ref=e901]
+                  - cell "210" [ref=e902]
+                - row "131 FEMALE Torgersen Adelie 3325 17.9 38.5 190" [ref=e903]:
+                  - rowheader "131" [ref=e904]
+                  - cell "FEMALE" [ref=e905]
+                  - cell "Torgersen" [ref=e906]
+                  - cell "Adelie" [ref=e907]
+                  - cell "3325" [ref=e908]
+                  - cell "17.9" [ref=e909]
+                  - cell "38.5" [ref=e910]
+                  - cell "190" [ref=e911]
+                - row "132 MALE Torgersen Adelie 3500 19.2 43.1 197" [ref=e912]:
+                  - rowheader "132" [ref=e913]
+                  - cell "MALE" [ref=e914]
+                  - cell "Torgersen" [ref=e915]
+                  - cell "Adelie" [ref=e916]
+                  - cell "3500" [ref=e917]
+                  - cell "19.2" [ref=e918]
+                  - cell "43.1" [ref=e919]
+                  - cell "197" [ref=e920]
+                - row "133 FEMALE Dream Adelie 3500 18.5 36.8 193" [ref=e921]:
+                  - rowheader "133" [ref=e922]
+                  - cell "FEMALE" [ref=e923]
+                  - cell "Dream" [ref=e924]
+                  - cell "Adelie" [ref=e925]
+                  - cell "3500" [ref=e926]
+                  - cell "18.5" [ref=e927]
+                  - cell "36.8" [ref=e928]
+                  - cell "193" [ref=e929]
+                - row "134 MALE Dream Adelie 4475 18.5 37.5 199" [ref=e930]:
+                  - rowheader "134" [ref=e931]
+                  - cell "MALE" [ref=e932]
+                  - cell "Dream" [ref=e933]
+                  - cell "Adelie" [ref=e934]
+                  - cell "4475" [ref=e935]
+                  - cell "18.5" [ref=e936]
+                  - cell "37.5" [ref=e937]
+                  - cell "199" [ref=e938]
+                - row "135 FEMALE Dream Adelie 3425 17.6 38.1 187" [ref=e939]:
+                  - rowheader "135" [ref=e940]
+                  - cell "FEMALE" [ref=e941]
+                  - cell "Dream" [ref=e942]
+                  - cell "Adelie" [ref=e943]
+                  - cell "3425" [ref=e944]
+                  - cell "17.6" [ref=e945]
+                  - cell "38.1" [ref=e946]
+                  - cell "187" [ref=e947]
+                - row "136 MALE Dream Adelie 3900 17.5 41.1 190" [ref=e948]:
+                  - rowheader "136" [ref=e949]
+                  - cell "MALE" [ref=e950]
+                  - cell "Dream" [ref=e951]
+                  - cell "Adelie" [ref=e952]
+                  - cell "3900" [ref=e953]
+                  - cell "17.5" [ref=e954]
+                  - cell "41.1" [ref=e955]
+                  - cell "190" [ref=e956]
+                - row "137 FEMALE Dream Adelie 3175 17.5 35.6 191" [ref=e957]:
+                  - rowheader "137" [ref=e958]
+                  - cell "FEMALE" [ref=e959]
+                  - cell "Dream" [ref=e960]
+                  - cell "Adelie" [ref=e961]
+                  - cell "3175" [ref=e962]
+                  - cell "17.5" [ref=e963]
+                  - cell "35.6" [ref=e964]
+                  - cell "191" [ref=e965]
+                - row "138 MALE Dream Adelie 3975 20.1 40.2 200" [ref=e966]:
+                  - rowheader "138" [ref=e967]
+                  - cell "MALE" [ref=e968]
+                  - cell "Dream" [ref=e969]
+                  - cell "Adelie" [ref=e970]
+                  - cell "3975" [ref=e971]
+                  - cell "20.1" [ref=e972]
+                  - cell "40.2" [ref=e973]
+                  - cell "200" [ref=e974]
+                - row "139 FEMALE Dream Adelie 3400 16.5 37 185" [ref=e975]:
+                  - rowheader "139" [ref=e976]
+                  - cell "FEMALE" [ref=e977]
+                  - cell "Dream" [ref=e978]
+                  - cell "Adelie" [ref=e979]
+                  - cell "3400" [ref=e980]
+                  - cell "16.5" [ref=e981]
+                  - cell "37" [ref=e982]
+                  - cell "185" [ref=e983]
+                - row "140 MALE Dream Adelie 4250 17.9 39.7 193" [ref=e984]:
+                  - rowheader "140" [ref=e985]
+                  - cell "MALE" [ref=e986]
+                  - cell "Dream" [ref=e987]
+                  - cell "Adelie" [ref=e988]
+                  - cell "4250" [ref=e989]
+                  - cell "17.9" [ref=e990]
+                  - cell "39.7" [ref=e991]
+                  - cell "193" [ref=e992]
+                - row "141 FEMALE Dream Adelie 3400 17.1 40.2 193" [ref=e993]:
+                  - rowheader "141" [ref=e994]
+                  - cell "FEMALE" [ref=e995]
+                  - cell "Dream" [ref=e996]
+                  - cell "Adelie" [ref=e997]
+                  - cell "3400" [ref=e998]
+                  - cell "17.1" [ref=e999]
+                  - cell "40.2" [ref=e1000]
+                  - cell "193" [ref=e1001]
+                - row "142 MALE Dream Adelie 3475 17.2 40.6 187" [ref=e1002]:
+                  - rowheader "142" [ref=e1003]
+                  - cell "MALE" [ref=e1004]
+                  - cell "Dream" [ref=e1005]
+                  - cell "Adelie" [ref=e1006]
+                  - cell "3475" [ref=e1007]
+                  - cell "17.2" [ref=e1008]
+                  - cell "40.6" [ref=e1009]
+                  - cell "187" [ref=e1010]
+                - row "143 FEMALE Dream Adelie 3050 15.5 32.1 188" [ref=e1011]:
+                  - rowheader "143" [ref=e1012]
+                  - cell "FEMALE" [ref=e1013]
+                  - cell "Dream" [ref=e1014]
+                  - cell "Adelie" [ref=e1015]
+                  - cell "3050" [ref=e1016]
+                  - cell "15.5" [ref=e1017]
+                  - cell "32.1" [ref=e1018]
+                  - cell "188" [ref=e1019]
+                - row "144 MALE Dream Adelie 3725 17 40.7 190" [ref=e1020]:
+                  - rowheader "144" [ref=e1021]
+                  - cell "MALE" [ref=e1022]
+                  - cell "Dream" [ref=e1023]
+                  - cell "Adelie" [ref=e1024]
+                  - cell "3725" [ref=e1025]
+                  - cell "17" [ref=e1026]
+                  - cell "40.7" [ref=e1027]
+                  - cell "190" [ref=e1028]
+                - row "145 FEMALE Dream Adelie 3000 16.8 37.3 192" [ref=e1029]:
+                  - rowheader "145" [ref=e1030]
+                  - cell "FEMALE" [ref=e1031]
+                  - cell "Dream" [ref=e1032]
+                  - cell "Adelie" [ref=e1033]
+                  - cell "3000" [ref=e1034]
+                  - cell "16.8" [ref=e1035]
+                  - cell "37.3" [ref=e1036]
+                  - cell "192" [ref=e1037]
+                - row "146 MALE Dream Adelie 3650 18.7 39 185" [ref=e1038]:
+                  - rowheader "146" [ref=e1039]
+                  - cell "MALE" [ref=e1040]
+                  - cell "Dream" [ref=e1041]
+                  - cell "Adelie" [ref=e1042]
+                  - cell "3650" [ref=e1043]
+                  - cell "18.7" [ref=e1044]
+                  - cell "39" [ref=e1045]
+                  - cell "185" [ref=e1046]
+                - row "147 MALE Dream Adelie 4250 18.6 39.2 190" [ref=e1047]:
+                  - rowheader "147" [ref=e1048]
+                  - cell "MALE" [ref=e1049]
+                  - cell "Dream" [ref=e1050]
+                  - cell "Adelie" [ref=e1051]
+                  - cell "4250" [ref=e1052]
+                  - cell "18.6" [ref=e1053]
+                  - cell "39.2" [ref=e1054]
+                  - cell "190" [ref=e1055]
+                - row "148 FEMALE Dream Adelie 3475 18.4 36.6 184" [ref=e1056]:
+                  - rowheader "148" [ref=e1057]
+                  - cell "FEMALE" [ref=e1058]
+                  - cell "Dream" [ref=e1059]
+                  - cell "Adelie" [ref=e1060]
+                  - cell "3475" [ref=e1061]
+                  - cell "18.4" [ref=e1062]
+                  - cell "36.6" [ref=e1063]
+                  - cell "184" [ref=e1064]
+                - row "149 FEMALE Dream Adelie 3450 17.8 36 195" [ref=e1065]:
+                  - rowheader "149" [ref=e1066]
+                  - cell "FEMALE" [ref=e1067]
+                  - cell "Dream" [ref=e1068]
+                  - cell "Adelie" [ref=e1069]
+                  - cell "3450" [ref=e1070]
+                  - cell "17.8" [ref=e1071]
+                  - cell "36" [ref=e1072]
+                  - cell "195" [ref=e1073]
+                - row "150 MALE Dream Adelie 3750 18.1 37.8 193" [ref=e1074]:
+                  - rowheader "150" [ref=e1075]
+                  - cell "MALE" [ref=e1076]
+                  - cell "Dream" [ref=e1077]
+                  - cell "Adelie" [ref=e1078]
+                  - cell "3750" [ref=e1079]
+                  - cell "18.1" [ref=e1080]
+                  - cell "37.8" [ref=e1081]
+                  - cell "193" [ref=e1082]
+                - row "151 FEMALE Dream Adelie 3700 17.1 36 187" [ref=e1083]:
+                  - rowheader "151" [ref=e1084]
+                  - cell "FEMALE" [ref=e1085]
+                  - cell "Dream" [ref=e1086]
+                  - cell "Adelie" [ref=e1087]
+                  - cell "3700" [ref=e1088]
+                  - cell "17.1" [ref=e1089]
+                  - cell "36" [ref=e1090]
+                  - cell "187" [ref=e1091]
+                - row "152 MALE Dream Adelie 4000 18.5 41.5 201" [ref=e1092]:
+                  - rowheader "152" [ref=e1093]
+                  - cell "MALE" [ref=e1094]
+                  - cell "Dream" [ref=e1095]
+                  - cell "Adelie" [ref=e1096]
+                  - cell "4000" [ref=e1097]
+                  - cell "18.5" [ref=e1098]
+                  - cell "41.5" [ref=e1099]
+                  - cell "201" [ref=e1100]
+                - row "153 FEMALE Dream Chinstrap 3500 17.9 46.5 192" [ref=e1101]:
+                  - rowheader "153" [ref=e1102]
+                  - cell "FEMALE" [ref=e1103]
+                  - cell "Dream" [ref=e1104]
+                  - cell "Chinstrap" [ref=e1105]
+                  - cell "3500" [ref=e1106]
+                  - cell "17.9" [ref=e1107]
+                  - cell "46.5" [ref=e1108]
+                  - cell "192" [ref=e1109]
+                - row "154 MALE Dream Chinstrap 3900 19.5 50 196" [ref=e1110]:
+                  - rowheader "154" [ref=e1111]
+                  - cell "MALE" [ref=e1112]
+                  - cell "Dream" [ref=e1113]
+                  - cell "Chinstrap" [ref=e1114]
+                  - cell "3900" [ref=e1115]
+                  - cell "19.5" [ref=e1116]
+                  - cell "50" [ref=e1117]
+                  - cell "196" [ref=e1118]
+                - row "155 MALE Dream Chinstrap 3650 19.2 51.3 193" [ref=e1119]:
+                  - rowheader "155" [ref=e1120]
+                  - cell "MALE" [ref=e1121]
+                  - cell "Dream" [ref=e1122]
+                  - cell "Chinstrap" [ref=e1123]
+                  - cell "3650" [ref=e1124]
+                  - cell "19.2" [ref=e1125]
+                  - cell "51.3" [ref=e1126]
+                  - cell "193" [ref=e1127]
+                - row "156 FEMALE Dream Chinstrap 3525 18.7 45.4 188" [ref=e1128]:
+                  - rowheader "156" [ref=e1129]
+                  - cell "FEMALE" [ref=e1130]
+                  - cell "Dream" [ref=e1131]
+                  - cell "Chinstrap" [ref=e1132]
+                  - cell "3525" [ref=e1133]
+                  - cell "18.7" [ref=e1134]
+                  - cell "45.4" [ref=e1135]
+                  - cell "188" [ref=e1136]
+                - row "157 MALE Dream Chinstrap 3725 19.8 52.7 197" [ref=e1137]:
+                  - rowheader "157" [ref=e1138]
+                  - cell "MALE" [ref=e1139]
+                  - cell "Dream" [ref=e1140]
+                  - cell "Chinstrap" [ref=e1141]
+                  - cell "3725" [ref=e1142]
+                  - cell "19.8" [ref=e1143]
+                  - cell "52.7" [ref=e1144]
+                  - cell "197" [ref=e1145]
+                - row "158 FEMALE Dream Chinstrap 3950 17.8 45.2 198" [ref=e1146]:
+                  - rowheader "158" [ref=e1147]
+                  - cell "FEMALE" [ref=e1148]
+                  - cell "Dream" [ref=e1149]
+                  - cell "Chinstrap" [ref=e1150]
+                  - cell "3950" [ref=e1151]
+                  - cell "17.8" [ref=e1152]
+                  - cell "45.2" [ref=e1153]
+                  - cell "198" [ref=e1154]
+                - row "159 FEMALE Dream Chinstrap 3250 18.2 46.1 178" [ref=e1155]:
+                  - rowheader "159" [ref=e1156]
+                  - cell "FEMALE" [ref=e1157]
+                  - cell "Dream" [ref=e1158]
+                  - cell "Chinstrap" [ref=e1159]
+                  - cell "3250" [ref=e1160]
+                  - cell "18.2" [ref=e1161]
+                  - cell "46.1" [ref=e1162]
+                  - cell "178" [ref=e1163]
+                - row "160 MALE Dream Chinstrap 3750 18.2 51.3 197" [ref=e1164]:
+                  - rowheader "160" [ref=e1165]
+                  - cell "MALE" [ref=e1166]
+                  - cell "Dream" [ref=e1167]
+                  - cell "Chinstrap" [ref=e1168]
+                  - cell "3750" [ref=e1169]
+                  - cell "18.2" [ref=e1170]
+                  - cell "51.3" [ref=e1171]
+                  - cell "197" [ref=e1172]
+                - row "161 FEMALE Dream Chinstrap 4150 18.9 46 195" [ref=e1173]:
+                  - rowheader "161" [ref=e1174]
+                  - cell "FEMALE" [ref=e1175]
+                  - cell "Dream" [ref=e1176]
+                  - cell "Chinstrap" [ref=e1177]
+                  - cell "4150" [ref=e1178]
+                  - cell "18.9" [ref=e1179]
+                  - cell "46" [ref=e1180]
+                  - cell "195" [ref=e1181]
+                - row "162 MALE Dream Chinstrap 3700 19.9 51.3 198" [ref=e1182]:
+                  - rowheader "162" [ref=e1183]
+                  - cell "MALE" [ref=e1184]
+                  - cell "Dream" [ref=e1185]
+                  - cell "Chinstrap" [ref=e1186]
+                  - cell "3700" [ref=e1187]
+                  - cell "19.9" [ref=e1188]
+                  - cell "51.3" [ref=e1189]
+                  - cell "198" [ref=e1190]
+                - row "163 FEMALE Dream Chinstrap 3800 17.8 46.6 193" [ref=e1191]:
+                  - rowheader "163" [ref=e1192]
+                  - cell "FEMALE" [ref=e1193]
+                  - cell "Dream" [ref=e1194]
+                  - cell "Chinstrap" [ref=e1195]
+                  - cell "3800" [ref=e1196]
+                  - cell "17.8" [ref=e1197]
+                  - cell "46.6" [ref=e1198]
+                  - cell "193" [ref=e1199]
+                - row "164 MALE Dream Chinstrap 3775 20.3 51.7 194" [ref=e1200]:
+                  - rowheader "164" [ref=e1201]
+                  - cell "MALE" [ref=e1202]
+                  - cell "Dream" [ref=e1203]
+                  - cell "Chinstrap" [ref=e1204]
+                  - cell "3775" [ref=e1205]
+                  - cell "20.3" [ref=e1206]
+                  - cell "51.7" [ref=e1207]
+                  - cell "194" [ref=e1208]
+                - row "165 FEMALE Dream Chinstrap 3700 17.3 47 185" [ref=e1209]:
+                  - rowheader "165" [ref=e1210]
+                  - cell "FEMALE" [ref=e1211]
+                  - cell "Dream" [ref=e1212]
+                  - cell "Chinstrap" [ref=e1213]
+                  - cell "3700" [ref=e1214]
+                  - cell "17.3" [ref=e1215]
+                  - cell "47" [ref=e1216]
+                  - cell "185" [ref=e1217]
+                - row "166 MALE Dream Chinstrap 4050 18.1 52 201" [ref=e1218]:
+                  - rowheader "166" [ref=e1219]
+                  - cell "MALE" [ref=e1220]
+                  - cell "Dream" [ref=e1221]
+                  - cell "Chinstrap" [ref=e1222]
+                  - cell "4050" [ref=e1223]
+                  - cell "18.1" [ref=e1224]
+                  - cell "52" [ref=e1225]
+                  - cell "201" [ref=e1226]
+                - row "167 FEMALE Dream Chinstrap 3575 17.1 45.9 190" [ref=e1227]:
+                  - rowheader "167" [ref=e1228]
+                  - cell "FEMALE" [ref=e1229]
+                  - cell "Dream" [ref=e1230]
+                  - cell "Chinstrap" [ref=e1231]
+                  - cell "3575" [ref=e1232]
+                  - cell "17.1" [ref=e1233]
+                  - cell "45.9" [ref=e1234]
+                  - cell "190" [ref=e1235]
+                - row "168 MALE Dream Chinstrap 4050 19.6 50.5 201" [ref=e1236]:
+                  - rowheader "168" [ref=e1237]
+                  - cell "MALE" [ref=e1238]
+                  - cell "Dream" [ref=e1239]
+                  - cell "Chinstrap" [ref=e1240]
+                  - cell "4050" [ref=e1241]
+                  - cell "19.6" [ref=e1242]
+                  - cell "50.5" [ref=e1243]
+                  - cell "201" [ref=e1244]
+                - row "169 MALE Dream Chinstrap 3300 20 50.3 197" [ref=e1245]:
+                  - rowheader "169" [ref=e1246]
+                  - cell "MALE" [ref=e1247]
+                  - cell "Dream" [ref=e1248]
+                  - cell "Chinstrap" [ref=e1249]
+                  - cell "3300" [ref=e1250]
+                  - cell "20" [ref=e1251]
+                  - cell "50.3" [ref=e1252]
+                  - cell "197" [ref=e1253]
+                - row "170 FEMALE Dream Chinstrap 3700 17.8 58 181" [ref=e1254]:
+                  - rowheader "170" [ref=e1255]
+                  - cell "FEMALE" [ref=e1256]
+                  - cell "Dream" [ref=e1257]
+                  - cell "Chinstrap" [ref=e1258]
+                  - cell "3700" [ref=e1259]
+                  - cell "17.8" [ref=e1260]
+                  - cell "58" [ref=e1261]
+                  - cell "181" [ref=e1262]
+                - row "171 FEMALE Dream Chinstrap 3450 18.6 46.4 190" [ref=e1263]:
+                  - rowheader "171" [ref=e1264]
+                  - cell "FEMALE" [ref=e1265]
+                  - cell "Dream" [ref=e1266]
+                  - cell "Chinstrap" [ref=e1267]
+                  - cell "3450" [ref=e1268]
+                  - cell "18.6" [ref=e1269]
+                  - cell "46.4" [ref=e1270]
+                  - cell "190" [ref=e1271]
+                - row "172 MALE Dream Chinstrap 4400 18.2 49.2 195" [ref=e1272]:
+                  - rowheader "172" [ref=e1273]
+                  - cell "MALE" [ref=e1274]
+                  - cell "Dream" [ref=e1275]
+                  - cell "Chinstrap" [ref=e1276]
+                  - cell "4400" [ref=e1277]
+                  - cell "18.2" [ref=e1278]
+                  - cell "49.2" [ref=e1279]
+                  - cell "195" [ref=e1280]
+                - row "173 FEMALE Dream Chinstrap 3600 17.3 42.4 181" [ref=e1281]:
+                  - rowheader "173" [ref=e1282]
+                  - cell "FEMALE" [ref=e1283]
+                  - cell "Dream" [ref=e1284]
+                  - cell "Chinstrap" [ref=e1285]
+                  - cell "3600" [ref=e1286]
+                  - cell "17.3" [ref=e1287]
+                  - cell "42.4" [ref=e1288]
+                  - cell "181" [ref=e1289]
+                - row "174 MALE Dream Chinstrap 3400 17.5 48.5 191" [ref=e1290]:
+                  - rowheader "174" [ref=e1291]
+                  - cell "MALE" [ref=e1292]
+                  - cell "Dream" [ref=e1293]
+                  - cell "Chinstrap" [ref=e1294]
+                  - cell "3400" [ref=e1295]
+                  - cell "17.5" [ref=e1296]
+                  - cell "48.5" [ref=e1297]
+                  - cell "191" [ref=e1298]
+                - row "175 FEMALE Dream Chinstrap 2900 16.6 43.2 187" [ref=e1299]:
+                  - rowheader "175" [ref=e1300]
+                  - cell "FEMALE" [ref=e1301]
+                  - cell "Dream" [ref=e1302]
+                  - cell "Chinstrap" [ref=e1303]
+                  - cell "2900" [ref=e1304]
+                  - cell "16.6" [ref=e1305]
+                  - cell "43.2" [ref=e1306]
+                  - cell "187" [ref=e1307]
+                - row "176 MALE Dream Chinstrap 3800 19.4 50.6 193" [ref=e1308]:
+                  - rowheader "176" [ref=e1309]
+                  - cell "MALE" [ref=e1310]
+                  - cell "Dream" [ref=e1311]
+                  - cell "Chinstrap" [ref=e1312]
+                  - cell "3800" [ref=e1313]
+                  - cell "19.4" [ref=e1314]
+                  - cell "50.6" [ref=e1315]
+                  - cell "193" [ref=e1316]
+                - row "177 FEMALE Dream Chinstrap 3300 17.9 46.7 195" [ref=e1317]:
+                  - rowheader "177" [ref=e1318]
+                  - cell "FEMALE" [ref=e1319]
+                  - cell "Dream" [ref=e1320]
+                  - cell "Chinstrap" [ref=e1321]
+                  - cell "3300" [ref=e1322]
+                  - cell "17.9" [ref=e1323]
+                  - cell "46.7" [ref=e1324]
+                  - cell "195" [ref=e1325]
+                - row "178 MALE Dream Chinstrap 4150 19 52 197" [ref=e1326]:
+                  - rowheader "178" [ref=e1327]
+                  - cell "MALE" [ref=e1328]
+                  - cell "Dream" [ref=e1329]
+                  - cell "Chinstrap" [ref=e1330]
+                  - cell "4150" [ref=e1331]
+                  - cell "19" [ref=e1332]
+                  - cell "52" [ref=e1333]
+                  - cell "197" [ref=e1334]
+                - row "179 FEMALE Dream Chinstrap 3400 18.4 50.5 200" [ref=e1335]:
+                  - rowheader "179" [ref=e1336]
+                  - cell "FEMALE" [ref=e1337]
+                  - cell "Dream" [ref=e1338]
+                  - cell "Chinstrap" [ref=e1339]
+                  - cell "3400" [ref=e1340]
+                  - cell "18.4" [ref=e1341]
+                  - cell "50.5" [ref=e1342]
+                  - cell "200" [ref=e1343]
+                - row "180 MALE Dream Chinstrap 3800 19 49.5 200" [ref=e1344]:
+                  - rowheader "180" [ref=e1345]
+                  - cell "MALE" [ref=e1346]
+                  - cell "Dream" [ref=e1347]
+                  - cell "Chinstrap" [ref=e1348]
+                  - cell "3800" [ref=e1349]
+                  - cell "19" [ref=e1350]
+                  - cell "49.5" [ref=e1351]
+                  - cell "200" [ref=e1352]
+                - row "181 FEMALE Dream Chinstrap 3700 17.8 46.4 191" [ref=e1353]:
+                  - rowheader "181" [ref=e1354]
+                  - cell "FEMALE" [ref=e1355]
+                  - cell "Dream" [ref=e1356]
+                  - cell "Chinstrap" [ref=e1357]
+                  - cell "3700" [ref=e1358]
+                  - cell "17.8" [ref=e1359]
+                  - cell "46.4" [ref=e1360]
+                  - cell "191" [ref=e1361]
+                - row "182 MALE Dream Chinstrap 4550 20 52.8 205" [ref=e1362]:
+                  - rowheader "182" [ref=e1363]
+                  - cell "MALE" [ref=e1364]
+                  - cell "Dream" [ref=e1365]
+                  - cell "Chinstrap" [ref=e1366]
+                  - cell "4550" [ref=e1367]
+                  - cell "20" [ref=e1368]
+                  - cell "52.8" [ref=e1369]
+                  - cell "205" [ref=e1370]
+                - row "183 FEMALE Dream Chinstrap 3200 16.6 40.9 187" [ref=e1371]:
+                  - rowheader "183" [ref=e1372]
+                  - cell "FEMALE" [ref=e1373]
+                  - cell "Dream" [ref=e1374]
+                  - cell "Chinstrap" [ref=e1375]
+                  - cell "3200" [ref=e1376]
+                  - cell "16.6" [ref=e1377]
+                  - cell "40.9" [ref=e1378]
+                  - cell "187" [ref=e1379]
+                - row "184 MALE Dream Chinstrap 4300 20.8 54.2 201" [ref=e1380]:
+                  - rowheader "184" [ref=e1381]
+                  - cell "MALE" [ref=e1382]
+                  - cell "Dream" [ref=e1383]
+                  - cell "Chinstrap" [ref=e1384]
+                  - cell "4300" [ref=e1385]
+                  - cell "20.8" [ref=e1386]
+                  - cell "54.2" [ref=e1387]
+                  - cell "201" [ref=e1388]
+                - row "185 FEMALE Dream Chinstrap 3350 16.7 42.5 187" [ref=e1389]:
+                  - rowheader "185" [ref=e1390]
+                  - cell "FEMALE" [ref=e1391]
+                  - cell "Dream" [ref=e1392]
+                  - cell "Chinstrap" [ref=e1393]
+                  - cell "3350" [ref=e1394]
+                  - cell "16.7" [ref=e1395]
+                  - cell "42.5" [ref=e1396]
+                  - cell "187" [ref=e1397]
+                - row "186 MALE Dream Chinstrap 4100 18.8 51 203" [ref=e1398]:
+                  - rowheader "186" [ref=e1399]
+                  - cell "MALE" [ref=e1400]
+                  - cell "Dream" [ref=e1401]
+                  - cell "Chinstrap" [ref=e1402]
+                  - cell "4100" [ref=e1403]
+                  - cell "18.8" [ref=e1404]
+                  - cell "51" [ref=e1405]
+                  - cell "203" [ref=e1406]
+                - row "187 MALE Dream Chinstrap 3600 18.6 49.7 195" [ref=e1407]:
+                  - rowheader "187" [ref=e1408]
+                  - cell "MALE" [ref=e1409]
+                  - cell "Dream" [ref=e1410]
+                  - cell "Chinstrap" [ref=e1411]
+                  - cell "3600" [ref=e1412]
+                  - cell "18.6" [ref=e1413]
+                  - cell "49.7" [ref=e1414]
+                  - cell "195" [ref=e1415]
+                - row "188 FEMALE Dream Chinstrap 3900 16.8 47.5 199" [ref=e1416]:
+                  - rowheader "188" [ref=e1417]
+                  - cell "FEMALE" [ref=e1418]
+                  - cell "Dream" [ref=e1419]
+                  - cell "Chinstrap" [ref=e1420]
+                  - cell "3900" [ref=e1421]
+                  - cell "16.8" [ref=e1422]
+                  - cell "47.5" [ref=e1423]
+                  - cell "199" [ref=e1424]
+                - row "189 FEMALE Dream Chinstrap 3850 18.3 47.6 195" [ref=e1425]:
+                  - rowheader "189" [ref=e1426]
+                  - cell "FEMALE" [ref=e1427]
+                  - cell "Dream" [ref=e1428]
+                  - cell "Chinstrap" [ref=e1429]
+                  - cell "3850" [ref=e1430]
+                  - cell "18.3" [ref=e1431]
+                  - cell "47.6" [ref=e1432]
+                  - cell "195" [ref=e1433]
+                - row "190 MALE Dream Chinstrap 4800 20.7 52 210" [ref=e1434]:
+                  - rowheader "190" [ref=e1435]
+                  - cell "MALE" [ref=e1436]
+                  - cell "Dream" [ref=e1437]
+                  - cell "Chinstrap" [ref=e1438]
+                  - cell "4800" [ref=e1439]
+                  - cell "20.7" [ref=e1440]
+                  - cell "52" [ref=e1441]
+                  - cell "210" [ref=e1442]
+                - row "191 FEMALE Dream Chinstrap 2700 16.6 46.9 192" [ref=e1443]:
+                  - rowheader "191" [ref=e1444]
+                  - cell "FEMALE" [ref=e1445]
+                  - cell "Dream" [ref=e1446]
+                  - cell "Chinstrap" [ref=e1447]
+                  - cell "2700" [ref=e1448]
+                  - cell "16.6" [ref=e1449]
+                  - cell "46.9" [ref=e1450]
+                  - cell "192" [ref=e1451]
+                - row "192 MALE Dream Chinstrap 4500 19.9 53.5 205" [ref=e1452]:
+                  - rowheader "192" [ref=e1453]
+                  - cell "MALE" [ref=e1454]
+                  - cell "Dream" [ref=e1455]
+                  - cell "Chinstrap" [ref=e1456]
+                  - cell "4500" [ref=e1457]
+                  - cell "19.9" [ref=e1458]
+                  - cell "53.5" [ref=e1459]
+                  - cell "205" [ref=e1460]
+                - row "193 MALE Dream Chinstrap 3950 19.5 49 210" [ref=e1461]:
+                  - rowheader "193" [ref=e1462]
+                  - cell "MALE" [ref=e1463]
+                  - cell "Dream" [ref=e1464]
+                  - cell "Chinstrap" [ref=e1465]
+                  - cell "3950" [ref=e1466]
+                  - cell "19.5" [ref=e1467]
+                  - cell "49" [ref=e1468]
+                  - cell "210" [ref=e1469]
+                - row "194 FEMALE Dream Chinstrap 3650 17.5 46.2 187" [ref=e1470]:
+                  - rowheader "194" [ref=e1471]
+                  - cell "FEMALE" [ref=e1472]
+                  - cell "Dream" [ref=e1473]
+                  - cell "Chinstrap" [ref=e1474]
+                  - cell "3650" [ref=e1475]
+                  - cell "17.5" [ref=e1476]
+                  - cell "46.2" [ref=e1477]
+                  - cell "187" [ref=e1478]
+                - row "195 MALE Dream Chinstrap 3550 19.1 50.9 196" [ref=e1479]:
+                  - rowheader "195" [ref=e1480]
+                  - cell "MALE" [ref=e1481]
+                  - cell "Dream" [ref=e1482]
+                  - cell "Chinstrap" [ref=e1483]
+                  - cell "3550" [ref=e1484]
+                  - cell "19.1" [ref=e1485]
+                  - cell "50.9" [ref=e1486]
+                  - cell "196" [ref=e1487]
+                - row "196 FEMALE Dream Chinstrap 3500 17 45.5 196" [ref=e1488]:
+                  - rowheader "196" [ref=e1489]
+                  - cell "FEMALE" [ref=e1490]
+                  - cell "Dream" [ref=e1491]
+                  - cell "Chinstrap" [ref=e1492]
+                  - cell "3500" [ref=e1493]
+                  - cell "17" [ref=e1494]
+                  - cell "45.5" [ref=e1495]
+                  - cell "196" [ref=e1496]
+                - row "197 FEMALE Dream Chinstrap 3675 17.9 50.9 196" [ref=e1497]:
+                  - rowheader "197" [ref=e1498]
+                  - cell "FEMALE" [ref=e1499]
+                  - cell "Dream" [ref=e1500]
+                  - cell "Chinstrap" [ref=e1501]
+                  - cell "3675" [ref=e1502]
+                  - cell "17.9" [ref=e1503]
+                  - cell "50.9" [ref=e1504]
+                  - cell "196" [ref=e1505]
+                - row "198 MALE Dream Chinstrap 4450 18.5 50.8 201" [ref=e1506]:
+                  - rowheader "198" [ref=e1507]
+                  - cell "MALE" [ref=e1508]
+                  - cell "Dream" [ref=e1509]
+                  - cell "Chinstrap" [ref=e1510]
+                  - cell "4450" [ref=e1511]
+                  - cell "18.5" [ref=e1512]
+                  - cell "50.8" [ref=e1513]
+                  - cell "201" [ref=e1514]
+                - row "199 FEMALE Dream Chinstrap 3400 17.9 50.1 190" [ref=e1515]:
+                  - rowheader "199" [ref=e1516]
+                  - cell "FEMALE" [ref=e1517]
+                  - cell "Dream" [ref=e1518]
+                  - cell "Chinstrap" [ref=e1519]
+                  - cell "3400" [ref=e1520]
+                  - cell "17.9" [ref=e1521]
+                  - cell "50.1" [ref=e1522]
+                  - cell "190" [ref=e1523]
+                - row "200 MALE Dream Chinstrap 4300 19.6 49 212" [ref=e1524]:
+                  - rowheader "200" [ref=e1525]
+                  - cell "MALE" [ref=e1526]
+                  - cell "Dream" [ref=e1527]
+                  - cell "Chinstrap" [ref=e1528]
+                  - cell "4300" [ref=e1529]
+                  - cell "19.6" [ref=e1530]
+                  - cell "49" [ref=e1531]
+                  - cell "212" [ref=e1532]
+                - row [ref=e1533]:
+                  - cell [ref=e1534]
+          - generic [ref=e1634]:
+            - generic [ref=e1635]:
+              - strong [ref=e1636]: Current cleaned stage updated
+              - generic [ref=e1637]: Review the dataset preview and History before moving on.
+            - button "Hide recent changes" [ref=e1638] [cursor=pointer]
+            - list [ref=e1639]:
+              - listitem [ref=e1640]:
+                - generic [ref=e1641]: Missing
+                - generic [ref=e1642]: sex, body_mass_g, culmen_depth_mm, culmen_length_mm, flipper_length_mm
+                - generic [ref=e1643]: impute mean
+      - complementary [ref=e482]:
+        - generic [ref=e485]:
+          - generic [ref=e486]:
+            - generic [ref=e488]:
+              - generic [ref=e489]: Prediction goal
+              - generic [ref=e490]: Can I predict flipper_length_mm from the other variables in this dataset?
+              - generic [ref=e491]: 344 rows · 7 variables
+              - button "Change goal" [ref=e493] [cursor=pointer]:
+                - img [ref=e494]
+                - text: Change goal
+            - generic "Guidance mode" [ref=e499]:
+              - button "AI assisted" [ref=e500] [cursor=pointer]
+              - button "Built-in" [ref=e501] [cursor=pointer]
+            - generic [ref=e504]: 0 of 5 done
+          - generic [ref=e505]:
+            - paragraph [ref=e506]: Prediction path for 344 rows and 7 variables.
+            - generic [ref=e507]:
+              - article [ref=e508]:
+                - generic [ref=e509] [cursor=pointer]:
+                  - generic [ref=e510]: "1"
+                  - generic [ref=e511]:
+                    - paragraph [ref=e512]: Fix missing values in culmen_length_mm, culmen_depth_mm, flipper_length_mm
+                    - generic [ref=e513]:
+                      - generic [ref=e514]: current
+                      - generic [ref=e515]: required
+                  - img [ref=e517]
+                - generic [ref=e519]:
+                  - generic [ref=e520]:
+                    - generic [ref=e521]: "Affects:"
+                    - generic [ref=e522]:
+                      - generic [ref=e523]: culmen_length_mm
+                      - generic [ref=e524]: culmen_depth_mm
+                      - generic [ref=e525]: flipper_length_mm
+                      - generic [ref=e526]: body_mass_g
+                      - generic [ref=e527]: sex
+                  - generic [ref=e528]:
+                    - img [ref=e530]
+                    - generic [ref=e533]:
+                      - generic [ref=e534]: Missing
+                      - generic [ref=e535]:
+                        - text: Missing —
+                        - text: Quality group in toolbar
+                    - button "Open ↑" [ref=e536] [cursor=pointer]
+                  - generic [ref=e537]:
+                    - button "▶ Why this matters" [ref=e539] [cursor=pointer]
+                    - button "✓ Mark done" [ref=e540] [cursor=pointer]
+              - article [ref=e541]:
+                - generic [ref=e542] [cursor=pointer]:
+                  - generic [ref=e543]: "2"
+                  - paragraph [ref=e545]: Review categorical labels for standardization
+                  - img [ref=e547]
+              - article [ref=e549]:
+                - generic [ref=e550] [cursor=pointer]:
+                  - generic [ref=e551]: "3"
+                  - paragraph [ref=e553]: "Optional: review feature tools and numeric formatting"
+                  - img [ref=e555]
+              - article [ref=e557]:
+                - generic [ref=e558] [cursor=pointer]:
+                  - generic [ref=e559]: "4"
+                  - paragraph [ref=e561]: Run descriptive statistics for key variables
+                  - img [ref=e563]
+              - article [ref=e1574]:
+                - generic [ref=e1575] [cursor=pointer]:
+                  - generic [ref=e1576]: "5"
+                  - paragraph [ref=e1578]: Train candidate models for body_mass_g
+                  - img [ref=e1580]
+      - complementary [ref=e1561]:
+        - generic [ref=e1562]:
+          - generic [ref=e1563]:
+            - paragraph [ref=e1564]: Guided Focus · 2 of 3
+            - generic [ref=e1565]: Missing values
+          - strong [ref=e1566]: Review and apply the fix
+          - paragraph [ref=e1569]:
+            - text: "Do this now:"
+            - text: Review recommended cleaning methods, choose columns, or configure overrides. Click Apply when ready.
+        - generic [ref=e1571]:
+          - button "Back" [ref=e1633] [cursor=pointer]
+          - button "Explore freely" [ref=e1573] [cursor=pointer]
+      - img
+  - button "Open AI assistant" [ref=e260] [cursor=pointer]:
+    - img [ref=e261]
+    - generic [ref=e263]: Ask AI

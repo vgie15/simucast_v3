@@ -34,6 +34,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [applyingAll, setApplyingAll] = useState(false)
   const [applyingGroup, setApplyingGroup] = useState(null)
+  const [toolUndoing, setToolUndoing] = useState(false)
   const [appliedFixSummary, setAppliedFixSummary] = useState([])
   const [showChangePreview, setShowChangePreview] = useState(true)
   const [dataChangePulse, setDataChangePulse] = useState(false)
@@ -146,6 +147,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
   }
 
   const handleToolUndo = async (stageId) => {
+    setToolUndoing(true)
     try {
       await api.restoreStage(dataset.id, stageId)
       setViewStageId('current')
@@ -154,10 +156,13 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
       setShowChangePreview(true)
     } catch (err) {
       console.error('Undo failed', err)
+    } finally {
+      setToolUndoing(false)
     }
   }
 
   const handleToolRedo = async (stageId) => {
+    setToolUndoing(true)
     try {
       await api.restoreStage(dataset.id, stageId)
       setViewStageId('current')
@@ -166,6 +171,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
       setShowChangePreview(true)
     } catch (err) {
       console.error('Redo failed', err)
+    } finally {
+      setToolUndoing(false)
     }
   }
 
@@ -299,6 +306,7 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
           onDataChanged={handleApplied}
           onToolUndo={handleToolUndo}
           onToolRedo={handleToolRedo}
+          toolUndoing={toolUndoing}
           renderToolbar={(visibilityProps) => (
             <DataToolsToolbar
               dataset={dataset}

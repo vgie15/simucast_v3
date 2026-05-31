@@ -1,0 +1,240 @@
+- generic [ref=e230]:
+  - main [ref=e231]:
+    - generic [ref=e273]:
+      - generic [ref=e274]:
+        - generic [ref=e275]:
+          - link "SimuCast logo SimuCast" [ref=e276] [cursor=pointer]:
+            - /url: /projects
+            - img "SimuCast logo" [ref=e278]
+            - generic [ref=e279]: SimuCast
+          - generic [ref=e280]:
+            - link "Data" [ref=e281] [cursor=pointer]:
+              - /url: /projects/20/data
+            - button "Expand" [disabled] [ref=e282]
+            - button "Describe" [disabled] [ref=e283]
+            - button "Analysis" [disabled] [ref=e284]
+            - button "Models" [disabled] [ref=e285]
+            - button "What-if" [disabled] [ref=e286]
+            - button "Report" [disabled] [ref=e287]
+            - generic [ref=e288]:
+              - button "History" [ref=e289] [cursor=pointer]:
+                - img [ref=e290]
+                - text: History
+              - button "Close assistant rail" [pressed] [ref=e294] [cursor=pointer]:
+                - img [ref=e295]
+        - generic [ref=e299]:
+          - generic [ref=e300]:
+            - generic [ref=e301]:
+              - img [ref=e302]
+              - heading "penguins_size.csv" [level=2] [ref=e305]
+              - generic [ref=e306]: 344 rows · 7 cols
+            - generic [ref=e307]:
+              - tablist "Dataset view" [ref=e308]:
+                - button "Original dataset" [ref=e309] [cursor=pointer]:
+                  - img [ref=e310]
+                - button "Cleaned" [ref=e314] [cursor=pointer]:
+                  - img [ref=e315]
+                  - generic [ref=e318]: Cleaned
+                - button "Highlight changes" [ref=e319] [cursor=pointer]:
+                  - img [ref=e320]
+              - button "About" [ref=e323] [cursor=pointer]
+              - generic [ref=e324]:
+                - button "Undo edit" [disabled] [ref=e325]:
+                  - img [ref=e326]
+                - button "Redo edit" [disabled] [ref=e329]:
+                  - img [ref=e330]
+              - link "Download CSV" [ref=e333] [cursor=pointer]:
+                - /url: /api/datasets/20/export.csv
+                - img [ref=e334]
+              - button "Expand to fullscreen" [ref=e337] [cursor=pointer]:
+                - img [ref=e338]
+          - toolbar "Dataset tools" [ref=e344]:
+            - generic [ref=e345]: Dataset tools
+            - generic [ref=e346]:
+              - generic [ref=e347]: Quality
+              - button "Missing Review missing values" [ref=e348] [cursor=pointer]:
+                - img [ref=e350]
+                - generic [ref=e353]: Missing
+                - text: Review missing values
+              - button "Outliers Review outliers" [ref=e354] [cursor=pointer]:
+                - img [ref=e356]
+                - generic [ref=e359]: Outliers
+                - text: Review outliers
+              - button "Duplicates Review duplicate rows" [ref=e360] [cursor=pointer]:
+                - img [ref=e362]
+                - generic [ref=e365]: Duplicates
+                - text: Review duplicate rows
+            - generic [ref=e366]:
+              - generic [ref=e367]: Transform
+              - button "Labels Standardize labels" [ref=e368] [cursor=pointer]:
+                - img [ref=e370]
+                - generic [ref=e374]: Labels
+                - text: Standardize labels
+              - button "Bin Create binned columns" [ref=e375] [cursor=pointer]:
+                - img [ref=e377]
+                - generic [ref=e379]: Bin
+                - text: Create binned columns
+              - button "Format Numeric formatting (decimals)" [ref=e380] [cursor=pointer]:
+                - img [ref=e382]
+                - generic [ref=e384]: Format
+                - text: Numeric formatting (decimals)
+            - generic [ref=e385]:
+              - generic [ref=e386]: Structure
+              - button "Merge Merge columns" [ref=e387] [cursor=pointer]:
+                - img [ref=e389]
+                - generic [ref=e391]: Merge
+                - text: Merge columns
+              - button "Split Split a column" [ref=e392] [cursor=pointer]:
+                - img [ref=e394]
+                - generic [ref=e396]: Split
+                - text: Split a column
+              - button "Drop Col Drop columns" [ref=e397] [cursor=pointer]:
+                - img [ref=e399]
+                - generic [ref=e401]: Drop Col
+                - text: Drop columns
+              - button "Drop Row Drop matching rows" [ref=e402] [cursor=pointer]:
+                - img [ref=e404]
+                - generic [ref=e406]: Drop Row
+                - text: Drop matching rows
+              - button "Rename Rename columns" [ref=e407] [cursor=pointer]:
+                - img [ref=e409]
+                - generic [ref=e412]: Rename
+                - text: Rename columns
+            - generic [ref=e413]:
+              - generic [ref=e414]: View
+              - button "Sort Sort the table view" [ref=e415] [cursor=pointer]:
+                - img [ref=e417]
+                - generic [ref=e419]: Sort
+                - text: Sort the table view
+              - button "Filter Filter the table view" [ref=e420] [cursor=pointer]:
+                - img [ref=e422]
+                - generic [ref=e424]: Filter
+                - text: Filter the table view
+            - button "7/7 Show or hide columns" [ref=e426] [cursor=pointer]:
+              - img [ref=e428]
+              - generic [ref=e431]: 7/7
+              - text: Show or hide columns
+          - table [ref=e433]:
+            - rowgroup [ref=e434]:
+              - 'row "Row A sex CATEGORY A island CATEGORY A species CATEGORY # body_mass_g FLOAT # culmen_depth_mm FLOAT # culmen_length_mm FLOAT # flipper_length_mm FLOAT" [ref=e435]':
+                - columnheader "Row" [ref=e436]
+                - columnheader "A sex CATEGORY" [ref=e437]:
+                  - button "A sex CATEGORY" [ref=e438] [cursor=pointer]:
+                    - generic [ref=e439]: A
+                    - generic [ref=e440]: sex
+                    - generic [ref=e441]: CATEGORY
+                - columnheader "A island CATEGORY" [ref=e442]:
+                  - button "A island CATEGORY" [ref=e443] [cursor=pointer]:
+                    - generic [ref=e444]: A
+                    - generic [ref=e445]: island
+                    - generic [ref=e446]: CATEGORY
+                - columnheader "A species CATEGORY" [ref=e447]:
+                  - button "A species CATEGORY" [ref=e448] [cursor=pointer]:
+                    - generic [ref=e449]: A
+                    - generic [ref=e450]: species
+                    - generic [ref=e451]: CATEGORY
+                - columnheader "# body_mass_g FLOAT" [ref=e452]:
+                  - button "# body_mass_g FLOAT" [ref=e453] [cursor=pointer]:
+                    - generic [ref=e454]: "#"
+                    - generic [ref=e455]: body_mass_g
+                    - generic [ref=e456]: FLOAT
+                - columnheader "# culmen_depth_mm FLOAT" [ref=e457]:
+                  - button "# culmen_depth_mm FLOAT" [ref=e458] [cursor=pointer]:
+                    - generic [ref=e459]: "#"
+                    - generic [ref=e460]: culmen_depth_mm
+                    - generic [ref=e461]: FLOAT
+                - columnheader "# culmen_length_mm FLOAT" [ref=e462]:
+                  - button "# culmen_length_mm FLOAT" [ref=e463] [cursor=pointer]:
+                    - generic [ref=e464]: "#"
+                    - generic [ref=e465]: culmen_length_mm
+                    - generic [ref=e466]: FLOAT
+                - columnheader "# flipper_length_mm FLOAT" [ref=e467]:
+                  - button "# flipper_length_mm FLOAT" [ref=e468] [cursor=pointer]:
+                    - generic [ref=e469]: "#"
+                    - generic [ref=e470]: flipper_length_mm
+                    - generic [ref=e471]: FLOAT
+            - rowgroup [ref=e472]:
+              - row "Loading the current dataset rows..." [ref=e473]:
+                - cell "Loading the current dataset rows..." [ref=e474]
+              - row "Loading…" [ref=e475]:
+                - cell "Loading…" [ref=e476]
+      - complementary [ref=e477]:
+        - generic [ref=e480]:
+          - generic [ref=e481]:
+            - generic [ref=e483]:
+              - generic [ref=e484]: Prediction goal
+              - generic [ref=e485]: Can I predict flipper_length_mm from the other variables in this dataset?
+              - generic [ref=e486]: 344 rows · 7 variables
+              - button "Change goal" [ref=e488] [cursor=pointer]:
+                - img [ref=e489]
+                - text: Change goal
+            - generic "Guidance mode" [ref=e493]:
+              - button "AI assisted" [ref=e494] [cursor=pointer]
+              - button "Built-in" [ref=e495] [cursor=pointer]
+            - generic [ref=e498]: 0 of 4 done
+          - generic [ref=e499]:
+            - paragraph [ref=e500]: Prediction path for 344 rows and 7 variables.
+            - generic [ref=e501]:
+              - article [ref=e502]:
+                - generic [ref=e503] [cursor=pointer]:
+                  - generic [ref=e504]: "1"
+                  - generic [ref=e505]:
+                    - paragraph [ref=e506]: Review categorical labels for standardization
+                    - generic [ref=e507]:
+                      - generic [ref=e508]: current
+                      - generic [ref=e509]: recommended
+                  - img [ref=e511]
+                - generic [ref=e513]:
+                  - generic [ref=e514]:
+                    - generic [ref=e515]: "Affects:"
+                    - generic [ref=e516]:
+                      - generic [ref=e517]: sex
+                      - generic [ref=e518]: island
+                      - generic [ref=e519]: species
+                  - generic [ref=e520]:
+                    - img [ref=e522]
+                    - generic [ref=e525]:
+                      - generic [ref=e526]: Labels
+                      - generic [ref=e527]:
+                        - text: Labels —
+                        - text: Transform group in toolbar
+                    - button "Open ↑" [ref=e528] [cursor=pointer]
+                  - generic [ref=e529]:
+                    - button "▶ Why this matters" [ref=e531] [cursor=pointer]
+                    - button "✓ Mark done" [ref=e532] [cursor=pointer]
+              - article [ref=e533]:
+                - generic [ref=e534] [cursor=pointer]:
+                  - generic [ref=e535]: "2"
+                  - paragraph [ref=e537]: "Optional: review feature tools and numeric formatting"
+                  - img [ref=e539]
+              - article [ref=e541]:
+                - generic [ref=e542] [cursor=pointer]:
+                  - generic [ref=e543]: "3"
+                  - paragraph [ref=e545]: Run descriptive statistics for key variables
+                  - img [ref=e547]
+              - article [ref=e549]:
+                - generic [ref=e550] [cursor=pointer]:
+                  - generic [ref=e551]: "4"
+                  - paragraph [ref=e553]: Train candidate models for flipper_length_mm
+                  - img [ref=e555]
+      - complementary [ref=e558]:
+        - generic [ref=e559]:
+          - generic [ref=e560]:
+            - paragraph [ref=e561]: Guided Focus · 1 of 3
+            - generic [ref=e562]: DATA
+          - strong [ref=e563]: Review the Outliers card
+          - generic [ref=e564]:
+            - paragraph [ref=e565]:
+              - text: "What SimuCast sees:"
+              - text: SimuCast found numeric values that sit outside the current IQR bounds.
+            - paragraph [ref=e566]:
+              - text: "Do this now:"
+              - text: Stay on the Outliers card so this issue is handled separately from missing values and duplicates.
+            - paragraph [ref=e567]: "Why: Extreme values can pull summaries and model fit away from the typical pattern."
+        - generic [ref=e568]:
+          - button "Show recommendation" [ref=e569] [cursor=pointer]
+          - button "Explore freely" [ref=e570] [cursor=pointer]
+      - img
+  - button "Open AI assistant" [ref=e260] [cursor=pointer]:
+    - img [ref=e261]
+    - generic [ref=e263]: Ask AI

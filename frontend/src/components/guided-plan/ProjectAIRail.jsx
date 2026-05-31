@@ -9,33 +9,22 @@ import AIProjectPlanPanel from './AIProjectPlanPanel'
 export default function ProjectAIRail({
   dataset,
   activeTab,
-  collapsed,
-  onStartResize,
+  panelOpen,
   onOpenGuidanceSetup,
   onGuidanceUpdated,
+  onStartGuideFocus,
 }) {
-  if (!dataset || collapsed) return null
+  if (!dataset) return null
 
   return (
-    <aside className="ax-ai-rail">
-      <div className="ax-rail-body ax-rail-body-plan">
-        <AIProjectPlanPanel
-          dataset={dataset}
-          activeTab={activeTab}
-          onOpenGuidanceSetup={onOpenGuidanceSetup}
-          onGuidanceUpdated={onGuidanceUpdated}
-        />
-      </div>
-      {onStartResize && (
-        <div
-          className="ax-rail-resize-handle left"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            onStartResize()
-          }}
-          aria-hidden
-        />
-      )}
-    </aside>
+    <div className="ax-rail-body ax-rail-body-plan" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <AIProjectPlanPanel
+        dataset={dataset}
+        activeTab={activeTab}
+        onOpenGuidanceSetup={onOpenGuidanceSetup}
+        onGuidanceUpdated={onGuidanceUpdated}
+        onStartGuideFocus={onStartGuideFocus}
+      />
+    </div>
   )
 }
