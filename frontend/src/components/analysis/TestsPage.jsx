@@ -179,7 +179,7 @@ export default function TestsPage({ dataset, initialData }) {
     <div className="ax-test-layout">
       {/* LEFT COLUMN */}
       <div className="ax-test-left">
-        <div className="ax-test-left-scroll">
+        <div className="ax-test-left-sticky">
           <h1 className="ax-test-title">Statistical Analysis</h1>
           <p className="ax-test-sub">Evaluate relationships, compare groups, and turn results into decisions</p>
 
@@ -211,7 +211,9 @@ export default function TestsPage({ dataset, initialData }) {
               <span className="ax-test-info-val">{selectedTest.avoid}</span>
             </div>
           </div>
+        </div>
 
+        <div className="ax-test-left-scroll">
           <p className="ax-test-section-label">VARIABLES</p>
           {(kind === 't' || kind === 'anova') && (
             <div className="ax-test-selects">
