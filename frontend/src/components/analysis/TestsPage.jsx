@@ -445,21 +445,6 @@ function TestResult({ kind, result, setup, datasetId }) {
         </div>
       </div>
 
-      {/* Section D — Action Row */}
-      <div className="ax-test-actions">
-        <a href="#/models" className="ax-test-action-primary">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 3l9 16H3L12 3z" /><path d="M12 9v4M12 17h.01" /></svg>
-          Open Models setup →
-        </a>
-        <button className="ax-test-action-secondary" type="button">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>
-          Save to report
-        </button>
-        <button className="ax-test-action-link" type="button" onClick={() => setResult(null)}>
-          Run another test →
-        </button>
-      </div>
-
       {/* Supplementary charts for non-corr tests */}
       {kind === 't' && <GroupMeanBars means={[
         { label: result.group_labels?.[0] || 'Group 1', value: result.mean_group_1 },
