@@ -105,6 +105,21 @@ def _get_ordinal_mapping(unique_values):
         mapping[raw_val] = rank
     return mapping
 
+def _get_ordered_mapping(unique_values, preferred_order):
+    norm_to_raw = {_normalize_encoding_value(v): v for v in unique_values}
+    preferred_norms = [_normalize_encoding_value(v) for v in preferred_order or []]
+    sorted_norms = []
+    for norm in preferred_norms:
+        if norm in norm_to_raw and norm not in sorted_norms:
+            sorted_norms.append(norm)
+    sorted_norms.extend(sorted(n for n in norm_to_raw.keys() if n not in sorted_norms))
+
+    mapping = {}
+    for rank, norm in enumerate(sorted_norms):
+        raw_val = norm_to_raw[norm]
+        mapping[raw_val] = rank
+    return mapping
+
 def _detect_encoding_suggestion(series):
     unique_vals = [str(x) for x in series.dropna().unique()]
     if len(unique_vals) <= 1:
@@ -139,7 +154,10 @@ def _apply_categorical_encoding(df, plan_encoding, categorical_mappings=None):
         if categorical_mappings and col in categorical_mappings:
             mapping = categorical_mappings[col]
         else:
-            if method == "binary":
+            preferred_order = item.get("order") or []
+            if preferred_order:
+                mapping = _get_ordered_mapping(unique_vals, preferred_order)
+            elif method == "binary":
                 mapping = _get_binary_mapping(unique_vals)
             else:
                 mapping = _get_ordinal_mapping(unique_vals)
@@ -322,6 +340,7 @@ def _target_info(y, task, target_options):
 def _encoding_plan(sub_clean, features, target_options=None):
     target_options = target_options or {}
     categorical_encoding = target_options.get("categorical_encoding") or {}
+    categorical_order = target_options.get("categorical_order") or {}
     
     encoding = []
     for column in features:
@@ -340,6 +359,7 @@ def _encoding_plan(sub_clean, features, target_options=None):
             "method": method,
             "n_categories": len(categories),
             "sample_categories": categories[:6],
+            "order": categorical_order.get(column) or [],
         })
     return encoding
 

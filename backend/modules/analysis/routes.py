@@ -102,7 +102,7 @@ def describe(ds_id):
 def run_test(ds_id):
     """Run one of t-test / ANOVA / chi-square / correlation."""
     body = request.get_json() or {}
-    kind = body.get("kind")  # 't', 'anova', 'chi', 'corr'
+    kind = body.get("kind", "").replace("analysis_", "")  # 't', 'anova', 'chi', 'corr'
     s = db()
     try:
         ds = s.query(Dataset).filter_by(id=ds_id).first()

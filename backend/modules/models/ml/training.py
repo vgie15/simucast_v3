@@ -127,13 +127,6 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
     else:  # auto
         scaler_kind = "standard" if needs_scaling else "none"
 
-    scaler = None
-    if scaler_kind != "none":
-        scaler = MinMaxScaler() if scaler_kind == "minmax" else StandardScaler()
-        X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
-    else:
-        X_scaled = X
-
     stratify = None
     if is_classification and plan.get("split", {}).get("stratified"):
         counts = pd.Series(y).value_counts()
@@ -141,8 +134,14 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             stratify = y
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, y, test_size=test_size, random_state=42, stratify=stratify
+        X, y, test_size=test_size, random_state=42, stratify=stratify
     )
+
+    scaler = None
+    if scaler_kind != "none":
+        scaler = MinMaxScaler() if scaler_kind == "minmax" else StandardScaler()
+        X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X.columns, index=X_train.index)
+        X_test = pd.DataFrame(scaler.transform(X_test), columns=X.columns, index=X_test.index)
 
     if is_classification:
         clf = _build_model_estimator(algo, True, params, plan.get("class_weight"))
@@ -166,7 +165,7 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             "validation_method": plan.get("validation_method", "standard_split"),
         }
         metrics["generalization_gap"] = float(metrics["train_accuracy"] - metrics["accuracy"])
-        cv = _cross_validation_metrics(algo, X_scaled, y, True, params, plan)
+        cv = _cross_validation_metrics(algo, X, y, True, params, plan)
         if cv:
             metrics["cross_validation"] = cv
         metrics["health_diagnostics"] = _model_health_diagnostics(metrics, plan, algo)
@@ -198,7 +197,7 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
             "validation_method": plan.get("validation_method", "standard_split"),
         }
         metrics["generalization_gap"] = float(metrics["train_r2"] - metrics["r2"])
-        cv = _cross_validation_metrics(algo, X_scaled, y, False, params, plan)
+        cv = _cross_validation_metrics(algo, X, y, False, params, plan)
         if cv:
             metrics["cross_validation"] = cv
         metrics["health_diagnostics"] = _model_health_diagnostics(metrics, plan, algo)

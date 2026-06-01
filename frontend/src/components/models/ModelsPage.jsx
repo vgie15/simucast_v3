@@ -2,12 +2,26 @@
  * PAGE: ML MODELS (TRAIN, COMPARE)
  * Keywords: models, train, machine learning, regression, classification, linear, logistic, tree, random forest, feature importance
  * ============================================================ */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
-import { ChevronDown, Check, RotateCcw, History, ArrowUpRight, AlertTriangle } from 'lucide-react'
+import {
+  Activity,
+  BarChart3,
+  Brain,
+  Check,
+  ChevronDown,
+  Gauge,
+  History,
+  RotateCcw,
+  SlidersHorizontal,
+  Sparkles,
+  ArrowUpRight,
+  AlertTriangle
+} from 'lucide-react'
 import { api } from '../../api'
 import { AIInsightCard, ExplainButton } from '../ai/AIExplainers'
+import { AIExplainToggle, ExplainPopup, ResultsSummary, FallbackLabel, r2FallbackLabel, rmseFallbackLabel, gapFallbackLabel } from '../ai/AIExplainPanel'
 import { useDialog } from '../common/DialogProvider'
 import { useAuth } from '../providers/AuthProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStates'
@@ -26,6 +40,33 @@ const ALGOS = [
   { key: 'linear',   label: 'Linear Regression',   task: 'regression',     interpretable: true,
     desc: 'Linear baseline for regression. Coefficients directly interpretable.' },
 ]
+
+const SETUP_ALGO_DETAILS = {
+  rf: {
+    name: 'Random Forest',
+    description: 'Builds many decision trees and averages their predictions.',
+    bestFor: 'non-linear patterns, robust to outliers',
+    color: '#f97316',
+  },
+  tree: {
+    name: 'Decision Tree',
+    description: 'Splits data into branches based on feature thresholds.',
+    bestFor: 'interpretable models, smaller datasets',
+    color: '#2563eb',
+  },
+  linear: {
+    name: 'Linear Regression',
+    description: 'Fits a straight line through the data to predict numeric outcomes.',
+    bestFor: 'linear relationships, fast training',
+    color: '#7c3aed',
+  },
+  logistic: {
+    name: 'Logistic Regression',
+    description: 'Predicts probability of class membership.',
+    bestFor: 'binary classification problems',
+    color: '#16a34a',
+  },
+}
 
 const GUEST_MODEL_LIMIT = 5
 
@@ -85,6 +126,35 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [standardizedCols, setStandardizedCols] = useState(new Set())
   const [categoricalEncoding, setCategoricalEncoding] = useState({})
+  const [categoricalOrders, setCategoricalOrders] = useState({})
+  const [aiExplainActive, setAiExplainActive] = useState(false)
+  const [explainPopup, setExplainPopup] = useState(null)
+  const [toastMsg, setToastMsg] = useState(null)
+
+  useEffect(() => {
+    if (toastMsg) {
+      const t = setTimeout(() => setToastMsg(null), 3000)
+      return () => clearTimeout(t)
+    }
+  }, [toastMsg])
+
+  const onExplain = useCallback((element, event) => {
+    if (!aiExplainActive) return
+    const rect = event?.currentTarget?.getBoundingClientRect()
+    setExplainPopup(rect ? { ...element, sourceRect: rect } : element)
+  }, [aiExplainActive])
+
+  const handleToggleExplain = useCallback(() => {
+    setAiExplainActive((prev) => {
+      const next = !prev
+      if (next) {
+        setToastMsg('Click any metric or card to explain it')
+      } else {
+        setExplainPopup(null)
+      }
+      return next
+    })
+  }, [])
 
   const handleFixAction = (fix) => {
     if (!fix?.route) return
@@ -186,6 +256,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       setModelParams(saved.modelParams || defaultModelParams())
       setNumericPreprocessing(saved.numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] })
       setCategoricalEncoding(saved.categoricalEncoding || {})
+      setCategoricalOrders(saved.categoricalOrders || {})
       setResults(saved.results || null)
       setActiveResultIdx(saved.activeResultIdx ?? 0)
     } catch (err) {
@@ -211,10 +282,11 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       modelParams,
       numericPreprocessing,
       categoricalEncoding,
+      categoricalOrders,
       results,
       activeResultIdx,
     }))
-  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(results), activeResultIdx])
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders), JSON.stringify(results), activeResultIdx])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -246,7 +318,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
           target,
           features,
           algorithms: chosenAlgos,
-          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding),
+          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders),
         })
         if (!cancelled) {
           setPlan(r)
@@ -318,7 +390,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
         target,
         features,
         algorithms: selectedAlgos,
-        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding),
+        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders),
         model_params: modelParams,
       })
       if (r.session) auth.updateSession(r.session)
@@ -496,6 +568,12 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
     _setShowHistory(val)
   }
   const [showChecksDetail, setShowChecksDetail] = useState(false)
+  const [activeModelsSection, setActiveModelsSection] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(`simucast.modelsSection.${dataset?.id}`)
+      return saved || 'setup'
+    } catch { return 'setup' }
+  })
 
 
   const planBlocked = plan && (plan.validation_checks || []).some((c) => c.status === 'block')
@@ -569,8 +647,63 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
     }
   }
 
+  const getCategoryOrder = (column, samples = []) => {
+    const saved = categoricalOrders[column] || []
+    const merged = [...saved, ...samples].map(v => String(v))
+    return Array.from(new Set(merged)).filter(Boolean)
+  }
+
+  const moveCategoryOrderValue = (column, samples, fromIndex, toIndex) => {
+    const order = getCategoryOrder(column, samples)
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= order.length || toIndex >= order.length || fromIndex === toIndex) return
+    const next = [...order]
+    const [item] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, item)
+    setCategoricalOrders(prev => ({ ...prev, [column]: next }))
+  }
+
+  const resetCategoryOrder = (column) => {
+    setCategoricalOrders(prev => {
+      const next = { ...prev }
+      delete next[column]
+      return next
+    })
+  }
+
+  const inferredTask = plan?.task || 'regression'
+  const setupTotalRows = Math.max(0, Number(plan?.rows_used || dataset?.n_rows || dataset?.rows_count || dataset?.row_count || 0))
+  const setupTestRows = validationMethod === 'standard_split' ? Math.round(setupTotalRows * testSize) : 0
+  const setupTrainRows = validationMethod === 'standard_split' ? Math.max(0, setupTotalRows - setupTestRows) : 0
+  const setupTrainPct = Math.round((1 - testSize) * 100)
+  const setupTestPct = Math.round(testSize * 100)
+  const [activeFold, setActiveFold] = useState(0)
+
+  useEffect(() => {
+    if (validationMethod !== 'cross_validation') return
+    const id = setInterval(() => setActiveFold(f => (f + 1) % cvFolds), 2200)
+    return () => clearInterval(id)
+  }, [validationMethod, cvFolds])
+
+  const jumpToModelsSection = (section) => {
+    setActiveModelsSection(section)
+    try { window.localStorage.setItem(`simucast.modelsSection.${dataset?.id}`, section) } catch {}
+    if (section === 'history') setShowHistory(true)
+    requestAnimationFrame(() => {
+      document.querySelector('.ax-models-main')?.scrollTo({ top: 0, behavior: 'auto' })
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    })
+  }
+
+  const modelsNavItems = [
+    { id: 'setup', label: 'Setup', icon: SlidersHorizontal, badge: `${selectedAlgos.length} algos` },
+    { id: 'results', label: 'Results', icon: BarChart3, badge: `${models.length || results?.models?.length || 0} model${(models.length || results?.models?.length || 0) === 1 ? '' : 's'}` },
+    { id: 'features', label: 'Feature influence', icon: Activity, badge: `${features.length} features` },
+    { id: 'tune', label: 'Tune parameters', icon: Brain, badge: 'Smart defaults' },
+    { id: 'history', label: 'History', icon: History, badge: `${models.length} run${models.length === 1 ? '' : 's'}` },
+  ]
+
   return (
-    <div className={`ax-busy-host ax-operation-busy ${training ? 'is-busy' : ''}`} style={{ paddingBottom: 60 }}>
+    <div className={`ax-models-layout ax-busy-host ax-operation-busy ${training ? 'is-busy' : ''}`}>
       <BusyOverlay
         active={training}
         title={`Training ${selectedAlgos.length} model${selectedAlgos.length === 1 ? '' : 's'}...`}
@@ -578,51 +711,413 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
         steps={['Preparing model inputs', 'Training selected algorithms', 'Saving results for What-if and reports']}
       />
 
-      {/* Title block with Reset and History toggles */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-        <div>
-          <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            {plan?.task ? `MODELS · ${plan.task.toUpperCase()}` : 'MODELS'}
-          </span>
-          <h1 className="ax-page-title" style={{ margin: '4px 0 0', fontSize: '26px', fontWeight: 800 }}>Build a model</h1>
+      <aside className="ax-models-left">
+        <div className="ax-models-left-head">
+          <h1 className="ax-models-title">Build a model</h1>
+          <p className="ax-models-sub">Configure, train, and evaluate predictive models</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="ax-btn mini"
-            onClick={() => {
-              setTarget('')
-              setTargetMode('auto')
-              setPositiveClass('')
-              setFeatures([])
-              setChosenAlgos(['logistic', 'rf'])
-              setResults(null)
-            }}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, height: 32 }}
-            type="button"
-          >
-            <RotateCcw size={13} /> Reset
-          </button>
-          {models.length > 0 && (
-            <button
-              className="ax-btn mini"
-              onClick={() => setShowHistory(!showHistory)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                height: 32,
-                background: showHistory ? 'var(--color-accent-light)' : 'var(--color-background-primary)',
-                borderColor: showHistory ? 'var(--color-accent)' : 'var(--color-border-secondary)',
-                color: showHistory ? 'var(--color-accent-dark)' : 'var(--color-text-primary)'
-              }}
-              type="button"
-            >
-              <History size={13} /> History · {models.length}
-            </button>
-          )}
-        </div>
+        <nav className="ax-models-nav" aria-label="Model sections" style={{ padding: '14px 18px 14px 24px' }}>
+          {modelsNavItems.map((item) => {
+            const Icon = item.icon
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`ax-models-nav-item ${activeModelsSection === item.id ? 'active' : ''}`}
+                onClick={() => jumpToModelsSection(item.id)}
+              >
+                <span className="ax-models-nav-icon"><Icon size={14} /></span>
+                <span>{item.label}</span>
+                <span className="ax-models-nav-badge">{item.badge}</span>
+              </button>
+            )
+          })}
+        </nav>
+      </aside>
+
+      <main className="ax-models-main">
+
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-accent, #f97316)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Models · {modelsNavItems.find(i => i.id === activeModelsSection)?.label || activeModelsSection}
+        </span>
+        <AIExplainToggle active={aiExplainActive} onToggle={handleToggleExplain} />
       </div>
 
+      {activeModelsSection === 'setup' && (
+        <>
+      <div className="ax-models-setup-grid">
+        <section className="ax-models-setup-section ax-models-setup-config">
+          <div className="ax-models-setup-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div>
+              <h2>Configuration</h2>
+              <p>Choose the model target and training setup before running algorithms.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTarget('')
+                setTargetMode('auto')
+                setPositiveClass('')
+                setFeatures([])
+                setChosenAlgos(['logistic', 'rf'])
+                setResults(null)
+              }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--color-text-tertiary, #9ca3af)', fontFamily: 'inherit', padding: '2px 0', whiteSpace: 'nowrap' }}
+            >
+              ↺ Reset
+            </button>
+          </div>
+          <div className="ax-models-config-grid">
+            <ConfigDropdown label="Target variable" value={target || 'Select target'}>
+              {(close) => (
+                <div className="ax-models-config-menu">
+                  {variables.map((v) => (
+                    <button
+                      key={v.name}
+                      type="button"
+                      className={`ax-models-config-menu-item ${target === v.name ? 'is-active' : ''}`}
+                      onClick={() => {
+                        setTarget(v.name)
+                        setTargetMode('auto')
+                        setPositiveClass('')
+                        setFeatures(features.filter((f) => f !== v.name))
+                        setResults(null)
+                        close()
+                      }}
+                    >
+                      <span>{v.name}</span>
+                      <em>{v.dtype}</em>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </ConfigDropdown>
+            <ConfigDropdown label="Features" value={`${features.length} of ${allFeatureNames.length} selected`}>
+              {() => (
+                <div className="ax-models-config-menu">
+                  <div className="ax-models-config-menu-actions">
+                    <button type="button" onClick={selectAll}>Select all</button>
+                    <button type="button" onClick={selectNone}>Clear</button>
+                  </div>
+                  <div className="ax-models-config-check-list">
+                    {candidateFeatures.map((feature) => (
+                      <label key={feature.name} className={features.includes(feature.name) ? 'is-active' : ''}>
+                        <input type="checkbox" checked={features.includes(feature.name)} onChange={() => toggleFeature(feature.name)} />
+                        <span>{feature.name}</span>
+                        <em>{feature.dtype || feature.type || 'field'}</em>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </ConfigDropdown>
+            <ConfigDropdown label="Algorithms" value={`${selectedAlgos.length} selected`}>
+              {() => (
+                <div className="ax-models-config-menu">
+                  <div className="ax-models-config-check-list">
+                    {ALGOS.map((algo) => {
+                      const detail = SETUP_ALGO_DETAILS[algo.key]
+                      const compatible = !plan || algo.task === 'both' || algo.task === inferredTask
+                      const included = compatible && chosenAlgos.includes(algo.key)
+                      return (
+                        <label key={algo.key} className={included ? 'is-active' : ''} title={!compatible ? `Not compatible with ${inferredTask} target` : undefined}>
+                          <input
+                            type="checkbox"
+                            checked={included}
+                            disabled={!compatible || (auth.isGuest && !chosenAlgos.includes(algo.key) && guestModelsRemaining <= selectedAlgos.length)}
+                            onChange={() => toggleAlgo(algo.key)}
+                          />
+                          <span>{detail.name}</span>
+                          <em>{compatible ? 'available' : 'disabled'}</em>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </ConfigDropdown>
+            <ValidationDropdown
+              validationMethod={validationMethod}
+              setValidationMethod={setValidationMethod}
+              testSize={testSize}
+              setTestSize={setTestSize}
+              cvFolds={cvFolds}
+              setCvFolds={setCvFolds}
+            />
+          </div>
+          <div className="ax-models-config-actions">
+            <p>{planBlocked ? 'Resolve the active data issue before training.' : 'Ready when target, features, and at least one algorithm are selected.'}</p>
+            <button
+              id="models-train-action-setup"
+              className="ax-models-train-btn"
+              disabled={(!planBlocked && (training || !target || features.length === 0 || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit))}
+              onClick={planBlocked ? highlightActiveIssue : train}
+              type="button"
+            >
+              {training ? <InlineSpinner label="Training..." /> : <><Sparkles size={14} /> Train models</>}
+            </button>
+          </div>
+        </section>
+
+        {false && <>
+        <section className="ax-models-setup-section">
+          <div className="ax-models-setup-head">
+            <div>
+              <h2>Features</h2>
+              <p>{features.length} of {allFeatureNames.length} selected</p>
+            </div>
+            <div className="ax-models-setup-links">
+              <button type="button" onClick={selectAll}>Select all</button>
+              <span>·</span>
+              <button type="button" onClick={selectNone}>Clear</button>
+            </div>
+          </div>
+          <div className="ax-models-feature-grid">
+            {candidateFeatures.map((feature) => {
+              const selected = features.includes(feature.name)
+              const dtype = feature.dtype || feature.type || 'field'
+              const skew = Number(feature.skew ?? feature.stats?.skew ?? 0)
+              const isNumeric = ['numeric', 'int', 'float', 'number'].includes(dtype)
+              const isSkewed = isNumeric && Math.abs(skew) >= 1
+              return (
+                <label key={feature.name} className={`ax-models-feature-chip ${selected ? 'is-selected' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => toggleFeature(feature.name)}
+                  />
+                  <span className="ax-models-feature-name">{feature.name}</span>
+                  {isSkewed && <span className="ax-models-skew-dot" title="Skewed numeric feature" />}
+                  <span className="ax-models-feature-type">{dtype}</span>
+                </label>
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="ax-models-setup-section">
+          <div className="ax-models-setup-head">
+            <div>
+              <h2>Algorithms</h2>
+              <p>{selectedAlgos.length} selected for {inferredTask}</p>
+            </div>
+          </div>
+          <div className="ax-models-algo-grid">
+            {ALGOS.map((algo) => {
+              const detail = SETUP_ALGO_DETAILS[algo.key]
+              const compatible = !plan || algo.task === 'both' || algo.task === inferredTask
+              const included = compatible && chosenAlgos.includes(algo.key)
+              const typeLabel = algo.task === 'classification'
+                ? 'Classification only'
+                : algo.task === 'regression'
+                  ? 'Regression'
+                  : inferredTask === 'classification'
+                    ? 'Classification'
+                    : 'Regression'
+              return (
+                <article
+                  key={algo.key}
+                  className={`ax-models-algo-card ${!compatible ? 'is-disabled' : ''}`}
+                  style={{ '--algo-color': detail.color }}
+                  title={!compatible ? `Not compatible with ${inferredTask} target` : undefined}
+                >
+                  <div className="ax-models-algo-card-top">
+                    <h3>{detail.name}</h3>
+                    <button
+                      type="button"
+                      className={`ax-models-toggle ${included ? 'is-on' : ''}`}
+                      disabled={!compatible || (auth.isGuest && !chosenAlgos.includes(algo.key) && guestModelsRemaining <= selectedAlgos.length)}
+                      onClick={() => toggleAlgo(algo.key)}
+                      aria-label={`${included ? 'Exclude' : 'Include'} ${detail.name}`}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                  <div className="ax-models-algo-meta">
+                    <span>{typeLabel}</span>
+                    <strong>{included ? 'included' : compatible ? 'excluded' : 'disabled'}</strong>
+                  </div>
+                  <p>{detail.description}</p>
+                  <div className="ax-models-algo-best"><span>Best for:</span> {detail.bestFor}</div>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+        </>}
+
+      </div>
+
+      {/* ── Preprocessing plan ─────────────────────────────────── */}
+      <div className="ax-preplan-card" id="models-preplan">
+        <div className="ax-preplan-head">
+          <div>
+            <span className="ax-preplan-title">Preprocessing plan</span>
+            <span className="ax-preplan-sub">How your data will be cleaned and prepared for training</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {planLoading && <InlineSpinner label="" />}
+            {!planLoading && plan && issueCount === 0 && (
+              <span className="ax-preplan-badge ax-preplan-badge--ok"><Check size={10} /> Ready</span>
+            )}
+            {!planLoading && plan && issueCount > 0 && (
+              <span className="ax-preplan-badge ax-preplan-badge--warn"><AlertTriangle size={10} /> {issueCount} issue{issueCount !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+        </div>
+
+        {(!target || features.length === 0) && (
+          <p className="ax-preplan-empty">Select a target variable and at least one feature to see the preprocessing plan.</p>
+        )}
+
+        {target && features.length > 0 && planLoading && !plan && (
+          <p className="ax-preplan-empty">Analyzing data…</p>
+        )}
+
+        {target && features.length > 0 && !planLoading && planError && !plan && (
+          <p className="ax-preplan-empty ax-preplan-empty--error">{planError}</p>
+        )}
+
+        {plan && (
+          <>
+            {/* ── Data readiness checks ── */}
+            <div className="ax-preplan-section">
+              <h4 className="ax-preplan-section-title">Data readiness</h4>
+              <div className="ax-preplan-checks">
+                {checks.map((check, idx) => {
+                  const dismissed = dismissedChecks.includes(check.key)
+                  const effective = dismissed && check.status === 'warning' ? 'ok' : check.status
+                  return (
+                    <div key={check.key || idx} className={`ax-preplan-check ax-preplan-check--${effective}`}>
+                      <span className="ax-preplan-check-dot" />
+                      <div className="ax-preplan-check-body">
+                        <span className="ax-preplan-check-label">{check.label}</span>
+                        {check.detail && <span className="ax-preplan-check-detail">{check.detail}</span>}
+                      </div>
+                      {!dismissed && (check.fixes || []).length > 0 && (
+                        <FixOptionsDropdown
+                          fixes={check.fixes.map(f => f.category ? { ...f, label: `${f.label} · ${f.category === 'recommended' ? 'Recommended' : f.category === 'alternative' ? 'Alternative' : 'Advanced'}` } : f)}
+                          onAction={handleFixAction}
+                          canDismiss={check.status === 'warning'}
+                          onDismiss={() => setDismissedChecks(d => [...d, check.key])}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Numeric scaling ── */}
+            <div className="ax-preplan-section">
+              <h4 className="ax-preplan-section-title">Numeric scaling</h4>
+              <div className="ax-preplan-scale-cards">
+                {[
+                  { value: 'auto',     label: 'Auto',           tag: 'Recommended', desc: 'StandardScaler for linear models; skipped for tree-based' },
+                  { value: 'standard', label: 'StandardScaler', tag: null,          desc: 'Centers to mean 0, unit variance' },
+                  { value: 'minmax',   label: 'MinMaxScaler',   tag: null,          desc: 'Rescales all values to [0, 1]' },
+                  { value: 'none',     label: 'None',           tag: null,          desc: 'No scaling applied to features' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`ax-preplan-scale-card ${numericPreprocessing.scaling === opt.value ? 'is-active' : ''}`}
+                    onClick={() => setNumericPreprocessing(prev => ({ ...prev, scaling: opt.value }))}
+                  >
+                    <span className="ax-preplan-scale-name">{opt.label}</span>
+                    {opt.tag && <span className="ax-preplan-scale-tag">{opt.tag}</span>}
+                    <span className="ax-preplan-scale-desc">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Categorical encoding ── */}
+            {(() => {
+              const categoricalColumns = variables.filter(v =>
+                features.includes(v.name) && ['category', 'text', 'binary', 'boolean'].includes(v.dtype)
+              )
+              if (!categoricalColumns.length) return null
+              return (
+                <div className="ax-preplan-section">
+                  <h4 className="ax-preplan-section-title">Encoding per column</h4>
+                  <p className="ax-preplan-section-sub">Select how categorical variables are converted to numeric values before model training.</p>
+                  <table className="ax-preplan-enc-table">
+                    <thead>
+                      <tr>
+                        <th>COLUMN</th>
+                        <th>VALUES / ORDER</th>
+                        <th>ENCODING METHOD</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {categoricalColumns.map(col => {
+                        const isStandardized = standardizedCols.has(col.name)
+                        const currentVal = isStandardized ? 'standardized' : (categoricalEncoding[col.name] || 'auto')
+                        const encItem = plan?.encoding?.find(e => e.column === col.name)
+                        const recLabel = encItem?.method === 'binary' ? 'Binary' : encItem?.method === 'ordinal' ? 'Ordinal' : 'One-Hot'
+                        const sampleCategories = encItem?.sample_categories || []
+                        const orderedCategories = getCategoryOrder(col.name, sampleCategories)
+                        const usesOrder = currentVal === 'ordinal' || currentVal === 'binary' || (!categoricalEncoding[col.name] && encItem?.method === 'ordinal')
+                        return (
+                          <tr key={col.name} style={{ opacity: isStandardized ? 0.72 : 1 }}>
+                            <td className="ax-preplan-enc-col">{col.name}</td>
+                            <td className="ax-preplan-enc-vals">
+                              {orderedCategories.length ? (
+                                <div className={`ax-models-order-chips ${usesOrder ? 'is-reorderable' : ''}`}>
+                                  {orderedCategories.map((value, chipIdx) => (
+                                    <span
+                                      key={`${col.name}-${value}`}
+                                      className="ax-models-order-chip"
+                                      draggable={usesOrder}
+                                      onDragStart={e => { if (!usesOrder) return; e.dataTransfer.setData('text/plain', String(chipIdx)); e.dataTransfer.effectAllowed = 'move' }}
+                                      onDragOver={e => { if (!usesOrder) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                                      onDrop={e => { if (!usesOrder) return; e.preventDefault(); moveCategoryOrderValue(col.name, sampleCategories, Number(e.dataTransfer.getData('text/plain')), chipIdx) }}
+                                    >
+                                      {usesOrder && <span className="ax-models-order-handle">::</span>}
+                                      {value}
+                                    </span>
+                                  ))}
+                                  {usesOrder && categoricalOrders[col.name]?.length > 0 && (
+                                    <button type="button" className="ax-models-order-reset" onClick={() => resetCategoryOrder(col.name)}>Reset</button>
+                                  )}
+                                </div>
+                              ) : (
+                                <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>No samples</span>
+                              )}
+                            </td>
+                            <td className="ax-preplan-enc-method">
+                              {isStandardized ? (
+                                <select disabled style={{ fontSize: '11.5px', padding: '2px 6px', background: 'var(--color-background-secondary)' }}>
+                                  <option>Standardized ✓</option>
+                                </select>
+                              ) : (
+                                <select
+                                  value={currentVal}
+                                  onChange={e => setCategoricalEncoding(prev => ({ ...prev, [col.name]: e.target.value }))}
+                                  style={{ fontSize: '11.5px', padding: '2px 6px' }}
+                                >
+                                  <option value="auto">Auto ({recLabel})</option>
+                                  <option value="one_hot">One-Hot</option>
+                                  <option value="ordinal">Ordinal</option>
+                                  <option value="binary">Binary</option>
+                                </select>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
+          </>
+        )}
+      </div>
+
+      {false && <>
       <PageGuide
         title="Modeling works best after a clean question"
         meta="Models"
@@ -631,18 +1126,17 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
         SimuCast helps choose sensible targets and features, then compares train and test performance so overfitting is visible.
       </PageGuide>
 
-      {/* Previous Models Table */}
-      {showHistory && models.length > 0 && (
-        <PreviousModelsTable
-          models={models}
-          restoreModelSettings={restoreModelSettings}
-          prepareAndUseInWhatIf={prepareAndUseInWhatIf}
-          deleteSavedModel={deleteSavedModel}
-          setShowHistory={setShowHistory}
-        />
-      )}
-
-
+      <section className="ax-models-ready-card" aria-label="Training summary">
+        <div className="ax-models-ready-icon"><Sparkles size={22} /></div>
+        <h2>Ready to train</h2>
+        <p>Configure your target, features, and algorithms on the left, then train the selected models.</p>
+        <div className="ax-models-ready-rows">
+          <div><span>Target</span><strong>{target || 'Not selected'}</strong></div>
+          <div><span>Features</span><strong>{features.length} of {allFeatureNames.length}</strong></div>
+          <div><span>Validation</span><strong>{validationMethod === 'standard_split' ? `${Math.round((1 - testSize) * 100)}/${Math.round(testSize * 100)} Split` : `${cvFolds}-fold CV`}</strong></div>
+          <div><span>Algorithms</span><strong>{selectedAlgos.length} selected</strong></div>
+        </div>
+      </section>
 
       {/* Inline Configuration Card */}
       <div
@@ -981,6 +1475,9 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                       // Auto-detected suggestions from plan.encoding
                       const encItem = plan?.encoding?.find(e => e.column === col.name);
                       const recLabel = encItem?.method === 'binary' ? 'Binary' : encItem?.method === 'ordinal' ? 'Ordinal' : 'One-Hot';
+                      const sampleCategories = encItem?.sample_categories || [];
+                      const orderedCategories = getCategoryOrder(col.name, sampleCategories);
+                      const usesOrder = currentVal === 'ordinal' || currentVal === 'binary' || (!categoricalEncoding[col.name] && encItem?.method === 'ordinal');
                       
                       const renderSamples = () => {
                         if (!encItem || !encItem.sample_categories) return '';
@@ -994,8 +1491,45 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                       return (
                         <tr key={col.name} style={{ borderBottom: '1px solid var(--color-border-tertiary)', opacity: isStandardized ? 0.72 : 1 }}>
                           <td style={{ padding: '10px 8px', fontWeight: 600 }}>{col.name}</td>
-                          <td style={{ padding: '10px 8px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
-                            {renderSamples()}
+                          <td style={{ padding: '10px 8px', color: 'var(--color-text-secondary)', fontSize: '11px' }}>
+                            {orderedCategories.length ? (
+                              <div className={`ax-models-order-chips ${usesOrder ? 'is-reorderable' : ''}`} aria-label={`${col.name} category order`}>
+                                {orderedCategories.map((value, idx) => (
+                                  <span
+                                    key={`${col.name}-${value}`}
+                                    className="ax-models-order-chip"
+                                    draggable={usesOrder}
+                                    title={usesOrder ? 'Drag to reorder this category' : 'Order is not used for this encoding method'}
+                                    onDragStart={(e) => {
+                                      if (!usesOrder) return
+                                      e.dataTransfer.setData('text/plain', String(idx))
+                                      e.dataTransfer.effectAllowed = 'move'
+                                    }}
+                                    onDragOver={(e) => {
+                                      if (!usesOrder) return
+                                      e.preventDefault()
+                                      e.dataTransfer.dropEffect = 'move'
+                                    }}
+                                    onDrop={(e) => {
+                                      if (!usesOrder) return
+                                      e.preventDefault()
+                                      const fromIndex = Number(e.dataTransfer.getData('text/plain'))
+                                      moveCategoryOrderValue(col.name, sampleCategories, fromIndex, idx)
+                                    }}
+                                  >
+                                    {usesOrder && <span className="ax-models-order-handle">::</span>}
+                                    {value}
+                                  </span>
+                                ))}
+                                {usesOrder && categoricalOrders[col.name]?.length > 0 && (
+                                  <button type="button" className="ax-models-order-reset" onClick={() => resetCategoryOrder(col.name)}>
+                                    Reset
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{ color: 'var(--color-text-tertiary)' }}>No category samples</span>
+                            )}
                           </td>
                           <td style={{ padding: '10px 8px' }}>
                             {isStandardized ? (
@@ -1244,9 +1778,30 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
           )}
         </div>
       )}
+      </>}
+        </>
+      )}
 
       {/* Results panel container */}
-      {results && (
+      <div id="models-results" />
+      {activeModelsSection === 'history' && (
+        models.length > 0 ? (
+          <PreviousModelsTable
+            models={models}
+            restoreModelSettings={restoreModelSettings}
+            prepareAndUseInWhatIf={prepareAndUseInWhatIf}
+            deleteSavedModel={deleteSavedModel}
+            setShowHistory={setShowHistory}
+          />
+        ) : (
+          <div className="ax-models-ready-card" style={{ minHeight: 260 }}>
+            <div className="ax-models-ready-icon"><History size={22} /></div>
+            <h2>No model history yet</h2>
+            <p>Train a model first, then previous runs and restore actions will appear here.</p>
+          </div>
+        )
+      )}
+      {results && ['results', 'features'].includes(activeModelsSection) && (
         <>
           <ResultsPanel
             results={results}
@@ -1255,8 +1810,31 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
             onUseInWhatIf={useInWhatIf}
             datasetId={dataset.id}
             onFixAction={handleFixAction}
+            section={activeModelsSection}
+            aiExplainActive={aiExplainActive}
+            onExplain={onExplain}
+            onToggleExplain={handleToggleExplain}
+            toastMsg={toastMsg}
           />
-          {(results.models || []).length > 0 && (
+        </>
+      )}
+      {!results && activeModelsSection === 'results' && (
+        <div className="ax-models-ready-card" style={{ minHeight: 260 }}>
+          <div className="ax-models-ready-icon"><BarChart3 size={22} /></div>
+          <h2>No results yet</h2>
+          <p>Train at least one model in Setup, then results and comparison will appear here.</p>
+        </div>
+      )}
+      {!results && activeModelsSection === 'features' && (
+        <div className="ax-models-ready-card" style={{ minHeight: 260 }}>
+          <div className="ax-models-ready-icon"><Activity size={22} /></div>
+          <h2>No feature influence yet</h2>
+          <p>Train a model first, then feature importance and directional effects will appear here.</p>
+        </div>
+      )}
+      {activeModelsSection === 'tune' && (
+        <>
+          {results && (results.models || []).length > 0 ? (
             <div id="models-tuning" className="ax-card ax-module-card ax-card-model" style={{ padding: 18, marginTop: 16 }}>
               {/* Header */}
               <div className="ax-tune-head">
@@ -1284,6 +1862,8 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                 modelParams={modelParams}
                 setModelParams={setModelParams}
                 results={results}
+                aiExplainActive={aiExplainActive}
+                onExplain={onExplain}
               />
 
               <div className="ax-tune-train-row">
@@ -1297,8 +1877,23 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                 </button>
               </div>
             </div>
+          ) : (
+            <div className="ax-models-ready-card" style={{ minHeight: 260 }}>
+              <div className="ax-models-ready-icon"><Brain size={22} /></div>
+              <h2>Tune parameters</h2>
+              <p>Train at least one model first, then algorithm parameters will appear here for fine-tuning.</p>
+            </div>
           )}
         </>
+      )}
+      </main>
+
+      {explainPopup && (
+        <ExplainPopup
+          element={explainPopup}
+          onClose={() => setExplainPopup(null)}
+          datasetId={dataset?.id}
+        />
       )}
     </div>
   )
@@ -1620,6 +2215,153 @@ function ConfigDropdown({ label, value, children }) {
   )
 }
 
+function ValidationDropdown({ validationMethod, setValidationMethod, testSize, setTestSize, cvFolds, setCvFolds }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleClickOutside = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setIsOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
+
+  const value = validationMethod === 'standard_split'
+    ? `${Math.round((1 - testSize) * 100)}/${Math.round(testSize * 100)} Split`
+    : `${cvFolds}-fold CV`
+
+  return (
+    <div ref={ref} className="models-config-dropdown-container" style={{ position: 'relative', flex: 1, minWidth: 140 }}>
+      <div
+        className="models-config-box"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          padding: '8px 12px',
+          background: 'var(--color-background-primary)',
+          border: isOpen ? '1.5px solid var(--color-accent)' : '1.5px solid var(--color-border-tertiary)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          height: '100%',
+          userSelect: 'none',
+          transition: 'border-color 0.15s, box-shadow 0.15s',
+          boxShadow: isOpen ? '0 0 0 2px var(--color-accent-light)' : 'none'
+        }}
+      >
+        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+          Validation
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+          <span style={{ fontSize: '13px', fontWeight: 650, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {value}
+          </span>
+          <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        </div>
+      </div>
+      {isOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            zIndex: 2005,
+            background: '#fff',
+            border: '1px solid var(--color-border-secondary, #e5e7eb)',
+            borderRadius: '10px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.10)',
+            padding: '14px',
+            width: '260px'
+          }}
+        >
+          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
+            METHOD
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="validation-method-popover"
+                checked={validationMethod === 'standard_split'}
+                onChange={() => setValidationMethod('standard_split')}
+                style={{ accentColor: 'var(--color-accent, #f97316)' }}
+              />
+              Train / test split
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', marginBottom: 4 }}>
+              <input
+                type="radio"
+                name="validation-method-popover"
+                checked={validationMethod === 'cross_validation'}
+                onChange={() => setValidationMethod('cross_validation')}
+                style={{ accentColor: 'var(--color-accent, #f97316)' }}
+              />
+              Cross-validation
+            </label>
+          </div>
+
+          {validationMethod === 'standard_split' ? (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border-tertiary, #e5e7eb)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>TEST SPLIT</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-accent, #f97316)' }}>{Math.round(testSize * 100)}%</span>
+              </div>
+              <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="range"
+                  className="ax-validation-slider"
+                  min="10"
+                  max="50"
+                  step="5"
+                  value={Math.round(testSize * 100)}
+                  onChange={(e) => setTestSize(Number(e.target.value) / 100)}
+                  style={{
+                    width: '100%', height: 6, margin: 0,
+                    WebkitAppearance: 'none', appearance: 'none',
+                    background: `linear-gradient(to right, var(--color-accent, #f97316) ${Math.round(testSize * 100)}%, #e5e7eb ${Math.round(testSize * 100)}%)`,
+                    borderRadius: 3, outline: 'none', cursor: 'pointer'
+                  }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border-tertiary, #e5e7eb)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>K FOLDS</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[3, 5, 10].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setCvFolds(n)}
+                    style={{
+                      padding: '6px 16px',
+                      borderRadius: 20,
+                      border: `1.5px solid ${cvFolds === n ? 'var(--color-accent, #f97316)' : '#e5e7eb'}`,
+                      background: cvFolds === n ? 'var(--color-accent, #f97316)' : '#fff',
+                      color: cvFolds === n ? '#fff' : 'var(--color-text-secondary, #64748b)',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      fontFamily: 'inherit',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Returns the title text with HTML ampersand entities decoded back to regular ampersands.
 function plainTitle(value) {
   return String(value || '').replace(/&amp;/g, '&')
@@ -1773,7 +2515,7 @@ function FixOptionsDropdown({ fixes, onAction, canDismiss, onDismiss }) {
   )
 }
 
-function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results }) {
+function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results, aiExplainActive, onExplain }) {
   const [activeTab, setActiveTab] = useState(selectedAlgos.length > 1 ? 'all' : (selectedAlgos[0] ?? 'all'))
 
   // Keep activeTab in sync when selectedAlgos changes
@@ -1902,7 +2644,13 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
     const isBlank = value === '' || value == null
 
     return (
-      <div key={merged.key} className="ax-tune-param">
+      <div
+        key={merged.key}
+        className="ax-tune-param"
+        onClick={(e) => aiExplainActive && onExplain?.({ type: 'parameter', metricKey: 'parameter', section: 'Tune Parameters', paramKey: merged.key, paramValue: value, paramLabel: merged.label, algoName: algoLabelForTask(primaryAlgo, results?.models?.[0]?.metrics?.task) }, e)}
+        style={{ cursor: aiExplainActive ? 'help' : 'default', outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none', position: 'relative', transition: 'all .15s ease' }}
+      >
+        {aiExplainActive && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>?</span>}
         {/* Top row: name + code key + badges */}
         <div className="ax-tune-param-top">
           <div>
@@ -2247,7 +2995,7 @@ function IssueActionMenu({ check, onResolveIssue, onExecuteAction }) {
 }
 
 // Panel that displays trained model comparison, health card, and detailed inspection of the active model.
-function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, datasetId, onFixAction }) {
+function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, datasetId, onFixAction, section = 'results', aiExplainActive, onExplain, onToggleExplain, toastMsg }) {
   const dialog = useDialog()
   const { models, skipped } = results
   if (!models || models.length === 0) {
@@ -2268,9 +3016,89 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
   const activeHealth = assessModelHealth(active)
   const activeTone = healthTone(activeHealth?.color)
 
-  const influenceList = useMemo(() => {
-    return normalizeInfluence(active.feature_influence || active.feature_importance)
-  }, [active])
+  const [featureModelIdx, setFeatureModelIdx] = useState(activeIdx)
+
+  useEffect(() => {
+    setFeatureModelIdx(activeIdx)
+  }, [activeIdx])
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    if (!showModelDropdown) return
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowModelDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showModelDropdown])
+  const featureModel = models[featureModelIdx] || active
+  const featureInfluence = useMemo(() => {
+    return normalizeInfluence(featureModel.feature_influence || featureModel.feature_importance)
+  }, [featureModel])
+  const bestIdx = useMemo(() => {
+    let idx = 0
+    let bestVal = -Infinity
+    models.forEach((m, i) => {
+      const val = m.metrics?.task === 'classification' ? (m.metrics?.accuracy ?? 0) : (m.metrics?.r2 ?? -Infinity)
+      if (val > bestVal) { bestVal = val; idx = i }
+    })
+    return idx
+  }, [models])
+
+  const targetName = featureModel?.target || 'target'
+  const keyInsights = useMemo(() => {
+    if (!featureInfluence.length) return []
+    const sorted = [...featureInfluence].sort((a, b) => (b.relative_strength ?? b.strength ?? 0) - (a.relative_strength ?? a.strength ?? 0))
+    const top = sorted[0]
+    const topPct = Math.round((top?.relative_strength ?? top?.strength ?? 0) * 100)
+    const insights = []
+    if (top && topPct > 50) {
+      insights.push(`The model relies mostly on ${top.feature} when predicting ${targetName}.`)
+    }
+    const strong = sorted.find((f) => {
+      const pct = Math.round((f.relative_strength ?? f.strength ?? 0) * 100)
+      return pct >= 15 && pct <= 80 && (f.direction === 'positive' || f.direction === 'negative')
+    })
+    if (strong) {
+      const dir = strong.direction === 'positive' ? 'higher' : 'lower'
+      insights.push(`${strong.feature} with ${dir} values tends to predict ${dir} ${targetName}.`)
+    }
+    const weak = sorted.find((f) => {
+      const pct = Math.round((f.relative_strength ?? f.strength ?? 0) * 100)
+      return pct <= 5 && pct >= 0
+    })
+    if (weak) {
+      insights.push(`${weak.feature} has very little influence on the prediction.`)
+    }
+    return insights.slice(0, 3)
+  }, [featureInfluence, targetName])
+
+  const businessTakeaways = useMemo(() => {
+    if (!featureInfluence.length) return []
+    const sorted = [...featureInfluence].sort((a, b) => (b.relative_strength ?? b.strength ?? 0) - (a.relative_strength ?? a.strength ?? 0))
+    const takeaways = []
+    if (sorted[0]) {
+      takeaways.push(`${sorted[0].feature} is the strongest predictor of ${targetName}.`)
+    }
+    if (sorted[1]) {
+      takeaways.push(`${sorted[1].feature} is the most important measurement.`)
+    }
+    const weakFeature = sorted.find((f) => {
+      const pct = Math.round((f.relative_strength ?? f.strength ?? 0) * 100)
+      return pct <= 2
+    })
+    if (weakFeature) {
+      takeaways.push(`${weakFeature.feature} has little predictive value.`)
+    }
+    if (sorted.length > 2) {
+      const types = sorted.slice(0, 3).map((f) => f.feature)
+      takeaways.push(`Most prediction power comes from ${types.join(', ')}.`)
+    }
+    return takeaways.slice(0, 4)
+  }, [featureInfluence, targetName])
 
   const leaderboard = useMemo(() => {
     const isClassification = models[0].metrics?.task === 'classification'
@@ -2331,41 +3159,70 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
       bestAccuracy: {
         label: isClassification ? 'BEST ON ACCURACY' : 'BEST ON R²',
         value: isClassification ? pct(bestAccModel.metrics?.accuracy) : num(bestAccModel.metrics?.r2),
-        modelName: algoLabelForTask(bestAccModel.algorithm, bestAccModel.metrics?.task)
+        rawValue: isClassification ? bestAccModel.metrics?.accuracy : bestAccModel.metrics?.r2,
+        modelName: algoLabelForTask(bestAccModel.algorithm, bestAccModel.metrics?.task),
+        model: bestAccModel
       },
       bestAuc: {
         label: isClassification ? 'BEST ON AUC' : 'SMALLEST RMSE',
         value: isClassification ? (bestAucModel.metrics?.auc == null ? 'n/a' : num(bestAucModel.metrics?.auc)) : num(bestAucModel.metrics?.rmse),
-        modelName: algoLabelForTask(bestAucModel.algorithm, bestAucModel.metrics?.task)
+        rawValue: isClassification ? bestAucModel.metrics?.auc : bestAucModel.metrics?.rmse,
+        modelName: algoLabelForTask(bestAucModel.algorithm, bestAucModel.metrics?.task),
+        model: bestAucModel
       },
       smallestGap: {
         label: 'SMALLEST TRAIN-TEST GAP',
         value: isClassification ? pct(smallestGapModel.metrics?.generalization_gap) : num(smallestGapModel.metrics?.generalization_gap),
-        modelName: algoLabelForTask(smallestGapModel.algorithm, smallestGapModel.metrics?.task)
+        rawValue: smallestGapModel.metrics?.generalization_gap,
+        modelName: algoLabelForTask(smallestGapModel.algorithm, smallestGapModel.metrics?.task),
+        model: smallestGapModel
       },
       watchOut: {
         label: 'WATCH OUT',
         value: worstModel.metrics?.generalization_gap >= 0.15 ? 'Severe risk' : worstModel.metrics?.generalization_gap >= 0.08 ? 'Moderate risk' : 'Healthy',
+        rawValue: worstModel.metrics?.generalization_gap,
         modelName: algoLabelForTask(worstModel.algorithm, worstModel.metrics?.task),
-        isRisk: worstModel.metrics?.generalization_gap >= 0.08
+        isRisk: worstModel.metrics?.generalization_gap >= 0.08,
+        model: worstModel
       }
     }
   }, [models])
 
   return (
     <>
+      {section === 'results' && (
+        <>
+      {toastMsg && (
+        <div style={{ padding: '10px 16px', background: '#FFF7ED', borderRadius: 8, marginBottom: 16, fontSize: 12, color: '#C2410C', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Sparkles size={14} /> {toastMsg}
+        </div>
+      )}
+
+      <ResultsSummary models={models} activeIdx={activeIdx} isClassification={isClassification} />
+
       {/* Leaderboard Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
         {/* Card 1: Best Accuracy */}
         <div
+          onClick={(e) => aiExplainActive && onExplain?.({
+            type: 'metric', metricKey: isClassification ? 'accuracy' : 'r2',
+            value: leaderboard.bestAccuracy.rawValue, section: 'Leaderboard',
+            label: leaderboard.bestAccuracy.label,
+            model: leaderboard.bestAccuracy.model
+          }, e)}
           style={{
             padding: '16px',
             background: 'var(--color-background-primary)',
             border: '1.5px solid var(--color-accent)',
             borderRadius: '12px',
-            boxShadow: 'var(--shadow-card)'
+            boxShadow: 'var(--shadow-card)',
+            cursor: aiExplainActive ? 'help' : 'default',
+            outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none',
+            position: 'relative',
+            transition: 'all .15s ease'
           }}
         >
+          {aiExplainActive && <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 10, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>?</span>}
           <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {leaderboard.bestAccuracy.label}
           </span>
@@ -2375,18 +3232,30 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
           <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
             {leaderboard.bestAccuracy.modelName}
           </span>
+          <FallbackLabel text={isClassification ? null : r2FallbackLabel(leaderboard.bestAccuracy.rawValue)} />
         </div>
 
         {/* Card 2: Best AUC / RMSE */}
         <div
+          onClick={(e) => aiExplainActive && onExplain?.({
+            type: 'metric', metricKey: isClassification ? 'auc' : 'rmse',
+            value: leaderboard.bestAuc.rawValue, section: 'Leaderboard',
+            label: leaderboard.bestAuc.label,
+            model: leaderboard.bestAuc.model
+          }, e)}
           style={{
             padding: '16px',
             background: 'var(--color-background-primary)',
             border: '1.5px solid var(--color-border-tertiary)',
             borderRadius: '12px',
-            boxShadow: 'var(--shadow-card)'
+            boxShadow: 'var(--shadow-card)',
+            cursor: aiExplainActive ? 'help' : 'default',
+            outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none',
+            position: 'relative',
+            transition: 'all .15s ease'
           }}
         >
+          {aiExplainActive && <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 10, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>?</span>}
           <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {leaderboard.bestAuc.label}
           </span>
@@ -2396,18 +3265,30 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
           <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
             {leaderboard.bestAuc.modelName}
           </span>
+          {!isClassification && <FallbackLabel text={rmseFallbackLabel(leaderboard.bestAuc.rawValue, active.metrics?.target_mean)} />}
         </div>
 
         {/* Card 3: Smallest Gap */}
         <div
+          onClick={(e) => aiExplainActive && onExplain?.({
+            type: 'metric', metricKey: 'gap',
+            value: leaderboard.smallestGap.rawValue, section: 'Leaderboard',
+            label: leaderboard.smallestGap.label,
+            model: leaderboard.smallestGap.model
+          }, e)}
           style={{
             padding: '16px',
             background: 'var(--color-background-primary)',
             border: '1.5px solid var(--color-border-tertiary)',
             borderRadius: '12px',
-            boxShadow: 'var(--shadow-card)'
+            boxShadow: 'var(--shadow-card)',
+            cursor: aiExplainActive ? 'help' : 'default',
+            outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none',
+            position: 'relative',
+            transition: 'all .15s ease'
           }}
         >
+          {aiExplainActive && <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 10, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>?</span>}
           <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {leaderboard.smallestGap.label}
           </span>
@@ -2417,18 +3298,30 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
           <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
             {leaderboard.smallestGap.modelName}
           </span>
+          <FallbackLabel text={gapFallbackLabel(leaderboard.smallestGap.rawValue)} />
         </div>
 
         {/* Card 4: Watch Out */}
         <div
+          onClick={(e) => aiExplainActive && onExplain?.({
+            type: 'metric', metricKey: 'risk',
+            value: leaderboard.watchOut.rawValue, section: 'Leaderboard',
+            label: leaderboard.watchOut.label,
+            model: leaderboard.watchOut.model
+          }, e)}
           style={{
             padding: '16px',
             background: leaderboard.watchOut.isRisk ? '#FEF2F2' : 'var(--color-background-primary)',
             border: `1.5px solid ${leaderboard.watchOut.isRisk ? '#FEE2E2' : 'var(--color-border-tertiary)'}`,
             borderRadius: '12px',
-            boxShadow: 'var(--shadow-card)'
+            boxShadow: 'var(--shadow-card)',
+            cursor: aiExplainActive ? 'help' : 'default',
+            outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none',
+            position: 'relative',
+            transition: 'all .15s ease'
           }}
         >
+          {aiExplainActive && <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 10, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>?</span>}
           <span style={{ fontSize: '10px', fontWeight: 700, color: leaderboard.watchOut.isRisk ? 'var(--color-text-danger)' : 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {leaderboard.watchOut.label}
           </span>
@@ -2441,7 +3334,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
         </div>
       </div>
 
-      {/* Comparison table block */}
+      {/* AI Explain Toggle + Comparison table block */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '20px 2px 10px' }}>
         <span style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 650 }}>
           COMPARISON · {models.length} MODELS
@@ -2456,7 +3349,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
         />
       </div>
 
-      <ComparisonTable models={models} activeIdx={activeIdx} onPick={setActiveIdx} />
+      <ComparisonTable models={models} activeIdx={activeIdx} onPick={setActiveIdx} aiExplainActive={aiExplainActive} onExplain={onExplain} />
 
       {skipped?.length > 0 && (
         <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '6px 0 12px' }}>
@@ -2464,10 +3357,14 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
         </p>
       )}
 
+        </>
+      )}
+
       {/* Model Health and Feature Influence Split Panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, marginTop: 20 }}>
+      {(section === 'results' || section === 'features') && (
+      <div id="models-health" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20, marginTop: 20 }}>
         {/* Left Card: Model Health */}
-        <div className="ax-card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
+        {section === 'results' && <div className="ax-card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
               <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -2501,7 +3398,11 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
           {/* Metrics Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18, flex: 1 }}>
             {/* Metric 1: Train */}
-            <div style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px' }}>
+            <div
+              onClick={(e) => aiExplainActive && onExplain?.({ type: 'modelHealth', metricKey: 'train', value: isClassification ? active.metrics?.train_accuracy : active.metrics?.train_r2, section: 'Model Health', label: 'TRAIN', model: active }, e)}
+              style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px', cursor: aiExplainActive ? 'help' : 'default', outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none', position: 'relative', transition: 'all .15s ease' }}
+            >
+              {aiExplainActive && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>?</span>}
               <span style={{ fontSize: '9px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
                 TRAIN
               </span>
@@ -2511,7 +3412,11 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
             </div>
 
             {/* Metric 2: Test */}
-            <div style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px' }}>
+            <div
+              onClick={(e) => aiExplainActive && onExplain?.({ type: 'modelHealth', metricKey: isClassification ? 'accuracy' : 'r2', value: isClassification ? active.metrics?.accuracy : active.metrics?.r2, section: 'Model Health', label: 'TEST', model: active }, e)}
+              style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px', cursor: aiExplainActive ? 'help' : 'default', outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none', position: 'relative', transition: 'all .15s ease' }}
+            >
+              {aiExplainActive && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>?</span>}
               <span style={{ fontSize: '9px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
                 TEST
               </span>
@@ -2521,13 +3426,18 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
             </div>
 
             {/* Metric 3: Gap */}
-            <div style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px' }}>
+            <div
+              onClick={(e) => aiExplainActive && onExplain?.({ type: 'modelHealth', metricKey: 'gap', value: active.metrics?.generalization_gap, section: 'Model Health', label: 'GAP', model: active }, e)}
+              style={{ background: 'var(--color-background-tertiary)', border: '1px solid var(--color-border-tertiary)', borderRadius: 8, padding: '12px 14px', cursor: aiExplainActive ? 'help' : 'default', outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none', position: 'relative', transition: 'all .15s ease' }}
+            >
+              {aiExplainActive && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>?</span>}
               <span style={{ fontSize: '9px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
                 GAP
               </span>
               <p style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0 0', color: Math.abs(active.metrics?.generalization_gap) >= 0.08 ? 'var(--color-text-warning)' : 'var(--color-text-primary)' }}>
                 {isClassification ? pct(Math.abs(active.metrics?.generalization_gap)) : num(Math.abs(active.metrics?.generalization_gap))}
               </p>
+              <FallbackLabel text={gapFallbackLabel(active.metrics?.generalization_gap)} />
             </div>
 
             {/* Metric 4: Test Rows */}
@@ -2574,29 +3484,29 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
               Check correlations
             </button>
           </div>
-        </div>
+        </div>}
 
         {/* Right Card: Feature Influence */}
-        <div className="ax-card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
+        {section === 'features' && <div id="models-features" className="ax-card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
               <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 FEATURE INFLUENCE
               </span>
               <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
-                {algoLabelForTask(active.algorithm, active.metrics?.task)}
+                {algoLabelForTask(featureModel.algorithm, featureModel.metrics?.task)}
               </h3>
             </div>
             <button
               className="ax-btn mini prim"
               onClick={async () => {
-                if (active.has_whatif) {
-                  onUseInWhatIf(active)
+                if (featureModel.has_whatif) {
+                  onUseInWhatIf(featureModel)
                   return
                 }
                 try {
-                  await api.prepareModelForWhatIf(active.id)
-                  onUseInWhatIf({ ...active, has_whatif: true })
+                  await api.prepareModelForWhatIf(featureModel.id)
+                  onUseInWhatIf({ ...featureModel, has_whatif: true })
                 } catch (err) {
                   await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
                 }
@@ -2608,45 +3518,173 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
             </button>
           </div>
 
-          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '0 0 16px', flex: '0 0 auto' }}>
-            Direction is shown when available: increases raise the prediction/probability, decreases lower it.
-          </p>
+          {/* 1. Model Selector Strip */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'thin' }}>
+              {models.slice(0, 3).map((m, i) => {
+                const isActive = i === featureModelIdx
+                const isBest = i === bestIdx
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setFeatureModelIdx(i)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '6px 12px', borderRadius: 999, whiteSpace: 'nowrap',
+                      fontSize: 11, fontWeight: isActive ? 700 : 500,
+                      border: isActive ? '1.5px solid #f97316' : '1.5px solid var(--color-border-secondary)',
+                      background: isActive ? '#f97316' : 'var(--color-background-primary)',
+                      color: isActive ? '#fff' : 'var(--color-text-secondary)',
+                      cursor: 'pointer', transition: 'all .15s ease', flexShrink: 0
+                    }}
+                  >
+                    {algoLabelForTask(m.algorithm, m.metrics?.task)}
+                    {isBest && <span style={{ fontSize: 10 }}>★</span>}
+                  </button>
+                )
+              })}
+              {models.length > 3 && (
+                <div ref={dropdownRef} style={{ position: 'relative', flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowModelDropdown((v) => !v)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 999,
+                      fontSize: 11, fontWeight: 500,
+                      border: '1.5px solid var(--color-border-secondary)',
+                      background: 'var(--color-background-primary)',
+                      color: 'var(--color-text-secondary)',
+                      cursor: 'pointer', whiteSpace: 'nowrap'
+                    }}
+                  >
+                    + {models.length - 3} more ▾
+                  </button>
+                  {showModelDropdown && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, marginTop: 4,
+                      background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
+                      boxShadow: '0 4px 12px rgba(0,0,0,.1)', zIndex: 100, minWidth: 180, padding: 4
+                    }}>
+                      {models.slice(3).map((m, i) => {
+                        const realIdx = i + 3
+                        const isActive = realIdx === featureModelIdx
+                        const isBest = realIdx === bestIdx
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => { setFeatureModelIdx(realIdx); setShowModelDropdown(false) }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              width: '100%', padding: '6px 10px', borderRadius: 6,
+                              fontSize: 11, fontWeight: isActive ? 700 : 500,
+                              border: 'none', background: isActive ? '#FFF7ED' : 'transparent',
+                              color: isActive ? '#C2410C' : 'var(--color-text-secondary)',
+                              cursor: 'pointer', textAlign: 'left'
+                            }}
+                          >
+                            {algoLabelForTask(m.algorithm, m.metrics?.task)}
+                            {isBest && <span style={{ fontSize: 10, color: '#f97316' }}>★</span>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {featureModelIdx !== bestIdx && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
+                Viewing {algoLabelForTask(featureModel.algorithm, featureModel.metrics?.task)} — {algoLabelForTask(models[bestIdx].algorithm, models[bestIdx].metrics?.task)} has better accuracy (R² {models[bestIdx].metrics?.r2 != null ? models[bestIdx].metrics.r2.toFixed(3) : 'n/a'} vs {featureModel.metrics?.r2 != null ? featureModel.metrics.r2.toFixed(3) : 'n/a'})
+                <button
+                  type="button"
+                  onClick={() => setFeatureModelIdx(bestIdx)}
+                  style={{ background: 'none', border: 'none', color: '#f97316', fontSize: 11, fontWeight: 600, cursor: 'pointer', marginLeft: 4, padding: 0 }}
+                >
+                  Switch to best →
+                </button>
+              </p>
+            )}
+          </div>
 
-          {/* Features directional bar list */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, justifyContent: 'center' }}>
-            {influenceList.length > 0 ? (
-              influenceList.map((item) => {
+          {/* 2. Key Insights Card */}
+          {keyInsights.length > 0 && (
+            <div style={{ padding: '12px 16px', background: '#FFF7ED', borderLeft: '4px solid #f97316', borderRadius: 10, marginBottom: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#C2410C', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>
+                What SimuCast learned
+              </p>
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                {keyInsights.map((insight, i) => (
+                  <li key={i} style={{ fontSize: 12, color: '#7c2d12', lineHeight: 1.5, marginBottom: i < keyInsights.length - 1 ? 4 : 0 }}>
+                    • {insight}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* 3. Feature Rows */}
+          <style>{`.ax-feature-row:hover .ax-feature-try-btn { opacity: 1; pointer-events: auto; }`}</style>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, justifyContent: 'center' }}>
+            {featureInfluence.length > 0 ? (
+              featureInfluence.map((item, idx) => {
                 const isPositive = item.direction === 'positive'
                 const isNegative = item.direction === 'negative'
                 const strengthPercent = Math.round((item.relative_strength ?? item.strength ?? 0) * 100)
-                
-                // Bar colors matching screenshot: raises gets orange, lowers gets dark slate/grey, default gets light grey/accent
                 const barColor = isPositive ? 'var(--color-accent)' : isNegative ? '#334155' : 'var(--color-border-primary)'
-                
+                const strengthLabel = strengthPercent >= 80 ? 'Very Strong' : strengthPercent >= 40 ? 'Strong' : strengthPercent >= 15 ? 'Moderate' : strengthPercent >= 1 ? 'Weak' : 'No influence'
+                const strengthColor = strengthPercent >= 80 ? '#C2410C' : strengthPercent >= 40 ? '#f97316' : strengthPercent >= 15 ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)'
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : null
+
                 return (
-                  <div key={item.feature} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
-                    <strong style={{ width: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--color-text-primary)' }}>
+                  <div
+                    key={item.feature}
+                    className="ax-feature-row"
+                    onClick={(e) => aiExplainActive && onExplain?.({ type: 'featureInfluence', metricKey: 'featureInfluence', section: 'Feature Influence', featureName: item.feature, value: strengthPercent, rank: idx + 1, totalFeatures: featureInfluence.length, model: featureModel }, e)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, cursor: aiExplainActive ? 'help' : 'default', position: 'relative', borderRadius: 8, padding: '8px 10px', transition: 'all .15s ease', background: 'transparent' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-background-secondary)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    {/* Rank */}
+                    <span style={{ width: 24, textAlign: 'center', fontSize: medal ? 14 : 11, fontWeight: 600, color: medal ? undefined : 'var(--color-text-tertiary)', flexShrink: 0 }}>
+                      {medal || `${idx + 1}`}
+                    </span>
+
+                    {/* Feature Name */}
+                    <span style={{ width: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, color: 'var(--color-text-primary)', flexShrink: 0 }}>
                       {item.feature}
-                    </strong>
-                    <div style={{ flex: 1, height: '8px', background: 'var(--color-background-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: `${strengthPercent}%`, height: '100%', background: barColor, borderRadius: '4px' }} />
+                    </span>
+
+                    {/* Bar */}
+                    <div style={{ flex: 1, height: 8, background: 'var(--color-background-secondary)', borderRadius: 4, overflow: 'hidden', minWidth: 60 }}>
+                      <div style={{ width: `${strengthPercent}%`, height: '100%', background: `linear-gradient(90deg, #f97316, #fb923c)`, borderRadius: 4, transition: 'width 400ms ease' }} />
                     </div>
-                    <span style={{ width: '38px', textAlign: 'right', fontWeight: 650, color: 'var(--color-text-primary)' }}>
+
+                    {/* Percentage */}
+                    <span style={{ width: 36, textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)', flexShrink: 0 }}>
                       {strengthPercent}%
                     </span>
-                    <span
-                      style={{
-                        width: '78px',
-                        textAlign: 'left',
-                        fontWeight: 700,
-                        color: isPositive ? 'var(--color-text-success)' : isNegative ? 'var(--color-text-danger)' : 'var(--color-text-secondary)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 2
-                      }}
-                    >
-                      {isPositive ? '↑ raises' : isNegative ? '↓ lowers' : 'Model-derived'}
+
+                    {/* Strength Label */}
+                    <span style={{ width: 80, fontSize: 10, fontWeight: 600, color: strengthColor, textAlign: 'left', flexShrink: 0 }}>
+                      {strengthLabel}
                     </span>
+
+                    {/* Direction indicator */}
+                    <span style={{ width: 20, textAlign: 'center', fontSize: 10, color: isPositive ? 'var(--color-text-success)' : isNegative ? 'var(--color-text-danger)' : 'var(--color-text-tertiary)', flexShrink: 0 }} title={isPositive ? 'Raises prediction' : isNegative ? 'Lowers prediction' : 'Model-derived'}>
+                      {isPositive ? '↑' : isNegative ? '↓' : '—'}
+                    </span>
+
+                    {/* Hover action button */}
+                    <button
+                      className="ax-feature-try-btn"
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onUseInWhatIf(featureModel) }}
+                      style={{ opacity: 0, position: 'absolute', right: 8, background: 'none', border: '1px solid #f97316', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 600, color: '#C2410C', cursor: 'pointer', transition: 'opacity .15s ease', whiteSpace: 'nowrap', pointerEvents: 'none' }}
+                    >
+                      Try in What-if →
+                    </button>
                   </div>
                 )
               })
@@ -2656,10 +3694,41 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
               </p>
             )}
           </div>
-        </div>
-      </div>
 
-      {active.metrics?.confusion_matrix && (
+          {/* 5. Business Takeaways Card */}
+          {businessTakeaways.length > 0 && (
+            <div style={{ marginTop: 20, padding: '16px 18px', background: 'linear-gradient(135deg, #1e1e2e, #2d2d44)', borderRadius: 12, position: 'relative' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#f97316', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>
+                Key Takeaways
+              </p>
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                {businessTakeaways.map((t, i) => (
+                  <li key={i} style={{ fontSize: 12, color: '#e2e8f0', lineHeight: 1.6, display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: i < businessTakeaways.length - 1 ? 4 : 0 }}>
+                    <span style={{ color: '#22c55e', flexShrink: 0 }}>✓</span>
+                    {t}
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="ax-btn mini"
+                style={{ marginTop: 12, background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.2)', color: '#fff', fontSize: 10, fontWeight: 600 }}
+                onClick={() => {
+                  if (dataset?.id) {
+                    window.sessionStorage.setItem('simucast.reportTakeaways', JSON.stringify({ model: algoLabelForTask(featureModel.algorithm, featureModel.metrics?.task), takeaways: businessTakeaways, ts: Date.now() }))
+                    onGo?.('report')
+                  }
+                }}
+              >
+                Save to Report
+              </button>
+            </div>
+          )}
+        </div>}
+      </div>
+      )}
+
+      {section === 'results' && active.metrics?.confusion_matrix && (
         <div className="ax-card" style={{ padding: 20, marginTop: 20 }}>
           {/* Header */}
           <div style={{ marginBottom: 16 }}>
@@ -2711,7 +3780,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
 }
 
 // Table that compares trained models side by side and marks the best performer per task.
-function ComparisonTable({ models, activeIdx, onPick }) {
+function ComparisonTable({ models, activeIdx, onPick, aiExplainActive, onExplain }) {
   const task = models[0].metrics.task
   return (
     <div className="ax-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 6 }}>
@@ -2754,9 +3823,14 @@ function ComparisonTable({ models, activeIdx, onPick }) {
             return (
               <tr
                 key={m.id}
-                onClick={() => onPick(i)}
+                onClick={(e) => {
+                  if (aiExplainActive) {
+                    onExplain?.({ type: 'comparisonRow', metricKey: 'comparisonRow', section: 'Comparison Table', model: m, label: m.label, index: i }, e)
+                  }
+                  onPick(i)
+                }}
                 style={{
-                  cursor: 'pointer',
+                  cursor: aiExplainActive ? 'help' : 'pointer',
                   background: i === activeIdx ? 'var(--color-accent-light)' : undefined,
                 }}
               >
@@ -3457,7 +4531,7 @@ function algoLabelForTask(algo, task) {
 }
 
 // Builds the training target options payload from the user's validation and class-weight choices.
-function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding) {
+function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
@@ -3468,6 +4542,7 @@ function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds,
   if (classWeight) options.class_weight = 'balanced'
   options.numeric_preprocessing = numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] }
   options.categorical_encoding = categoricalEncoding || {}
+  options.categorical_order = categoricalOrders || {}
   return options
 }
 

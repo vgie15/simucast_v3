@@ -28,6 +28,7 @@ import { api } from '../../api'
 
 const reportPageCache = new Map()
 import HelpButton from '../common/HelpButton'
+import { prepareChartData } from '../../utils/chartData'
 import { useAuth } from '../providers/AuthProvider'
 import { useDialog } from '../common/DialogProvider'
 import {
@@ -211,19 +212,7 @@ export default function ReportPage({ dataset, initialData }) {
     // Check module-level cache
     const ck = `${dataset.id}|${dataset.current_stage_id}`
     const cached = reportPageCache.get(ck)
-    if (cached) {
-      setSavedCharts(cached.charts)
-      setActivity(cached.activity)
-      setModels(cached.models)
-      setDatasetRows(cached.rows)
-      setCorrelationPairs(cached.pairs)
-      setCheckedIds(cached.checkedIds)
-      setOutline(cached.outline)
-      setLoadingData(false)
-      return
-    }
-
-    // Load saved charts from localStorage (synchronized from DescribePage)
+    // Always reload charts from localStorage (they can change independently)
     let charts = []
     try {
       const saved = window.localStorage.getItem(`simucast.savedCharts.${dataset.id}`)
@@ -232,6 +221,52 @@ export default function ReportPage({ dataset, initialData }) {
       console.warn('Failed to load saved charts from localStorage', err)
     }
     setSavedCharts(charts)
+    if (cached) {
+      setActivity(cached.activity)
+      setModels(cached.models)
+      setDatasetRows(cached.rows)
+      setCorrelationPairs(cached.pairs)
+      // Rebuild outline with fresh charts
+      const defaultChecked = []
+      const defaultOutline = []
+      const dataPrep = (cached.activity || []).filter((item) => {
+        const category = item.category || item.detail?.category || ''
+        const actionType = item.action_type || item.detail?.action_type || ''
+        return (
+          (category === 'data_prep' || category === 'clean' || item.kind === 'stage' || item.kind === 'cell_edit') &&
+          actionType !== 'save_whatif_scenario' &&
+          item.kind !== 'model' &&
+          item.kind !== 'analysis'
+        )
+      })
+      if (dataPrep.length > 0) {
+        dataPrep.forEach((item) => defaultChecked.push(`dataprep-${item.id}`))
+        defaultOutline.push({ id: 'data_prep', title: 'Data Preparation', type: 'data_prep', source: 'Data' })
+      }
+      charts.forEach((chart) => {
+        defaultChecked.push(`viz-${chart.id}`)
+        defaultOutline.push({ id: `viz-${chart.id}`, title: chart.title, type: 'chart', source: 'Desc', data: chart })
+      })
+      if ((cached.pairs || []).length > 0) {
+        cached.pairs.slice(0, 3).forEach((p, idx) => defaultChecked.push(`corr-${idx}`))
+        defaultOutline.push({ id: 'correlations', title: 'Key Correlations', type: 'correlations', source: 'Desc' })
+      }
+      ;(cached.models || []).forEach((model) => {
+        defaultChecked.push(`model-${model.id}`)
+        defaultOutline.push({ id: `model-${model.id}`, title: `${model.algorithm} results`, type: 'model', source: 'Model', data: model })
+      })
+      const scList = (cached.activity || []).filter((item) => item.kind === 'whatif' || item.detail?.action_type === 'save_whatif_scenario')
+      scList.forEach((item) => {
+        defaultChecked.push(`whatif-${item.id}`)
+        defaultOutline.push({ id: `whatif-${item.id}`, title: `What-if: ${item.detail?.scenario_name || item.summary}`, type: 'scenario', source: 'W-if', data: item })
+      })
+      defaultChecked.push('ai-prep', 'ai-model')
+      defaultOutline.push({ id: 'ai', title: 'AI Interpretation', type: 'ai', source: 'AI' })
+      setCheckedIds(defaultChecked)
+      setOutline(defaultOutline)
+      setLoadingData(false)
+      return
+    }
 
     Promise.all([
       api.listActivity(dataset.id, 'asc').catch(() => ({ activity: [] })),
@@ -3363,10 +3398,10 @@ function ChartMiniThumbnail({ type }) {
 function PreviewMockupChart({ chart, rows = [] }) {
   if (!chart) return null
   const { type, xAxis, yAxis } = chart
-  const chartData = prepareReportChartData(rows, chart)
   const color = chart.color || '#f97316'
+  const chartDataRaw = prepareChartData(rows, type, xAxis, yAxis, chart.colorBy || '', chart.aggregation || 'Mean', color)
 
-  if (!chartData) {
+  if (!chartDataRaw) {
     return (
       <div className="chart-preview">
         <div className="chart-mock" style={{ alignItems: 'center', justifyContent: 'center', color: '#a3a3a3', fontSize: 11 }}>
@@ -3377,7 +3412,19 @@ function PreviewMockupChart({ chart, rows = [] }) {
     )
   }
 
-  const chartJsData = buildReportChartJsData(chartData, chart)
+  let chartData = chartDataRaw
+  if ((type === 'bar' || type === 'horizontal bar') && chart.sortOrder && chart.sortOrder !== 'default' && chartData?.labels?.length) {
+    const pairs = chartData.labels.map((label, idx) => ({ label, value: chartData.datasets[0]?.data?.[idx] ?? 0 }))
+      .sort((a, b) => chart.sortOrder === 'asc' ? a.value - b.value : b.value - a.value)
+    const sortedLabels = pairs.map((p) => p.label)
+    const sortedData = pairs.map((p) => p.value)
+    chartData = {
+      ...chartData,
+      labels: sortedLabels,
+      datasets: chartData.datasets.map((ds) => ({ ...ds, data: sortedData }))
+    }
+  }
+  const chartJsData = chartData
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -3397,13 +3444,57 @@ function PreviewMockupChart({ chart, rows = [] }) {
   }
   if (type === 'horizontal bar') chartOptions.indexAxis = 'y'
 
+  const labelPlugin = chart.showLabels ? {
+    id: 'rptdatalabels',
+    afterDatasetsDraw(ch) {
+      const ctx = ch.ctx
+      const ctype = ch.config.type
+      ch.data.datasets.forEach((dataset, di) => {
+        const meta = ch.getDatasetMeta(di)
+        if (meta.hidden) return
+        if (ctype === 'pie' || ctype === 'doughnut') {
+          const total = dataset.data.reduce((s, v) => s + (Number(v) || 0), 0)
+          meta.data.forEach((arc, j) => {
+            const val = Number(dataset.data[j])
+            if (!val || !total) return
+            const pct = ((val / total) * 100).toFixed(1) + '%'
+            const pos = arc.tooltipPosition()
+            ctx.save()
+            ctx.fillStyle = '#fff'
+            ctx.font = 'bold 10px sans-serif'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(pct, pos.x, pos.y)
+            ctx.restore()
+          })
+        } else {
+          meta.data.forEach((element, j) => {
+            const raw = dataset.data[j]
+            const val = typeof raw === 'object' && raw !== null ? raw.y : raw
+            if (val == null || isNaN(Number(val))) return
+            const label = Number.isInteger(Number(val)) ? String(Math.round(Number(val))) : Number(val).toFixed(2)
+            const pos = element.tooltipPosition()
+            ctx.save()
+            ctx.fillStyle = '#374151'
+            ctx.font = 'bold 10px sans-serif'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'bottom'
+            ctx.fillText(label, pos.x, pos.y - 4)
+            ctx.restore()
+          })
+        }
+      })
+    }
+  } : null
+  const chartPlugins = labelPlugin ? [labelPlugin] : []
+
   const renderChart = () => {
-    if (type === 'line') return <Line data={chartJsData} options={chartOptions} />
-    if (type === 'scatter') return <Scatter data={chartJsData} options={chartOptions} />
-    if (type === 'pie') return <Pie data={chartJsData} options={chartOptions} />
-    if (type === 'radar') return <Radar data={chartJsData} options={chartOptions} />
-    if (type === 'bubble') return <Bubble data={chartJsData} options={chartOptions} />
-    return <Bar data={chartJsData} options={chartOptions} />
+    if (type === 'line') return <Line data={chartJsData} options={chartOptions} plugins={chartPlugins} />
+    if (type === 'scatter') return <Scatter data={chartJsData} options={chartOptions} plugins={chartPlugins} />
+    if (type === 'pie') return <Pie data={chartJsData} options={chartOptions} plugins={chartPlugins} />
+    if (type === 'radar') return <Radar data={chartJsData} options={chartOptions} plugins={chartPlugins} />
+    if (type === 'bubble') return <Bubble data={chartJsData} options={chartOptions} plugins={chartPlugins} />
+    return <Bar data={chartJsData} options={chartOptions} plugins={chartPlugins} />
   }
 
   return (
@@ -3538,134 +3629,34 @@ function PreviewMockupChart({ chart, rows = [] }) {
   )
 }
 
-function prepareReportChartData(rows, chart) {
-  if (!rows?.length || !chart?.xAxis) return null
-  const type = chart.type
-  const xAxis = chart.xAxis
-  const yAxis = chart.yAxis
-  const groupBy = chart.colorBy
-  const agg = chart.aggregation || 'Mean'
-  const color = chart.color || '#f97316'
-
-  if (type === 'histogram') {
-    const values = rows.map((row) => Number(row[xAxis])).filter(Number.isFinite)
-    if (!values.length) return null
-    const min = Math.min(...values)
-    const max = Math.max(...values)
-    const binCount = Math.min(12, Math.max(6, Math.ceil(Math.sqrt(values.length))))
-    const step = (max - min) / binCount || 1
-    const bins = Array.from({ length: binCount }, (_, idx) => ({
-      label: `${formatChartValue(min + idx * step)}-${formatChartValue(min + (idx + 1) * step)}`,
-      count: 0,
-    }))
-    values.forEach((value) => {
-      const idx = Math.min(binCount - 1, Math.floor((value - min) / step))
-      if (bins[idx]) bins[idx].count += 1
-    })
-    return { labels: bins.map((bin) => bin.label), datasets: [{ label: xAxis, data: bins.map((bin) => bin.count), color }] }
-  }
-
-  if (type === 'scatter' || type === 'bubble') {
-    if (!yAxis) return null
-    const points = rows.map((row) => ({
-      x: Number(row[xAxis]),
-      y: Number(row[yAxis]),
-      group: groupBy ? String(row[groupBy] ?? 'None') : 'Data',
-    })).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-    if (!points.length) return null
-    const groups = groupBy ? Array.from(new Set(points.map((point) => point.group))) : ['Data']
-    return {
-      labels: [],
-      datasets: groups.map((group, idx) => ({
-        label: group,
-        color: getReportCohortColor(color, idx, groups.length),
-        data: points
-          .filter((point) => point.group === group)
-          .map((point) => ({ ...point, r: type === 'bubble' ? Math.max(5, Math.min(18, Math.abs(point.y))) : 7 })),
-      })),
-    }
-  }
-
-  if (!yAxis) return null
-  const labels = Array.from(new Set(rows.map((row) => String(row[xAxis] ?? 'None'))))
-  const aggregateValue = (groupRows) => {
-    if (agg === 'Count') return groupRows.length
-    const nums = groupRows.map((row) => Number(row[yAxis])).filter(Number.isFinite)
-    if (!nums.length) return 0
-    if (agg === 'Sum') return nums.reduce((sum, value) => sum + value, 0)
-    if (agg === 'Max') return Math.max(...nums)
-    return nums.reduce((sum, value) => sum + value, 0) / nums.length
-  }
-
-  let data = labels.map((label) => aggregateValue(rows.filter((row) => String(row[xAxis] ?? 'None') === label)))
-  let sortedLabels = labels
-  if ((type === 'bar' || type === 'horizontal bar') && chart.sortOrder && chart.sortOrder !== 'default') {
-    const pairs = labels.map((label, idx) => ({ label, value: data[idx] }))
-      .sort((a, b) => chart.sortOrder === 'asc' ? a.value - b.value : b.value - a.value)
-    sortedLabels = pairs.map((pair) => pair.label)
-    data = pairs.map((pair) => pair.value)
-  }
-
-  const limit = type === 'pie' ? 8 : 12
-  return {
-    labels: sortedLabels.slice(0, limit),
-    datasets: [{ label: yAxis, data: data.slice(0, limit), color }],
-  }
-}
-
-function buildReportChartJsData(chartData, chart) {
-  const type = chart.type
-  const color = chart.color || '#f97316'
-  if (type === 'scatter' || type === 'bubble') {
-    return {
-      datasets: chartData.datasets.map((dataset, idx) => ({
-        label: dataset.label,
-        data: dataset.data,
-        backgroundColor: dataset.color || getReportCohortColor(color, idx, chartData.datasets.length),
-        borderColor: dataset.color || getReportCohortColor(color, idx, chartData.datasets.length),
-        pointRadius: type === 'bubble' ? undefined : 4,
-        pointHoverRadius: type === 'bubble' ? undefined : 6,
-      })),
-    }
-  }
-  if (type === 'pie') {
-    const total = chartData.labels.length
-    return {
-      labels: chartData.labels,
-      datasets: chartData.datasets.map((dataset) => ({
-        ...dataset,
-        backgroundColor: chartData.labels.map((_, idx) => getReportCohortColor(color, idx, total)),
-        borderColor: '#fff',
-        borderWidth: 2,
-      })),
-    }
-  }
-  return {
-    labels: chartData.labels,
-    datasets: chartData.datasets.map((dataset, idx) => ({
-      ...dataset,
-      backgroundColor: dataset.color || getReportCohortColor(color, idx, chartData.datasets.length),
-      borderColor: dataset.color || getReportCohortColor(color, idx, chartData.datasets.length),
-      borderWidth: type === 'line' || type === 'radar' ? 2 : 0,
-      borderRadius: type === 'bar' || type === 'horizontal bar' || type === 'histogram' ? 4 : undefined,
-      fill: type === 'radar' ? 'origin' : false,
-      tension: type === 'line' ? 0.25 : undefined,
-    })),
-  }
-}
-
 function getReportCohortColor(primaryColor, index, total) {
   if (total <= 1) return primaryColor
-  const fallback = ['#16a34a', '#f97316', '#facc15', '#3b82f6', '#7c3aed', '#0f766e', '#db2777', '#64748b']
-  if (!/^#[0-9a-f]{6}$/i.test(primaryColor)) return fallback[index % fallback.length]
-  const hex = primaryColor.replace('#', '')
-  const r = parseInt(hex.slice(0, 2), 16)
-  const g = parseInt(hex.slice(2, 4), 16)
-  const b = parseInt(hex.slice(4, 6), 16)
-  const hue = (index * (360 / Math.max(total, 1))) % 360
-  const mix = 0.62 + (index % 3) * 0.1
-  const clamp = (value) => Math.max(0, Math.min(255, Math.round(value)))
-  return `rgb(${clamp(r * mix + hue % 80)}, ${clamp(g * mix + (120 - hue % 70))}, ${clamp(b * mix + (80 - hue % 50))})`
+  const hex = (primaryColor || '#f97316').replace('#', '')
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return primaryColor
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+  let rNorm = r / 255, gNorm = g / 255, bNorm = b / 255
+  let max = Math.max(rNorm, gNorm, bNorm), min = Math.min(rNorm, gNorm, bNorm)
+  let h, s, l = (max + min) / 2
+  if (max === min) {
+    h = s = 0
+  } else {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    switch (max) {
+      case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break
+      case gNorm: h = (bNorm - rNorm) / d + 2; break
+      case bNorm: h = (rNorm - gNorm) / d + 4; break
+    }
+    h /= 6
+  }
+  h = Math.round(h * 360)
+  s = Math.round(s * 100)
+  l = Math.round(l * 100)
+  const hueShift = Math.round((h + (index * (360 / total))) % 360)
+  const lightnessShift = Math.max(25, Math.min(75, l + (index % 2 === 0 ? 5 : -5)))
+  return `hsl(${hueShift}, ${s}%, ${lightnessShift}%)`
 }
 
 function lightenHex(hexColor, amount = 16) {

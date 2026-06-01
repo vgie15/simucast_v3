@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react'
 import { Scatter } from 'react-chartjs-2'
 import { api } from '../../api'
 import { AIInsightCard, ExplainButton } from '../ai/AIExplainers'
+import { WhatThisMeans, DecisionTakeaway, AnalysisAIExplain, CorrelationHeatmap } from './AnalysisExplainPanel'
 import { useDialog } from '../common/DialogProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
@@ -185,10 +186,14 @@ export default function TestsPage({ dataset, initialData }) {
     <div className="ax-test-layout">
       {/* LEFT COLUMN */}
       <div className="ax-test-left">
+        {/* Header: title + subtitle only — separator line sits right below */}
         <div className="ax-test-left-sticky">
           <h1 className="ax-test-title">Statistical Analysis</h1>
           <p className="ax-test-sub">Evaluate relationships, compare groups, and turn results into decisions</p>
+        </div>
 
+        {/* Pinned context block: test type picker + info — always visible, never scrolls */}
+        <div className="ax-test-left-context">
           <p className="ax-test-section-label">TEST TYPE</p>
           <div className="ax-test-pills">
             {TESTS.map((t) => (
@@ -422,28 +427,14 @@ function TestResult({ kind, result, setup, datasetId }) {
         </span>
       </div>
 
-      {/* Section C — Conclusion + Insight */}
-      <div className="ax-test-insights">
-        <div className="ax-test-conclusion">
-          <div className="ax-test-conclusion-accent" />
-          <div className="ax-test-conclusion-head">
-            <span className="ax-test-conclusion-label">CONCLUSION</span>
-            <ExplainButton
-              datasetId={datasetId}
-              step={stepName}
-              params={setup}
-              result={result}
-              question="Explain this specific number — what does it mean for the dataset and how should the user act on it?"
-            />
-          </div>
-          <p className="ax-test-conclusion-text">{summary.conclusion}</p>
-        </div>
-        <div className="ax-test-predictive">
-          <p className="ax-test-predictive-label">PREDICTIVE INSIGHT</p>
-          <p className="ax-test-predictive-text">{summary.predictive}</p>
-          <p className="ax-test-predictive-hint">Use Models for full prediction</p>
-        </div>
-      </div>
+      {/* Section 1 — What This Means */}
+      <WhatThisMeans kind={kind} result={result} setup={setup} />
+
+      {/* Section 2 — Decision Takeaway */}
+      <DecisionTakeaway kind={kind} result={result} />
+
+      {/* Section 3 — AI Explain */}
+      <AnalysisAIExplain kind={kind} result={result} setup={setup} datasetId={datasetId} dataset={null} />
 
       {/* Supplementary charts for non-corr tests */}
       {kind === 't' && <GroupMeanBars means={[
@@ -455,7 +446,7 @@ function TestResult({ kind, result, setup, datasetId }) {
       {kind === 'corr' && (
         <>
           <CorrelationScatter result={result} />
-          <CorrelationMatrix result={result} />
+          <CorrelationHeatmap result={result} datasetId={datasetId} />
         </>
       )}
     </div>
@@ -555,35 +546,6 @@ function ContingencyTable({ result }) {
                     <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 4 }}>({fmt(result.row_percentages?.[r]?.[c])}%)</span>
                   </td>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-function CorrelationMatrix({ result }) {
-  const vars = result.variables || []
-  return (
-    <div className="ax-test-corr-matrix">
-      <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 6px' }}>Correlation matrix</p>
-      <div style={{ overflow: 'auto' }}>
-        <table className="ax-tbl">
-          <thead>
-            <tr><th></th>{vars.map((v) => <th key={v}>{v}</th>)}</tr>
-          </thead>
-          <tbody>
-            {vars.map((r) => (
-              <tr key={r}>
-                <td style={{ fontWeight: 500 }}>{r}</td>
-                {vars.map((c) => {
-                  const v = result.matrix?.[r]?.[c]
-                  const abs = Math.abs(v ?? 0)
-                  const bg = abs > 0.7 ? '#EEEDFE' : abs > 0.4 ? '#F5F2FB' : 'transparent'
-                  return <td key={c} style={{ background: bg, textAlign: 'center' }}>{fmt(v)}</td>
-                })}
               </tr>
             ))}
           </tbody>

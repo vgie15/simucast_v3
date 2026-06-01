@@ -105,20 +105,9 @@ export default function ExpandPage({ dataset, setDataset }) {
   const targetTooLow = !Number.isFinite(targetRows) || targetRows <= dataset.row_count
 
   return (
-    <div style={{ paddingBottom: 60 }}>
-      {/* Inline styles for grid and multipliers */}
+    <div className="ax-expand-layout">
+      {/* Inline styles for method cards and multiplier pills */}
       <style dangerouslySetInnerHTML={{ __html: `
-        .ax-expand-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 24px;
-          align-items: start;
-        }
-        @media (min-width: 900px) {
-          .ax-expand-grid {
-            grid-template-columns: 380px 1fr;
-          }
-        }
         .ax-expand-method-card {
           text-align: left;
           border-radius: 12px;
@@ -140,22 +129,19 @@ export default function ExpandPage({ dataset, setDataset }) {
         }
       `}} />
 
-      {/* Page Header metadata */}
-      <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        EXPAND - ROW GENERATION
-      </span>
-      <h1 className="ax-page-title" style={{ margin: '4px 0 0', fontSize: '26px', fontWeight: 800 }}>Expand data</h1>
-      <p style={{ margin: '4px 0 20px', color: 'var(--color-text-secondary)', fontSize: 13 }}>
-        Grow a small dataset by resampling (preserves correlations) or synthesis (per-column independent).
-      </p>
+      {/* ── LEFT PANEL ── */}
+      <div className="ax-expand-left">
+        {/* Header */}
+        <div className="ax-expand-left-head">
+          <h1 className="ax-expand-title">Expand data</h1>
+          <p className="ax-expand-sub">Grow your dataset by resampling or synthesis.</p>
+        </div>
 
-      {/* Main layout grid */}
-      <div className="ax-expand-grid">
-        
-        {/* Left Column: Controls (no wrapping ax-card border as in mockup) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* Scrollable controls */}
+        <div className="ax-expand-left-scroll">
+
           {/* 1 - Method */}
-          <div>
+          <div style={{ marginBottom: 24 }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
               1 - METHOD
             </span>
@@ -209,7 +195,7 @@ export default function ExpandPage({ dataset, setDataset }) {
           </div>
 
           {/* 2 - Target Rows */}
-          <div>
+          <div style={{ marginBottom: 24 }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
               2 - TARGET ROWS
             </span>
@@ -270,7 +256,7 @@ export default function ExpandPage({ dataset, setDataset }) {
             </div>
           </div>
 
-          {/* 3 - Noise on numerics */}
+          {/* 3 - Noise on numerics (bootstrap only) */}
           {method === 'bootstrap' && (
             <div>
               <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
@@ -295,74 +281,71 @@ export default function ExpandPage({ dataset, setDataset }) {
               </p>
             </div>
           )}
+        </div>
 
-          {/* Action button inside Left Column */}
-          <div style={{ marginTop: 8 }}>
-            {error && (
-              <p style={{ fontSize: 11, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>{error}</p>
-            )}
-            <button
-              className="ax-btn prim"
-              disabled={busy || previewing || targetTooLow || !preview}
-              onClick={apply}
+        {/* Footer: error + Apply + Export */}
+        <div className="ax-expand-left-foot">
+          {error && (
+            <p style={{ fontSize: 11, color: 'var(--color-text-danger)', margin: 0 }}>{error}</p>
+          )}
+          <button
+            className="ax-btn prim"
+            disabled={busy || previewing || targetTooLow || !preview}
+            onClick={apply}
+            style={{
+              width: '100%',
+              height: 42,
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: (busy || previewing || targetTooLow || !preview) ? 'var(--color-background-tertiary)' : '#F97316',
+              color: '#fff',
+              border: 'none',
+              boxShadow: (busy || previewing || targetTooLow || !preview) ? 'none' : '0 4px 10px rgba(249, 115, 22, 0.15)',
+              cursor: (busy || previewing || targetTooLow || !preview) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s'
+            }}
+            type="button"
+          >
+            {busy ? 'Expanding…' : `Apply — add ${Math.max(0, targetRows - dataset.row_count).toLocaleString()} rows`}
+          </button>
+
+          {expandedApplied && (
+            <a
+              className="ax-btn"
+              href={api.exportCsvUrl(dataset.id)}
+              download
               style={{
-                width: '100%',
-                height: 42, // Adjusted button size to look neat and clean, standard premium height
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 700,
+                textDecoration: 'none',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: (busy || previewing || targetTooLow || !preview) ? 'var(--color-background-tertiary)' : '#F97316',
-                color: '#fff',
-                border: 'none',
-                boxShadow: (busy || previewing || targetTooLow || !preview) ? 'none' : '0 4px 10px rgba(249, 115, 22, 0.15)',
-                cursor: (busy || previewing || targetTooLow || !preview) ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s'
+                height: 38,
+                fontSize: 12,
+                borderRadius: 8
               }}
-              type="button"
             >
-              {busy ? 'Expanding…' : `Apply — add ${Math.max(0, targetRows - dataset.row_count).toLocaleString()} rows`}
-            </button>
-            
-            {expandedApplied && (
-              <a 
-                className="ax-btn" 
-                href={api.exportCsvUrl(dataset.id)} 
-                download 
-                style={{ 
-                  textDecoration: 'none', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  marginTop: 10,
-                  height: 38,
-                  fontSize: 12,
-                  borderRadius: 8
-                }}
-              >
-                Export expanded CSV
-              </a>
-            )}
-          </div>
+              Export expanded CSV
+            </a>
+          )}
         </div>
+      </div>
 
-        {/* Right Column: Preview & Stats */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
+      {/* ── RIGHT PANEL ── */}
+      <div className="ax-expand-right">
+        <div className="ax-expand-right-scroll">
           {preview ? (
             <>
+              {/* Section label */}
+              <span className="ax-expand-section-label">EXPANSION PREVIEW</span>
+
               {/* Summary stats cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 20 }}>
                 {/* Rows Card */}
-                <div 
-                  style={{ 
-                    padding: '14px 16px', 
-                    background: '#FFFFFF',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: 12
-                  }}
-                >
+                <div style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     ROWS
                   </span>
@@ -372,14 +355,7 @@ export default function ExpandPage({ dataset, setDataset }) {
                 </div>
 
                 {/* Avg Drift Card */}
-                <div 
-                  style={{ 
-                    padding: '14px 16px', 
-                    background: '#FFFFFF',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: 12
-                  }}
-                >
+                <div style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     AVG DRIFT
                   </span>
@@ -392,14 +368,7 @@ export default function ExpandPage({ dataset, setDataset }) {
                 </div>
 
                 {/* Distinct Rows Card */}
-                <div 
-                  style={{ 
-                    padding: '14px 16px', 
-                    background: '#FFFFFF',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: 12
-                  }}
-                >
+                <div style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     DISTINCT ROWS
                   </span>
@@ -414,7 +383,7 @@ export default function ExpandPage({ dataset, setDataset }) {
 
               {/* Drift Table */}
               {preview.drift?.length > 0 && (
-                <div style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
+                <div style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12, marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       DISTRIBUTION DRIFT · NUMERIC COLUMNS
@@ -492,10 +461,11 @@ export default function ExpandPage({ dataset, setDataset }) {
               </div>
             </>
           ) : (
-            <div 
-              style={{ 
-                padding: '40px 20px', 
-                background: 'var(--color-background-secondary)', 
+            /* Empty state */
+            <div
+              style={{
+                padding: '40px 20px',
+                background: 'var(--color-background-secondary)',
                 border: '1.5px dashed var(--color-border-tertiary)',
                 borderRadius: 12,
                 textAlign: 'center',
@@ -505,7 +475,6 @@ export default function ExpandPage({ dataset, setDataset }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                height: '100%',
                 minHeight: 280
               }}
             >
@@ -515,8 +484,8 @@ export default function ExpandPage({ dataset, setDataset }) {
             </div>
           )}
         </div>
-
       </div>
+
     </div>
   )
 }
@@ -548,12 +517,12 @@ function DriftSparkline({ value }) {
   if (value === null || value === undefined) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
   const numVal = Number(value)
   if (!Number.isFinite(numVal)) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
-  
+
   // Cap drift at +/- 5% for visualization scaling
   const capped = Math.max(-5, Math.min(5, numVal))
   const isPositive = capped >= 0
   const widthPct = Math.abs(capped) * 10 // 5% maps to 50% width
-  
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
       <div style={{ position: 'relative', width: 60, height: 6, background: '#E5E7EB', borderRadius: 3, overflow: 'hidden' }}>

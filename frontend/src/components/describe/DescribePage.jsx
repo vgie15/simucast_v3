@@ -31,13 +31,19 @@ import {
   ChevronDown,
   Copy,
   Download,
+  Hash,
+  LayoutDashboard,
   Maximize2,
   Minimize2,
   Lightbulb,
   Pencil,
+  Play,
+  Sigma,
+  Tags,
   X,
   LayoutGrid
 } from 'lucide-react'
+import { prepareChartData, getCohortColor } from '../../utils/chartData'
 
 // Register Chart.js elements and controllers
 ChartJS.register(
@@ -120,6 +126,12 @@ export default function DescribePage({ dataset, initialData }) {
   const [descLoading, setDescLoading] = useState(false)
   const [expandedVarRows, setExpandedVarRows] = useState(new Set())
   const [activeCatVar, setActiveCatVar] = useState(null)
+  const [activeDescribeSection, setActiveDescribeSection] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(`simucast.descSection.${dataset?.id}`)
+      return saved || 'overview'
+    } catch { return 'overview' }
+  })
 
   // Restore saved charts from localStorage per dataset
   useEffect(() => {
@@ -397,15 +409,16 @@ export default function DescribePage({ dataset, initialData }) {
       }
     } : null
     const plugins = labelPlugin ? [labelPlugin] : []
+    const labelKey = cbShowLabels ? 'labels-on' : 'labels-off'
 
     switch (chartBuilderType) {
-      case 'bar': case 'horizontal bar': return <Bar ref={chartRef} data={chartData} options={options} plugins={plugins} />
-      case 'line': return <Line ref={chartRef} data={chartData} options={options} plugins={plugins} />
-      case 'scatter': return <Scatter ref={chartRef} data={chartData} options={options} plugins={plugins} />
-      case 'pie': return <Pie ref={chartRef} data={chartData} options={options} plugins={plugins} />
-      case 'histogram': return <Bar ref={chartRef} data={chartData} options={options} plugins={plugins} />
-      case 'radar': return <Radar ref={chartRef} data={chartData} options={options} plugins={plugins} />
-      case 'bubble': return <Bubble ref={chartRef} data={chartData} options={options} plugins={plugins} />
+      case 'bar': case 'horizontal bar': return <Bar key={labelKey} ref={chartRef} data={chartData} options={options} plugins={plugins} />
+      case 'line': return <Line key={labelKey} ref={chartRef} data={chartData} options={options} plugins={plugins} />
+      case 'scatter': return <Scatter key={labelKey} ref={chartRef} data={chartData} options={options} plugins={plugins} />
+      case 'pie': return <Pie key={labelKey} ref={chartRef} data={chartData} options={options} plugins={plugins} />
+      case 'histogram': return <Bar key={labelKey} ref={chartRef} data={chartData} options={options} plugins={plugins} />
+      case 'radar': return <Radar key={labelKey} ref={chartRef} data={chartData} options={options} plugins={plugins} />
+      case 'bubble': return <Bubble key={labelKey} ref={chartRef} data={chartData} options={options} plugins={plugins} />
       default: return null
     }
   }
@@ -592,64 +605,94 @@ export default function DescribePage({ dataset, initialData }) {
   })()
 
   const activeCatStat = catStats.find(s => s.variable === activeCatVar)
+  const jumpToDescribeSection = (section) => {
+    setActiveDescribeSection(section)
+    try { window.localStorage.setItem(`simucast.descSection.${dataset?.id}`, section) } catch {}
+    requestAnimationFrame(() => {
+      document.querySelector('.ax-desc-right-scroll')?.scrollTo({ top: 0, behavior: 'auto' })
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    })
+  }
+  const describeNavItems = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, badge: `${qualityFlags.length} flags` },
+    { id: 'numeric', label: 'Numeric variables', icon: Hash, badge: numericStats.length },
+    { id: 'categorical', label: 'Categorical variables', icon: Tags, badge: catStats.length },
+    { id: 'correlations', label: 'Correlations', icon: Sigma, badge: strongestCorrPair ? `r=${Math.abs(strongestCorrPair.val).toFixed(2)}` : 'run' },
+    { id: 'chart-builder', label: 'Chart builder', icon: BarChart3, badge: `${savedCharts.length} saved` },
+  ]
 
   return (
-    <>
-      {/* ──── PAGE HEADER ──── */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 className="ax-page-title">Descriptive statistics</h1>
-        <p className="ax-page-sub">Summarize variables, identify distributions, and spot patterns before modeling</p>
-      </div>
-
-      {/* ──── VARIABLES CARD ──── */}
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '14px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, color: '#374151' }}>Variables <strong style={{ color: ORANGE_ACCENT }}>{selectedVars.length} selected</strong></span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button type="button" onClick={() => setSelectedVars((dataset.variables || []).map(v => v.name))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: ORANGE_ACCENT, fontFamily: 'inherit', padding: 0 }}>Select all</button>
-            <span style={{ color: '#d1d5db', fontSize: 12 }}>·</span>
-            <button type="button" onClick={() => setSelectedVars([])} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: ORANGE_ACCENT, fontFamily: 'inherit', padding: 0 }}>Clear</button>
+    <div className="ax-desc-layout ax-desc-redesign">
+      <aside className="ax-desc-left">
+        {/* Header: title + subtitle only — separator line sits right below */}
+        <div className="ax-desc-left-sticky">
+          <h1 className="ax-desc-title">Descriptive statistics</h1>
+          <p className="ax-desc-sub">Summarize variables and spot patterns before modeling</p>
+        </div>
+        <div className="ax-desc-left-vars">
+          {/* Section navigation */}
+          <nav className="ax-desc-nav" aria-label="Describe sections">
+            {describeNavItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`ax-desc-nav-item ${activeDescribeSection === item.id ? 'active' : ''}`}
+                  onClick={() => jumpToDescribeSection(item.id)}
+                >
+                  <span className="ax-desc-nav-icon"><Icon size={14} /></span>
+                  <span>{item.label}</span>
+                  <span className="ax-desc-nav-badge">{item.badge}</span>
+                </button>
+              )
+            })}
+          </nav>
+          <div className="ax-desc-section-label" style={{ marginTop: 16 }}>Variables</div>
+          <div className="ax-desc-var-tools">
+            <button type="button" onClick={() => setSelectedVars((dataset.variables || []).map(v => v.name))}>All</button>
+            <span>·</span>
+            <button type="button" onClick={() => setSelectedVars([])}>Clear</button>
+          </div>
+          <div className="ax-desc-var-chips">
+            {(dataset.variables || []).map(v => {
+              const isSel = selectedVars.includes(v.name)
+              return (
+                <button
+                  key={v.name}
+                  type="button"
+                  onClick={() => setSelectedVars(prev => prev.includes(v.name) ? prev.filter(n => n !== v.name) : [...prev, v.name])}
+                  className={`ax-desc-var-chip ${isSel ? 'active' : ''}`}
+                >
+                  <span className="ax-desc-var-chip-name">{v.name}</span>
+                  <span className="ax-desc-var-chip-type">{v.dtype}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-          {(dataset.variables || []).map(v => {
-            const isSel = selectedVars.includes(v.name)
-            return (
-              <button
-                key={v.name}
-                type="button"
-                onClick={() => setSelectedVars(prev => prev.includes(v.name) ? prev.filter(n => n !== v.name) : [...prev, v.name])}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: 20,
-                  border: `1.5px solid ${isSel ? ORANGE_ACCENT : '#e5e7eb'}`,
-                  background: isSel ? ORANGE_LIGHT : '#fafafa',
-                  cursor: 'pointer', fontSize: 12, fontFamily: 'inherit'
-                }}
-              >
-                <span style={{ fontWeight: 600, color: '#111827' }}>{v.name}</span>
-                <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400 }}>{v.dtype}</span>
-              </button>
-            )
-          })}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-          <span style={{ fontSize: 11, color: '#9ca3af' }}>Updated from dataset stage {dataset.current_stage_id}</span>
+        <div className="ax-desc-run-area">
+          <span className="ax-desc-stage-note">Updated from dataset stage {dataset.current_stage_id}</span>
           <button
             type="button"
             onClick={runDescriptives}
             disabled={descLoading || !selectedVars.length}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 18px',
-              background: ORANGE_ACCENT, color: '#fff', border: 'none', borderRadius: 9,
-              fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-              cursor: descLoading || !selectedVars.length ? 'default' : 'pointer',
-              opacity: descLoading || !selectedVars.length ? 0.65 : 1
-            }}
+            className="ax-desc-run-btn"
           >
-            {descLoading ? <InlineSpinner label="Running…" /> : '⊡ Run descriptives'}
+            {descLoading ? <InlineSpinner label="Running..." /> : <><Play size={14} /> Run descriptives</>}
           </button>
         </div>
+      </aside>
+      <main className="ax-desc-right">
+        <div className={`ax-desc-right-scroll ${activeDescribeSection === 'chart-builder' ? 'no-scroll' : ''}`}>
+      <div style={{ marginBottom: 12 }}>
+        <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-accent, #f97316)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Describe · {describeNavItems.find(i => i.id === activeDescribeSection)?.label || activeDescribeSection}
+        </span>
       </div>
+      {activeDescribeSection === 'overview' && (
+        <>
+      <p style={{ fontSize: 11, color: '#9ca3af', marginBottom: 16 }}>Updated from dataset stage {dataset.current_stage_id}</p>
 
       {/* ──── SUMMARY STAT CARDS ──── */}
       {descResult && (
@@ -666,6 +709,165 @@ export default function DescribePage({ dataset, initialData }) {
               <div style={{ fontSize: 11, color: '#9ca3af', lineHeight: 1.4 }}>{card.sub}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ──── SECTION 1: DATASET HEALTH ──── */}
+      {descResult && (
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 20px', marginBottom: 16, borderLeft: `4px solid ${qualityFlags.length === 0 ? '#16a34a' : '#f97316'}` }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: qualityFlags.length === 0 ? '#16a34a' : '#f97316', marginBottom: 8 }}>
+            {qualityFlags.length === 0 ? '✓ Dataset looks clean' : `⚠ ${qualityFlags.length} issue${qualityFlags.length !== 1 ? 's' : ''} detected`}
+          </div>
+          {qualityFlags.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {[
+                (descResult.stats || []).some(s => s.missing === 0 || s.missing == null) && '✓ No missing values',
+                skewedVars.length === 0 && '✓ No outliers detected',
+                !groupedQualityFlags.some(f => f.type === 'mixed_labels') && '✓ No label inconsistencies',
+                (descResult.stats || []).every(s => !s.duplicates || s.duplicates === 0) && '✓ No duplicates found',
+              ].filter(Boolean).map((item, i) => (
+                <span key={i} style={{ fontSize: 11, color: '#6b7280' }}>{item}</span>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {Object.entries(qualityFlags.reduce((acc, f) => { acc[f.type] = (acc[f.type] || 0) + 1; return acc }, {})).map(([type, count]) => (
+                <span key={type} style={{ fontSize: 11, color: '#6b7280' }}>
+                  • {type === 'mixed_labels' ? 'Mixed labels' : type === 'outlier' ? 'Outliers' : type === 'imbalance' ? 'Class imbalance' : type}: {count} column{count !== 1 ? 's' : ''}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ──── SECTION 2: COLUMN QUICK-SCAN ──── */}
+      {descResult && (
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px 10px', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Column quick-scan</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                <th style={{ padding: '6px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 600 }}>Variable</th>
+                <th style={{ padding: '6px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 600 }}>Type</th>
+                <th style={{ padding: '6px 12px', textAlign: 'right', color: '#6b7280', fontWeight: 600 }}>Unique</th>
+                <th style={{ padding: '6px 12px', textAlign: 'right', color: '#6b7280', fontWeight: 600 }}>Missing</th>
+                <th style={{ padding: '6px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 600 }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(descResult.stats || []).map((s, i) => {
+                const typeBadge = s.kind === 'numeric' ? { bg: '#eff6ff', color: '#2563eb' } : s.kind === 'categorical' ? { bg: '#fff7ed', color: '#ea580c' } : { bg: '#f3f4f6', color: '#6b7280' }
+                const typeLabel = s.kind === 'numeric' ? 'numeric' : s.kind === 'categorical' ? 'category' : 'text'
+                const missing = s.missing ?? 0
+                const hasIssue = qualityFlags.some(f => f.variable === s.variable)
+                const issueFlag = qualityFlags.find(f => f.variable === s.variable)
+                return (
+                  <tr key={s.variable} style={{ background: i % 2 === 0 ? 'transparent' : '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111827', fontFamily: 'var(--font-mono, monospace)' }}>{s.variable}</td>
+                    <td style={{ padding: '6px 12px' }}>
+                      <span style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600, background: typeBadge.bg, color: typeBadge.color }}>{typeLabel}</span>
+                    </td>
+                    <td style={{ padding: '6px 12px', textAlign: 'right', color: '#374151', fontFamily: 'var(--font-mono, monospace)' }}>{s.unique ?? '—'}</td>
+                    <td style={{ padding: '6px 12px', textAlign: 'right', color: missing > 0 ? '#f97316' : '#16a34a', fontFamily: 'var(--font-mono, monospace)', fontWeight: missing > 0 ? 600 : 400 }}>{missing}</td>
+                    <td style={{ padding: '6px 12px' }}>
+                      {hasIssue ? (
+                        <span style={{ color: '#f97316', fontSize: 11 }}>⚠ {issueFlag?.type === 'outlier' ? 'outliers' : issueFlag?.type === 'mixed_labels' ? 'mixed labels' : 'imbalance'}</span>
+                      ) : (
+                        <span style={{ color: '#16a34a', fontSize: 11 }}>✓ Clean</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ──── SECTION 3: NOTABLE FINDINGS ──── */}
+      {descResult && (
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 20px', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Notable findings</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {strongestCorrPair && Math.abs(strongestCorrPair.val) > 0.5 && (
+              <div>
+                <div style={{ fontSize: 12, color: '#111827' }}>
+                  <span style={{ color: '#f97316', marginRight: 6 }}>●</span>
+                  Strong correlation: {strongestCorrPair.a} ↔ {strongestCorrPair.b} (r = {strongestCorrPair.val.toFixed(2)})
+                </div>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, paddingLeft: 18 }}>→ May be redundant as features</div>
+              </div>
+            )}
+            {catStats.map(s => {
+              const nClasses = Object.keys(s.value_counts || {}).length
+              const maxPct = s.n ? Math.max(...Object.values(s.value_counts || {}).map(v => v / s.n)) : 0
+              const isImbalanced = maxPct > 0.7
+              return (
+                <div key={s.variable}>
+                  <div style={{ fontSize: 12, color: '#111827' }}>
+                    <span style={{ color: '#f97316', marginRight: 6 }}>●</span>
+                    {s.variable} has {nClasses} {isImbalanced ? 'imbalanced' : 'balanced'} classes
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, paddingLeft: 18 }}>
+                    → {isImbalanced ? 'Consider balancing before classification' : 'Good class distribution'}
+                  </div>
+                </div>
+              )
+            })}
+            {skewedVars.map(s => (
+              <div key={s.variable}>
+                <div style={{ fontSize: 12, color: '#111827' }}>
+                  <span style={{ color: '#f97316', marginRight: 6 }}>●</span>
+                  {s.variable} is {s.skew > 0 ? 'right' : 'left'}-skewed (skew = {s.skew.toFixed(1)})
+                </div>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, paddingLeft: 18 }}>→ Consider log transform or outlier check</div>
+              </div>
+            ))}
+            {qualityFlags.length === 0 && skewedVars.length === 0 && !strongestCorrPair && (
+              <div style={{ fontSize: 12, color: '#111827' }}>
+                <span style={{ color: '#16a34a', marginRight: 6 }}>●</span>
+                No issues found — ready for analysis
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ──── SECTION 4: NEXT STEPS ──── */}
+      {descResult && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          {strongestCorrPair && Math.abs(strongestCorrPair.val) > 0.5 && (
+            <button
+              type="button"
+              onClick={() => jumpToDescribeSection('correlations')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 999, border: '1.5px solid #d1d5db', background: '#fff', fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.borderColor = '#f97316'; e.currentTarget.style.color = '#f97316' }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#374151' }}
+            >
+              → Explore in Correlations
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => jumpToDescribeSection('chart-builder')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 999, border: '1.5px solid #d1d5db', background: '#fff', fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.borderColor = '#f97316'; e.currentTarget.style.color = '#f97316' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#374151' }}
+          >
+            → Visualize in Chart builder
+          </button>
+          {qualityFlags.length === 0 && (
+            <button
+              type="button"
+              onClick={() => jumpToDescribeSection('numeric')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 999, border: '1.5px solid #d1d5db', background: '#fff', fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.borderColor = '#f97316'; e.currentTarget.style.color = '#f97316' }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#374151' }}
+            >
+              → Ready for Analysis
+            </button>
+          )}
         </div>
       )}
 
@@ -706,11 +908,16 @@ export default function DescribePage({ dataset, initialData }) {
           </div>
         </div>
       )}
+        </>
+      )}
 
       {/* ---- VARIABLE SUMMARY PANELS ---- */}
-      {(numericStats.length > 0 || catStats.length > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: catStats.length > 0 ? 'minmax(0, 2fr) minmax(360px, 1fr)' : '1fr', gap: 24, marginBottom: 20, alignItems: 'start' }}>
-          {numericStats.length > 0 && (
+      {((activeDescribeSection === 'numeric' && numericStats.length > 0) || (activeDescribeSection === 'categorical' && catStats.length > 0)) && (
+        <>
+        <div id="describe-numeric" />
+        <div id="describe-categorical" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, marginBottom: 20, alignItems: 'start' }}>
+          {activeDescribeSection === 'numeric' && numericStats.length > 0 && (
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '24px 24px 24px', height: 560, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#5b6573', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 20 }}>
                 Numeric Variables — {numericStats.length} Selected
@@ -751,7 +958,7 @@ export default function DescribePage({ dataset, initialData }) {
             </div>
           )}
 
-          {catStats.length > 0 && (
+          {activeDescribeSection === 'categorical' && catStats.length > 0 && (
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '24px 24px 24px', height: 560, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <p style={{ fontSize: 11, fontWeight: 800, color: '#5b6573', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 20px' }}>Categorical Variables — Distribution</p>
               {activeCatStat && (() => {
@@ -792,11 +999,13 @@ export default function DescribePage({ dataset, initialData }) {
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* ──── CORRELATION HEATMAP ──── */}
-      {descResult && (corrResult?.variables?.length >= 2 ? (
+      {activeDescribeSection === 'correlations' && descResult && (corrResult?.variables?.length >= 2 ? (
         <div
+          id="describe-correlations"
           style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 20, marginBottom: 20 }}
           onClick={() => setSelectedCorrCell(null)}
         >
@@ -1045,7 +1254,7 @@ export default function DescribePage({ dataset, initialData }) {
       ))}
 
       {/* Interactive Chart Builder */}
-      {descResult && <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', marginBottom: 20 }}>
+      {activeDescribeSection === 'chart-builder' && descResult && <div id="describe-chart-builder" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', marginBottom: 20, height: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column' }}>
 
         {/* Top bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #e5e7eb' }}>
@@ -1157,9 +1366,9 @@ export default function DescribePage({ dataset, initialData }) {
             )}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', minHeight: 480 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             {/* Controls panel */}
-            <div style={{ borderRight: '1px solid #e5e7eb', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
+            <div style={{ borderRight: '1px solid #e5e7eb', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', overflowX: 'hidden' }}>
               {/* Chart type pills */}
               <div>
                 <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Chart Type</p>
@@ -1277,7 +1486,7 @@ export default function DescribePage({ dataset, initialData }) {
             </div>
 
             {/* Chart preview */}
-            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <input
@@ -1306,7 +1515,7 @@ export default function DescribePage({ dataset, initialData }) {
                   {cbTypeLabel}
                 </span>
               </div>
-              <div style={{ flex: 1, minHeight: 380 }}>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 {loadingRows ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><InlineSpinner label="Loading data..." /></div>
                 ) : renderLiveChart()}
@@ -1350,7 +1559,9 @@ export default function DescribePage({ dataset, initialData }) {
           </div>
         )}
       </div>}
-    </>
+        </div>
+      </main>
+    </div>
   )
 }
 
@@ -1400,144 +1611,6 @@ function simpleLinearRegression(points) {
   const slope = (n * sumXY - sumX * sumY) / denom
   const intercept = (sumY - slope * sumX) / n
   return { slope, intercept }
-}
-
-function getCohortColor(primaryColor, index, total) {
-  if (total <= 1) return primaryColor
-  const hex = primaryColor.replace('#', '')
-  const r = parseInt(hex.substring(0, 2), 16)
-  const g = parseInt(hex.substring(2, 4), 16)
-  const b = parseInt(hex.substring(4, 6), 16)
-  let rNorm = r / 255, gNorm = g / 255, bNorm = b / 255
-  let max = Math.max(rNorm, gNorm, bNorm), min = Math.min(rNorm, gNorm, bNorm)
-  let h, s, l = (max + min) / 2
-  if (max === min) {
-    h = s = 0
-  } else {
-    let d = max - min
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-    switch (max) {
-      case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break
-      case gNorm: h = (bNorm - rNorm) / d + 2; break
-      case bNorm: h = (rNorm - gNorm) / d + 4; break
-    }
-    h /= 6
-  }
-  h = Math.round(h * 360)
-  s = Math.round(s * 100)
-  l = Math.round(l * 100)
-  const hueShift = Math.round((h + (index * (360 / total))) % 360)
-  const lightnessShift = Math.max(25, Math.min(75, l + (index % 2 === 0 ? 5 : -5)))
-  return `hsl(${hueShift}, ${s}%, ${lightnessShift}%)`
-}
-
-function prepareChartData(rows, chartType, xAxis, yAxis, groupBy, agg, color) {
-  if (!rows || !rows.length || !xAxis) return null
-
-  if (chartType === 'histogram') {
-    const vals = rows.map(r => Number(r[xAxis])).filter(Number.isFinite)
-    if (!vals.length) return null
-    const min = Math.min(...vals)
-    const max = Math.max(...vals)
-    const binCount = 10
-    const step = (max - min) / binCount || 1
-    const bins = Array.from({ length: binCount }, (_, i) => ({
-      lo: min + i * step,
-      hi: min + (i + 1) * step,
-      label: `${(min + i * step).toFixed(1)}-${(min + (i + 1) * step).toFixed(1)}`,
-      count: 0
-    }))
-    if (!groupBy) {
-      rows.forEach(r => {
-        const val = Number(r[xAxis])
-        if (Number.isFinite(val)) {
-          const binIdx = Math.min(binCount - 1, Math.floor((val - min) / step))
-          if (binIdx >= 0 && binIdx < binCount) bins[binIdx].count++
-        }
-      })
-      return { labels: bins.map(b => b.label), datasets: [{ label: xAxis, data: bins.map(b => b.count), backgroundColor: color, borderRadius: 4 }] }
-    } else {
-      const groups = Array.from(new Set(rows.map(r => String(r[groupBy] ?? 'None'))))
-      const datasets = groups.map((grp, idx) => {
-        const grpBins = bins.map(b => ({ ...b, count: 0 }))
-        rows.filter(r => String(r[groupBy] ?? 'None') === grp).forEach(r => {
-          const val = Number(r[xAxis])
-          if (Number.isFinite(val)) {
-            const binIdx = Math.min(binCount - 1, Math.floor((val - min) / step))
-            if (binIdx >= 0 && binIdx < binCount) grpBins[binIdx].count++
-          }
-        })
-        return { label: grp, data: grpBins.map(b => b.count), backgroundColor: getCohortColor(color, idx, groups.length), borderRadius: 4 }
-      })
-      return { labels: bins.map(b => b.label), datasets }
-    }
-  }
-
-  if (chartType === 'scatter' || chartType === 'bubble') {
-    if (!yAxis) return null
-    const points = rows.map(r => ({
-      x: Number(r[xAxis]), y: Number(r[yAxis]),
-      r: chartType === 'bubble' ? 8 : undefined, row: r
-    })).filter(pt => Number.isFinite(pt.x) && Number.isFinite(pt.y))
-    if (chartType === 'bubble') {
-      const yVals = points.map(pt => Math.abs(pt.y))
-      const maxY = Math.max(...yVals, 1)
-      points.forEach(pt => { pt.r = Math.max(4, Math.min(25, (Math.abs(pt.y) / maxY) * 20)) })
-    }
-    if (!groupBy) {
-      return { datasets: [{ label: `${xAxis} vs ${yAxis}`, data: points, backgroundColor: color, pointRadius: chartType === 'bubble' ? undefined : 6, pointHoverRadius: chartType === 'bubble' ? undefined : 8 }] }
-    } else {
-      const groups = Array.from(new Set(rows.map(r => String(r[groupBy] ?? 'None'))))
-      const datasets = groups.map((grp, idx) => ({
-        label: grp,
-        data: points.filter(pt => String(pt.row[groupBy] ?? 'None') === grp),
-        backgroundColor: getCohortColor(color, idx, groups.length),
-        pointRadius: chartType === 'bubble' ? undefined : 6,
-        pointHoverRadius: chartType === 'bubble' ? undefined : 8
-      }))
-      return { datasets }
-    }
-  }
-
-  if (!yAxis) return null
-  const xVals = Array.from(new Set(rows.map(r => String(r[xAxis] ?? 'None')))).sort()
-  const aggregateValue = (groupRows, col, type) => {
-    if (type === 'Count') return groupRows.length
-    const nums = groupRows.map(r => Number(r[col])).filter(Number.isFinite)
-    if (!nums.length) return 0
-    if (type === 'Sum') return nums.reduce((a, b) => a + b, 0)
-    if (type === 'Mean') return nums.reduce((a, b) => a + b, 0) / nums.length
-    if (type === 'Max') return Math.max(...nums)
-    return 0
-  }
-  if (!groupBy) {
-    const data = xVals.map(xVal => aggregateValue(rows.filter(r => String(r[xAxis] ?? 'None') === xVal), yAxis, agg))
-    const bgColors = chartType === 'pie' ? xVals.map((_, idx) => getCohortColor(color, idx, xVals.length)) : color
-    return {
-      labels: xVals,
-      datasets: [{
-        label: yAxis || 'Count', data, backgroundColor: bgColors,
-        borderColor: chartType === 'line' || chartType === 'radar' ? color : undefined,
-        borderWidth: chartType === 'line' || chartType === 'radar' ? 2 : undefined,
-        fill: chartType === 'radar' ? 'origin' : false,
-        tension: chartType === 'line' ? 0.25 : undefined,
-        borderRadius: chartType === 'bar' || chartType === 'horizontal bar' ? 4 : undefined
-      }]
-    }
-  } else {
-    const groups = Array.from(new Set(rows.map(r => String(r[groupBy] ?? 'None'))))
-    const datasets = groups.map((grp, idx) => ({
-      label: grp,
-      data: xVals.map(xVal => aggregateValue(rows.filter(r => String(r[xAxis] ?? 'None') === xVal && String(r[groupBy] ?? 'None') === grp), yAxis, agg)),
-      backgroundColor: getCohortColor(color, idx, groups.length),
-      borderColor: chartType === 'line' || chartType === 'radar' ? getCohortColor(color, idx, groups.length) : undefined,
-      borderWidth: chartType === 'line' || chartType === 'radar' ? 2 : undefined,
-      fill: chartType === 'radar' ? 'origin' : false,
-      tension: chartType === 'line' ? 0.25 : undefined,
-      borderRadius: chartType === 'bar' || chartType === 'horizontal bar' ? 4 : undefined
-    }))
-    return { labels: xVals, datasets }
-  }
 }
 
 function fmt(v) {

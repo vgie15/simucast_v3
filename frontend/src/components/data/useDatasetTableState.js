@@ -7,6 +7,7 @@ const DEFAULT_STATE = {
   activeChangeIndex: 0,
   changeStages: [],
   changeLoading: false,
+  hasChanges: false,
 }
 
 const states = new Map()
@@ -50,7 +51,8 @@ function setPartialState(key, patch) {
     next.changeType === current.changeType &&
     next.activeChangeIndex === current.activeChangeIndex &&
     next.changeStages === current.changeStages &&
-    next.changeLoading === current.changeLoading
+    next.changeLoading === current.changeLoading &&
+    next.hasChanges === current.hasChanges
   ) {
     return
   }
@@ -121,6 +123,15 @@ export function useDatasetTableState(datasetId, preferredViewMode = 'cleaned') {
     [key],
   )
 
+  const setHasChanges = useCallback(
+    (value) => {
+      setPartialState(key, (current) => ({
+        hasChanges: typeof value === 'function' ? value(current.hasChanges) : value,
+      }))
+    },
+    [key],
+  )
+
   const resetTableState = useCallback(() => {
     setPartialState(key, { ...DEFAULT_STATE, viewMode: preferredViewMode || DEFAULT_STATE.viewMode })
   }, [key, preferredViewMode])
@@ -133,6 +144,7 @@ export function useDatasetTableState(datasetId, preferredViewMode = 'cleaned') {
     setActiveChangeIndex,
     setChangeStages,
     setChangeLoading,
+    setHasChanges,
     resetTableState,
   }
 }

@@ -89,12 +89,14 @@ export default function DataDetailView({
     activeChangeIndex,
     changeStages,
     changeLoading,
+    hasChanges,
     setViewMode,
     setChangeScope,
     setChangeType,
     setActiveChangeIndex,
     setChangeStages,
     setChangeLoading,
+    setHasChanges,
   } = useDatasetTableState(datasetId, preferredViewMode)
   const variableColumns = useMemo(() => (variables || []).map((v) => v.name), [variables])
   const allColumns = useMemo(
@@ -152,6 +154,18 @@ export default function DataDetailView({
       return hasChange ? updatedRow : row
     })
   }, [rows, undoStack])
+
+  // Sync hasChanges to global table state
+  useEffect(() => {
+    setHasChanges(undoStack.length > 0)
+  }, [undoStack.length, setHasChanges])
+
+  // Switch back to original view when all changes are undone
+  useEffect(() => {
+    if (undoStack.length === 0 && viewMode !== 'original') {
+      setViewMode('original')
+    }
+  }, [undoStack.length, viewMode, setViewMode])
 
   const [headerEdit, setHeaderEdit] = useState(null)
   const [savingHeader, setSavingHeader] = useState(false)
@@ -640,25 +654,30 @@ export default function DataDetailView({
               <Database size={14} className="ax-segmented-icon" />
               {viewMode === 'original' && <span className="ax-segmented-label">Original</span>}
             </button>
-            <button
-              type="button"
-              className={`ax-segmented-item ${viewMode === 'cleaned' ? 'active' : ''}`}
-              onClick={() => setViewMode('cleaned')}
-              title="Cleaned dataset"
-            >
-              <Sparkles size={14} className="ax-segmented-icon" />
-              {viewMode === 'cleaned' && <span className="ax-segmented-label">Cleaned</span>}
-            </button>
-            <button
-              type="button"
-              className={`ax-segmented-item ${viewMode === 'highlight' ? 'active' : ''}`}
-              onClick={() => setViewMode('highlight')}
-              disabled={!changeStages.length && !changeLoading}
-              title="Highlight changes"
-            >
-              <Highlighter size={14} className="ax-segmented-icon" />
-              {viewMode === 'highlight' && <span className="ax-segmented-label">Highlighted</span>}
-            </button>
+            <div className={`ax-segmented-item-wrap ${!hasChanges ? 'is-disabled' : ''}`} title={!hasChanges ? 'Apply a change first to enable this view' : undefined}>
+              <button
+                type="button"
+                className={`ax-segmented-item ${viewMode === 'cleaned' ? 'active' : ''} ${!hasChanges ? 'ax-tab-disabled' : ''}`}
+                onClick={() => hasChanges && setViewMode('cleaned')}
+                disabled={!hasChanges}
+                style={!hasChanges ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : { transition: 'opacity 0.2s ease' }}
+              >
+                <Sparkles size={14} className="ax-segmented-icon" />
+                {viewMode === 'cleaned' && <span className="ax-segmented-label">Cleaned</span>}
+              </button>
+            </div>
+            <div className={`ax-segmented-item-wrap ${!hasChanges ? 'is-disabled' : ''}`} title={!hasChanges ? 'Apply a change first to enable this view' : undefined}>
+              <button
+                type="button"
+                className={`ax-segmented-item ${viewMode === 'highlight' ? 'active' : ''} ${!hasChanges ? 'ax-tab-disabled' : ''}`}
+                onClick={() => hasChanges && setViewMode('highlight')}
+                disabled={!hasChanges || (!changeStages.length && !changeLoading)}
+                style={!hasChanges ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : { transition: 'opacity 0.2s ease' }}
+              >
+                <Highlighter size={14} className="ax-segmented-icon" />
+                {viewMode === 'highlight' && <span className="ax-segmented-label">Highlighted</span>}
+              </button>
+            </div>
           </div>
           <button
             type="button"

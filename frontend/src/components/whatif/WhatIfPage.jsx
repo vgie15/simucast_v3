@@ -1,15 +1,26 @@
 /* ============================================================
- * PAGE: WHAT-IF / PREDICTION
+ * PAGE: WHAT-IF / PREDICTION — 2-column side panel layout
  * Keywords: whatif, what-if, predict, prediction, scenario, simulation
  * ============================================================ */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
-import { AIInsightCard, ExplainButton } from '../ai/AIExplainers'
-import HelpButton from '../common/HelpButton'
-import PageGuide from '../common/PageGuide'
+import { ExplainButton } from '../ai/AIExplainers'
 
-// What-if simulation page that runs predictions on a model and saves scenarios.
+const SCENARIO_MAX = 8
+const STORAGE_KEY = 'simucast.whatif'
+
+function loadDraft() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveDraft(draft) {
+  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft)) } catch {}
+}
+
 export default function WhatIfPage({ dataset, activeModel, initialData }) {
   const dialog = useDialog()
   const [fallbackModel, setFallbackModel] = useState(null)
@@ -23,8 +34,41 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
   const [scenarioName, setScenarioName] = useState('')
   const [scenarios, setScenarios] = useState([])
   const [selectedScenarioName, setSelectedScenarioName] = useState('')
-  const [restrictToRange, setRestrictToRange] = useState(false)
+  const draftRestored = useRef(false)
   const selectedModel = activeModel || fallbackModel
+
+  // Restore draft from localStorage
+  useEffect(() => {
+    if (draftRestored.current) return
+    const draft = loadDraft()
+    if (draft && draft.datasetId === dataset?.id) {
+      if (draft.modelFull) setModelFull(draft.modelFull)
+      if (draft.inputs) setInputs(draft.inputs)
+      if (draft.pred) setPred(draft.pred)
+      if (draft.baseline) setBaseline(draft.baseline)
+      if (draft.baselineInputs) setBaselineInputs(draft.baselineInputs)
+      if (draft.scenarios) setScenarios(draft.scenarios)
+      if (draft.fallbackModelId) {
+        setFallbackModel({ id: draft.fallbackModelId, has_whatif: true })
+      }
+    }
+    draftRestored.current = true
+  }, [dataset?.id])
+
+  // Save draft to localStorage
+  useEffect(() => {
+    if (!draftRestored.current || !dataset?.id) return
+    saveDraft({
+      datasetId: dataset.id,
+      modelFull: modelFull ? { id: modelFull.id, name: modelFull.name, target: modelFull.target, whatif_features: modelFull.whatif_features } : null,
+      inputs,
+      pred,
+      baseline,
+      baselineInputs,
+      scenarios,
+      fallbackModelId: selectedModel?.id || null,
+    })
+  }, [dataset?.id, modelFull?.id, inputs, pred, baseline, baselineInputs, scenarios, selectedModel?.id])
 
   useEffect(() => {
     if (!dataset?.id || activeModel) return
@@ -43,6 +87,8 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
 
   useEffect(() => {
     if (!selectedModel) return
+    // Skip if we already have a modelFull for this model (restored from draft)
+    if (modelFull && modelFull.id === selectedModel.id) return
     api.getModel(selectedModel.id).then(async (m) => {
       const currentFeatures = await hydrateCurrentCategoryValues(dataset?.id, m.whatif_features || [])
       const hydratedModel = { ...m, whatif_features: currentFeatures }
@@ -61,6 +107,8 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
 
   useEffect(() => {
     if (!modelFull || !Object.keys(inputs).length) return
+    // Skip prediction if we already have one for these exact inputs (restored from draft)
+    if (pred && JSON.stringify(pred.inputs) === JSON.stringify(inputs)) return
     api.predict(modelFull.id, inputs).then((p) => {
       setPred(p)
       setBaseline((current) => {
@@ -71,62 +119,17 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
   }, [inputs, modelFull?.id])
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
-  if (!selectedModel) {
-    return (
-      <>
-        <h1 className="ax-page-title">What-if analysis</h1>
-        <p className="ax-page-sub">Train or choose a model on the Models page to enable what-if.</p>
-        <PageGuide
-          title="What-if needs a trained model first"
-          meta="What-if"
-          steps={['Choose model', 'Set values', 'Compare prediction']}
-        >
-          After a model is available, this page lets you adjust feature values and compare the prediction against a baseline.
-        </PageGuide>
-        {availableModels.length > 0 && (
-          <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Choose a model for What-if
-              <HelpButton
-                title="Choose a model for What-if"
-                text="This card lets you pick any trained model that supports prediction. Once selected, SimuCast prepares the model inputs so you can test scenarios."
-              />
-            </p>
-            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-              All trained models can be prepared for What-if. Tree-based models may change predictions in steps when inputs cross learned thresholds.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-              {availableModels.slice(0, 5).map((model) => (
-                <div key={model.id} className="ax-card" style={{ padding: '8px 10px' }}>
-                  <div className="ax-row">
-                    <span style={{ fontSize: 12 }}>{model.algorithm} - {model.target}</span>
-                    <button className="ax-btn" onClick={async () => {
-                      try {
-                        if (!model.has_whatif) await api.prepareModelForWhatIf(model.id)
-                        setFallbackModel({ ...model, has_whatif: true })
-                      } catch (err) {
-                        await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
-                      }
-                    }}>Use in What-if</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </>
-    )
-  }
+  if (!selectedModel) return <NoModelView availableModels={availableModels} setFallbackModel={setFallbackModel} dialog={dialog} />
   if (!modelFull) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Loading model...</p>
 
   const features = modelFull.whatif_features || []
+  const categoricalFeatures = features.filter((f) => f.kind === 'categorical')
+  const numericFeatures = features.filter((f) => f.kind !== 'categorical')
   const isProb = pred?.kind === 'probability'
-  const pct = isProb ? Math.round(pred.prediction * 100) : null
   const targetContext = pred?.target_context || modelFull.target_context
-  const warning = pred?.warning || rangeWarning(pred, targetContext)
-  const delta = pred && baseline ? pred.prediction - baseline.prediction : null
   const extrapolation = computeExtrapolation(inputs, features)
   const riskTone = riskStyle(extrapolation.overall_risk)
+  const delta = pred && baseline ? pred.prediction - baseline.prediction : null
 
   const resetToMean = () => {
     const init = {}
@@ -140,321 +143,400 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
     if (!pred) return
     const name = scenarioName.trim() || `Scenario ${scenarios.length + 1}`
     const scenario = { name, inputs: { ...inputs }, prediction: pred, extrapolation }
-    setScenarios([...scenarios, scenario])
+    setScenarios((prev) => [...prev.slice(0, SCENARIO_MAX - 1), scenario])
     setScenarioName('')
-    try {
-      await api.saveScenario(modelFull.id, scenario)
-    } catch (err) {
-      await dialog.alert({
-        title: 'Scenario Saved Locally',
-        message: 'The scenario was saved in this page, but documentation logging failed.',
-        details: err.message,
-        variant: 'danger',
-      })
-    }
+    try { await api.saveScenario(modelFull.id, scenario) } catch {}
   }
 
-  return (
-    <>
-      <h1 className="ax-page-title">What-if analysis</h1>
-      <p className="ax-page-sub">Using <code>{modelFull.name}</code>. Adjust feature values and see how changes affect the prediction.</p>
-      <PageGuide
-        title="Change one scenario at a time"
-        meta="What-if"
-        steps={['Adjust inputs', 'Read prediction', 'Save scenario', 'Compare']}
-      >
-        Start from the baseline values, change the variables you care about, then save useful scenarios for the report.
-      </PageGuide>
+  const deleteScenario = (idx) => setScenarios((prev) => prev.filter((_, i) => i !== idx))
 
-      <div id="whatif-section-controls" className="ax-card ax-module-card ax-card-whatif" style={{ marginBottom: 14, padding: 16 }}>
-        <div className="ax-module-head ax-whatif-head">
-          <div className="ax-module-head-main">
-            <p className="ax-module-title">Prediction result</p>
-            <p className="ax-module-subtitle">
-              Predicted {isProb ? `probability${pred?.positive_class ? ` of ${pred.positive_class}` : pred?.predicted_class ? ` of ${pred.predicted_class}` : ''}` : modelFull.target}
-            </p>
-          </div>
-          {pred && (
-            <ExplainButton
-              datasetId={dataset.id}
-              step="whatif-prediction"
-              params={{ target: modelFull.target, inputs, baseline_inputs: undefined }}
-              result={{ prediction: pred, baseline, delta, extrapolation }}
-              question="Explain this scenario prediction in plain English: what changed from the baseline, why the prediction shifted in that direction, and how confident the user should be given the extrapolation risk."
-              label="Explain"
-            />
+  const loadScenario = (s) => {
+    setInputs(s.inputs || {})
+    setSelectedScenarioName(s.name)
+    setPred(null)
+  }
+
+  const rangeMin = Number(targetContext?.min ?? 0)
+  const rangeMax = Number(targetContext?.max ?? 100)
+  const rangeMean = Number(targetContext?.mean ?? (rangeMin + rangeMax) / 2)
+  const currentPred = pred?.prediction ?? 0
+  const baselinePred = baseline?.prediction ?? rangeMean
+  const pctPosition = rangeMax > rangeMin ? Math.min(100, Math.max(0, ((currentPred - rangeMin) / (rangeMax - rangeMin)) * 100)) : 50
+  const baselinePct = rangeMax > rangeMin ? Math.min(100, Math.max(0, ((baselinePred - rangeMin) / (rangeMax - rangeMin)) * 100)) : 50
+
+  return (
+    <div className="ax-whatif-layout">
+      {/* ─── LEFT COLUMN ─── */}
+      <div className="ax-whatif-left">
+        {/* Header (pinned) */}
+        <div className="ax-whatif-left-head">
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-accent, #f97316)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            What-if · {modelFull.name}
+          </span>
+          <p className="ax-whatif-left-sub">
+            Adjust feature values to see how they affect the prediction
+          </p>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="ax-whatif-left-scroll">
+          {categoricalFeatures.length > 0 && (
+            <FeatureGroup label="Categorical features">
+              {categoricalFeatures.map((f) => (
+                <CategoricalPill key={f.name} feature={f} value={inputs[f.name]} onChange={(v) => setInputs({ ...inputs, [f.name]: v })} />
+              ))}
+            </FeatureGroup>
+          )}
+          {numericFeatures.length > 0 && (
+            <FeatureGroup label="Numeric features">
+              {numericFeatures.map((f) => (
+                <NumericSlider key={f.name} feature={f} value={inputs[f.name]} onChange={(v) => setInputs({ ...inputs, [f.name]: v })} />
+              ))}
+            </FeatureGroup>
           )}
         </div>
-        <div className="ax-row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
-          <div>
-            <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Current scenario
-              <HelpButton
-                title="Prediction result"
-                text="This card shows the model prediction for the current scenario. The baseline compares against the original average/default inputs, while the scenario risk warns when values go outside the training data range."
-              />
-            </p>
-            <p style={{ fontSize: 32, fontWeight: 500, margin: '2px 0 0', lineHeight: 1 }}>
-              {isProb ? `${pct}%` : pred?.prediction?.toFixed(3) ?? '-'}
-            </p>
-            {targetContext && !isProb && (
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
-                Dataset range: {fmt(targetContext.min)}-{fmt(targetContext.max)} | mean {fmt(targetContext.mean)}
-              </p>
-            )}
-            {baseline && pred && (
-              <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-                Baseline {formatPrediction(baseline)} | Current {formatPrediction(pred)} | Change {formatDelta(delta, isProb)}
-              </p>
-            )}
-          </div>
+
+        {/* Footer (pinned) */}
+        <div className="ax-whatif-left-foot">
+          <button className="ax-btn" onClick={resetToMean} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>Reset to mean</button>
+          <input
+            value={scenarioName}
+            onChange={(e) => setScenarioName(e.target.value)}
+            placeholder="Scenario name..."
+            style={{ flex: 1, fontSize: 11, minWidth: 0 }}
+          />
+          <button className="ax-btn prim" onClick={saveScenario} disabled={!pred} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>Save</button>
         </div>
-        {isProb && (
-          <div style={{ height: 8, background: 'var(--color-background-secondary)', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${pct}%`, background: probabilityColor(pred, modelFull), transition: 'width 0.15s' }} />
-          </div>
-        )}
-        <div style={{ marginTop: 12, padding: '10px 12px', border: `1px solid ${riskTone.border}`, background: riskTone.bg, borderRadius: 6, fontSize: 12, color: riskTone.fg }}>
-          <strong>Scenario risk: {extrapolation.overall_risk.toUpperCase()}</strong>
-          <br />
-          {extrapolation.out_of_range_features?.length > 0
-            ? 'This prediction is based on extrapolated inputs. The model has not seen similar values during training.'
-            : 'All numeric inputs are inside the dataset range seen during training.'}
-        </div>
-        {extrapolation.out_of_range_features?.length > 0 && (
-          <div style={{ marginTop: 12, padding: '10px 12px', border: `1px solid ${riskTone.border}`, background: riskTone.bg, borderRadius: 6, fontSize: 12, color: riskTone.fg }}>
-            <strong>Out-of-range features:</strong> {extrapolation.out_of_range_features.join(', ')}
-            <br />
-            Predictions may become less reliable outside the conditions present in the dataset.
-          </div>
-        )}
-        {warning && (
-          <div style={{ marginTop: 12, padding: '10px 12px', border: '1px solid #EF9F27', background: '#FFF8EA', borderRadius: 6, fontSize: 12, color: '#7A4B00' }}>
-            {warning}
-          </div>
-        )}
-        {pred?.note && (
-          <div style={{ marginTop: 12, padding: '10px 12px', border: '1px solid var(--color-border-tertiary)', background: 'var(--color-background-secondary)', borderRadius: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-            {pred.note}
-          </div>
-        )}
       </div>
 
-      <p className="ax-lbl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        Adjust feature values
-        <HelpButton
-          title="Adjust feature values"
-          text="Use these controls to change the original model features and immediately see how the trained model prediction responds. Numeric controls show the observed range from training data."
-        />
-      </p>
-      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: -6 }}>
-        See how dataset-learned values affect the prediction. Numeric controls show the observed range and mean from the training data.
-      </p>
-      <div className="ax-card ax-module-card ax-card-whatif">
-        <div className="ax-module-head">
-          <div className="ax-module-head-main">
-            <p className="ax-module-title">Adjust feature values</p>
+      {/* ─── RIGHT COLUMN ─── */}
+      <div className="ax-whatif-main">
+        {/* Prediction Result Card */}
+        <div className="ax-card" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Prediction result — {modelFull.target}
+              </span>
+            </div>
+            {pred && (
+              <ExplainButton
+                datasetId={dataset.id}
+                step="whatif-prediction"
+                params={{ target: modelFull.target, inputs, baseline_inputs: baselineInputs }}
+                result={{ prediction: pred, baseline, delta, extrapolation }}
+                question="Explain this scenario prediction in plain English: what changed from the baseline, why the prediction shifted, and how confident the user should be."
+                label="Explain"
+              />
+            )}
           </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, marginBottom: 16 }}>
+            {/* Current scenario */}
+            <div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Current scenario</span>
+              <p style={{ fontSize: 40, fontWeight: 700, margin: '4px 0 2px', color: 'var(--color-text-primary)', lineHeight: 1.1 }}>
+                {isProb ? `${Math.round(currentPred * 100)}%` : fmt(currentPred)}
+              </p>
+              {baseline && (
+                <p style={{ fontSize: 12, margin: '4px 0 0', color: delta > 0 ? 'var(--color-text-success, #16a34a)' : delta < 0 ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary)' }}>
+                  {formatDelta(delta, isProb)} vs baseline
+                </p>
+              )}
+              <div style={{
+                marginTop: 10, padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: riskTone.bg, color: riskTone.fg, border: `1px solid ${riskTone.border}`,
+                display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%', boxSizing: 'border-box'
+              }}>
+                Scenario risk: {extrapolation.overall_risk.toUpperCase()}
+                {extrapolation.out_of_range_features?.length > 0 ? ' — extrapolated inputs' : ' — all inputs within dataset range'}
+              </div>
+            </div>
+            {/* Baseline */}
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Baseline</span>
+              <p style={{ fontSize: 22, fontWeight: 500, margin: '4px 0 0', color: 'var(--color-text-secondary)' }}>
+                {isProb ? `${Math.round(baselinePred * 100)}%` : fmt(baselinePred)}
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>mean prediction</p>
+            </div>
+          </div>
+
+          {/* Range gauge */}
+          {targetContext && !isProb && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+                <span>Dataset range: {fmt(rangeMin)} – {fmt(rangeMax)}</span>
+                <span style={{ color: 'var(--color-accent, #f97316)', fontWeight: 600 }}>{Math.round(pctPosition)}%</span>
+              </div>
+              <div style={{ position: 'relative', height: 28 }}>
+                {/* Track */}
+                <div style={{ position: 'absolute', top: 10, left: 0, right: 0, height: 8, background: 'var(--color-background-secondary, #f3f4f6)', borderRadius: 4 }}>
+                  {/* Fill */}
+                  <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${pctPosition}%`, background: 'linear-gradient(90deg, var(--color-accent, #f97316), #fb923c)', borderRadius: 4, transition: 'width 0.3s ease' }} />
+                </div>
+                {/* Baseline marker */}
+                <div style={{ position: 'absolute', top: 6, left: `${baselinePct}%`, width: 2, height: 16, background: 'var(--color-text-secondary)', borderRadius: 1, transform: 'translateX(-1px)' }} />
+                {/* Current dot */}
+                <div style={{ position: 'absolute', top: 6, left: `${pctPosition}%`, width: 16, height: 16, background: '#fff', border: '3px solid var(--color-accent, #f97316)', borderRadius: '50%', transform: 'translate(-8px, 0)', boxShadow: '0 1px 4px rgba(0,0,0,0.15)', transition: 'left 0.3s ease' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                <span>{fmt(rangeMin)}</span>
+                <span>↑ baseline</span>
+                <span>{fmt(rangeMax)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Note box */}
+          {pred?.note && (
+            <div style={{ marginTop: 12, padding: '8px 10px', background: 'var(--color-background-secondary, #f9fafb)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+              {pred.note}
+            </div>
+          )}
         </div>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
-          <input type="checkbox" checked={restrictToRange} onChange={(e) => setRestrictToRange(e.target.checked)} />
-          Restrict inputs to dataset range
-        </label>
-        <p style={{ margin: '-6px 0 12px', fontSize: 11, color: 'var(--color-text-secondary)' }}>
-          Sliders stay in the safe dataset range. Manual boxes can go beyond the range unless restriction is turned on.
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '190px 1fr 120px', gap: '12px', alignItems: 'center', fontSize: 12 }}>
-          {features.map((f) => {
-            const val = inputs[f.name]
-            const numericVal = Number(val ?? f.mean)
-            const featureRisk = extrapolation.details?.find((item) => item.feature === f.name)
-            return (
-              <React.Fragment key={f.name}>
-                <label>
-                  <span style={{ display: 'block', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                    {f.name}
-                  </span>
-                  {f.kind !== 'categorical' && (
-                    <span style={{ display: 'block', color: 'var(--color-text-tertiary)', fontSize: 10, marginTop: 2 }}>
-                      Range {fmt(f.min)}-{fmt(f.max)} | mean {fmt(f.mean)}
-                    </span>
-                  )}
-                </label>
-                {f.kind === 'categorical' ? (
-                  <select value={val ?? ''} onChange={(e) => setInputs({ ...inputs, [f.name]: e.target.value })}>
-                    {(f.values || []).map((value) => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                ) : (
-                  <div>
-                    <input
-                      type="range"
-                      min={f.min}
-                      max={f.max}
-                      step={Math.max((f.max - f.min) / 100, 0.01)}
-                      value={clamp(numericVal, Number(f.min), Number(f.max))}
-                      onChange={(e) => setInputs({ ...inputs, [f.name]: +e.target.value })}
-                      style={{ width: '100%' }}
-                    />
-                    {featureRisk && (
-                      <p style={{ margin: '4px 0 0', fontSize: 11, color: riskStyle(featureRisk.risk).fg }}>
-                        Outside dataset range ({fmt(f.min)}-{fmt(f.max)}). {distanceText(featureRisk)}. Prediction reliability may decrease.
-                      </p>
+
+        {/* Scenario Compare Card */}
+        {(baseline || scenarios.length > 0) && (
+          <div className="ax-card" style={{ padding: 20 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scenario compare</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+              {/* Baseline */}
+              <div style={{ borderTop: '3px solid var(--color-border-tertiary)', paddingTop: 12 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>Baseline</span>
+                <p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 8px', color: 'var(--color-text-secondary)' }}>
+                  {formatPrediction(baseline)}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {baselineInputs && Object.entries(baselineInputs).slice(0, 8).map(([k, v]) => (
+                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                      <span style={{ color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>{String(v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Current inputs */}
+              <div style={{ borderTop: '3px solid var(--color-accent, #f97316)', paddingTop: 12 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>Current inputs</span>
+                <p style={{ fontSize: 22, fontWeight: 700, margin: '4px 0 2px', color: 'var(--color-accent, #f97316)' }}>
+                  {formatPrediction(pred)}
+                </p>
+                {baseline && (
+                  <p style={{ fontSize: 11, margin: '0 0 8px', color: delta > 0 ? 'var(--color-text-success, #16a34a)' : delta < 0 ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary)' }}>
+                    {formatDelta(delta, isProb)} vs baseline
+                  </p>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {Object.entries(inputs).slice(0, 8).map(([k, v]) => {
+                    const changed = baselineInputs && String(baselineInputs[k]) !== String(v)
+                    return (
+                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: changed ? 'var(--color-accent, #f97316)' : 'var(--color-text-secondary)', fontWeight: changed ? 700 : 400 }}>{String(v)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Saved Scenarios Card */}
+        <div className="ax-card" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saved scenarios</span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{scenarios.length} saved</span>
+          </div>
+          {scenarios.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', fontStyle: 'italic', margin: 0, textAlign: 'center', padding: '12px 0' }}>
+              No scenarios saved yet — adjust values and click Save
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {scenarios.map((s, i) => {
+                const sDelta = baseline ? s.prediction.prediction - baseline.prediction : null
+                return (
+                  <div
+                    key={i}
+                    onClick={() => loadScenario(s)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 12, background: selectedScenarioName === s.name ? 'var(--color-accent-light, #fff7ed)' : 'transparent' }}
+                    onMouseEnter={(e) => { if (selectedScenarioName !== s.name) e.currentTarget.style.background = 'var(--color-background-secondary)' }}
+                    onMouseLeave={(e) => { if (selectedScenarioName !== s.name) e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-text-primary)' }}>{formatPrediction(s.prediction)}</span>
+                    {sDelta !== null && (
+                      <span style={{ fontSize: 11, color: sDelta > 0 ? 'var(--color-text-success, #16a34a)' : sDelta < 0 ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                        {formatDelta(sDelta, isProb)}
+                      </span>
                     )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteScenario(i) }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
+                      title="Delete scenario"
+                    >×</button>
                   </div>
-                )}
-                {f.kind === 'categorical' ? (
-                  <span style={{ fontWeight: 500, textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                    {val}
-                  </span>
-                ) : (
-                  <input
-                    type="number"
-                    value={val ?? ''}
-                    step={Math.max((f.max - f.min) / 100, 0.01)}
-                    onChange={(e) => {
-                      const raw = e.target.value
-                      if (raw === '') {
-                        setInputs({ ...inputs, [f.name]: '' })
-                        return
-                      }
-                      const next = Number(raw)
-                      if (!Number.isFinite(next)) return
-                      const value = restrictToRange ? clamp(next, Number(f.min), Number(f.max)) : next
-                      setInputs({ ...inputs, [f.name]: value })
-                    }}
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
-                      borderColor: featureRisk ? riskStyle(featureRisk.risk).border : undefined,
-                    }}
-                    title={restrictToRange ? 'Turn off range restriction to explore extrapolated values.' : 'Manual input can exceed the dataset range.'}
-                  />
-                )}
-              </React.Fragment>
-            )
-          })}
-        </div>
-        <div className="ax-row" style={{ marginTop: 14 }}>
-          <button className="ax-btn" onClick={resetToMean}>Reset to average values</button>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input value={scenarioName} onChange={(e) => setScenarioName(e.target.value)} placeholder="Scenario name" />
-            <button className="ax-btn prim" onClick={saveScenario} disabled={!pred}>Save scenario</button>
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  )
+}
 
-      {(baseline || scenarios.length > 0) && (
-        <>
-          <p className="ax-lbl" style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-            Scenario compare
-            <HelpButton
-              title="Scenario compare"
-              text="This section compares the baseline, current inputs, and saved scenarios. Clicking a saved scenario loads its values back into the adjustment controls."
-            />
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-            {baseline && <ScenarioCard name="Baseline" prediction={baseline} inputs={baselineInputs} />}
-            {pred && <ScenarioCard name="Current inputs" prediction={pred} baseline={baseline} extrapolation={extrapolation} inputs={inputs} active />}
-            {scenarios.map((s, i) => (
-              <ScenarioCard
-                key={i}
-                name={s.name}
-                prediction={s.prediction}
-                baseline={baseline}
-                extrapolation={s.extrapolation}
-                inputs={s.inputs}
-                active={selectedScenarioName === s.name}
-                onClick={() => {
-                  setInputs(s.inputs || {})
-                  setSelectedScenarioName(s.name)
-                  setPred(null)
-                }}
-              />
+/* ─── Sub-components ─── */
+
+function FeatureGroup({ label, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
+    </div>
+  )
+}
+
+function CategoricalPill({ feature, value, onChange }) {
+  return (
+    <div>
+      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)', display: 'block', marginBottom: 4 }}>{feature.name}</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {(feature.values || []).map((v) => {
+          const active = String(value) === String(v)
+          return (
+            <button
+              key={v}
+              onClick={() => onChange(v)}
+              style={{
+                padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: active ? 700 : 500, cursor: 'pointer',
+                border: active ? 'none' : '1.5px solid var(--color-border-tertiary)',
+                background: active ? 'var(--color-accent, #f97316)' : 'transparent',
+                color: active ? '#fff' : 'var(--color-text-secondary)',
+                transition: 'all 0.15s ease'
+              }}
+            >{v}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function NumericSlider({ feature, value, onChange }) {
+  const numericVal = Number(value ?? feature.mean)
+  const min = Number(feature.min)
+  const max = Number(feature.max)
+  const mean = Number(feature.mean)
+  const step = Math.max((max - min) / 200, 0.01)
+  const deltaFromMean = numericVal - mean
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>{feature.name}</span>
+        <input
+          type="number"
+          value={Number.isFinite(numericVal) ? numericVal : ''}
+          step={step}
+          onChange={(e) => {
+            const raw = e.target.value
+            if (raw === '') { onChange(''); return }
+            const next = Number(raw)
+            if (Number.isFinite(next)) onChange(next)
+          }}
+          style={{ width: 64, fontSize: 11, fontFamily: 'var(--font-mono)', textAlign: 'right', padding: '2px 4px', border: '1px solid var(--color-border-tertiary)', borderRadius: 4 }}
+        />
+      </div>
+      {/* Slider track with mean marker */}
+      <div style={{ position: 'relative', height: 24, marginTop: 2 }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={clamp(numericVal, min, max)}
+          onChange={(e) => onChange(+e.target.value)}
+          style={{ width: '100%', height: 24, cursor: 'pointer', accentColor: 'var(--color-accent, #f97316)' }}
+        />
+        {/* Mean tick marker */}
+        {max > min && (
+          <div style={{ position: 'absolute', top: 0, left: `${((mean - min) / (max - min)) * 100}%`, width: 1, height: 24, background: 'var(--color-text-tertiary)', pointerEvents: 'none', opacity: 0.5 }} />
+        )}
+      </div>
+      {/* Min / Max labels */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: -2 }}>
+        <span>{fmt(min)}</span>
+        <span>{fmt(max)}</span>
+      </div>
+      {/* Change from mean indicator */}
+      <div style={{ fontSize: 11, marginTop: 2 }}>
+        {Math.abs(deltaFromMean) < step ? (
+          <span style={{ color: 'var(--color-text-tertiary)' }}>At mean</span>
+        ) : (
+          <span style={{ color: deltaFromMean > 0 ? 'var(--color-text-success, #16a34a)' : 'var(--color-text-danger, #dc2626)' }}>
+            {deltaFromMean > 0 ? '+' : ''}{fmt(deltaFromMean)} from mean ({fmt(mean)})
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function NoModelView({ availableModels, setFallbackModel, dialog }) {
+  return (
+    <>
+      <div style={{ marginBottom: 12 }}>
+        <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-accent, #f97316)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>What-if</span>
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Train or choose a model on the Models page to enable what-if.</p>
+      {availableModels.length > 0 && (
+        <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
+          <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Choose a model for What-if</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+            {availableModels.slice(0, 5).map((model) => (
+              <div key={model.id} className="ax-card" style={{ padding: '8px 10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12 }}>{model.algorithm} - {model.target}</span>
+                  <button className="ax-btn" onClick={async () => {
+                    try {
+                      if (!model.has_whatif) await api.prepareModelForWhatIf(model.id)
+                      setFallbackModel({ ...model, has_whatif: true })
+                    } catch (err) {
+                      await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
+                    }
+                  }}>Use in What-if</button>
+                </div>
+              </div>
             ))}
           </div>
-        </>
+        </div>
       )}
     </>
   )
 }
 
-// Card displaying a saved scenario's prediction, delta from baseline and risk badge.
-function ScenarioCard({ name, prediction, baseline, extrapolation, inputs, active, onClick }) {
-  const isProb = prediction.kind === 'probability'
-  const delta = baseline ? prediction.prediction - baseline.prediction : null
-  const scenarioRisk = extrapolation?.overall_risk
-  return (
-    <div
-      className="ax-card"
-      onClick={onClick}
-      style={{ padding: '10px 12px', border: active ? '2px solid var(--color-border-info)' : undefined, cursor: onClick ? 'pointer' : undefined }}
-      title={onClick ? 'Load this scenario into the adjust feature values controls.' : undefined}
-    >
-      <p style={{ fontSize: 11, color: active ? 'var(--color-text-info)' : 'var(--color-text-secondary)', margin: 0 }}>{name}</p>
-      <p style={{ fontSize: 22, fontWeight: 500, margin: '2px 0 0' }}>
-        {formatPrediction(prediction)}
-      </p>
-      {delta !== null && (
-        <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>
-          {formatDelta(delta, isProb)} vs baseline
-        </p>
-      )}
-      {scenarioRisk && scenarioRisk !== 'low' && (
-        <p style={{ fontSize: 11, color: riskStyle(scenarioRisk).fg, margin: '4px 0 0' }}>
-          Scenario risk: {scenarioRisk.toUpperCase()}
-        </p>
-      )}
-      {inputs && Object.keys(inputs).length > 0 && (
-        <details style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
-          <summary style={{ fontSize: 11, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Values used</summary>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '3px 8px', marginTop: 6, fontSize: 10 }}>
-            {Object.entries(inputs).slice(0, 10).map(([key, value]) => (
-              <React.Fragment key={key}>
-                <span style={{ color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{key}</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>{String(value)}</span>
-              </React.Fragment>
-            ))}
-          </div>
-        </details>
-      )}
-    </div>
-  )
-}
-
-// Picks a status color for a probability prediction based on target sentiment and value.
-function probabilityColor(prediction, model) {
-  const target = String(prediction?.positive_class || prediction?.predicted_class || model?.target || '').toLowerCase()
-  const negativeTarget = /fail|risk|drop|churn|default|bad|loss|no|not|negative/.test(target)
-  if (negativeTarget) {
-    const pct = Math.round(Number(prediction?.prediction || 0) * 100)
-    return pct >= 60 ? '#EF4444' : pct >= 35 ? '#F97316' : '#10B981'
-  }
-  return '#3B82F6'
-}
+/* ─── Helpers ─── */
 
 async function hydrateCurrentCategoryValues(datasetId, features) {
   if (!datasetId) return features
-  const hydrated = await Promise.all(
+  return Promise.all(
     (features || []).map(async (feature) => {
       if (feature.kind !== 'categorical') return feature
       try {
         const stats = await api.columnStats(datasetId, feature.name)
         const values = (stats.value_counts || []).map((item) => String(item.value))
         if (!values.length) return feature
-        return {
-          ...feature,
-          values,
-          default: values.includes(feature.default) ? feature.default : values[0],
-        }
-      } catch (err) {
-        return feature
-      }
+        return { ...feature, values, default: values.includes(feature.default) ? feature.default : values[0] }
+      } catch { return feature }
     }),
   )
-  return hydrated
 }
 
-// Computes per-feature extrapolation distance, direction and overall risk for inputs.
 function computeExtrapolation(inputs, features) {
   const details = []
   for (const f of features || []) {
@@ -464,93 +546,40 @@ function computeExtrapolation(inputs, features) {
     const hi = Number(f.max)
     if (![value, lo, hi].every(Number.isFinite)) continue
     const span = Math.max(hi - lo, Math.abs(hi), Math.abs(lo), 1)
-    let distance = 0
-    let direction = ''
-    let boundary = null
-    if (value < lo) {
-      distance = lo - value
-      direction = 'below'
-      boundary = lo
-    } else if (value > hi) {
-      distance = value - hi
-      direction = 'above'
-      boundary = hi
-    }
+    let distance = 0, direction = '', boundary = null
+    if (value < lo) { distance = lo - value; direction = 'below'; boundary = lo }
+    else if (value > hi) { distance = value - hi; direction = 'above'; boundary = hi }
     if (!distance) continue
-    const deviationRatio = distance / span
-    details.push({
-      feature: f.name,
-      value,
-      min: lo,
-      max: hi,
-      distance,
-      direction,
-      boundary,
-      deviation_ratio: deviationRatio,
-      risk: deviationRatio <= 0.1 ? 'medium' : 'high',
-    })
+    details.push({ feature: f.name, value, min: lo, max: hi, distance, direction, boundary, deviation_ratio: distance / span, risk: distance / span <= 0.1 ? 'medium' : 'high' })
   }
-  const overall = details.some((item) => item.risk === 'high') ? 'high' : details.length ? 'medium' : 'low'
-  return {
-    overall_risk: overall,
-    out_of_range_features: details.map((item) => item.feature),
-    details,
-    message: details.length ? 'Some inputs exceed dataset boundaries. Predictions may be unreliable.' : null,
-  }
+  const overall = details.some((d) => d.risk === 'high') ? 'high' : details.length ? 'medium' : 'low'
+  return { overall_risk: overall, out_of_range_features: details.map((d) => d.feature), details }
 }
 
-// Returns background, foreground and border colors corresponding to a risk level.
 function riskStyle(risk) {
-  if (risk === 'high') return { bg: '#FFF1F1', fg: '#9E2524', border: '#E24B4A' }
-  if (risk === 'medium') return { bg: '#FFF8EA', fg: '#7A4B00', border: '#EF9F27' }
-  return { bg: '#F0FAF6', fg: '#18765B', border: '#1D9E75' }
+  if (risk === 'high') return { bg: '#FEF2F2', fg: '#991B1B', border: '#FECACA' }
+  if (risk === 'medium') return { bg: '#FFFBEB', fg: '#92400E', border: '#FDE68A' }
+  return { bg: '#F0FDF4', fg: '#166534', border: '#BBF7D0' }
 }
 
-// Formats an extrapolation entry as a short distance, direction and boundary string.
-function distanceText(risk) {
-  if (!risk) return ''
-  return `${fmt(risk.distance)} ${risk.direction} ${fmt(risk.boundary)}`
-}
-
-// Clamps a numeric value into the inclusive min and max range.
 function clamp(value, min, max) {
   if (!Number.isFinite(value)) return min
   return Math.min(Math.max(value, min), max)
 }
 
-// Formats a numeric value with one or two decimals depending on magnitude.
 function fmt(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
   return Math.abs(n) >= 100 ? n.toFixed(1) : n.toFixed(2)
 }
 
-// Formats a prediction as either a percentage probability or a fixed-decimal value.
 function formatPrediction(prediction) {
   if (!prediction) return '-'
-  return prediction.kind === 'probability'
-    ? `${Math.round(prediction.prediction * 100)}%`
-    : prediction.prediction.toFixed(3)
+  return prediction.kind === 'probability' ? `${Math.round(prediction.prediction * 100)}%` : fmt(prediction.prediction)
 }
 
-// Formats the delta between two predictions, using points for probabilities.
 function formatDelta(delta, isProb) {
   if (delta === null || delta === undefined || !Number.isFinite(delta)) return '-'
   const sign = delta > 0 ? '+' : ''
-  return isProb ? `${sign}${Math.round(delta * 100)} pts` : `${sign}${delta.toFixed(3)}`
-}
-
-// Returns a warning message when a regression prediction lies outside the dataset range.
-function rangeWarning(prediction, targetContext) {
-  if (!prediction || prediction.kind === 'probability' || !targetContext) return null
-  const lo = Number(targetContext.min)
-  const hi = Number(targetContext.max)
-  const value = Number(prediction.prediction)
-  if (![lo, hi, value].every(Number.isFinite)) return null
-  const span = hi - lo
-  const pad = Math.max(span * 0.15, 1)
-  if (value < lo - pad || value > hi + pad) {
-    return 'Prediction seems outside the expected dataset range. Check preprocessing, feature values, or model fit.'
-  }
-  return null
+  return isProb ? `${sign}${Math.round(delta * 100)} pts` : `${sign}${fmt(delta)}`
 }
