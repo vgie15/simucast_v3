@@ -7,12 +7,14 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { useDatasetTableState } from './useDatasetTableState'
-import { Highlighter, Info, Sparkles } from 'lucide-react'
+import { Database, Highlighter, Info, Sparkles } from 'lucide-react'
 
 const PAGE_SIZE = 100
 const VIEW_MODES = [
-  { id: 'original', label: 'Original' },
-  { id: 'modeling', label: 'For Modeling' },
+  { id: 'original', label: 'Original', icon: Database },
+  { id: 'cleaned', label: 'Cleaned', icon: Sparkles },
+  { id: 'highlight', label: 'Highlighted', icon: Highlighter },
+  { id: 'modeling', label: 'For Modeling', icon: Sparkles },
 ]
 const TYPE_ICON = {
   numeric: '#',
@@ -177,12 +179,6 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   }, [hidden])
 
   useEffect(() => {
-    if (viewMode === 'cleaned') {
-      setViewMode('modeling')
-    }
-  }, [setViewMode, viewMode])
-
-  useEffect(() => {
     setVisibleColumns((current) => {
       const filtered = current.filter((name) => allColumns.includes(name))
       if (filtered.length) return allColumns.filter((name) => filtered.includes(name))
@@ -267,9 +263,9 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     setError('')
     const stageId = viewMode === 'original'
       ? 'original'
-      : modelingStageId === 'original'
-        ? 'original'
-        : modelingStageId || dataset.current_stage_id || undefined
+      : viewMode === 'modeling'
+        ? (modelingStageId === 'original' ? 'original' : modelingStageId || dataset.current_stage_id || undefined)
+        : dataset.current_stage_id || undefined
 
     api
       .getRows(datasetId, page, PAGE_SIZE, stageId)
@@ -445,38 +441,26 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
           <div className="ax-floating-dataset-toolbar">
             <div className="ax-floating-dataset-tabbar">
               <div className="ax-segmented-control ax-floating-dataset-modes" role="tablist" aria-label="Preview dataset view">
-                {VIEW_MODES.map((mode, index) => (
-                  <React.Fragment key={mode.id}>
-                    {index > 0 && <span className="ax-floating-dataset-tab-separator">·</span>}
-                    <button
-                      type="button"
-                      className={`ax-segmented-item ${viewMode === mode.id || (mode.id === 'modeling' && viewMode !== 'original') ? 'active' : ''}`}
-                      onClick={() => setViewMode(mode.id)}
-                    >
-                      <span className="ax-segmented-label">{mode.label}</span>
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
-              <div className="ax-floating-dataset-mode-icons" aria-label="Dataset view shortcuts">
-                <button
-                  type="button"
-                  className={viewMode !== 'original' && viewMode !== 'highlight' ? 'active' : ''}
-                  onClick={() => setViewMode('modeling')}
-                  title="For Modeling"
-                  aria-label="For Modeling"
-                >
-                  <Sparkles size={14} />
-                </button>
-                <button
-                  type="button"
-                  className={viewMode === 'highlight' ? 'active' : ''}
-                  onClick={() => setViewMode('highlight')}
-                  title="Highlight changes"
-                  aria-label="Highlight changes"
-                >
-                  <Highlighter size={14} />
-                </button>
+                {VIEW_MODES.map((mode, index) => {
+                  const active = viewMode === mode.id
+                  const Icon = mode.icon
+                  const disabled = mode.id !== 'original' && !hasChanges
+                  return (
+                    <React.Fragment key={mode.id}>
+                      {index > 0 && <span className="ax-floating-dataset-control-divider" aria-hidden="true" />}
+                      <button
+                        type="button"
+                        className={`ax-segmented-item ${active ? 'active' : ''}`}
+                        onClick={() => setViewMode(mode.id)}
+                        disabled={disabled}
+                        title={disabled ? 'Apply a change first to enable this view' : mode.label}
+                      >
+                        <Icon size={14} />
+                        <span className="ax-segmented-label">{mode.label}</span>
+                      </button>
+                    </React.Fragment>
+                  )
+                })}
               </div>
             </div>
             <div className="ax-floating-dataset-tools">

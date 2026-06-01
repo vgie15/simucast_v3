@@ -699,6 +699,8 @@ function DataToolsToolbar({
       tools: [
         { key: 'labels', label: 'Labels', icon: 'tag', tip: 'Standardize labels', issue: hasIssue.labels },
         { key: 'bin', label: 'Bin', icon: 'chart-histogram', tip: 'Create binned columns' },
+        { key: 'scale', label: 'Scale', icon: 'ruler-measure', tip: 'Scale numeric values' },
+        { key: 'encode', label: 'Encode', icon: 'binary', tip: 'Encode categorical values' },
         { key: 'format', label: 'Format', icon: 'hash', tip: 'Numeric formatting (decimals)' },
       ],
     },
@@ -728,7 +730,7 @@ function DataToolsToolbar({
   const activeTool = openTool === 'columns'
     ? { key: 'columns', label: 'Columns', icon: 'eye' }
     : toolMap[openTool]
-  const recommendationTools = new Set(['missing', 'outliers', 'duplicates', 'labels', 'bin', 'format'])
+  const recommendationTools = new Set(['missing', 'outliers', 'duplicates', 'labels', 'bin', 'scale', 'encode', 'format'])
   const hasRecommendationToggle = recommendationTools.has(openTool)
   const openFromButton = (toolKey, event) => {
     const shell = event.currentTarget.closest('.ax-data-toolbar-shell')
@@ -891,6 +893,12 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
   }
   if (toolKey === 'bin') {
     return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Binned column')} initialTool="bins" compact showRecommendations={showRecommendations} />
+  }
+  if (toolKey === 'scale') {
+    return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Scaled column')} initialTool="scale" compact showRecommendations={showRecommendations} />
+  }
+  if (toolKey === 'encode') {
+    return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Encoded column')} initialTool="encode" compact showRecommendations={showRecommendations} />
   }
   if (toolKey === 'format') {
     return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Formatted column')} initialTool="format" compact showRecommendations={showRecommendations} />
@@ -1213,6 +1221,7 @@ function TablerIcon({ name }) {
     tag: <><path d="M4 4h6l10 10-6 6L4 10V4z" /><circle cx="8" cy="8" r="1" /></>,
     'chart-histogram': <><path d="M4 19h16" /><path d="M7 16V9M12 16V5M17 16v-3" /></>,
     'ruler-measure': <><path d="M4 15l11-11 5 5-11 11-5-5z" /><path d="M8 15l-1-1M11 12l-1-1M14 9l-1-1" /></>,
+    binary: <><path d="M7 4h4v16H7zM13 4h4v16h-4z" /><path d="M9 8h.01M15 16h.01M9 16h.01M15 8h.01" /></>,
     hash: <><path d="M5 9h14M5 15h14M9 4L7 20M17 4l-2 16" /></>,
     'layout-columns': <><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M12 5v14" /></>,
     columns: <><path d="M6 5h5v14H6zM13 5h5v14h-5z" /></>,
@@ -1698,11 +1707,11 @@ function FeatureRecommendationCard({ recommendation }) {
   )
 }
 
-// Card offering binning and numeric formatting tools for creating new feature columns.
+// Card offering transform tools for creating feature columns and modeling-ready values.
 function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', compact = false, showRecommendations = false }) {
   const auth = useAuth()
   const [open, setOpen] = useState(compact)
-  const [tool, setTool] = useState(initialTool) // 'bins' | 'format'
+  const [tool, setTool] = useState(initialTool)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
@@ -1710,7 +1719,9 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
 
   const variables = dataset?.variables || []
   const numericVariables = variables.filter((v) => ['numeric','int','float'].includes(v.dtype))
+  const categoricalVariables = variables.filter((v) => ['category', 'text', 'binary'].includes(v.dtype))
   const numVars = numericVariables.map((v) => v.name)
+  const catVars = categoricalVariables.map((v) => v.name)
 
   // Bins state
   const [binCol, setBinCol] = useState('')
@@ -1723,6 +1734,16 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
   const [fmtOp, setFmtOp] = useState('round')
   const [fmtParam, setFmtParam] = useState('2')
   const [fmtNewName, setFmtNewName] = useState('')
+
+  // Scale state
+  const [scaleCol, setScaleCol] = useState('')
+  const [scaleMethod, setScaleMethod] = useState('minmax')
+  const [scaleNewName, setScaleNewName] = useState('')
+
+  // Encode state
+  const [encodeCol, setEncodeCol] = useState('')
+  const [encodeMethod, setEncodeMethod] = useState('one_hot')
+  const [encodePrefix, setEncodePrefix] = useState('')
   const binRecommendation = recommendBinning(numericVariables)
   const formatRecommendation = recommendNumericFormatting(numericVariables)
 
@@ -1747,6 +1768,14 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
   }, [formatRecommendation?.column, fmtCol])
 
   useEffect(() => {
+    if (!scaleCol && numVars.length) setScaleCol(numVars[0])
+  }, [numVars.join('|'), scaleCol])
+
+  useEffect(() => {
+    if (!encodeCol && catVars.length) setEncodeCol(catVars[0])
+  }, [catVars.join('|'), encodeCol])
+
+  useEffect(() => {
     setAiSuggestion(null)
   }, [tool, dataset?.current_stage_id])
 
@@ -1759,22 +1788,27 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
     setAiLoading(true)
     setAiSuggestion(null)
     try {
-      const activeRecommendation = tool === 'bins' ? binRecommendation : formatRecommendation
+      const activeRecommendation = tool === 'bins' ? binRecommendation : tool === 'format' ? formatRecommendation : null
       const payload = {
         stage_id: dataset.current_stage_id,
         tool,
         system_recommendation: activeRecommendation || null,
         selected_options: tool === 'bins'
           ? { column: binCol, bins: binCount, labels: binLabels, new_name: binNewName || `${binCol || 'column'}_bin` }
-          : { column: fmtCol, operation: fmtOp, decimals: fmtParam, new_name: fmtNewName || fmtCol },
+          : tool === 'scale'
+            ? { column: scaleCol, method: scaleMethod, new_name: scaleNewName || `${scaleCol || 'column'}_${scaleMethod}` }
+            : tool === 'encode'
+              ? { column: encodeCol, method: encodeMethod, prefix: encodePrefix || encodeCol }
+              : { column: fmtCol, operation: fmtOp, decimals: fmtParam, new_name: fmtNewName || fmtCol },
         numeric_columns: numericVariables.map((v) => ({ name: v.name, type: v.dtype, unique: v.unique })),
-        supported_actions: ['create bins', 'numeric formatting'],
+        categorical_columns: categoricalVariables.map((v) => ({ name: v.name, type: v.dtype, unique: v.unique })),
+        supported_actions: ['create bins', 'scale numeric values', 'encode categories', 'numeric formatting'],
       }
       const r = await api.aiExplain(
         dataset.id,
         `feature-tools-${tool}-recommendation:${dataset.current_stage_id || 'current'}`,
         payload,
-        'Give plain-text advice for this optional feature tool. Recommend only supported SimuCast actions: create bins or numeric formatting. Explain whether it is useful and what settings to use. Do not apply changes.',
+        'Give plain-text advice for this optional feature tool. Recommend only supported SimuCast actions: create bins, scale numeric values, encode categories, or numeric formatting. Explain whether it is useful and what settings to use. Do not apply changes.',
         payload,
       )
       setAiSuggestion({ ok: true, text: r.explanation || 'AI suggestion unavailable.' })
@@ -1793,6 +1827,12 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
       if (tool === 'bins') {
         if (!binCol) { setMsg('Select a column to bin.'); setBusy(false); return }
         body = { operation: 'bin', column: binCol, bins: Number(binCount), labels: binLabels ? binLabels.split(',').map((s) => s.trim()) : null, new_name: binNewName || `${binCol}_bin` }
+      } else if (tool === 'scale') {
+        if (!scaleCol) { setMsg('Select a numeric column to scale.'); setBusy(false); return }
+        body = { operation: scaleMethod, column: scaleCol, new_name: scaleNewName || (scaleMethod === 'zscore' ? `${scaleCol}_z` : `${scaleCol}_scaled`) }
+      } else if (tool === 'encode') {
+        if (!encodeCol) { setMsg('Select a categorical column to encode.'); setBusy(false); return }
+        body = { operation: 'encode', column: encodeCol, method: encodeMethod, prefix: encodePrefix || encodeCol }
       } else if (tool === 'format') {
         if (!fmtCol) { setMsg('Select a column.'); setBusy(false); return }
         body = { operation: 'round', column: fmtCol, param: fmtParam, new_name: fmtNewName || fmtCol }
@@ -1811,7 +1851,7 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
     <div className={`ax-card ax-module-card ax-card-prep ax-busy-host ${busy ? 'is-busy' : ''} ${compact ? 'ax-tool-embedded-card' : ''}`} style={{ marginBottom: compact ? 0 : 16 }}>
       <BusyOverlay
         active={busy}
-        title={tool === 'format' ? 'Formatting numeric values...' : 'Applying feature engineering...'}
+        title={tool === 'format' ? 'Formatting numeric values...' : tool === 'scale' ? 'Scaling numeric values...' : tool === 'encode' ? 'Encoding categories...' : 'Applying feature engineering...'}
         detail="Creating a new dataset stage and refreshing the data preparation workspace."
       />
       {!compact && (
@@ -1842,7 +1882,7 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
         <div style={{ marginTop: 12 }}>
           {!compact && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-              {[['bins','Create bins'],['format','Numeric formatting']].map(([key, label]) => (
+              {[['bins','Create bins'],['scale','Scale'],['encode','Encode'],['format','Numeric formatting']].map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
@@ -1963,7 +2003,6 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
                 <select value={scaleMethod} onChange={(e) => setScaleMethod(e.target.value)}>
                   <option value="minmax">Min-max</option>
                   <option value="zscore">Z-score</option>
-                  <option value="decimal">Decimal formatting</option>
                 </select>
                 <label style={{ color: 'var(--color-text-secondary)' }}>New column name</label>
                 <input
@@ -1973,6 +2012,50 @@ function FeatureEngineeringCard({ dataset, onApplied, initialTool = 'bins', comp
                   onChange={(e) => setScaleNewName(e.target.value)}
                 />
               </div>
+            </div>
+          )}
+
+          {tool === 'encode' && (
+            <div>
+              {showRecommendations && (
+                <>
+                  <FeatureRecommendationHeader
+                    title="Encoding setup"
+                    info="Encode categorical columns when you need numeric columns for downstream modeling or export. One-hot is safest for unordered labels; ordinal is compact when label order matters."
+                    loading={aiLoading}
+                    onAsk={askAiForFeatureRecommendation}
+                  />
+                  <FeatureRecommendationCard recommendation={{
+                    label: encodeCol ? `Encode ${encodeCol}` : 'Choose a categorical column',
+                    why: 'One-hot creates separate 0/1 columns for each category. Ordinal creates one numeric code column.',
+                  }} />
+                  <AiRecommendationBlock loading={aiLoading} suggestion={aiSuggestion} />
+                </>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center', fontSize: 12, marginTop: 12 }}>
+                <label style={{ color: 'var(--color-text-secondary)' }}>Column</label>
+                <select value={encodeCol} onChange={(e) => setEncodeCol(e.target.value)}>
+                  <option value="">- select -</option>
+                  {catVars.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <label style={{ color: 'var(--color-text-secondary)' }}>Method</label>
+                <select value={encodeMethod} onChange={(e) => setEncodeMethod(e.target.value)}>
+                  <option value="one_hot">One-hot columns</option>
+                  <option value="ordinal">Ordinal codes</option>
+                </select>
+                <label style={{ color: 'var(--color-text-secondary)' }}>Name prefix</label>
+                <input
+                  type="text"
+                  placeholder={encodeCol || 'auto'}
+                  value={encodePrefix}
+                  onChange={(e) => setEncodePrefix(e.target.value)}
+                />
+              </div>
+              {encodeMethod === 'one_hot' && (
+                <p className="ax-data-toolbar-note" style={{ marginTop: 10 }}>
+                  Creates one 0/1 column per category and keeps the original column.
+                </p>
+              )}
             </div>
           )}
 

@@ -499,6 +499,38 @@ def feature_engineer(ds_id):
             df[new_name] = (df[col] - mn) / ((mx - mn) if mx != mn else 1)
             summary = f"Min-max scaled '{col}' → '{new_name}'."
 
+        elif operation == "encode":
+            col = body.get("column")
+            method = body.get("method") or "one_hot"
+            prefix = body.get("prefix") or col
+            if col not in df.columns:
+                return {"error": f"Column '{col}' not found"}, 400
+            values = [v for v in df[col].dropna().unique().tolist()]
+            if not values:
+                return {"error": f"Column '{col}' has no values to encode"}, 400
+            if len(values) > 30:
+                return {"error": "Encoding is limited to columns with 30 or fewer unique values."}, 400
+            if method == "ordinal":
+                mapping = {value: idx for idx, value in enumerate(sorted(values, key=lambda v: str(v)))}
+                new_name = body.get("new_name") or f"{prefix}_encoded"
+                df[new_name] = df[col].map(mapping)
+                summary = f"Ordinal encoded '{col}' into '{new_name}'."
+            elif method == "one_hot":
+                created = []
+                for value in sorted(values, key=lambda v: str(v)):
+                    safe = str(value).strip().replace(" ", "_").replace("/", "_").replace("\\", "_")
+                    safe = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in safe)[:36] or "value"
+                    new_col = f"{prefix}_{safe}"
+                    suffix = 2
+                    while new_col in df.columns:
+                        new_col = f"{prefix}_{safe}_{suffix}"
+                        suffix += 1
+                    df[new_col] = (df[col] == value).astype(int)
+                    created.append(new_col)
+                summary = f"One-hot encoded '{col}' into {len(created)} columns."
+            else:
+                return {"error": f"Unsupported encoding method: {method}"}, 400
+
         elif operation == "pct_of_max":
             col = body.get("column")
             new_name = body.get("new_name") or f"{col}_pct"

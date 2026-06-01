@@ -6686,16 +6686,17 @@ button.ax-module-head:focus-visible {
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .ax-floating-dataset-modes {
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: max-content;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px;
+  gap: 4px;
+  padding: 3px;
   border: 0.5px solid var(--color-border-tertiary);
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--color-background-secondary);
 }
 .ax-floating-dataset-modes button {
@@ -6714,10 +6715,31 @@ button.ax-module-head:focus-visible {
   font-weight: 700;
   white-space: nowrap;
 }
+.ax-floating-dataset-modes .ax-segmented-item:not(.active) {
+  width: auto;
+  min-width: 0;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+.ax-floating-dataset-modes .ax-segmented-item.active {
+  width: auto;
+  padding: 0 12px;
+}
+.ax-floating-dataset-modes .ax-segmented-label {
+  display: inline;
+  white-space: nowrap;
+}
 .ax-floating-dataset-modes button.active {
   background: var(--color-background-primary);
   color: var(--color-text-primary);
   box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
+}
+.ax-floating-dataset-control-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border-secondary, #d1d5db);
+  margin: 0 2px;
+  flex: 0 0 auto;
 }
 .ax-floating-dataset-tab-separator {
   display: none;
@@ -6725,31 +6747,46 @@ button.ax-module-head:focus-visible {
   font-size: 12px;
   font-weight: 800;
 }
-.ax-floating-dataset-mode-icons {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding-left: 2px;
-}
-.ax-floating-dataset-mode-icons button {
-  width: 30px;
-  height: 30px;
-  border: 0.5px solid var(--color-border-tertiary);
-  border-radius: 7px;
-  background: var(--color-background-primary);
-  color: var(--color-text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.ax-floating-dataset-mode-icons button:hover,
-.ax-floating-dataset-mode-icons button.active {
-  border-color: #fed7aa;
-  background: #fff7ed;
-  color: var(--color-accent, #f97316);
-}
 .ax-floating-dataset-modes button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+.ax-dd-view-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+}
+.ax-dd-view-modes {
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+.ax-dd-view-modes .ax-segmented-item,
+.ax-dd-view-modes .ax-segmented-item:not(.active) {
+  width: auto;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ax-dd-view-modes .ax-segmented-item.active {
+  width: auto;
+  padding: 0 12px;
+}
+.ax-dd-view-modes .ax-segmented-label {
+  display: inline;
+  white-space: nowrap;
+}
+.ax-dd-view-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border-secondary, #d1d5db);
+  margin: 0 2px;
+  flex: 0 0 auto;
+}
+.ax-dd-view-modes button:disabled,
+.ax-dd-view-modes .ax-segmented-item:disabled {
   cursor: not-allowed;
   opacity: 0.42;
 }

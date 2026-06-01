@@ -64,6 +64,12 @@ const CHANGE_TYPE_OPTIONS = [
   { value: 'scaled', label: 'Scaled values' },
   { value: 'generated', label: 'Generated columns' },
 ]
+const DATA_VIEW_MODES = [
+  { id: 'original', label: 'Original', icon: Database },
+  { id: 'cleaned', label: 'Cleaned', icon: Sparkles },
+  { id: 'highlight', label: 'Highlighted', icon: Highlighter },
+  { id: 'modeling', label: 'For Modeling', icon: Sparkles },
+]
 
 // Detail view that paginates dataset rows with column visibility controls and the about panel.
 export default function DataDetailView({
@@ -644,39 +650,27 @@ export default function DataDetailView({
         </div>
         <div className="ax-dd-actions" style={{ alignItems: 'center' }}>
           {/* Segmented view modes switcher */}
-          <div className="ax-segmented-control" role="tablist" aria-label="Dataset view" style={{ marginRight: 8 }}>
-            <button
-              type="button"
-              className={`ax-segmented-item ${viewMode === 'original' ? 'active' : ''}`}
-              onClick={() => setViewMode('original')}
-              title="Original dataset"
-            >
-              <Database size={14} className="ax-segmented-icon" />
-              {viewMode === 'original' && <span className="ax-segmented-label">Original</span>}
-            </button>
-            <div className={`ax-segmented-item-wrap ${!hasChanges ? 'is-disabled' : ''}`} title={!hasChanges ? 'Apply a change first to enable this view' : undefined}>
-              <button
-                type="button"
-                className={`ax-segmented-item ${viewMode === 'cleaned' ? 'active' : ''} ${!hasChanges ? 'ax-tab-disabled' : ''}`}
-                onClick={() => hasChanges && setViewMode('cleaned')}
-                disabled={!hasChanges}
-                style={!hasChanges ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : { transition: 'opacity 0.2s ease' }}
-              >
-                <Sparkles size={14} className="ax-segmented-icon" />
-                {viewMode === 'cleaned' && <span className="ax-segmented-label">Cleaned</span>}
-              </button>
-            </div>
-            <div className={`ax-segmented-item-wrap ${!hasChanges ? 'is-disabled' : ''}`} title={!hasChanges ? 'Apply a change first to enable this view' : undefined}>
-              <button
-                type="button"
-                className={`ax-segmented-item ${viewMode === 'highlight' ? 'active' : ''} ${!hasChanges ? 'ax-tab-disabled' : ''}`}
-                onClick={() => hasChanges && setViewMode('highlight')}
-                disabled={!hasChanges || (!changeStages.length && !changeLoading)}
-                style={!hasChanges ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : { transition: 'opacity 0.2s ease' }}
-              >
-                <Highlighter size={14} className="ax-segmented-icon" />
-                {viewMode === 'highlight' && <span className="ax-segmented-label">Highlighted</span>}
-              </button>
+          <div className="ax-dd-view-switcher">
+            <div className="ax-segmented-control ax-dd-view-modes" role="tablist" aria-label="Dataset view">
+              {DATA_VIEW_MODES.map((mode, index) => {
+                const Icon = mode.icon
+                const disabled = mode.id !== 'original' && !hasChanges
+                return (
+                  <React.Fragment key={mode.id}>
+                    {index > 0 && <span className="ax-dd-view-divider" aria-hidden="true" />}
+                    <button
+                      type="button"
+                      className={`ax-segmented-item ${viewMode === mode.id ? 'active' : ''}`}
+                      onClick={() => setViewMode(mode.id)}
+                      disabled={disabled}
+                      title={disabled ? 'Apply a change first to enable this view' : mode.label}
+                    >
+                      <Icon size={14} className="ax-segmented-icon" />
+                      <span className="ax-segmented-label">{mode.label}</span>
+                    </button>
+                  </React.Fragment>
+                )
+              })}
             </div>
           </div>
           <button
