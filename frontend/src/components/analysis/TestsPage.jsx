@@ -59,6 +59,10 @@ export default function TestsPage({ dataset, initialData }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [restoring, setRestoring] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
+  const [lastRunTime, setLastRunTime] = useState('')
+  const leftScrollRef = React.useRef(null)
+  const rightScrollRef = React.useRef(null)
 
   const variables = dataset?.variables || []
   const numericVars = variables.filter((v) => ['numeric', 'int', 'float', 'binary'].includes(v.dtype))
@@ -70,10 +74,43 @@ export default function TestsPage({ dataset, initialData }) {
   useEffect(() => {
     if (!dataset?.id) return
     let alive = true
+    setRestoring(true)
+
+    const raw = window.localStorage.getItem(`simucast.analysisState.${dataset.id}`)
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw)
+        setKind(saved.kind || 't')
+        setGroup(saved.group || '')
+        setMeasure(saved.measure || '')
+        setVarA(saved.varA || '')
+        setVarB(saved.varB || '')
+        setCorrVars(saved.corrVars || [])
+        setResult(saved.result || null)
+        setLastRunTime(saved.lastRunTime || '')
+        
+        // Restore scroll positions after render
+        setTimeout(() => {
+          if (leftScrollRef.current && saved.leftScroll) {
+            leftScrollRef.current.scrollTop = saved.leftScroll
+          }
+          if (rightScrollRef.current && saved.rightScroll) {
+            rightScrollRef.current.scrollTop = saved.rightScroll
+          }
+        }, 100)
+
+        setRestoring(false)
+        setDraftReady(true)
+        return
+      } catch (err) {
+        console.warn('Could not restore analysis state from localStorage', err)
+      }
+    }
+
     if (initialData?.tab === 'tests' && initialData?.datasetId === dataset.id && initialData.analyses) {
       const latest = (initialData.analyses.analyses || []).find((a) => {
         const k = String(a.kind || '')
-        return k.startsWith('test_') && k !== 'test_corr'
+        return ['test_t', 'test_anova', 'test_chi', 'test_analysis_corr'].includes(k)
       })
       if (latest) {
         const restoredKind = String(latest.kind || '').replace(/^test_/, '').replace('analysis_corr', 'corr')
@@ -85,64 +122,102 @@ export default function TestsPage({ dataset, initialData }) {
         setVarA(config.var_a || '')
         setVarB(config.var_b || '')
         setCorrVars(config.variables || [])
+        if (latest.created_at) {
+          const timeStr = new Date(latest.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          setLastRunTime(timeStr)
+        }
       } else {
         setResult(null)
       }
       setRestoring(false)
+      setDraftReady(true)
       return
     }
-    const ck = `${dataset.id}|${dataset.current_stage_id}`
-    const cached = testsPageCache.get(ck)
-    if (cached) {
-      setKind(cached.kind)
-      setResult(cached.result)
-      setGroup(cached.group)
-      setMeasure(cached.measure)
-      setVarA(cached.varA)
-      setVarB(cached.varB)
-      setCorrVars(cached.corrVars)
-      setRestoring(false)
-      return
-    }
-    setRestoring(true)
+
     api.listAnalyses(dataset.id, '', 20)
       .then((r) => {
         if (!alive) return
         const latest = (r.analyses || []).find((a) => {
           const k = String(a.kind || '')
-          return k.startsWith('test_') && k !== 'test_corr'
+          return ['test_t', 'test_anova', 'test_chi', 'test_analysis_corr'].includes(k)
         })
         if (!latest) {
           setResult(null)
           return
         }
-        const restoredKind = String(latest.kind || '').replace(/^test_/, '')
+        const restoredKind = String(latest.kind || '').replace(/^test_/, '').replace('analysis_corr', 'corr')
         const config = latest.config || {}
-        const state = {
-          kind: restoredKind || 't',
-          result: latest.result || null,
-          group: config.group || '',
-          measure: config.measure || '',
-          varA: config.var_a || '',
-          varB: config.var_b || '',
-          corrVars: config.variables || [],
+        setKind(restoredKind || 't')
+        setResult(latest.result || null)
+        setGroup(config.group || '')
+        setMeasure(config.measure || '')
+        setVarA(config.var_a || '')
+        setVarB(config.var_b || '')
+        setCorrVars(config.variables || [])
+        if (latest.created_at) {
+          const timeStr = new Date(latest.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          setLastRunTime(timeStr)
         }
-        testsPageCache.set(ck, state)
-        setKind(state.kind)
-        setResult(state.result)
-        setGroup(state.group)
-        setMeasure(state.measure)
-        setVarA(state.varA)
-        setVarB(state.varB)
-        setCorrVars(state.corrVars)
       })
       .finally(() => {
-        if (alive) setRestoring(false)
+        if (alive) {
+          setRestoring(false)
+          setDraftReady(true)
+        }
       })
+
     return () => {
       alive = false
     }
-  }, [dataset?.id, dataset?.current_stage_id])
+  }, [dataset?.id])
+
+  useEffect(() => {
+    if (!dataset?.id || !draftReady) return
+    
+    const save = () => {
+      const state = {
+        kind,
+        group,
+        measure,
+        varA,
+        varB,
+        corrVars,
+        result,
+        lastRunTime,
+        leftScroll: leftScrollRef.current ? leftScrollRef.current.scrollTop : 0,
+        rightScroll: rightScrollRef.current ? rightScrollRef.current.scrollTop : 0,
+      }
+      window.localStorage.setItem(`simucast.analysisState.${dataset.id}`, JSON.stringify(state))
+    }
+
+    save()
+
+    const leftEl = leftScrollRef.current
+    const rightEl = rightScrollRef.current
+
+    const handleScroll = () => {
+      save()
+    }
+
+    if (leftEl) leftEl.addEventListener('scroll', handleScroll)
+    if (rightEl) rightEl.addEventListener('scroll', handleScroll)
+
+    return () => {
+      if (leftEl) leftEl.removeEventListener('scroll', handleScroll)
+      if (rightEl) rightEl.removeEventListener('scroll', handleScroll)
+    }
+  }, [
+    dataset?.id,
+    draftReady,
+    kind,
+    group,
+    measure,
+    varA,
+    varB,
+    corrVars.join(','),
+    result,
+    lastRunTime,
+  ])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -175,6 +250,8 @@ export default function TestsPage({ dataset, initialData }) {
       if (kind === 'corr') body = { kind: 'analysis_corr', variables: corrVars }
       const r = await api.runTest(dataset.id, body)
       setResult(r)
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      setLastRunTime(timeStr)
     } catch (err) {
       await dialog.alert({ title: 'Test Failed', message: err.message, variant: 'danger' })
     } finally {
@@ -224,7 +301,7 @@ export default function TestsPage({ dataset, initialData }) {
           </div>
         </div>
 
-        <div className="ax-test-left-scroll">
+        <div ref={leftScrollRef} className="ax-test-left-scroll">
           <p className="ax-test-section-label">VARIABLES</p>
           {(kind === 't' || kind === 'anova') && (
             <div className="ax-test-selects">
@@ -299,26 +376,34 @@ export default function TestsPage({ dataset, initialData }) {
           )}
         </div>
 
-        <div className="ax-test-run-area">
+        <div className="ax-test-run-area" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {loading && <div className="ax-test-loading-bar"><div className="ax-test-loading-fill" /></div>}
-          <button className="ax-test-run-btn" disabled={loading || !canRun} onClick={run}>
+          <button className="ax-test-run-btn" style={{ flex: 1 }} disabled={loading || !canRun} onClick={run}>
             {loading ? <InlineSpinner label="Running test..." /> : '▶ Run test'}
           </button>
+          {!loading && lastRunTime && (
+            <span className="ax-test-last-run" style={{ fontSize: 11, color: 'var(--color-text-tertiary, #9ca3af)', whiteSpace: 'nowrap' }}>
+              Last run · {lastRunTime}
+            </span>
+          )}
         </div>
       </div>
 
       {/* RIGHT COLUMN */}
       <div className="ax-test-right">
-        <div id="fix-correlation-test" className="ax-test-right-scroll">
+        <div ref={rightScrollRef} id="fix-correlation-test" className="ax-test-right-scroll">
           {(!result && !loading && !restoring) && (
-            <div className="ax-test-empty">
-              <div className="ax-test-empty-icon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" />
+            <div className="ax-test-empty" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '300px', padding: '40px 20px', textAlign: 'center' }}>
+              <div className="ax-test-empty-icon" style={{ marginBottom: 16 }}>
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.8 }}>
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
                 </svg>
               </div>
-              <p className="ax-test-empty-text">Configure the test and click Run</p>
+              <p className="ax-test-empty-text" style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-secondary, #6b7280)', maxWidth: '320px', margin: 0 }}>
+                Select a test type and variables, then click Run Test to see results.
+              </p>
             </div>
           )}
 

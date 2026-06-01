@@ -339,7 +339,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, JSON.stringify(numericPreprocessing)])
+  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders)])
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -846,6 +846,17 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
               setCvFolds={setCvFolds}
             />
           </div>
+          <button
+            type="button"
+            className="ax-models-dataset-preview-link"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('simucast:open-dataset-preview', {
+                detail: { viewMode: 'modeling' },
+              }))
+            }}
+          >
+            Preview modeling dataset →
+          </button>
           <div className="ax-models-config-actions">
             <p>{planBlocked ? 'Resolve the active data issue before training.' : 'Ready when target, features, and at least one algorithm are selected.'}</p>
             <button
@@ -1031,6 +1042,9 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                   </button>
                 ))}
               </div>
+              <p className="ax-preplan-section-sub" style={{ marginTop: 8, fontStyle: 'italic' }}>
+                Your choice will be applied during training. Auto is recommended for most cases.
+              </p>
             </div>
 
             {/* ── Categorical encoding ── */}
@@ -2870,9 +2884,26 @@ function PreprocessingPlan({ plan, checks: propChecks, onFixAction, dismissedChe
     },
     plan.encoding.length > 0 && {
       label: 'Encoding',
-      value: `${plan.encoding.length} categorical column${plan.encoding.length !== 1 ? 's' : ''} one-hot encoded`,
+      value: (() => {
+        const counts = {}
+        plan.encoding.forEach((e) => {
+          const methodLabel = e.method === 'one_hot' ? 'One-Hot' : e.method === 'ordinal' ? 'Ordinal' : e.method === 'binary' ? 'Binary' : e.method
+          counts[methodLabel] = (counts[methodLabel] || 0) + 1
+        })
+        return Object.entries(counts)
+          .map(([method, count]) => `${count} ${method}`)
+          .join(', ')
+      })(),
     },
-    plan.scaling.length > 0 && { label: 'Scaling', value: 'StandardScaler on numeric features' },
+    {
+      label: 'Scaling',
+      value: (() => {
+        const method = (plan.numeric_preprocessing?.effective_scaling || (plan.scaling?.[0]?.method === 'MinMaxScaler' ? 'minmax' : plan.scaling?.[0]?.method === 'StandardScaler' ? 'standard' : 'none')).toLowerCase()
+        if (method === 'minmax') return 'MinMaxScaler on numeric features'
+        if (method === 'standard') return 'StandardScaler on numeric features'
+        return 'None'
+      })()
+    },
     plan.split && {
       label: 'Split',
       value: `${Math.round((plan.split.train_size || 0.8) * 100)}% train / ${Math.round((plan.split.test_size || 0.2) * 100)}% test${plan.split.stratified ? ' (stratified)' : ''}`,

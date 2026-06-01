@@ -3,6 +3,7 @@
  * Keywords: describe, descriptives, summary, histogram, mean, std, distribution
  * ============================================================ */
 import React, { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Chart as ChartJS,
   RadialLinearScale,
@@ -25,6 +26,7 @@ import {
 import { Bar, Line, Scatter, Pie, Radar, Bubble, Chart } from 'react-chartjs-2'
 import { api } from '../../api'
 import { InlineSpinner } from '../common/LoadingStates'
+import { SparkleIcon } from '../ai/AIExplainers'
 import {
   BarChart3,
   Bookmark,
@@ -93,6 +95,8 @@ export default function DescribePage({ dataset, initialData }) {
   const [corrResult, setCorrResult] = useState(null)
   const [corrLoading, setCorrLoading] = useState(false)
   const [selectedCorrCell, setSelectedCorrCell] = useState(null)
+  const [explainMode, setExplainMode] = useState(false)
+  const [explainPopup, setExplainPopup] = useState(null)
 
   // Chart builder
   const [datasetRows, setDatasetRows] = useState([])
@@ -125,7 +129,17 @@ export default function DescribePage({ dataset, initialData }) {
   const [descResult, setDescResult] = useState(null)
   const [descLoading, setDescLoading] = useState(false)
   const [expandedVarRows, setExpandedVarRows] = useState(new Set())
+  const [expandedFlags, setExpandedFlags] = useState(new Set())
   const [activeCatVar, setActiveCatVar] = useState(null)
+  const [catFilter, setCatFilter] = useState('all')
+  // Numeric detail panel & compare
+  const [selectedNumericVar, setSelectedNumericVar] = useState(null)
+  const [numericCompareMode, setNumericCompareMode] = useState(false)
+  // Cramér's V matrix
+  const [corrFilter, setCorrFilter] = useState('all')
+  const [selectedCramerCell, setSelectedCramerCell] = useState(null)
+  const [cramersResult, setCramersResult] = useState(null)
+  const [cramersLoading, setCramersLoading] = useState(false)
   const [activeDescribeSection, setActiveDescribeSection] = useState(() => {
     try {
       const saved = window.localStorage.getItem(`simucast.descSection.${dataset?.id}`)
@@ -218,6 +232,31 @@ export default function DescribePage({ dataset, initialData }) {
       .catch(() => {})
   }, [dataset?.id, dataset?.current_stage_id])
 
+  // Restore/auto-run Cramér's V matrix
+  useEffect(() => {
+    if (!dataset?.id) { setCramersResult(null); return }
+    const catCols = (dataset.variables || [])
+      .filter(v => !['numeric', 'int', 'float'].includes(v.dtype))
+      .map(v => v.name)
+    if (catCols.length < 2) return
+    const ck = `${dataset.id}|${dataset.current_stage_id}|cramers`
+    const cached = describePageCache.get(ck)
+    if (cached) { setCramersResult(cached); return }
+    api.listAnalyses(dataset.id, 'test_cramers_matrix', 1)
+      .then(({ analyses }) => {
+        if (analyses?.[0]) {
+          const r = analyses[0].result
+          describePageCache.set(ck, r)
+          setCramersResult(r)
+        } else {
+          api.runTest(dataset.id, { kind: 'cramers_matrix', variables: catCols })
+            .then(cramers => { describePageCache.set(ck, cramers); setCramersResult(cramers) })
+            .catch(() => {})
+        }
+      })
+      .catch(() => {})
+  }, [dataset?.id, dataset?.current_stage_id])
+
   // Load dataset rows for chart builder
   useEffect(() => {
     if (!dataset?.id) return
@@ -295,6 +334,11 @@ export default function DescribePage({ dataset, initialData }) {
       })
       .catch(() => {})
   }, [dataset?.id, dataset?.current_stage_id])
+
+  useEffect(() => {
+    document.body.classList.toggle('ax-explain-mode-on', explainMode)
+    return () => document.body.classList.remove('ax-explain-mode-on')
+  }, [explainMode])
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
 
@@ -620,13 +664,60 @@ export default function DescribePage({ dataset, initialData }) {
     { id: 'correlations', label: 'Correlations', icon: Sigma, badge: strongestCorrPair ? `r=${Math.abs(strongestCorrPair.val).toFixed(2)}` : 'run' },
     { id: 'chart-builder', label: 'Chart builder', icon: BarChart3, badge: `${savedCharts.length} saved` },
   ]
+  const activeSectionLabel = describeNavItems.find(i => i.id === activeDescribeSection)?.label || activeDescribeSection
+
+  const openExplain = (meta, event) => {
+    if (!explainMode) return
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    const target = event?.currentTarget || event?.target
+    const sourceRect = target?.getBoundingClientRect ? target.getBoundingClientRect() : null
+    setExplainPopup(buildDescribeExplainMeta(meta, {
+      dataset,
+      descResult,
+      numericStats,
+      catStats,
+      qualityFlags,
+      groupedQualityFlags,
+      strongestCorrPair,
+      activeDescribeSection,
+      activeSectionLabel,
+      activeCatStat,
+      selectedNumericVar,
+      selectedCorrCell,
+      selectedCramerCell,
+      corrResult,
+      cramersResult,
+      chartBuilderType,
+      chartBuilderX,
+      chartBuilderY,
+      chartBuilderAgg,
+      chartTitle,
+      sourceRect,
+    }))
+  }
+
+  const explainAttrs = (meta, className = '', capture = true) => {
+    const attrs = {
+      className: `${className} ${explainMode ? 'ax-explain-selectable' : ''}`.trim(),
+      title: explainMode ? `Explain ${meta.title}` : undefined,
+    }
+    const handler = (event) => openExplain(meta, event)
+    if (capture) {
+      attrs.onClickCapture = handler
+      attrs.onPointerDownCapture = handler
+    } else {
+      attrs.onClick = handler
+    }
+    return attrs
+  }
 
   return (
     <div className="ax-desc-layout ax-desc-redesign">
       <aside className="ax-desc-left">
         {/* Header: title + subtitle only — separator line sits right below */}
         <div className="ax-desc-left-sticky">
-          <h1 className="ax-desc-title">Descriptive statistics</h1>
+          <h1 {...explainAttrs({ id: 'sidebar-header', title: 'Descriptive statistics header', type: 'sidebar' }, 'ax-desc-title')}>Descriptive statistics</h1>
           <p className="ax-desc-sub">Summarize variables and spot patterns before modeling</p>
         </div>
         <div className="ax-desc-left-vars">
@@ -638,7 +729,7 @@ export default function DescribePage({ dataset, initialData }) {
                 <button
                   key={item.id}
                   type="button"
-                  className={`ax-desc-nav-item ${activeDescribeSection === item.id ? 'active' : ''}`}
+                  {...explainAttrs({ id: `sidebar-tab-${item.id}`, title: `${item.label} tab`, type: 'sidebar-tab', section: item.id }, `ax-desc-nav-item ${activeDescribeSection === item.id ? 'active' : ''}`)}
                   onClick={() => jumpToDescribeSection(item.id)}
                 >
                   <span className="ax-desc-nav-icon"><Icon size={14} /></span>
@@ -661,8 +752,8 @@ export default function DescribePage({ dataset, initialData }) {
                 <button
                   key={v.name}
                   type="button"
+                  {...explainAttrs({ id: `variable-chip-${v.name}`, title: `${v.name} variable filter chip`, type: 'variable-chip', variable: v.name }, `ax-desc-var-chip ${isSel ? 'active' : ''}`)}
                   onClick={() => setSelectedVars(prev => prev.includes(v.name) ? prev.filter(n => n !== v.name) : [...prev, v.name])}
-                  className={`ax-desc-var-chip ${isSel ? 'active' : ''}`}
                 >
                   <span className="ax-desc-var-chip-name">{v.name}</span>
                   <span className="ax-desc-var-chip-type">{v.dtype}</span>
@@ -676,8 +767,8 @@ export default function DescribePage({ dataset, initialData }) {
           <button
             type="button"
             onClick={runDescriptives}
-            disabled={descLoading || !selectedVars.length}
-            className="ax-desc-run-btn"
+            disabled={!explainMode && (descLoading || !selectedVars.length)}
+            {...explainAttrs({ id: 'run-descriptives', title: 'Run descriptives button', type: 'action' }, 'ax-desc-run-btn')}
           >
             {descLoading ? <InlineSpinner label="Running..." /> : <><Play size={14} /> Run descriptives</>}
           </button>
@@ -685,10 +776,23 @@ export default function DescribePage({ dataset, initialData }) {
       </aside>
       <main className="ax-desc-right">
         <div className={`ax-desc-right-scroll ${activeDescribeSection === 'chart-builder' ? 'no-scroll' : ''}`}>
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-accent, #f97316)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Describe · {describeNavItems.find(i => i.id === activeDescribeSection)?.label || activeDescribeSection}
+          Describe · {activeSectionLabel}
         </span>
+        <button
+          type="button"
+          className={`ax-explain-mode-toggle ${explainMode ? 'active' : ''}`}
+          onClick={() => {
+            setExplainMode(v => !v)
+            setExplainPopup(null)
+          }}
+          title={explainMode ? 'Turn off Explain Mode' : 'Turn on Explain Mode'}
+        >
+          <SparkleIcon size={13} />
+          Explain Mode
+          <span aria-hidden="true" />
+        </button>
       </div>
       {activeDescribeSection === 'overview' && (
         <>
@@ -698,12 +802,16 @@ export default function DescribePage({ dataset, initialData }) {
       {descResult && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
           {[
-            { big: numericStats.length + catStats.length, label: 'Variables analyzed', sub: `${numericStats.length} numeric · ${catStats.length} categorical`, orange: false },
-            { big: totalRows ?? '—', label: 'Total records', sub: avgValidN != null ? `Avg valid n per var: ${avgValidN}` : '', orange: false },
-            { big: skewedVars.length, label: 'Skewed variables', sub: skewedVars.slice(0, 3).map(s => s.variable).join(', ') + (skewedVars.length > 3 ? '…' : ''), orange: skewedVars.length > 0 },
-            { big: strongestCorrPair ? Math.abs(strongestCorrPair.val).toFixed(2) : '—', label: 'Strongest correlation', sub: strongestCorrPair ? `${strongestCorrPair.a} ↔ ${strongestCorrPair.b}` : 'Run correlation first', orange: false }
+            { big: numericStats.length + catStats.length, label: 'Variables analyzed', sub: `${numericStats.length} can be measured, ${catStats.length} are categories`, orange: false },
+            { big: totalRows ?? '—', label: 'Total records', sub: totalRows != null ? `All ${totalRows.toLocaleString()} rows are valid, none dropped` : '', orange: false },
+            { big: skewedVars.length, label: 'Skewed variables', sub: skewedVars.length === 0 ? 'All numeric columns are evenly distributed' : skewedVars.slice(0, 3).map(s => s.variable).join(', ') + (skewedVars.length > 3 ? ' and more' : '') + ' need attention', orange: skewedVars.length > 0 },
+            { big: strongestCorrPair ? Math.abs(strongestCorrPair.val).toFixed(2) : '—', label: 'Strongest correlation', sub: strongestCorrPair ? `${strongestCorrPair.a} and ${strongestCorrPair.b} move almost identically` : 'Compute correlations first', orange: false }
           ].map((card, i) => (
-            <div key={i} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 20px' }}>
+            <div
+              key={i}
+              {...explainAttrs({ id: `overview-metric-${card.label}`, title: `${card.label} metric card`, type: 'overview-metric', label: card.label, value: card.big, detail: card.sub })}
+              style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 20px' }}
+            >
               <div style={{ fontSize: 28, fontWeight: 700, color: card.orange ? ORANGE_ACCENT : '#111827', letterSpacing: '-0.5px', marginBottom: 4, lineHeight: 1 }}>{card.big}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 3 }}>{card.label}</div>
               <div style={{ fontSize: 11, color: '#9ca3af', lineHeight: 1.4 }}>{card.sub}</div>
@@ -712,38 +820,35 @@ export default function DescribePage({ dataset, initialData }) {
         </div>
       )}
 
-      {/* ──── SECTION 1: DATASET HEALTH ──── */}
+      {/* ──── SECTION 1: ISSUES CARDS ──── */}
       {descResult && (
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 20px', marginBottom: 16, borderLeft: `4px solid ${qualityFlags.length === 0 ? '#16a34a' : '#f97316'}` }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: qualityFlags.length === 0 ? '#16a34a' : '#f97316', marginBottom: 8 }}>
-            {qualityFlags.length === 0 ? '✓ Dataset looks clean' : `⚠ ${qualityFlags.length} issue${qualityFlags.length !== 1 ? 's' : ''} detected`}
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
           {qualityFlags.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {[
-                (descResult.stats || []).some(s => s.missing === 0 || s.missing == null) && '✓ No missing values',
-                skewedVars.length === 0 && '✓ No outliers detected',
-                !groupedQualityFlags.some(f => f.type === 'mixed_labels') && '✓ No label inconsistencies',
-                (descResult.stats || []).every(s => !s.duplicates || s.duplicates === 0) && '✓ No duplicates found',
-              ].filter(Boolean).map((item, i) => (
-                <span key={i} style={{ fontSize: 11, color: '#6b7280' }}>{item}</span>
-              ))}
+            <div {...explainAttrs({ id: 'issues-detected-card', title: 'Issues detected card', type: 'issues-card' })} style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 14, padding: '14px 20px' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#16a34a' }}>✓ No issues detected</div>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {Object.entries(qualityFlags.reduce((acc, f) => { acc[f.type] = (acc[f.type] || 0) + 1; return acc }, {})).map(([type, count]) => (
-                <span key={type} style={{ fontSize: 11, color: '#6b7280' }}>
-                  • {type === 'mixed_labels' ? 'Mixed labels' : type === 'outlier' ? 'Outliers' : type === 'imbalance' ? 'Class imbalance' : type}: {count} column{count !== 1 ? 's' : ''}
-                </span>
-              ))}
-            </div>
+            qualityFlags.map((flag, i) => (
+              <div key={i} {...explainAttrs({ id: `issue-row-${flag.variable}-${flag.type}`, title: `${flag.variable} ${flag.type} issue row`, type: 'issue-row', flag })} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ color: ORANGE_ACCENT, fontWeight: 700, fontSize: 13 }}>{flag.variable}</span>
+                    <span style={{ color: '#6b7280', fontSize: 12, marginLeft: 4 }}>{flag.desc}</span>
+                  </div>
+                </div>
+                <button type="button" onClick={() => { setActiveCatVar(flag.variable); jumpToDescribeSection('categorical') }} style={{ background: 'none', border: 'none', color: ORANGE_ACCENT, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  View →
+                </button>
+              </div>
+            ))
           )}
         </div>
       )}
 
       {/* ──── SECTION 2: COLUMN QUICK-SCAN ──── */}
       {descResult && (
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, marginBottom: 16, overflow: 'hidden' }}>
+        <div {...explainAttrs({ id: 'column-quick-scan-table', title: 'Column Quick-Scan table', type: 'quick-scan-table' }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, marginBottom: 16, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px 10px', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Column quick-scan</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
@@ -763,7 +868,7 @@ export default function DescribePage({ dataset, initialData }) {
                 const hasIssue = qualityFlags.some(f => f.variable === s.variable)
                 const issueFlag = qualityFlags.find(f => f.variable === s.variable)
                 return (
-                  <tr key={s.variable} style={{ background: i % 2 === 0 ? 'transparent' : '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
+                  <tr key={s.variable} {...explainAttrs({ id: `quick-scan-row-${s.variable}`, title: `${s.variable} quick-scan row`, type: 'quick-scan-row', stat: s })} style={{ background: i % 2 === 0 ? 'transparent' : '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
                     <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111827', fontFamily: 'var(--font-mono, monospace)' }}>{s.variable}</td>
                     <td style={{ padding: '6px 12px' }}>
                       <span style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600, background: typeBadge.bg, color: typeBadge.color }}>{typeLabel}</span>
@@ -772,9 +877,17 @@ export default function DescribePage({ dataset, initialData }) {
                     <td style={{ padding: '6px 12px', textAlign: 'right', color: missing > 0 ? '#f97316' : '#16a34a', fontFamily: 'var(--font-mono, monospace)', fontWeight: missing > 0 ? 600 : 400 }}>{missing}</td>
                     <td style={{ padding: '6px 12px' }}>
                       {hasIssue ? (
-                        <span style={{ color: '#f97316', fontSize: 11 }}>⚠ {issueFlag?.type === 'outlier' ? 'outliers' : issueFlag?.type === 'mixed_labels' ? 'mixed labels' : 'imbalance'}</span>
+                        <div>
+                          <div style={{ color: '#f97316', fontSize: 11, fontWeight: 600 }}>⚠ {issueFlag?.type === 'outlier' ? 'outliers' : issueFlag?.type === 'mixed_labels' ? 'mixed labels' : 'imbalance'}</div>
+                          <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>
+                            {issueFlag?.type === 'imbalance' ? 'One category dominates' : issueFlag?.type === 'outlier' ? 'Has extreme values' : 'Mixed label format'}
+                          </div>
+                        </div>
                       ) : (
-                        <span style={{ color: '#16a34a', fontSize: 11 }}>✓ Clean</span>
+                        <div>
+                          <div style={{ color: '#16a34a', fontSize: 11, fontWeight: 600 }}>✓ Clean</div>
+                          <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>No issues found</div>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -787,7 +900,7 @@ export default function DescribePage({ dataset, initialData }) {
 
       {/* ──── SECTION 3: NOTABLE FINDINGS ──── */}
       {descResult && (
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 20px', marginBottom: 16 }}>
+        <div {...explainAttrs({ id: 'notable-findings-card', title: 'Notable Findings card', type: 'notable-card' }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 20px', marginBottom: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Notable findings</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {strongestCorrPair && Math.abs(strongestCorrPair.val) > 0.5 && (
@@ -796,7 +909,9 @@ export default function DescribePage({ dataset, initialData }) {
                   <span style={{ color: '#f97316', marginRight: 6 }}>●</span>
                   Strong correlation: {strongestCorrPair.a} ↔ {strongestCorrPair.b} (r = {strongestCorrPair.val.toFixed(2)})
                 </div>
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, paddingLeft: 18 }}>→ May be redundant as features</div>
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, paddingLeft: 18, lineHeight: 1.5 }}>
+                  These two move so closely together that using both in your model may not add extra value — consider keeping just one.
+                </div>
               </div>
             )}
             {catStats.map(s => {
@@ -809,8 +924,10 @@ export default function DescribePage({ dataset, initialData }) {
                     <span style={{ color: '#f97316', marginRight: 6 }}>●</span>
                     {s.variable} has {nClasses} {isImbalanced ? 'imbalanced' : 'balanced'} classes
                   </div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, paddingLeft: 18 }}>
-                    → {isImbalanced ? 'Consider balancing before classification' : 'Good class distribution'}
+                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, paddingLeft: 18, lineHeight: 1.5 }}>
+                    {isImbalanced
+                      ? 'When one category dominates, the model tends to favor it. You may want to address this before training.'
+                      : 'This column is evenly split — no action needed.'}
                   </div>
                 </div>
               )
@@ -821,7 +938,9 @@ export default function DescribePage({ dataset, initialData }) {
                   <span style={{ color: '#f97316', marginRight: 6 }}>●</span>
                   {s.variable} is {s.skew > 0 ? 'right' : 'left'}-skewed (skew = {s.skew.toFixed(1)})
                 </div>
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, paddingLeft: 18 }}>→ Consider log transform or outlier check</div>
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, paddingLeft: 18, lineHeight: 1.5 }}>
+                  Skewed data can make some models less reliable. A log or square root transformation may help normalize it.
+                </div>
               </div>
             ))}
             {qualityFlags.length === 0 && skewedVars.length === 0 && !strongestCorrPair && (
@@ -840,6 +959,7 @@ export default function DescribePage({ dataset, initialData }) {
           {strongestCorrPair && Math.abs(strongestCorrPair.val) > 0.5 && (
             <button
               type="button"
+              {...explainAttrs({ id: 'explore-correlations-button', title: 'Explore in Correlations button', type: 'next-step' })}
               onClick={() => jumpToDescribeSection('correlations')}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 999, border: '1.5px solid #d1d5db', background: '#fff', fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
               onMouseEnter={e => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.borderColor = '#f97316'; e.currentTarget.style.color = '#f97316' }}
@@ -850,6 +970,7 @@ export default function DescribePage({ dataset, initialData }) {
           )}
           <button
             type="button"
+            {...explainAttrs({ id: 'visualize-chart-builder-button', title: 'Visualize in Chart Builder button', type: 'next-step' })}
             onClick={() => jumpToDescribeSection('chart-builder')}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 999, border: '1.5px solid #d1d5db', background: '#fff', fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
             onMouseEnter={e => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.borderColor = '#f97316'; e.currentTarget.style.color = '#f97316' }}
@@ -873,38 +994,54 @@ export default function DescribePage({ dataset, initialData }) {
 
       {/* ──── DATA QUALITY FLAGS ──── */}
       {qualityFlags.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '14px 20px', marginBottom: 8 }}>
+        <div {...explainAttrs({ id: 'data-quality-flags-card', title: 'Data Quality Flags card', type: 'quality-flags-card' }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '14px 20px', marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <div style={{ width: 14, height: 14, border: '1.5px solid #9ca3af', borderRadius: 3, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Data Quality Flags</span>
-            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Data Quality Flags</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: '#374151', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 20, padding: '2px 9px' }}>{qualityFlags.length} issue{qualityFlags.length !== 1 ? 's' : ''}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {groupedQualityFlags.map((flag, i) => (
-              <div key={`${flag.type}-${flag.variable || i}`} title={flag.type === 'imbalance' ? flag.desc : undefined} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: i < groupedQualityFlags.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 }}>
-                  <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, background: flag.type === 'mixed_labels' ? 'transparent' : ORANGE_ACCENT, border: flag.type === 'mixed_labels' ? '1.5px solid #d1d5db' : 'none' }} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: flag.type === 'imbalance' ? 0 : 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {flag.variable ? (
-                        <>
-                          <span style={{ color: ORANGE_ACCENT }}>{flag.variable}</span>
-                          <span style={{ color: '#374151', fontWeight: 500 }}>{flag.title.replace(flag.variable, '')}</span>
-                        </>
-                      ) : (
-                        <span style={{ color: '#374151' }}>{flag.title}</span>
-                      )}
+            {qualityFlags.map((flag, i) => {
+              const isExpanded = expandedFlags.has(flag.variable + flag.type)
+              const toggleFlag = () => {
+                const key = flag.variable + flag.type
+                setExpandedFlags(prev => {
+                  const next = new Set(prev)
+                  if (next.has(key)) next.delete(key); else next.add(key)
+                  return next
+                })
+              }
+              const explainText = flag.type === 'imbalance'
+                ? 'This column is dominated by a single value. When training a model, the algorithm may learn to always predict the majority class. Consider techniques like resampling or class weighting to address this.'
+                : flag.type === 'outlier'
+                ? 'Extreme values can pull statistical summaries and model coefficients in misleading directions. Inspect the distribution and consider winsorizing, transforming, or removing extreme points.'
+                : flag.type === 'mixed_labels'
+                ? 'Multiple labels appear to describe the same category. Standardizing these values will help the model treat them consistently rather than splitting their signal across redundant labels.'
+                : 'This flag may indicate a data quality issue worth reviewing before modeling.'
+              return (
+                <div key={`${flag.variable}-${flag.type}`} {...explainAttrs({ id: `quality-flag-${flag.variable}-${flag.type}`, title: `${flag.variable} data quality flag row`, type: 'quality-flag-row', flag })} style={{ borderBottom: i < qualityFlags.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                  <div
+                    onClick={toggleFlag}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', cursor: 'pointer' }}
+                  >
+                    <div style={{ width: 12, height: 12, borderRadius: 3, flexShrink: 0, background: ORANGE_ACCENT }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ color: ORANGE_ACCENT, fontWeight: 700, fontSize: 13 }}>{flag.variable}</span>
+                      <span style={{ color: '#374151', fontSize: 12, fontWeight: 500, marginLeft: 4 }}>
+                        {flag.type === 'imbalance' ? '— class imbalance' : flag.type === 'outlier' ? '— potential outliers' : flag.type === 'mixed_labels' ? '— mixed labels' : ''}
+                      </span>
                     </div>
-                    {flag.type !== 'imbalance' && (
-                      <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{flag.desc}</div>
-                    )}
+                    <button type="button" onClick={e => { e.stopPropagation(); setActiveCatVar(flag.variable); jumpToDescribeSection('categorical') }} style={{ background: 'none', border: 'none', color: ORANGE_ACCENT, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      Learn more →
+                    </button>
                   </div>
+                  {isExpanded && (
+                    <div style={{ padding: '0 0 10px 22px', fontSize: 11, color: '#6b7280', lineHeight: 1.6 }}>
+                      {explainText}
+                    </div>
+                  )}
                 </div>
-                <a href="#" onClick={e => e.preventDefault()} style={{ fontSize: 12, color: ORANGE_ACCENT, fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0, textDecoration: 'none' }}>{flag.action}</a>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -916,83 +1053,454 @@ export default function DescribePage({ dataset, initialData }) {
         <>
         <div id="describe-numeric" />
         <div id="describe-categorical" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, marginBottom: 20, alignItems: 'start' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: activeDescribeSection === 'numeric' && selectedNumericVar && !numericCompareMode
+              ? 'minmax(0, 3fr) minmax(320px, 2fr)'
+              : 'minmax(0, 1fr)',
+            gap: 24,
+            marginBottom: 20,
+            alignItems: 'stretch',
+            paddingRight: activeDescribeSection === 'numeric' && selectedNumericVar && !numericCompareMode ? 48 : 0
+          }}
+        >
           {activeDescribeSection === 'numeric' && numericStats.length > 0 && (
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '24px 24px 24px', height: 560, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#5b6573', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 20 }}>
-                Numeric Variables — {numericStats.length} Selected
+            <div {...explainAttrs({ id: 'numeric-variables-container', title: 'Numeric variables container', type: 'numeric-container' }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '24px 24px 24px', height: 560, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#5b6573', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Numeric Variables — {numericStats.length} Selected
+                </span>
+                <button
+                  type="button"
+                  {...explainAttrs({ id: 'numeric-compare-button', title: 'Compare button', type: 'numeric-control' })}
+                  onClick={() => setNumericCompareMode(v => !v)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: 999, border: `1.5px solid ${numericCompareMode ? '#ea580c' : '#d1d5db'}`, background: numericCompareMode ? '#fff7ed' : '#fff', fontSize: 11, fontWeight: 600, color: numericCompareMode ? '#ea580c' : '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  {numericCompareMode ? 'Exit compare' : 'Compare'}
+                </button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: 244, gap: 16, overflowY: 'auto', paddingRight: 4, minHeight: 0 }}>
-                {numericStats.map(s => {
-                  const isSkewed = Math.abs(s.skew ?? 0) >= 1
-                  const shapeLabel = isSkewed ? 'Skewed' : 'Symmetric'
-                  return (
-                    <article key={s.variable} style={{ background: '#faf7f2', borderRadius: 12, padding: '22px 20px 20px', height: 244, overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 22 }}>
-                        <h3 style={{ margin: 0, fontSize: 16, lineHeight: 1.2, color: '#020617', fontWeight: 800, fontFamily: 'var(--font-mono, monospace)', overflowWrap: 'anywhere' }}>{s.variable}</h3>
-                        <span style={{ flexShrink: 0, borderRadius: 999, padding: '4px 10px', background: isSkewed ? '#fff7ed' : '#d1fae5', color: isSkewed ? '#c2410c' : '#059669', fontSize: 12, fontWeight: 700 }}>{shapeLabel}</span>
+              {numericCompareMode ? (() => {
+                const densityVars = numericStats.slice(0, 8)
+                const allCounts = {}
+                let maxDensity = 0
+                let globalMin = Infinity, globalMax = -Infinity
+                const DENSITY_COLORS = ['#f97316','#3b82f6','#10b981','#8b5cf6','#ec4899','#f59e0b','#6366f1','#14b8a6']
+                densityVars.forEach((s, idx) => {
+                  const hist = descResult?.histograms?.[s.variable]
+                  if (!hist?.counts?.length) return
+                  const hMin = Math.min(...(hist.bins || []))
+                  const hMax = Math.max(...(hist.bins || []))
+                  if (hMin < globalMin) globalMin = hMin
+                  if (hMax > globalMax) globalMax = hMax
+                  const maxC = Math.max(...hist.counts)
+                  if (maxC > maxDensity) maxDensity = maxC
+                  allCounts[s.variable] = { counts: hist.counts, maxC, idx, mean: s.mean, std: s.std }
+                })
+                const globalRange = globalMax - globalMin || 1
+                const numBins = 40
+                // Build density estimate using KDE-like normalized bins
+                const densityCurves = Object.entries(allCounts).map(([name, d]) => {
+                  const normalized = d.counts.map((c, i) => ({
+                    val: i / d.counts.length * globalRange + globalMin,
+                    density: c / d.maxC
+                  }))
+                  return { name, normalized, idx: d.idx }
+                })
+                const hasData = densityCurves.length > 0
+                let compareSummary = ''
+                if (densityCurves.length >= 2) {
+                  const names = densityCurves.map(d => d.name)
+                  compareSummary = `Comparing distributions of ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}.`
+                } else if (densityCurves.length === 1) {
+                  compareSummary = `Distribution of ${densityCurves[0].name}.`
+                }
+                return (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    {compareSummary && (
+                      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10, padding: '6px 10px', background: '#f9fafb', borderRadius: 8, lineHeight: 1.4 }}>
+                        {compareSummary}
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 26, rowGap: 14 }}>
-                        <div>
-                          <div style={{ color: '#667085', fontSize: 12, marginBottom: 6 }}>Mean</div>
-                          <strong style={{ color: '#020617', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)' }}>{s.mean != null ? s.mean.toFixed(3).replace(/\.000$/, '.0') : '?'}</strong>
-                        </div>
-                        <div>
-                          <div style={{ color: '#667085', fontSize: 12, marginBottom: 6 }}>SD</div>
-                          <strong style={{ color: '#020617', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)' }}>{s.std != null ? s.std.toFixed(3).replace(/\.000$/, '.0') : '?'}</strong>
-                        </div>
-                        <div>
-                          <div style={{ color: '#667085', fontSize: 12, marginBottom: 6 }}>Median</div>
-                          <strong style={{ color: '#020617', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)' }}>{s.median != null ? s.median.toFixed(3).replace(/\.000$/, '.0') : '?'}</strong>
-                        </div>
-                        <div>
-                          <div style={{ color: '#667085', fontSize: 12, marginBottom: 6 }}>Skew</div>
-                          <strong style={{ color: '#020617', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)' }}>{s.skew != null ? s.skew.toFixed(3) : '?'}</strong>
-                        </div>
+                    )}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 0, position: 'relative', minHeight: 300 }}>
+                      {hasData ? (
+                        <>
+                          {/* Y-axis label */}
+                          <div style={{ position: 'absolute', left: -8, top: '50%', transform: 'rotate(-90deg) translateX(-50%)', transformOrigin: 'left center', fontSize: 9, color: '#9ca3af', whiteSpace: 'nowrap' }}>Normalized density</div>
+                          {/* Grid lines + curves */}
+                          <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0 }}>
+                            {/* Horizontal grid */}
+                            {[0, 0.25, 0.5, 0.75, 1].map(pct => (
+                              <line key={pct} x1="40" y1={300 - pct * 260} x2="100%" y2={300 - pct * 260} stroke="#f3f4f6" strokeWidth="1" />
+                            ))}
+                            {/* Density curves */}
+                            {densityCurves.map(({ name, normalized, idx }) => {
+                              const pts = normalized.map((p, i) => {
+                                const x = 40 + (i / (normalized.length - 1 || 1)) * (280 - 40)
+                                const y = 300 - p.density * 240 - 10
+                                return `${x},${y}`
+                              }).join(' ')
+                              const color = DENSITY_COLORS[idx % DENSITY_COLORS.length]
+                              return <polyline key={name} points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+                            })}
+                            {/* X-axis */}
+                            <line x1="40" y1={300 - 10} x2="100%" y2={300 - 10} stroke="#d1d5db" strokeWidth="1" />
+                            <text x="40" y={300 + 12} fontSize="8" fill="#9ca3af">{globalMin.toFixed(1)}</text>
+                            <text x="90%" y={300 + 12} fontSize="8" fill="#9ca3af" textAnchor="end">{globalMax.toFixed(1)}</text>
+                          </svg>
+                        </>
+                      ) : (
+                        <div style={{ width: '100%', textAlign: 'center', padding: 40, color: '#9ca3af', fontSize: 12 }}>No histogram data available for comparison.</div>
+                      )}
+                    </div>
+                    {/* Legend */}
+                    {densityCurves.length > 0 && (
+                      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, justifyContent: 'center' }}>
+                        {densityCurves.map(({ name, idx }) => (
+                          <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#374151' }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: DENSITY_COLORS[idx % DENSITY_COLORS.length], flexShrink: 0 }} />
+                            {name}
+                          </span>
+                        ))}
                       </div>
-                      <div style={{ width: 56, height: 4, borderRadius: 999, background: ORANGE_ACCENT, marginTop: 20 }} />
-                    </article>
-                  )
-                })}
-              </div>
+                    )}
+                  </div>
+                )
+              })() : (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: selectedNumericVar ? 'repeat(2, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))',
+                    gridAutoRows: 360,
+                    gap: 16,
+                    overflowY: 'auto',
+                    paddingRight: 4,
+                    minHeight: 0,
+                    minWidth: 0
+                  }}
+                >
+                  {numericStats.map(s => {
+                    const isSelected = selectedNumericVar === s.variable
+                    return (
+                      <article key={s.variable}
+                        {...explainAttrs({ id: `numeric-card-${s.variable}`, title: `${s.variable} numeric variable card`, type: 'numeric-card', stat: s })}
+                        onClick={() => setSelectedNumericVar(isSelected ? null : s.variable)}
+                        style={{ background: '#faf7f2', borderRadius: 12, padding: '22px 20px 16px', height: 360, overflow: 'hidden', cursor: 'pointer', border: isSelected ? `2px solid ${ORANGE_ACCENT}` : '2px solid transparent', transition: 'border-color 0.15s', minWidth: 0 }}
+                      >
+                        <h3 style={{ margin: '0 0 8px', fontSize: 16, lineHeight: 1.2, color: '#020617', fontWeight: 800, fontFamily: 'var(--font-mono, monospace)', overflowWrap: 'anywhere' }}>{s.variable}</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 26, rowGap: 10 }}>
+                          <div>
+                            <div style={{ color: '#667085', fontSize: 11, marginBottom: 2 }}>Mean</div>
+                            <strong style={{ color: '#020617', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)' }}>{s.mean != null ? s.mean.toFixed(3).replace(/\.000$/, '.0') : '?'}</strong>
+                          </div>
+                          <div>
+                            <div style={{ color: '#667085', fontSize: 11, marginBottom: 2 }}>SD</div>
+                            <strong style={{ color: '#020617', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)' }}>{s.std != null ? s.std.toFixed(3).replace(/\.000$/, '.0') : '?'}</strong>
+                          </div>
+                          <div>
+                            <div style={{ color: '#667085', fontSize: 11, marginBottom: 2 }}>Median</div>
+                            <strong style={{ color: '#020617', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)' }}>{s.median != null ? s.median.toFixed(3).replace(/\.000$/, '.0') : '?'}</strong>
+                          </div>
+                          <div>
+                            <div style={{ color: '#667085', fontSize: 11, marginBottom: 2 }}>Skew</div>
+                            <strong style={{ color: '#020617', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)' }}>{s.skew != null ? s.skew.toFixed(3) : '?'}</strong>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 12, marginTop: 10, marginBottom: 8, paddingTop: 8, borderTop: '1px solid #e8e4df' }}>
+                          <div>
+                            <div style={{ color: '#667085', fontSize: 10 }}>Min</div>
+                            <strong style={{ color: '#020617', fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>{s.min != null ? s.min.toFixed(1) : '?'}</strong>
+                          </div>
+                          <div>
+                            <div style={{ color: '#667085', fontSize: 10 }}>Max</div>
+                            <strong style={{ color: '#020617', fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>{s.max != null ? s.max.toFixed(1) : '?'}</strong>
+                          </div>
+                          <div>
+                            <div style={{ color: '#667085', fontSize: 10 }}>Missing</div>
+                            <strong style={{ color: (s.missing ?? 0) > 0 ? '#f97316' : '#16a34a', fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>{(s.missing ?? 0)}{(s.n && s.missing) ? ` (${(s.missing / s.n * 100).toFixed(1)}%)` : ''}</strong>
+                          </div>
+                        </div>
+                        {(() => {
+                          const hist = descResult?.histograms?.[s.variable]
+                          if (!hist?.counts?.length) return null
+                          const maxC = Math.max(...hist.counts)
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 40, marginTop: 4 }}>
+                              {hist.counts.map((c, i) => (
+                                <div key={i} style={{ flex: 1, height: `${maxC ? (c / maxC) * 100 : 0}%`, background: 'rgba(234, 88, 12, 0.5)', borderRadius: '2px 2px 0 0', minHeight: c > 0 ? 2 : 0 }} />
+                              ))}
+                            </div>
+                          )
+                        })()}
+                        <div style={{ fontSize: 10, color: '#6b7280', marginTop: 6, lineHeight: 1.4 }}>
+                          {s.skew != null && Math.abs(s.skew) < 0.5
+                            ? '✅ Values are evenly spread — good for modeling as-is'
+                            : s.skew != null && Math.abs(s.skew) < 1.0
+                            ? 'ℹ️ Slightly uneven distribution — may need minor adjustment'
+                            : s.skew != null
+                            ? '⚠️ Heavily uneven distribution — transformation recommended before modeling'
+                            : ''}
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
+        {/* Numeric detail panel */}
+        {activeDescribeSection === 'numeric' && selectedNumericVar && (() => {
+            const sv = numericStats.find(x => x.variable === selectedNumericVar)
+            if (!sv) return null
+            const hist = descResult?.histograms?.[selectedNumericVar]
+            const bins = hist?.counts?.length ? hist.counts.map((c, i) => ({
+              label: hist.bins?.[i]?.toFixed?.(1) ?? String(i),
+              count: c
+            })) : []
+            const maxBin = Math.max(...bins.map(b => b.count), 1)
+            const values = bins.flatMap((b, i) => Array.from({ length: b.count }, () => i))
+            const meanVal = values.length ? values.reduce((a, v) => a + v, 0) / values.length : 0
+            const sortedVals = [...values].sort((a, b) => a - b)
+            const medianVal = sortedVals.length ? (() => { const m = Math.floor(sortedVals.length / 2); return sortedVals.length % 2 ? sortedVals[m] : (sortedVals[m - 1] + sortedVals[m]) / 2 })() : 0
+            const meanIdx = Math.min(Math.floor(meanVal), bins.length - 1)
+            const medIdx = Math.min(Math.floor(medianVal), bins.length - 1)
 
+            const boxQ1 = sv.q1 ?? sortedVals[Math.floor(sortedVals.length * 0.25)] ?? 0
+            const boxQ3 = sv.q3 ?? sortedVals[Math.floor(sortedVals.length * 0.75)] ?? 0
+            const boxMedian = sv.median ?? medianVal
+            const boxMin = sv.min ?? 0
+            const boxMax = sv.max ?? 0
+            const boxRange = boxMax - boxMin || 1
+
+            return (
+              <div {...explainAttrs({ id: `numeric-detail-${selectedNumericVar}`, title: `${selectedNumericVar} detail drawer`, type: 'numeric-detail', stat: sv }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '20px 18px', alignSelf: 'stretch', minWidth: 0, maxHeight: 560, overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', fontFamily: 'var(--font-mono, monospace)' }}>{selectedNumericVar}</div>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>Distribution details</div>
+                  </div>
+                  <button type="button" onClick={() => setSelectedNumericVar(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', padding: 2 }}><X size={14} /></button>
+                </div>
+                {/* Full histogram */}
+                <div {...explainAttrs({ id: `numeric-detail-histogram-${selectedNumericVar}`, title: `${selectedNumericVar} distribution histogram`, type: 'numeric-detail-part', stat: sv })} style={{ height: 160, marginBottom: 14, position: 'relative' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 140, width: '100%' }}>
+                    {bins.map((b, i) => (
+                      <div key={i} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                        <div style={{ width: '100%', height: `${(b.count / maxBin) * 100}%`, background: 'rgba(234, 88, 12, 0.5)', borderRadius: '2px 2px 0 0', minHeight: b.count > 0 ? 2 : 0 }} />
+                        {i === meanIdx && (
+                          <div style={{ position: 'absolute', bottom: `${(b.count / maxBin) * 100}%`, left: 0, right: 0, height: 0, borderTop: '2px dashed #dc2626', zIndex: 2 }} />
+                        )}
+                        {i === medIdx && (
+                          <div style={{ position: 'absolute', bottom: `${(b.count / maxBin) * 100}%`, left: 0, right: 0, height: 0, borderTop: '2px dashed #7c3aed', zIndex: 2 }} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 2, fontSize: 9, color: '#9ca3af' }}>
+                    <span style={{ color: '#dc2626' }}>— Mean: {sv.mean != null ? sv.mean.toFixed(2) : meanVal.toFixed(2)}</span>
+                    <span style={{ color: '#7c3aed' }}>— Median: {sv.median != null ? sv.median.toFixed(2) : medianVal.toFixed(2)}</span>
+                  </div>
+                </div>
+                {/* Box plot */}
+                <div {...explainAttrs({ id: `numeric-detail-boxplot-${selectedNumericVar}`, title: `${selectedNumericVar} box plot`, type: 'numeric-detail-part', stat: sv })} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Distribution</div>
+                  <svg width="100%" height="80" viewBox="0 0 300 80" style={{ display: 'block', overflow: 'visible' }}>
+                    <line x1="10" y1="55" x2="270" y2="55" stroke="#d1d5db" strokeWidth="1" />
+                    <line x1={10 + ((boxMin - boxMin) / boxRange) * 260} y1="40" x2={10 + ((boxMin - boxMin) / boxRange) * 260} y2="70" stroke="#6b7280" strokeWidth="1.5" />
+                    <line x1={10 + ((boxMax - boxMin) / boxRange) * 260} y1="40" x2={10 + ((boxMax - boxMin) / boxRange) * 260} y2="70" stroke="#6b7280" strokeWidth="1.5" />
+                    <line x1={10 + ((boxMin - boxMin) / boxRange) * 260} y1="55" x2={10 + ((boxQ1 - boxMin) / boxRange) * 260} y2="55" stroke="#6b7280" strokeWidth="1" />
+                    <line x1={10 + ((boxQ3 - boxMin) / boxRange) * 260} y1="55" x2={10 + ((boxMax - boxMin) / boxRange) * 260} y2="55" stroke="#6b7280" strokeWidth="1" />
+                    <rect x={10 + ((boxQ1 - boxMin) / boxRange) * 260} y="35" width={((boxQ3 - boxQ1) / boxRange) * 260} height="40" fill="rgba(234, 88, 12, 0.15)" stroke="#ea580c" strokeWidth="1.5" rx="2" />
+                    <line x1={10 + ((boxMedian - boxMin) / boxRange) * 260} y1="35" x2={10 + ((boxMedian - boxMin) / boxRange) * 260} y2="75" stroke="#ea580c" strokeWidth="2" />
+                    <text x={10 + ((boxMin - boxMin) / boxRange) * 260} y="78" fontSize="8" fill="#6b7280" textAnchor="middle">Lowest</text>
+                    <text x={10 + ((boxQ1 - boxMin) / boxRange) * 260} y="30" fontSize="8" fill="#6b7280" textAnchor="middle">Q1</text>
+                    <text x={10 + ((boxMedian - boxMin) / boxRange) * 260} y="30" fontSize="8" fill="#ea580c" fontWeight="bold" textAnchor="middle">Median</text>
+                    <text x={10 + ((boxQ3 - boxMin) / boxRange) * 260} y="30" fontSize="8" fill="#6b7280" textAnchor="middle">Q3</text>
+                    <text x={10 + ((boxMax - boxMin) / boxRange) * 260} y="78" fontSize="8" fill="#6b7280" textAnchor="middle">Highest</text>
+                  </svg>
+                </div>
+                {/* Stats table */}
+                <div {...explainAttrs({ id: `numeric-detail-stats-${selectedNumericVar}`, title: `${selectedNumericVar} full statistics section`, type: 'numeric-detail-part', stat: sv })} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 16px', fontSize: 10, marginBottom: 14 }}>
+                  {[
+                    ['Mean', sv.mean != null ? sv.mean.toFixed(3) : '—'],
+                    ['Median', sv.median != null ? sv.median.toFixed(3) : '—'],
+                    ['SD', sv.std != null ? sv.std.toFixed(3) : '—'],
+                    ['Min', sv.min != null ? sv.min.toFixed(2) : '—'],
+                    ['Max', sv.max != null ? sv.max.toFixed(2) : '—'],
+                    ['Q1', sv.q1 != null ? sv.q1.toFixed(2) : '—'],
+                    ['Q3', sv.q3 != null ? sv.q3.toFixed(2) : '—'],
+                    ['IQR', sv.q1 != null && sv.q3 != null ? (sv.q3 - sv.q1).toFixed(2) : '—'],
+                    ['Skew', sv.skew != null ? sv.skew.toFixed(3) : '—'],
+                    ['Kurtosis', sv.kurtosis != null ? sv.kurtosis.toFixed(3) : '—'],
+                    ['Missing', sv.missing != null ? `${sv.missing}${sv.n ? ` (${(sv.missing / sv.n * 100).toFixed(1)}%)` : ''}` : '—'],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', background: '#f9fafb', borderRadius: 4 }}>
+                      <span style={{ color: '#6b7280' }}>{label}</span>
+                      <span style={{ fontWeight: 600, color: '#111827', fontFamily: 'var(--font-mono, monospace)' }}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setChartBuilderType('histogram'); setChartBuilderX(selectedNumericVar); jumpToDescribeSection('chart-builder') }}
+                  style={{ width: '100%', padding: '7px 0', borderRadius: 8, border: `1.5px solid ${ORANGE_ACCENT}`, background: '#fff', color: ORANGE_ACCENT, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  View in Chart Builder →
+                </button>
+              </div>
+            )
+          })()}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 24, marginBottom: 20, alignItems: 'start' }}>
           {activeDescribeSection === 'categorical' && catStats.length > 0 && (
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '24px 24px 24px', height: 560, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div {...explainAttrs({ id: 'categorical-variables-container', title: 'Categorical variables distribution container', type: 'categorical-container' }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '24px 24px 24px', height: 560, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <p style={{ fontSize: 11, fontWeight: 800, color: '#5b6573', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 20px' }}>Categorical Variables — Distribution</p>
               {activeCatStat && (() => {
                 const vc = activeCatStat.value_counts || {}
                 const entries = Object.entries(vc).sort(([, a], [, b]) => b - a)
                 const total = activeCatStat.n || 1
                 const maxCount = entries[0]?.[1] || 1
+                const topPct = entries[0] ? (entries[0][1] / total * 100) : 0
+                const nUnique = entries.length
+                const topLabel = entries[0]?.[0] || ''
+                const topShare = (entries[0]?.[1] || 0) / total
                 return (
                   <div style={{ overflowY: 'auto', minHeight: 0, paddingRight: 4 }}>
+                    {/* Tab pills */}
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
                       {catStats.map(s => (
-                        <button key={s.variable} type="button" onClick={() => setActiveCatVar(s.variable)}
-                          style={{ padding: '7px 16px', borderRadius: 20, border: `1px solid ${activeCatVar === s.variable ? ORANGE_ACCENT : '#d1d5db'}`, background: '#fff', color: activeCatVar === s.variable ? ORANGE_ACCENT : '#1f2a44', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          {s.variable.replace(/_/g, ' ')}
+                        <button key={s.variable} type="button" {...explainAttrs({ id: `category-selector-${s.variable}`, title: `${s.variable} category selector chip`, type: 'category-selector', stat: s })} onClick={() => { setActiveCatVar(s.variable); setCatFilter('all') }}
+                          style={{ padding: '7px 16px', borderRadius: 20, border: `1px solid ${activeCatVar === s.variable ? ORANGE_ACCENT : '#d1d5db'}`, background: '#fff', color: activeCatVar === s.variable ? ORANGE_ACCENT : '#1f2a44', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span>{s.variable.replace(/_/g, ' ')}</span>
+                          {(() => {
+                            const vcVals = Object.values(s.value_counts || {})
+                            if (vcVals.length < 2) return null
+                            const maxV = Math.max(...vcVals)
+                            return (
+                              <span style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 1, height: 14 }}>
+                                {vcVals.slice(0, 8).map((v, i) => (
+                                  <span key={i} style={{ width: 3, height: `${maxV ? (v / maxV) * 100 : 0}%`, background: activeCatVar === s.variable ? '#ea580c' : '#9ca3af', borderRadius: 1, minHeight: v > 0 ? 2 : 0, display: 'inline-block' }} />
+                                ))}
+                              </span>
+                            )
+                          })()}
                         </button>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {entries.map(([label, count]) => {
-                        const pct = (count / total * 100).toFixed(1)
+                    {/* Metadata line */}
+                    <p {...explainAttrs({ id: `valid-unique-summary-${activeCatStat.variable}`, title: `${activeCatStat.variable} valid and unique values summary`, type: 'valid-unique-summary', stat: activeCatStat })} style={{ fontSize: 12, color: '#667085', margin: '0 0 10px' }}>
+                      <strong style={{ color: '#475467' }}>{activeCatStat.variable}</strong> · {activeCatStat.n} valid · {activeCatStat.unique} unique value{activeCatStat.unique !== 1 ? 's' : ''}
+                    </p>
+                    {/* Context-aware insight card */}
+                    {(() => {
+                      if (topShare > 0.8) {
+                        const shareText = (topShare * 10).toFixed(0)
                         return (
-                          <div key={label} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 48px', alignItems: 'center', gap: 14 }}>
-                            <span style={{ fontSize: 13, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-                            <div style={{ height: 14, background: '#f1f2f4', borderRadius: 4, overflow: 'hidden' }}>
-                              <div style={{ width: `${(count / maxCount) * 100}%`, height: '100%', background: ORANGE_ACCENT }} />
+                          <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>⚠️ HEAVILY IMBALANCED</div>
+                            <p style={{ fontSize: 11, color: '#7f1d1d', margin: 0, lineHeight: 1.5, opacity: 0.85 }}>
+                              Nearly {shareText} out of 10 rows are labeled '{topLabel}'. If you train a model on this, it will likely predict '{topLabel}' most of the time — even when it shouldn't.
+                            </p>
+                          </div>
+                        )
+                      } else if (topShare > 0.4 && topShare < 0.6) {
+                        return (
+                          <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 4 }}>✅ WELL BALANCED</div>
+                            <p style={{ fontSize: 11, color: '#14532d', margin: 0, lineHeight: 1.5, opacity: 0.85 }}>
+                              Classes are well balanced — no action needed for this variable.
+                            </p>
+                          </div>
+                        )
+                      } else if (nUnique > 10) {
+                        return (
+                          <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>ℹ️ HIGH CARDINALITY</div>
+                            <p style={{ fontSize: 11, color: '#78350f', margin: 0, lineHeight: 1.5, opacity: 0.85 }}>
+                              This variable has {nUnique} unique values — consider grouping rare categories or using embedding techniques before modeling.
+                            </p>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
+                    {/* Filter pills */}
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                      {[{ key: 'all', label: 'All' }, { key: 'majority', label: 'Majority (>50%)' }, { key: 'minority', label: 'Minority (<20%)' }].map(f => (
+                        <button key={f.key} type="button" {...explainAttrs({ id: `category-filter-${f.key}`, title: `${f.label} filter chip`, type: 'category-filter', filter: f.key })} onClick={() => setCatFilter(f.key)}
+                          style={{ padding: '3px 10px', borderRadius: 999, border: `1px solid ${catFilter === f.key ? '#111827' : '#d1d5db'}`, background: catFilter === f.key ? '#111827' : '#fff', color: catFilter === f.key ? '#fff' : '#374151', fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Distribution bars with raw counts */}
+                    <div {...explainAttrs({ id: `categorical-distribution-chart-${activeCatStat.variable}`, title: `${activeCatStat.variable} distribution chart`, type: 'category-chart', stat: activeCatStat }, '', false)} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                      {entries.map(([label, count], idx) => {
+                        const pct = (count / total * 100).toFixed(1)
+                        const matchesFilter = catFilter === 'all'
+                          || (catFilter === 'majority' && pct > 50)
+                          || (catFilter === 'minority' && pct < 20)
+                        return (
+                          <div key={label} {...explainAttrs({ id: `category-value-${activeCatStat.variable}-${label}`, title: `${label} category bar/value`, type: 'category-value', variable: activeCatStat.variable, label, count, pct })} style={{ display: 'grid', gridTemplateColumns: '16px 1fr 52px 44px 44px', alignItems: 'center', gap: 8, opacity: matchesFilter ? 1 : 0.2 }}>
+                            <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textAlign: 'right' }}>#{idx + 1}</span>
+                            <div style={{ overflow: 'hidden' }}>
+                              <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>{label}</span>
+                              <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>{count.toLocaleString()} records</div>
                             </div>
-                            <strong style={{ fontSize: 13, color: '#020617', textAlign: 'right' }}>{pct}%</strong>
+                            <div style={{ height: 14, background: '#f1f2f4', borderRadius: 4, overflow: 'hidden' }}>
+                              <div style={{ width: `${(count / maxCount) * 100}%`, height: '100%', background: ORANGE_ACCENT, borderRadius: 4 }} />
+                            </div>
+                            <strong style={{ fontSize: 12, color: '#020617', textAlign: 'right' }}>{count.toLocaleString()}</strong>
+                            <span style={{ fontSize: 11, color: '#6b7280', textAlign: 'right' }}>{pct}%</span>
                           </div>
                         )
                       })}
                     </div>
-                    <p style={{ fontSize: 12, color: '#667085', margin: '18px 0 0', borderTop: '1px solid #e5e7eb', paddingTop: 16 }}>
-                      <strong style={{ color: '#475467' }}>{activeCatStat.variable}</strong> · {activeCatStat.n} valid · {activeCatStat.unique} unique value{activeCatStat.unique !== 1 ? 's' : ''}
-                    </p>
+                    {/* ALL VALUES BY FREQUENCY section */}
+                    <div {...explainAttrs({ id: `all-values-frequency-${activeCatStat.variable}`, title: 'All values by frequency section', type: 'frequency-section', stat: activeCatStat }, '', false)} style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>All Values by Frequency</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {entries.map(([label, count], idx) => {
+                          const pct = (count / total * 100).toFixed(1)
+                          return (
+                            <div key={label} style={{ display: 'grid', gridTemplateColumns: '16px 1fr 52px 44px 44px', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textAlign: 'right' }}>#{idx + 1}</span>
+                              <span style={{ fontSize: 11, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                              <div style={{ height: 6, background: '#f1f2f4', borderRadius: 3, overflow: 'hidden' }}>
+                                <div style={{ width: `${(count / maxCount) * 100}%`, height: '100%', background: ORANGE_ACCENT, borderRadius: 3 }} />
+                              </div>
+                              <strong style={{ fontSize: 10, color: '#374151', textAlign: 'right', fontFamily: 'var(--font-mono, monospace)' }}>{count.toLocaleString()}</strong>
+                              <span style={{ fontSize: 10, color: '#6b7280', textAlign: 'right' }}>{pct}%</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    {/* Cramér's V Associations */}
+                    {cramersResult && activeCatStat && (() => {
+                      const varName = activeCatStat.variable
+                      const pairs = (cramersResult.pairs || []).filter(p => p.var_a === varName || p.var_b === varName)
+                        .map(p => ({ other: p.var_a === varName ? p.var_b : p.var_a, v: p.v }))
+                        .sort((a, b) => b.v - a.v)
+                      if (pairs.length === 0) return null
+                      return (
+                        <div {...explainAttrs({ id: `categorical-associations-${varName}`, title: 'Associations with other variables section', type: 'associations-section', variable: varName }, '', false)} style={{ marginTop: 12, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Cramér's V Associations</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {pairs.map(({ other, v }) => (
+                              <div key={other} {...explainAttrs({ id: `cramers-row-${varName}-${other}`, title: `${varName} and ${other} Cramer's V relationship row`, type: 'cramers-row', variable: varName, other, value: v })} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 50px 70px', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 11, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono, monospace)' }}>{other}</span>
+                                <div style={{ height: 6, background: '#f1f2f4', borderRadius: 3, overflow: 'hidden' }}>
+                                  <div style={{ width: `${v * 100}%`, height: '100%', background: v > 0.5 ? '#ea580c' : v > 0.25 ? '#f59e0b' : '#9ca3af', borderRadius: 3 }} />
+                                </div>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#374151', textAlign: 'right', fontFamily: 'var(--font-mono, monospace)' }}>{v.toFixed(3)}</span>
+                                <span style={{ fontSize: 10, color: v > 0.5 ? '#ea580c' : v > 0.25 ? '#b45309' : '#9ca3af', fontWeight: 500 }}>{v > 0.5 ? 'Strong' : v > 0.25 ? 'Moderate' : 'Weak'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })()}
@@ -1006,15 +1514,27 @@ export default function DescribePage({ dataset, initialData }) {
       {activeDescribeSection === 'correlations' && descResult && (corrResult?.variables?.length >= 2 ? (
         <div
           id="describe-correlations"
+          {...explainAttrs({ id: 'numeric-correlation-heatmap', title: 'Numeric correlation heatmap', type: 'correlation-heatmap' }, '', false)}
           style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 20, marginBottom: 20 }}
-          onClick={() => setSelectedCorrCell(null)}
+          onClick={() => { setSelectedCorrCell(null); setSelectedCramerCell(null) }}
         >
           <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '16px 24px', alignItems: 'start' }}>
 
             {/* Row 1 left: title */}
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Correlation Heatmap — Numeric Pairs
-            </p>
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Correlation Heatmap — Numeric Pairs
+              </p>
+              {/* Filter pills */}
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[{ key: 'all', label: 'All' }, { key: 'strong', label: 'Strong (r > 0.7)' }, { key: 'moderate', label: 'Moderate (0.4\u20130.7)' }, { key: 'weak', label: 'Weak (< 0.4)' }].map(f => (
+                  <button key={f.key} type="button" {...explainAttrs({ id: `corr-filter-${f.key}`, title: `${f.label} relationship strength filter`, type: 'correlation-filter', filter: f.key })} onClick={() => setCorrFilter(f.key)}
+                    style={{ padding: '3px 8px', borderRadius: 999, border: `1px solid ${corrFilter === f.key ? '#111827' : '#d1d5db'}`, background: corrFilter === f.key ? '#111827' : '#fff', color: corrFilter === f.key ? '#fff' : '#374151', fontSize: 9, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Row 1 right: detail panel title */}
             <div onClick={e => e.stopPropagation()}>
@@ -1064,11 +1584,16 @@ export default function DescribePage({ dataset, initialData }) {
                           const abs = Math.abs(val)
                           const isSelf = r === c
                           const isSelected = selectedCorrCell?.row === r && selectedCorrCell?.col === c
+                          const matchesFilter = corrFilter === 'all'
+                            || (corrFilter === 'strong' && abs > 0.7)
+                            || (corrFilter === 'moderate' && abs > 0.4 && abs <= 0.7)
+                            || (corrFilter === 'weak' && abs <= 0.4)
                           const bg = isSelf ? ORANGE_ACCENT : getCorrelationColor(val)
                           const textColor = isSelf || abs > 0.5 ? '#fff' : '#111827'
                           return (
                             <td
                               key={c}
+                              {...explainAttrs({ id: `corr-cell-${r}-${c}`, title: `${r} and ${c} numeric correlation cell`, type: 'correlation-cell', row: r, col: c, value: val })}
                               onClick={() => setSelectedCorrCell(isSelected ? null : { row: r, col: c })}
                               style={{
                                 padding: '8px 12px',
@@ -1078,8 +1603,9 @@ export default function DescribePage({ dataset, initialData }) {
                                 borderRadius: 6,
                                 fontWeight: 700,
                                 cursor: 'pointer',
+                                opacity: isSelf ? 1 : (matchesFilter ? 1 : 0.2),
                                 boxShadow: isSelected ? '0 0 0 2px #fff, 0 0 0 4px #374151' : 'none',
-                                transition: 'box-shadow 0.15s'
+                                transition: 'opacity 0.15s, box-shadow 0.15s'
                               }}
                             >
                               {fmt(val)}
@@ -1090,6 +1616,39 @@ export default function DescribePage({ dataset, initialData }) {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              {/* Ranked correlation list */}
+              <div {...explainAttrs({ id: 'strongest-relationships-panel', title: 'Strongest relationships panel', type: 'relationship-panel' }, '', false)} style={{ maxHeight: 200, overflowY: 'auto', marginTop: 12 }}>
+                {getTopCorrelations(corrResult, 999)
+                  .filter(({ val }) => {
+                    const abs = Math.abs(val)
+                    return corrFilter === 'all'
+                      || (corrFilter === 'strong' && abs > 0.7)
+                      || (corrFilter === 'moderate' && abs > 0.4 && abs <= 0.7)
+                      || (corrFilter === 'weak' && abs <= 0.4)
+                  })
+                  .map(({ a, b, val }) => {
+                  const absR = Math.abs(val)
+                  const barColor = val > 0 ? '#ea580c' : '#0284c7'
+                  const isSelected = selectedCorrCell?.row === a && selectedCorrCell?.col === b
+                  return (
+                    <div
+                      key={`${a}-${b}`}
+                      {...explainAttrs({ id: `numeric-relationship-${a}-${b}`, title: `${a} and ${b} numeric relationship row`, type: 'relationship-row', a, b, value: val })}
+                      onClick={() => setSelectedCorrCell({ row: a, col: b })}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 6, background: isSelected ? '#fff7ed' : 'transparent' }}
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f9fafb' }}
+                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '0 1 auto' }}>{a} ↔ {b}</span>
+                      <div style={{ flex: 1, height: 4, background: '#e5e7eb', borderRadius: 2, minWidth: 30, position: 'relative' }}>
+                        <div style={{ width: `${absR * 100}%`, height: '100%', background: barColor, borderRadius: 2 }} />
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: barColor, whiteSpace: 'nowrap' }}>{val >= 0 ? '+' : ''}{val.toFixed(3)}</span>
+                      <span style={{ fontSize: 10, color: '#9ca3af', whiteSpace: 'nowrap' }}>{getCorrelationLabel(val)}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
@@ -1152,9 +1711,41 @@ export default function DescribePage({ dataset, initialData }) {
                       y: { ticks: { font: { size: 9 } }, title: { display: true, text: 'Count', font: { size: 9 } } }
                     }
                   }
+                  const meanVal = values.reduce((a, b) => a + b, 0) / values.length
+                  const medianVal = (() => { const sorted = [...values].sort((a, b) => a - b); const mid = Math.floor(sorted.length / 2); return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2 })()
+                  const histPlugin = {
+                    id: 'meanMedianLines',
+                    afterDraw(chart) {
+                      const ctx = chart.ctx
+                      const xScale = chart.scales.x
+                      const yScale = chart.scales.y
+                      const meanBinIdx = Math.min(Math.floor((meanVal - minV) / binWidth), binCount - 1)
+                      const medBinIdx = Math.min(Math.floor((medianVal - minV) / binWidth), binCount - 1)
+                      const meanX = xScale.getPixelForValue(meanBinIdx)
+                      if (meanX >= xScale.left && meanX <= xScale.right) {
+                        ctx.save(); ctx.setLineDash([6, 3]); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 1.5
+                        ctx.beginPath(); ctx.moveTo(meanX, yScale.top); ctx.lineTo(meanX, yScale.bottom); ctx.stroke()
+                        ctx.fillStyle = '#dc2626'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'
+                        ctx.fillText(`Mean: ${meanVal.toFixed(1)}`, meanX, yScale.top - 4); ctx.restore()
+                      }
+                      const medX = xScale.getPixelForValue(medBinIdx)
+                      if (medX >= xScale.left && medX <= xScale.right) {
+                        ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 1.5
+                        ctx.beginPath(); ctx.moveTo(medX, yScale.top); ctx.lineTo(medX, yScale.bottom); ctx.stroke()
+                        ctx.fillStyle = '#7c3aed'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'
+                        ctx.fillText(`Median: ${medianVal.toFixed(1)}`, medX, yScale.top - 14); ctx.restore()
+                      }
+                    }
+                  }
                   return (
-                    <div style={{ height: 220 }}>
-                      <Bar data={histData} options={histOptions} />
+                    <div>
+                      <div style={{ height: 220 }}>
+                        <Bar data={histData} options={histOptions} plugins={[histPlugin]} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 14, marginTop: 6 }}>
+                        <span style={{ fontSize: 10, color: '#dc2626' }}>--- Mean: {meanVal.toFixed(2)}</span>
+                        <span style={{ fontSize: 10, color: '#7c3aed' }}>--- Median: {medianVal.toFixed(2)}</span>
+                      </div>
                     </div>
                   )
                 }
@@ -1218,18 +1809,24 @@ export default function DescribePage({ dataset, initialData }) {
                     y: { title: { display: true, text: row, font: { size: 9 } }, ticks: { font: { size: 9 } } }
                   }
                 }
-                const insightText = Math.abs(val) >= 0.7
-                  ? 'These two variables move together strongly. Including both in your model may be redundant.'
-                  : Math.abs(val) >= 0.4
-                  ? 'These variables have a moderate relationship. Worth exploring further before modeling.'
-                  : 'These variables have a weak relationship. Both can likely be included independently.'
+                const absVal = Math.abs(val)
+                const insight = absVal > 0.85
+                  ? { icon: '⚠️', title: 'Multicollinearity Warning', desc: `r = ${val.toFixed(3)} — these variables are near-redundant. Consider dropping the weaker predictor to avoid inflated variance.`, bg: '#fef2f2', border: '#fecaca', color: '#991b1b' }
+                  : absVal > 0.5
+                  ? { icon: 'ℹ️', title: 'Moderate Correlation', desc: `r = ${val.toFixed(3)} — safe to keep both variables, but monitor VIF during regression.`, bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af' }
+                  : { icon: '✅', title: 'Independent Variables', desc: `r = ${val.toFixed(3)} — these variables are largely independent. Safe to include both in your model.`, bg: '#f0fdf4', border: '#bbf7d0', color: '#166534' }
                 return (
                   <div>
                     <div style={{ height: 200 }}>
                       <Chart type='scatter' data={{ datasets: scatterDatasets }} options={scatterOptions} />
                     </div>
-                    <div style={{ background: '#fff7ed', borderRadius: 8, padding: '8px 10px', marginTop: 10 }}>
-                      <p style={{ fontSize: 11, color: '#92400e', margin: 0, lineHeight: 1.5 }}>{insightText}</p>
+                    <div style={{ background: insight.bg, border: `1px solid ${insight.border}`, borderRadius: 10, padding: '10px 12px', marginTop: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 14 }}>{insight.icon}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: insight.color }}>{insight.title}</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, background: insight.color + '18', color: insight.color, borderRadius: 20, padding: '2px 8px' }}>|r| = {absVal.toFixed(3)}</span>
+                      </div>
+                      <p style={{ fontSize: 11, color: insight.color, margin: 0, lineHeight: 1.5, opacity: 0.85 }}>{insight.desc}</p>
                     </div>
                   </div>
                 )
@@ -1253,8 +1850,181 @@ export default function DescribePage({ dataset, initialData }) {
         </div>
       ))}
 
+      {/* ──── CRAMÉR'S V HEATMAP ──── */}
+      {activeDescribeSection === 'correlations' && cramersResult && cramersResult.variables?.length >= 2 && (
+        <div {...explainAttrs({ id: 'categorical-associations-heatmap', title: 'Categorical associations heatmap', type: 'categorical-heatmap' }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 20, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '16px 24px', alignItems: 'start' }}>
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Categorical Associations — Cramér's V
+              </p>
+              <p style={{ fontSize: 10, color: '#9ca3af', margin: 0 }}>Strength between categorical column pairs</p>
+            </div>
+            <div onClick={e => e.stopPropagation()}>
+              {!selectedCramerCell ? (
+                <>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: '#111827', marginTop: 0, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Strongest associations</p>
+                  <p style={{ fontSize: 11, color: '#6b7280', marginTop: 0, marginBottom: 0 }}>Click any cell to explore</p>
+                </>
+              ) : selectedCramerCell.row === selectedCramerCell.col ? (
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{selectedCramerCell.row}</p>
+              ) : (
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#111827', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }}>
+                  {selectedCramerCell.row} <span style={{ color: '#9ca3af' }}>←→</span> {selectedCramerCell.col}
+                </p>
+              )}
+            </div>
+            {/* Left: heatmap */}
+            <div onClick={e => e.stopPropagation()}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'separate', borderSpacing: '6px', fontSize: 11, fontFamily: 'var(--font-mono)', minWidth: Math.max(360, cramersResult.variables.length * 70) }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding: '6px 8px' }}></th>
+                      {cramersResult.variables.map((v) => (
+                        <th key={v} style={{ padding: '6px 8px', color: '#6b7280', fontWeight: 600, fontSize: 10 }}>{v}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cramersResult.variables.map((r) => (
+                      <tr key={r}>
+                        <td style={{ padding: '6px 8px', fontWeight: 600, fontSize: 10, color: '#4b5563' }}>{r}</td>
+                        {cramersResult.variables.map((c) => {
+                          const v = Number(cramersResult.matrix?.[r]?.[c] ?? 0)
+                          const isSelf = r === c
+                          const isSelected = selectedCramerCell?.row === r && selectedCramerCell?.col === c
+                          let bg = '#faf7f2'
+                          let tc = '#111827'
+                          if (v > 0.5) { bg = 'rgba(234, 88, 12, 0.7)'; tc = '#fff' }
+                          else if (v > 0.25) { bg = 'rgba(245, 158, 11, 0.5)'; tc = '#111827' }
+                          else if (v > 0.1) { bg = 'rgba(156, 163, 175, 0.3)'; tc = '#111827' }
+                          return (
+                            <td key={c}
+                              {...explainAttrs({ id: `cramers-cell-${r}-${c}`, title: `${r} and ${c} categorical association cell`, type: 'cramers-cell', row: r, col: c, value: v })}
+                              onClick={() => setSelectedCramerCell(isSelected ? null : { row: r, col: c })}
+                              style={{ padding: '6px 10px', textAlign: 'center', backgroundColor: bg, color: tc, borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 10, boxShadow: isSelected ? '0 0 0 2px #fff, 0 0 0 4px #374151' : 'none', transition: 'box-shadow 0.15s' }}
+                            >{v.toFixed(3)}</td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Ranked Cramér's V list */}
+              {(() => {
+                const pairs = []
+                const vars = cramersResult.variables
+                for (let i = 0; i < vars.length; i++) {
+                  for (let j = i + 1; j < vars.length; j++) {
+                    const v = Number(cramersResult.matrix?.[vars[i]]?.[vars[j]] ?? 0)
+                    pairs.push({ a: vars[i], b: vars[j], v })
+                  }
+                }
+                pairs.sort((x, y) => y.v - x.v)
+                return (
+                  <div {...explainAttrs({ id: 'categorical-relationships-panel', title: 'Categorical relationships panel', type: 'categorical-relationships-panel' }, '', false)} style={{ maxHeight: 160, overflowY: 'auto', marginTop: 10 }}>
+                    {pairs.map(p => {
+                      const isSelected = selectedCramerCell?.row === p.a && selectedCramerCell?.col === p.b
+                      return (
+                        <div key={`${p.a}-${p.b}`}
+                          {...explainAttrs({ id: `categorical-relationship-${p.a}-${p.b}`, title: `${p.a} and ${p.b} categorical relationship row`, type: 'categorical-relationship-row', a: p.a, b: p.b, value: p.v })}
+                          onClick={() => setSelectedCramerCell({ row: p.a, col: p.b })}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 6px', cursor: 'pointer', borderRadius: 6, background: isSelected ? '#fff7ed' : 'transparent', fontSize: 10 }}
+                          onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f9fafb' }}
+                          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <span style={{ fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{p.a} ↔ {p.b}</span>
+                          <div style={{ width: 50, height: 3, background: '#e5e7eb', borderRadius: 2 }}>
+                            <div style={{ width: `${p.v * 100}%`, height: '100%', background: p.v > 0.5 ? '#ea580c' : p.v > 0.25 ? '#f59e0b' : '#9ca3af', borderRadius: 2 }} />
+                          </div>
+                          <span style={{ fontWeight: 700, color: '#374151', fontFamily: 'var(--font-mono)' }}>{p.v.toFixed(3)}</span>
+                          <span style={{ color: p.v > 0.5 ? '#ea580c' : p.v > 0.25 ? '#b45309' : '#9ca3af', fontWeight: 500 }}>{p.v > 0.5 ? 'Strong' : p.v > 0.25 ? 'Moderate' : 'Weak'}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
+            {/* Right: detail panel */}
+            <div style={{ paddingTop: 0 }} onClick={e => e.stopPropagation()}>
+              {!selectedCramerCell ? (
+                <div style={{ fontSize: 11, color: '#9ca3af' }}>Click a cell to view grouped bar chart</div>
+              ) : selectedCramerCell.row === selectedCramerCell.col ? (
+                <div style={{ fontSize: 11, color: '#9ca3af' }}>Self-association (V = 1.000)</div>
+              ) : (() => {
+                const { row, col } = selectedCramerCell
+                const crossTab = {}
+                datasetRows.forEach(dr => {
+                  const rv = String(dr[row] ?? ''); const cv = String(dr[col] ?? '')
+                  if (!rv || !cv) return
+                  if (!crossTab[rv]) crossTab[rv] = {}
+                  crossTab[rv][cv] = (crossTab[rv][cv] || 0) + 1
+                })
+                // X-axis = values of `col` (the one listed second in the pair title)
+                // Color split = values of `row`
+                const colKeys = [...new Set(Object.values(crossTab).flatMap(Object.keys))].slice(0, 10)
+                const rowKeys = Object.keys(crossTab).slice(0, 10)
+                const maxCross = Math.max(...colKeys.flatMap(ck => rowKeys.map(rk => crossTab[rk]?.[ck] || 0)), 1)
+                const ROW_COLORS = ['#f59e0b', '#fdba74']
+                const v = Number(cramersResult.matrix?.[row]?.[col] ?? 0)
+                const strengthLabel = v > 0.5 ? 'Strong association' : v > 0.25 ? 'Moderate association' : 'Weak association'
+                return (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>
+                      Grouped counts: {row} by {col}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 8 }}>
+                      Cramér's V: {v.toFixed(3)} · {strengthLabel}
+                    </div>
+                    {/* Grouped bar chart: x-axis = col values, grouped by row values */}
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140, paddingBottom: 4, borderBottom: '1px solid #e5e7eb' }}>
+                      {colKeys.map(ck => {
+                        return (
+                          <div key={ck} style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2, height: '100%' }}>
+                            {rowKeys.map((rk, idx) => {
+                              const cnt = crossTab[rk]?.[ck] || 0
+                              return (
+                                <div key={rk} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                                  <div style={{ position: 'relative', width: '100%', height: `${(cnt / maxCross) * 100}%`, minHeight: cnt > 0 ? 2 : 0 }}>
+                                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '100%', background: ROW_COLORS[idx % ROW_COLORS.length], borderRadius: '2px 2px 0 0' }} title={`${ck} / ${rk}: ${cnt}`} />
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* X-axis labels */}
+                    <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                      {colKeys.map(ck => (
+                        <div key={ck} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {ck}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Legend */}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8 }}>
+                      {rowKeys.map((rk, idx) => (
+                        <div key={rk} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: 10, height: 10, background: ROW_COLORS[idx % ROW_COLORS.length], borderRadius: 2 }} />
+                          <span style={{ fontSize: 9, color: '#374151', fontWeight: 500 }}>{rk}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Interactive Chart Builder */}
-      {activeDescribeSection === 'chart-builder' && descResult && <div id="describe-chart-builder" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', marginBottom: 20, height: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column' }}>
+      {activeDescribeSection === 'chart-builder' && descResult && <div id="describe-chart-builder" {...explainAttrs({ id: 'chart-builder-container', title: 'Chart Builder', type: 'chart-builder' }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', marginBottom: 20, height: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column' }}>
 
         {/* Top bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #e5e7eb' }}>
@@ -1272,25 +2042,25 @@ export default function DescribePage({ dataset, initialData }) {
             <Pencil size={11} color="#9ca3af" style={{ flexShrink: 0, opacity: titleHovered ? 1 : 0, transition: 'opacity 0.15s', pointerEvents: 'none' }} />
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 16, flexShrink: 0 }}>
-            <button type="button" onClick={handleSaveChart}
+            <button type="button" {...explainAttrs({ id: 'save-chart-button', title: 'Save chart button', type: 'chart-action' })} onClick={handleSaveChart}
               onMouseEnter={e => { e.currentTarget.style.background = ORANGE_LIGHT; e.currentTarget.style.borderColor = ORANGE_ACCENT; e.currentTarget.style.color = ORANGE_ACCENT }}
               onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#374151' }}
               style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #d1d5db', borderRadius: 8, padding: '6px 12px', background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151' }}>
               <Bookmark size={13} /> Save chart
             </button>
-            <button type="button" onClick={handleDuplicateChart} title="Duplicate chart"
+            <button type="button" {...explainAttrs({ id: 'copy-chart-button', title: 'Copy chart button', type: 'chart-action' })} onClick={handleDuplicateChart} title="Duplicate chart"
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#9ca3af'; e.currentTarget.style.color = '#374151' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#6b7280' }}
               style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '6px 8px', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#6b7280' }}>
               <Copy size={15} />
             </button>
-            <button type="button" onClick={handleDownloadChart} title="Download as PNG"
+            <button type="button" {...explainAttrs({ id: 'download-chart-button', title: 'Download chart button', type: 'chart-action' })} onClick={handleDownloadChart} title="Download as PNG"
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#9ca3af'; e.currentTarget.style.color = '#374151' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#6b7280' }}
               style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '6px 8px', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#6b7280' }}>
               <Download size={15} />
             </button>
-            <button type="button" onClick={() => setExpandChart(true)} title="Fullscreen"
+            <button type="button" {...explainAttrs({ id: 'expand-chart-button', title: 'Expand chart button', type: 'chart-action' })} onClick={() => setExpandChart(true)} title="Fullscreen"
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#9ca3af'; e.currentTarget.style.color = '#374151' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#6b7280' }}
               style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '6px 8px', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#6b7280' }}>
@@ -1375,6 +2145,7 @@ export default function DescribePage({ dataset, initialData }) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {CB_CHART_TYPES.map(t => (
                     <button key={t.key} type="button"
+                      {...explainAttrs({ id: `chart-type-${t.key}`, title: `${t.label} chart type button`, type: 'chart-type', chartType: t.key })}
                       onClick={() => { setChartBuilderType(t.key); setActiveChartId(null); if (t.key === 'histogram' && !chartBuilderX) { const f = dataset.variables?.find(v => ['numeric', 'int', 'float'].includes(v.dtype))?.name; if (f) setChartBuilderX(f) } }}
                       style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 7, border: `1px solid ${chartBuilderType === t.key ? ORANGE_ACCENT : '#d1d5db'}`, background: chartBuilderType === t.key ? ORANGE_LIGHT : '#fff', color: chartBuilderType === t.key ? ORANGE_ACCENT : '#374151', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                       {t.label}
@@ -1387,27 +2158,27 @@ export default function DescribePage({ dataset, initialData }) {
               <div>
                 <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fields</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div>
+                  <div {...explainAttrs({ id: 'field-x-axis', title: 'X Axis field dropdown', type: 'field-dropdown' }, '', false)}>
                     <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 600 }}>X Axis *</label>
-                    <select value={chartBuilderX} onChange={e => setChartBuilderX(e.target.value)}
+                    <select {...explainAttrs({ id: 'x-axis-dropdown', title: 'X Axis dropdown', type: 'field-dropdown' })} value={chartBuilderX} onChange={e => setChartBuilderX(e.target.value)}
                       style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 7, padding: '6px 8px', background: '#fff', fontSize: 12, outline: 'none' }}>
                       <option value="">— select —</option>
                       {(dataset.variables || []).map(v => <option key={v.name} value={v.name}>{v.name} ({v.dtype})</option>)}
                     </select>
                   </div>
                   {chartBuilderType !== 'histogram' && (
-                    <div>
+                    <div {...explainAttrs({ id: 'field-y-axis', title: 'Y Axis field dropdown', type: 'field-dropdown' }, '', false)}>
                       <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 600 }}>Y Axis *</label>
-                      <select value={chartBuilderY} onChange={e => setChartBuilderY(e.target.value)}
+                      <select {...explainAttrs({ id: 'y-axis-dropdown', title: 'Y Axis dropdown', type: 'field-dropdown' })} value={chartBuilderY} onChange={e => setChartBuilderY(e.target.value)}
                         style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 7, padding: '6px 8px', background: '#fff', fontSize: 12, outline: 'none' }}>
                         <option value="">— select —</option>
                         {(dataset.variables || []).filter(v => ['numeric', 'int', 'float'].includes(v.dtype)).map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
                       </select>
                     </div>
                   )}
-                  <div>
+                  <div {...explainAttrs({ id: 'field-color-by', title: 'Color by field dropdown', type: 'field-dropdown' }, '', false)}>
                     <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 600 }}>Color by (optional)</label>
-                    <select value={chartBuilderGroupBy} onChange={e => setChartBuilderGroupBy(e.target.value)}
+                    <select {...explainAttrs({ id: 'color-by-dropdown', title: 'Color by dropdown', type: 'field-dropdown' })} value={chartBuilderGroupBy} onChange={e => setChartBuilderGroupBy(e.target.value)}
                       style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 7, padding: '6px 8px', background: '#fff', fontSize: 12, outline: 'none' }}>
                       <option value="">— none —</option>
                       {(dataset.variables || []).filter(v => !['numeric', 'int', 'float'].includes(v.dtype)).map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
@@ -1422,7 +2193,7 @@ export default function DescribePage({ dataset, initialData }) {
                   <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Aggregation</p>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {['Count', 'Mean', 'Sum', 'Max'].map(agg => (
-                      <button key={agg} type="button" onClick={() => setChartBuilderAgg(agg)}
+                      <button key={agg} type="button" {...explainAttrs({ id: `aggregation-${agg}`, title: `${agg} aggregation button`, type: 'aggregation', aggregation: agg })} onClick={() => setChartBuilderAgg(agg)}
                         style={{ flex: 1, border: `1px solid ${chartBuilderAgg === agg ? '#111827' : '#d1d5db'}`, borderRadius: 7, padding: '5px 4px', background: chartBuilderAgg === agg ? '#111827' : '#fff', color: chartBuilderAgg === agg ? '#fff' : '#374151', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         {agg}
                       </button>
@@ -1437,7 +2208,7 @@ export default function DescribePage({ dataset, initialData }) {
                   <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sort</p>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {[{ key: 'default', label: 'Default' }, { key: 'asc', label: '↑ Asc' }, { key: 'desc', label: '↓ Desc' }].map(s => (
-                      <button key={s.key} type="button" onClick={() => setCbSortOrder(s.key)}
+                      <button key={s.key} type="button" {...explainAttrs({ id: `sort-${s.key}`, title: `${s.label} sort button`, type: 'sort', sort: s.key })} onClick={() => setCbSortOrder(s.key)}
                         style={{ flex: 1, border: `1px solid ${cbSortOrder === s.key ? ORANGE_ACCENT : '#d1d5db'}`, borderRadius: 7, padding: '5px 4px', background: cbSortOrder === s.key ? ORANGE_LIGHT : '#fff', color: cbSortOrder === s.key ? ORANGE_ACCENT : '#374151', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         {s.label}
                       </button>
@@ -1486,7 +2257,7 @@ export default function DescribePage({ dataset, initialData }) {
             </div>
 
             {/* Chart preview */}
-            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div {...explainAttrs({ id: 'chart-preview-area', title: 'Chart preview area', type: 'chart-preview' }, '', false)} style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <input
@@ -1527,6 +2298,7 @@ export default function DescribePage({ dataset, initialData }) {
                 </div>
               )}
               <textarea
+                {...explainAttrs({ id: 'chart-note-textarea', title: 'Chart note text area', type: 'chart-note' })}
                 rows={2}
                 value={chartNote}
                 onChange={e => setChartNote(e.target.value)}
@@ -1558,11 +2330,359 @@ export default function DescribePage({ dataset, initialData }) {
             </div>
           </div>
         )}
+        {explainPopup && (
+          <DescribeExplainPopup
+            datasetId={dataset.id}
+            element={explainPopup}
+            onClose={() => setExplainPopup(null)}
+          />
+        )}
       </div>}
         </div>
       </main>
     </div>
   )
+}
+
+function DescribeExplainPopup({ datasetId, element, onClose }) {
+  const [aiText, setAiText] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState('normal')
+  const [followUpInput, setFollowUpInput] = useState('')
+  const [followUpLoading, setFollowUpLoading] = useState(false)
+  const [position, setPosition] = useState({ top: 84, left: 24 })
+
+  useEffect(() => {
+    if (!element?.sourceRect) return
+    const popupW = 374
+    const popupH = 430
+    const { innerWidth, innerHeight } = window
+    let top = element.sourceRect.bottom + 8
+    let left = Math.max(12, Math.min(element.sourceRect.left, innerWidth - popupW - 12))
+    if (top + popupH > innerHeight - 16) top = Math.max(12, element.sourceRect.top - popupH - 8)
+    setPosition({ top, left })
+  }, [element?.sourceRect])
+
+  const fetchAI = async (variant = 'normal') => {
+    if (!datasetId || !element) return
+    setLoading(true)
+    try {
+      const question = variant === 'simple'
+        ? `Explain this Describe page section in simpler student-friendly terms: ${element.title}.`
+        : variant === 'technical'
+          ? `Give a concise technical explanation for this Describe page section: ${element.title}. Include why it matters for data analysis or modeling.`
+          : `Explain this Describe page section in plain language for a SimuCast student: ${element.title}. Include what it means, what the current dataset suggests, why it matters, and a recommendation.`
+      const payload = {
+        title: element.title,
+        type: element.type,
+        values: element.values,
+        fallback: {
+          dataset: element.datasetExplanation,
+          why: element.whyItMatters,
+          verdict: element.verdict,
+        },
+      }
+      const response = await api.aiExplain(datasetId, `describe-${element.id}-${variant}`, payload, question, { element: payload })
+      setAiText(response?.explanation || element.datasetExplanation)
+    } catch {
+      setAiText(element.datasetExplanation)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const askFollowUp = async () => {
+    if (!datasetId || !followUpInput.trim()) return
+    setFollowUpLoading(true)
+    try {
+      const payload = {
+        title: element.title,
+        type: element.type,
+        values: element.values,
+        previousExplanation: aiText || element.datasetExplanation,
+      }
+      const response = await api.aiExplain(datasetId, `describe-${element.id}-followup`, payload, followUpInput, { element: payload })
+      setAiText(response?.explanation || element.datasetExplanation)
+      setFollowUpInput('')
+      setMode('normal')
+    } catch {
+      setAiText(element.datasetExplanation)
+    } finally {
+      setFollowUpLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    setAiText(null)
+    fetchAI()
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [element?.id, datasetId])
+
+  return createPortal(
+    <div
+      className="ax-expand-explain-popup"
+      style={{ top: position.top, left: position.left }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${element.title} explanation`}
+    >
+      <div className="ax-expand-explain-popup-head">
+        <div>
+          <p>AI Explain · {element.title}</p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close explanation">&times;</button>
+      </div>
+      <div className="ax-expand-explain-popup-body">
+        <section>
+          <span>What this means</span>
+          <p>{element.simple}</p>
+        </section>
+        <section>
+          <span>In your dataset</span>
+          {loading ? <InlineSpinner label="Generating explanation..." /> : <p>{aiText || element.datasetExplanation}</p>}
+        </section>
+        <section>
+          <span>Why it matters</span>
+          <p>{element.whyItMatters}</p>
+        </section>
+        <section>
+          <span>Verdict / recommendation</span>
+          <p className={`ax-expand-explain-verdict ${element.verdictTone}`}>{element.verdict}</p>
+        </section>
+      </div>
+      {mode === 'followup' && (
+        <div className="ax-expand-explain-followup">
+          <input
+            type="text"
+            value={followUpInput}
+            onChange={(event) => setFollowUpInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') askFollowUp()
+            }}
+            placeholder="Ask a follow-up..."
+          />
+          <button type="button" onClick={askFollowUp} disabled={followUpLoading || !followUpInput.trim()}>
+            {followUpLoading ? '...' : 'Ask'}
+          </button>
+        </div>
+      )}
+      <div className="ax-expand-explain-popup-foot">
+        <button type="button" className="ax-btn mini" onClick={() => fetchAI('simple')} disabled={loading}>
+          {loading ? 'Retrying...' : 'Explain simpler'}
+        </button>
+        <button type="button" className="ax-btn mini" onClick={() => fetchAI('technical')} disabled={loading}>Technical details</button>
+        <button type="button" className="ax-btn mini" onClick={() => setMode(mode === 'followup' ? 'normal' : 'followup')}>
+          {mode === 'followup' ? 'Close chat' : 'Ask follow-up'}
+        </button>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function buildDescribeExplainMeta(meta, context) {
+  const {
+    dataset,
+    descResult,
+    numericStats,
+    catStats,
+    qualityFlags,
+    groupedQualityFlags,
+    strongestCorrPair,
+    activeSectionLabel,
+    activeCatStat,
+    selectedNumericVar,
+    selectedCorrCell,
+    selectedCramerCell,
+    corrResult,
+    cramersResult,
+    chartBuilderType,
+    chartBuilderX,
+    chartBuilderY,
+    chartBuilderAgg,
+    chartTitle,
+    sourceRect,
+  } = context
+  const variableCount = (numericStats?.length || 0) + (catStats?.length || 0)
+  const rows = Number(dataset?.row_count || descResult?.row_count || 0)
+  const stat = meta.stat || numericStats?.find(s => meta.id?.includes?.(s.variable)) || activeCatStat
+  const corrValue = meta.value ?? (selectedCorrCell && corrResult?.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col])
+  const cramerValue = meta.value ?? (selectedCramerCell && cramersResult?.matrix?.[selectedCramerCell.row]?.[selectedCramerCell.col])
+  const values = {
+    rows,
+    variables: variableCount,
+    numericVariables: numericStats?.length || 0,
+    categoricalVariables: catStats?.length || 0,
+    issues: qualityFlags?.length || 0,
+    section: activeSectionLabel,
+    chartBuilderType,
+    chartBuilderX,
+    chartBuilderY,
+    chartBuilderAgg,
+    chartTitle,
+    stat,
+    corrValue,
+    cramerValue,
+  }
+
+  let simple = 'This control or visual explains one part of the descriptive statistics workflow.'
+  let datasetExplanation = `This project has ${rows ? rows.toLocaleString() : 'the current'} rows and ${variableCount} described variables.`
+  let whyItMatters = 'Understanding this part helps you decide whether the dataset is ready for analysis, visualization, or model training.'
+  let verdict = 'Use this as a quick check before moving to the next step.'
+  let verdictTone = 'good'
+
+  switch (meta.type) {
+    case 'sidebar':
+      simple = 'The Describe page summarizes your dataset before analysis.'
+      datasetExplanation = `Current descriptives cover ${numericStats?.length || 0} numeric and ${catStats?.length || 0} categorical variables.`
+      whyItMatters = 'This is where you spot missing values, imbalance, skew, and relationships before making charts or models.'
+      verdict = qualityFlags?.length ? `${qualityFlags.length} issue(s) still need review.` : 'Dataset summary looks ready for deeper analysis.'
+      verdictTone = qualityFlags?.length ? 'warning' : 'good'
+      break
+    case 'sidebar-tab':
+      simple = `This tab opens the ${meta.section || 'selected'} Describe section.`
+      datasetExplanation = `You are currently viewing ${activeSectionLabel}.`
+      whyItMatters = 'The sidebar keeps the workflow separated: overview first, then variables, correlations, and chart building.'
+      verdict = 'Use the tabs to inspect one kind of evidence at a time.'
+      break
+    case 'variable-chip':
+      simple = 'Variable chips choose which columns are included in the descriptive run.'
+      datasetExplanation = `${meta.variable} is one column in this dataset. Selecting it includes it in summaries and quality checks.`
+      whyItMatters = 'Filtering variables lets you focus the page on columns that matter for your analysis.'
+      verdict = 'Keep important target and predictor columns selected.'
+      break
+    case 'action':
+      simple = 'Run descriptives computes summary statistics for the selected variables.'
+      datasetExplanation = `${variableCount} variables are available for summary in this project.`
+      whyItMatters = 'Fresh descriptives make sure the page reflects the current cleaned dataset stage.'
+      verdict = 'Run this after changing selected variables or after cleaning data.'
+      break
+    case 'overview-metric':
+      simple = `${meta.label} is a high-level summary metric.`
+      datasetExplanation = `${meta.label}: ${meta.value}${meta.detail ? `. ${meta.detail}` : ''}`
+      whyItMatters = 'Summary cards help you quickly decide what needs closer inspection.'
+      verdict = meta.label === 'Skewed variables' && Number(meta.value) > 0 ? 'Review skewed numeric variables before modeling.' : 'Use this as a quick status signal.'
+      verdictTone = meta.label === 'Skewed variables' && Number(meta.value) > 0 ? 'warning' : 'good'
+      break
+    case 'issues-card':
+    case 'issue-row':
+    case 'quality-flags-card':
+    case 'quality-flag-row': {
+      const flag = meta.flag
+      simple = 'A data quality flag points to a possible issue in a column.'
+      datasetExplanation = flag ? `${flag.variable || 'Grouped flags'}: ${flag.desc || flag.title || flag.type}` : `${qualityFlags?.length || 0} quality issue(s) were detected.`
+      whyItMatters = 'Imbalance, outliers, and mixed labels can distort charts, tests, and model training if ignored.'
+      verdict = flag?.type === 'imbalance' ? 'Check whether this category split needs balancing.' : 'Review this before treating the column as reliable.'
+      verdictTone = 'warning'
+      break
+    }
+    case 'quick-scan-table':
+    case 'quick-scan-row':
+      simple = 'The quick-scan table summarizes each column in one compact row.'
+      datasetExplanation = meta.stat ? `${meta.stat.variable} has ${meta.stat.unique ?? 'unknown'} unique value(s) and ${meta.stat.missing ?? 0} missing value(s).` : 'Each row shows type, uniqueness, missing values, and status.'
+      whyItMatters = 'It helps find columns that need cleaning before analysis.'
+      verdict = meta.stat?.missing > 0 ? 'Handle missing values before modeling.' : 'This is a useful first pass quality check.'
+      verdictTone = meta.stat?.missing > 0 ? 'warning' : 'good'
+      break
+    case 'notable-card':
+      simple = 'Notable findings translate statistics into plain-language observations.'
+      datasetExplanation = strongestCorrPair ? `The strongest numeric relationship is ${strongestCorrPair.a} and ${strongestCorrPair.b} at r = ${strongestCorrPair.val.toFixed(3)}.` : 'No dominant numeric correlation is currently highlighted.'
+      whyItMatters = 'These findings suggest what to inspect next, such as redundant variables or skewed distributions.'
+      verdict = 'Use these as prompts for deeper analysis, not as final conclusions.'
+      break
+    case 'numeric-container':
+    case 'numeric-card':
+    case 'numeric-detail':
+    case 'numeric-detail-part':
+      simple = 'Numeric summaries describe the shape, center, spread, and missingness of a measured column.'
+      datasetExplanation = stat ? `${stat.variable || selectedNumericVar}: mean ${fmt(stat.mean)}, median ${fmt(stat.median)}, SD ${fmt(stat.std)}, skew ${fmt(stat.skew)}, missing ${stat.missing ?? 0}.` : `${numericStats?.length || 0} numeric variable(s) are summarized.`
+      whyItMatters = 'Mean, median, spread, skew, and missing values affect chart interpretation and model reliability.'
+      verdict = stat?.skew != null && Math.abs(stat.skew) > 1 ? 'Consider transformation or outlier handling before modeling.' : 'This variable looks reasonable for standard analysis.'
+      verdictTone = stat?.skew != null && Math.abs(stat.skew) > 1 ? 'warning' : 'good'
+      break
+    case 'numeric-control':
+      simple = 'Compare overlays numeric distributions so you can inspect multiple variables together.'
+      datasetExplanation = `${numericStats?.length || 0} numeric variables are available for comparison.`
+      whyItMatters = 'Comparing distributions helps reveal scale differences, skew, and outliers.'
+      verdict = 'Use Compare when choosing variables for modeling.'
+      break
+    case 'categorical-container':
+    case 'category-selector':
+    case 'category-filter':
+    case 'category-chart':
+    case 'category-value':
+    case 'valid-unique-summary':
+    case 'frequency-section':
+      simple = 'Categorical summaries show how rows are distributed across labels.'
+      datasetExplanation = meta.label ? `${meta.label} appears in ${meta.count} row(s), about ${meta.pct}% of ${meta.variable}.` : activeCatStat ? `${activeCatStat.variable} has ${activeCatStat.n} valid rows and ${activeCatStat.unique} unique value(s).` : `${catStats?.length || 0} categorical variable(s) are summarized.`
+      whyItMatters = 'Category imbalance can bias comparisons and classification models toward the majority label.'
+      verdict = activeCatStat?.unique > 20 ? 'Consider grouping rare labels if this will be used for modeling.' : 'Check whether the label split matches your expectations.'
+      verdictTone = activeCatStat?.unique > 20 ? 'warning' : 'good'
+      break
+    case 'associations-section':
+    case 'cramers-row':
+    case 'categorical-heatmap':
+    case 'cramers-cell':
+    case 'categorical-relationships-panel':
+    case 'categorical-relationship-row': {
+      const v = Number(meta.value ?? cramerValue ?? 0)
+      simple = 'Cramer\'s V measures association strength between categorical variables.'
+      datasetExplanation = meta.other ? `${meta.variable} and ${meta.other} have Cramer's V = ${v.toFixed(3)}.` : `The categorical association view compares pairs of category columns.`
+      whyItMatters = 'Strong categorical associations may reveal duplicated information or useful grouping structure.'
+      verdict = v > 0.5 ? 'Strong association, inspect before using both columns together.' : v > 0.25 ? 'Moderate association, useful but not redundant by itself.' : 'Weak association, likely safe to consider independently.'
+      verdictTone = v > 0.5 ? 'warning' : 'good'
+      break
+    }
+    case 'correlation-heatmap':
+    case 'correlation-cell':
+    case 'correlation-filter':
+    case 'relationship-panel':
+    case 'relationship-row': {
+      const r = Number(meta.value ?? corrValue ?? 0)
+      simple = 'Correlation measures how two numeric variables move together.'
+      datasetExplanation = meta.a ? `${meta.a} and ${meta.b} have r = ${r.toFixed(3)}.` : meta.row ? `${meta.row} and ${meta.col} have r = ${r.toFixed(3)}.` : 'The heatmap compares every numeric pair.'
+      whyItMatters = 'Strong correlations can indicate useful predictors or redundant variables.'
+      verdict = Math.abs(r) > 0.8 ? 'Very strong relationship, check for redundancy.' : Math.abs(r) > 0.4 ? 'Moderate relationship, worth investigating.' : 'Weak relationship, likely limited linear association.'
+      verdictTone = Math.abs(r) > 0.8 ? 'warning' : 'good'
+      break
+    }
+    case 'chart-builder':
+    case 'chart-type':
+    case 'field-dropdown':
+    case 'aggregation':
+    case 'sort':
+    case 'chart-preview':
+    case 'chart-action':
+    case 'chart-note':
+      simple = 'The Chart Builder turns selected fields into a visualization.'
+      datasetExplanation = `${chartTitle || 'Current chart'} uses ${chartBuilderType}${chartBuilderX ? ` with ${chartBuilderX}` : ''}${chartBuilderY ? ` and ${chartBuilderY}` : ''}${chartBuilderAgg ? ` using ${chartBuilderAgg}` : ''}.`
+      whyItMatters = 'Chart choices affect what pattern becomes visible, so field, aggregation, sort, and chart type should match the question.'
+      verdict = chartBuilderX && (chartBuilderType === 'histogram' || chartBuilderY) ? 'Current chart has enough fields to preview.' : 'Choose the required fields before saving or exporting.'
+      verdictTone = chartBuilderX && (chartBuilderType === 'histogram' || chartBuilderY) ? 'good' : 'warning'
+      break
+    default:
+      if (groupedQualityFlags?.length) {
+        verdict = `${groupedQualityFlags.length} grouped quality flag(s) should be reviewed.`
+        verdictTone = 'warning'
+      }
+  }
+
+  return {
+    id: meta.id || meta.title,
+    title: meta.title || 'Describe section',
+    type: meta.type || 'describe',
+    values,
+    simple,
+    datasetExplanation,
+    whyItMatters,
+    verdict,
+    verdictTone,
+    sourceRect,
+  }
 }
 
 function getCorrelationColor(val) {

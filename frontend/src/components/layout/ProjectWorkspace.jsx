@@ -2,7 +2,7 @@
  * PAGE: PROJECT WORKSPACE (TAB SHELL)
  * Keywords: workspace, tabs, data, describe, tests, models, whatif, report, expand
  * ============================================================ */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import DataPage from '../data/DataPage'
@@ -66,6 +66,47 @@ const TABS = [
   },
 ]
 
+const EDGE_TAB_HEIGHT = 96
+const EDGE_TAB_GAP = 8
+const EDGE_TAB_STORAGE = 'simucast.edgeTabs'
+
+function defaultEdgeTabPositions() {
+  const viewportHeight = typeof window === 'undefined' ? 760 : window.innerHeight
+  const center = Math.max(16, Math.round((viewportHeight - (EDGE_TAB_HEIGHT * 2 + EDGE_TAB_GAP)) / 2))
+  return {
+    guide: center,
+    history: center + EDGE_TAB_HEIGHT + EDGE_TAB_GAP,
+  }
+}
+
+function clampEdgeTabPositions(next) {
+  const viewportHeight = typeof window === 'undefined' ? 760 : window.innerHeight
+  const maxTop = Math.max(16, viewportHeight - EDGE_TAB_HEIGHT - 16)
+  let guide = Math.min(maxTop, Math.max(16, Number(next.guide ?? 16)))
+  let history = Math.min(maxTop, Math.max(16, Number(next.history ?? guide + EDGE_TAB_HEIGHT + EDGE_TAB_GAP)))
+
+  if (Math.abs(guide - history) < EDGE_TAB_HEIGHT + EDGE_TAB_GAP) {
+    if (guide <= history) {
+      history = Math.min(maxTop, guide + EDGE_TAB_HEIGHT + EDGE_TAB_GAP)
+      if (history >= maxTop) guide = Math.max(16, history - EDGE_TAB_HEIGHT - EDGE_TAB_GAP)
+    } else {
+      guide = Math.min(maxTop, history + EDGE_TAB_HEIGHT + EDGE_TAB_GAP)
+      if (guide >= maxTop) history = Math.max(16, guide - EDGE_TAB_HEIGHT - EDGE_TAB_GAP)
+    }
+  }
+
+  return { guide, history }
+}
+
+function loadEdgeTabPositions() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(EDGE_TAB_STORAGE) || 'null')
+    return clampEdgeTabPositions(saved || defaultEdgeTabPositions())
+  } catch {
+    return defaultEdgeTabPositions()
+  }
+}
+
 // Top-level workspace shell hosting the project tabs, history rail and AI rail.
 export default function ProjectWorkspace() {
   const { id, tab = 'data' } = useParams()
@@ -101,28 +142,91 @@ export default function ProjectWorkspace() {
   const [tabPreload, setTabPreload] = useState(null)
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [guidanceSetupOpen, setGuidanceSetupOpen] = useState(false)
   const [guidedLockNotice, setGuidedLockNotice] = useState('')
-  const [guidePanelOpen, setGuidePanelOpen] = useState(() => {
+  const [activeSidePanel, setActiveSidePanel] = useState(() => {
     try {
-      return window.sessionStorage.getItem('simucast.guidePanelOpen') === 'true'
-    } catch { return false }
+      return window.sessionStorage.getItem('simucast.guidePanelOpen') === 'true' ? 'guide' : null
+    } catch { return null }
   })
+  const [edgeTabPositions, setEdgeTabPositions] = useState(loadEdgeTabPositions)
+  const [draggingTab, setDraggingTab] = useState(null)
+  const dragStateRef = useRef(null)
 
   const activeTab = tab === 'clean' ? 'data' : tab === 'advanced' ? 'tests' : tab
 
-  const toggleGuidePanel = () => {
-    setGuidePanelOpen((prev) => {
-      const next = !prev
-      try { window.sessionStorage.setItem('simucast.guidePanelOpen', next ? 'true' : 'false') } catch {}
-      return next
-    })
+  const setSidePanel = (panel) => {
+    setActiveSidePanel(panel)
+    try { window.sessionStorage.setItem('simucast.guidePanelOpen', panel === 'guide' ? 'true' : 'false') } catch {}
+  }
+
+  const toggleSidePanel = (panel) => {
+    setSidePanel(activeSidePanel === panel ? null : panel)
   }
 
   const openGuidePanel = () => {
-    setGuidePanelOpen(true)
-    try { window.sessionStorage.setItem('simucast.guidePanelOpen', 'true') } catch {}
+    setSidePanel('guide')
+  }
+
+  const guidePanelOpen = activeSidePanel === 'guide'
+  const historyOpen = activeSidePanel === 'history'
+
+  useEffect(() => {
+    const onResize = () => {
+      setEdgeTabPositions((current) => {
+        const next = clampEdgeTabPositions(current)
+        try { window.localStorage.setItem(EDGE_TAB_STORAGE, JSON.stringify(next)) } catch {}
+        return next
+      })
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const persistEdgeTabPositions = (next) => {
+    setEdgeTabPositions(next)
+    try { window.localStorage.setItem(EDGE_TAB_STORAGE, JSON.stringify(next)) } catch {}
+  }
+
+  const startEdgeTabDrag = (event, tabKey) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    dragStateRef.current = {
+      tabKey,
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startTop: edgeTabPositions[tabKey],
+      moved: false,
+    }
+    setDraggingTab(tabKey)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const moveEdgeTabDrag = (event) => {
+    const drag = dragStateRef.current
+    if (!drag) return
+    const delta = event.clientY - drag.startY
+    if (Math.abs(delta) > 4) drag.moved = true
+    const next = clampEdgeTabPositions({
+      ...edgeTabPositions,
+      [drag.tabKey]: drag.startTop + delta,
+    })
+    setEdgeTabPositions(next)
+  }
+
+  const endEdgeTabDrag = (event, tabKey) => {
+    const drag = dragStateRef.current
+    if (!drag || drag.tabKey !== tabKey) return
+    event.currentTarget.releasePointerCapture?.(drag.pointerId)
+    const wasDrag = drag.moved
+    const finalPositions = clampEdgeTabPositions({
+      ...edgeTabPositions,
+      [drag.tabKey]: drag.startTop + (event.clientY - drag.startY),
+    })
+    dragStateRef.current = null
+    setDraggingTab(null)
+    persistEdgeTabPositions(finalPositions)
+    if (!wasDrag) toggleSidePanel(tabKey)
   }
 
   useEffect(() => {
@@ -200,8 +304,7 @@ export default function ProjectWorkspace() {
 
   const startGuideFocus = async (stepId) => {
     if (!dataset?.id || !dataset?.guidance) return
-    setGuidePanelOpen(false)
-    try { window.sessionStorage.setItem('simucast.guidePanelOpen', 'false') } catch {}
+    setSidePanel(null)
     try {
       await api.updateGuidance(dataset.id, { guided_mode: true, walkthrough_step: stepId })
       setDataset((current) => ({ ...current, guidance: { ...current.guidance, guided_mode: true, walkthrough_step: stepId } }))
@@ -251,27 +354,6 @@ export default function ProjectWorkspace() {
                 </NavLink>
               )
             })}
-            <div className="ax-project-actions">
-              <button
-                type="button"
-                className="ax-history-button"
-                onClick={() => setHistoryOpen(true)}
-                aria-haspopup="dialog"
-              >
-                <HistoryClockIcon />
-                History
-              </button>
-              <button
-                type="button"
-                className={`ax-rail-toggle ax-rail-toggle-ai ${guidePanelOpen ? 'active' : ''}`}
-                onClick={toggleGuidePanel}
-                aria-pressed={guidePanelOpen}
-                aria-label={guidePanelOpen ? 'Close guide panel' : 'Open guide panel'}
-                title={guidePanelOpen ? 'Close guide panel' : 'Open guide panel'}
-              >
-                <ToggleChevron direction={guidePanelOpen ? 'right' : 'left'} />
-              </button>
-            </div>
           </div>
           {guidedLockNotice && <strong className="ax-guided-lock-toast">{guidedLockNotice}</strong>}
         </div>
@@ -280,22 +362,35 @@ export default function ProjectWorkspace() {
         </div>
       </div>
 
-      {/* Guided workflow tab (collapsed state) */}
-      {!guidePanelOpen && (
-        <button className="ax-guide-tab" type="button" onClick={toggleGuidePanel} title="Open guided workflow">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          <span className="ax-guide-tab-label">Guide</span>
-        </button>
-      )}
+      <EdgeSideTab
+        kind="guide"
+        label="Guide"
+        top={edgeTabPositions.guide}
+        active={guidePanelOpen}
+        dragging={draggingTab === 'guide'}
+        onPointerDown={(event) => startEdgeTabDrag(event, 'guide')}
+        onPointerMove={moveEdgeTabDrag}
+        onPointerUp={(event) => endEdgeTabDrag(event, 'guide')}
+        onPointerCancel={(event) => endEdgeTabDrag(event, 'guide')}
+      />
+      <EdgeSideTab
+        kind="history"
+        label="History"
+        top={edgeTabPositions.history}
+        active={historyOpen}
+        dragging={draggingTab === 'history'}
+        onPointerDown={(event) => startEdgeTabDrag(event, 'history')}
+        onPointerMove={moveEdgeTabDrag}
+        onPointerUp={(event) => endEdgeTabDrag(event, 'history')}
+        onPointerCancel={(event) => endEdgeTabDrag(event, 'history')}
+      />
 
       {/* Backdrop overlay when panel is open */}
-      <div className={`ax-guide-panel-overlay ${guidePanelOpen ? 'open' : ''}`} onClick={toggleGuidePanel} />
+      <div className={`ax-guide-panel-overlay ${activeSidePanel ? 'open' : ''}`} onClick={() => setSidePanel(null)} />
 
       {/* Slide-in panel */}
       <aside className={`ax-guide-panel ${guidePanelOpen ? 'open' : ''}`}>
-        <button className="ax-guide-panel-close" type="button" onClick={toggleGuidePanel} aria-label="Close guide panel">&times;</button>
+        <button className="ax-guide-panel-close" type="button" onClick={() => setSidePanel(null)} aria-label="Close guide panel">&times;</button>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <ProjectAIRail
             dataset={dataset}
@@ -306,6 +401,19 @@ export default function ProjectWorkspace() {
             onStartGuideFocus={startGuideFocus}
           />
         </div>
+      </aside>
+      <aside className={`ax-guide-panel ax-history-side-panel ${historyOpen ? 'open' : ''}`}>
+        <ActivityPanel
+          dataset={dataset}
+          datasetId={dataset.id}
+          onClose={() => setSidePanel(null)}
+          onViewStage={(stageId) => {
+            setViewStageRequest({ stageId, nonce: Date.now() })
+            setSidePanel(null)
+            navigate(`/projects/${id}/data`)
+          }}
+          onRestored={refreshDataset}
+        />
       </aside>
 
       <GuidedCoach
@@ -324,54 +432,26 @@ export default function ProjectWorkspace() {
         }}
         onClose={() => setGuidanceSetupOpen(false)}
       />
-      {historyOpen && (
-        <div className="ax-history-modal-backdrop" role="dialog" aria-modal="true" aria-label="Project history">
-          <div className="ax-history-modal">
-            <ActivityPanel
-              dataset={dataset}
-              datasetId={dataset.id}
-              onClose={() => setHistoryOpen(false)}
-              onViewStage={(stageId) => {
-                setViewStageRequest({ stageId, nonce: Date.now() })
-                setHistoryOpen(false)
-                navigate(`/projects/${id}/data`)
-              }}
-              onRestored={refreshDataset}
-            />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
-function HistoryClockIcon() {
+function EdgeSideTab({ kind, label, top, active, dragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 4v4h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-// Renders a small chevron SVG that rotates based on the given direction.
-function ToggleChevron({ direction }) {
-  // direction: 'left' or 'right'
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 12 12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ transform: direction === 'left' ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+    <button
+      className={`ax-edge-tab ${kind} ${active ? 'active' : ''} ${dragging ? 'dragging' : ''}`}
+      type="button"
+      style={{ top }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      title={`${active ? 'Close' : 'Open'} ${label.toLowerCase()}`}
+      aria-pressed={active}
     >
-      <path d="M4 2L8 6L4 10" />
-    </svg>
+      <span className="ax-edge-tab-chevron">‹</span>
+      <span className="ax-edge-tab-label">{label}</span>
+    </button>
   )
 }
 

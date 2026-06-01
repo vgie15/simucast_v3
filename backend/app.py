@@ -46,6 +46,7 @@ def create_app():
     """Create and configure the Flask application."""
     flask_app = Flask(__name__)
     flask_app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+    flask_app.secret_key = os.environ.get("FLASK_SECRET_KEY", "simucast_secret_key_default")
     CORS(flask_app, origins=_cors_origins)
 
     _register_error_handlers(flask_app)

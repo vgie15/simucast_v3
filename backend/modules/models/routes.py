@@ -5,7 +5,7 @@ Wraps ``_build_preprocessing_plan`` + ``_train_one`` from ``backend.ml`` and
 persists each Model row alongside its preprocessing plan + influence summary.
 """
 import numpy as np
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 
 from backend.database import db, ActivityLog, Dataset, Model
 from backend.shared.utils import _parse_num, clean_json, friendly_error_message, jdump, jload
@@ -24,6 +24,24 @@ from backend.ml import (
 bp = Blueprint("models_routes", __name__)
 
 
+def _sync_preprocessing_session(target_options):
+    """Sync preprocessing choices between target_options and flask session."""
+    if "numeric_preprocessing" in target_options:
+        session["numeric_preprocessing"] = target_options["numeric_preprocessing"]
+    elif "numeric_preprocessing" in session:
+        target_options["numeric_preprocessing"] = session["numeric_preprocessing"]
+
+    if "categorical_encoding" in target_options:
+        session["categorical_encoding"] = target_options["categorical_encoding"]
+    elif "categorical_encoding" in session:
+        target_options["categorical_encoding"] = session["categorical_encoding"]
+
+    if "categorical_order" in target_options:
+        session["categorical_order"] = target_options["categorical_order"]
+    elif "categorical_order" in session:
+        target_options["categorical_order"] = session["categorical_order"]
+
+
 # ===========================================================================
 # SECTION: MACHINE LEARNING - MODEL TRAINING
 # Keywords: model, train, training, preprocessing, plan, regression, classification, linear, logistic, tree, random forest, rf, decision tree, sklearn
@@ -37,6 +55,7 @@ def preprocessing_plan(ds_id):
     features = body.get("features") or []
     algorithms = body.get("algorithms") or []
     target_options = body.get("target_options") or {}
+    _sync_preprocessing_session(target_options)
     s = db()
     try:
         ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
@@ -61,6 +80,7 @@ def train_model(ds_id):
     features = body.get("features") or []
     algo = body.get("algorithm", "logistic")
     target_options = body.get("target_options") or {}
+    _sync_preprocessing_session(target_options)
     model_params = body.get("model_params") or {}
     test_size = min(max(_parse_num(body.get("test_size", target_options.get("test_size")), 0.2, float), 0.05), 0.5)
 
@@ -142,6 +162,7 @@ def train_many_models(ds_id):
     features = body.get("features") or []
     algorithms = body.get("algorithms") or ["logistic"]
     target_options = body.get("target_options") or {}
+    _sync_preprocessing_session(target_options)
     model_params = body.get("model_params") or {}
     test_size = min(max(_parse_num(body.get("test_size", target_options.get("test_size")), 0.2, float), 0.05), 0.5)
 

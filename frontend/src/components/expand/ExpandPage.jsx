@@ -3,8 +3,11 @@
  * Keywords: expand, feature engineering, derived features, transform
  * ============================================================ */
 import React, { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
+import { InlineSpinner } from '../common/LoadingStates'
+import { SparkleIcon } from '../ai/AIExplainers'
 
 /**
  * ExpandPage
@@ -21,6 +24,8 @@ export default function ExpandPage({ dataset, setDataset }) {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [expandedApplied, setExpandedApplied] = useState(false)
+  const [explainMode, setExplainMode] = useState(false)
+  const [explainPopup, setExplainPopup] = useState(null)
 
   // re-target when project changes
   useEffect(() => {
@@ -98,6 +103,63 @@ export default function ExpandPage({ dataset, setDataset }) {
     return dataset.row_count
   }, [method, noisePct, targetRows, dataset?.row_count])
 
+  useEffect(() => {
+    document.body.classList.toggle('ax-explain-mode-on', explainMode)
+    return () => document.body.classList.remove('ax-explain-mode-on')
+  }, [explainMode])
+
+  const openExplain = (meta, event) => {
+    if (!explainMode) return
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    const target = event?.currentTarget || event?.target
+    const sourceRect = target?.getBoundingClientRect ? target.getBoundingClientRect() : null
+    setExplainPopup(buildExpandExplainMeta(meta, { dataset, preview, method, targetRows, noisePct, avgDrift, distinctRows, sourceRect }))
+  }
+
+  const explainAttrs = (meta, className = '', capture = false) => {
+    const attrs = {
+      className: `${className} ${explainMode ? 'ax-explain-selectable' : ''}`.trim(),
+      [capture ? 'onClickCapture' : 'onClick']: (event) => openExplain(meta, event),
+      title: explainMode ? `Explain ${meta.title}` : undefined,
+    }
+    if (capture) {
+      attrs.onPointerDownCapture = (event) => openExplain(meta, event)
+    }
+    return attrs
+  }
+
+  useEffect(() => {
+    if (!explainMode) return undefined
+    const onEdgeTab = (event) => {
+      const tab = event.target?.closest?.('.ax-edge-tab')
+      if (!tab) return
+      event.preventDefault()
+      event.stopPropagation()
+      const isHistory = tab.classList.contains('history')
+      setExplainPopup(buildExpandExplainMeta({
+        id: isHistory ? 'side-history-tab' : 'side-guide-tab',
+        title: isHistory ? 'History tab' : 'Guide tab',
+        type: 'side-tab',
+      }, {
+        dataset,
+        preview,
+        method,
+        targetRows,
+        noisePct,
+        avgDrift,
+        distinctRows,
+        sourceRect: tab.getBoundingClientRect(),
+      }))
+    }
+    document.addEventListener('pointerdown', onEdgeTab, true)
+    document.addEventListener('click', onEdgeTab, true)
+    return () => {
+      document.removeEventListener('pointerdown', onEdgeTab, true)
+      document.removeEventListener('click', onEdgeTab, true)
+    }
+  }, [explainMode, dataset, preview, method, targetRows, noisePct, avgDrift, distinctRows])
+
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
   }
@@ -141,7 +203,7 @@ export default function ExpandPage({ dataset, setDataset }) {
         <div className="ax-expand-left-scroll">
 
           {/* 1 - Method */}
-          <div style={{ marginBottom: 24 }}>
+          <div {...explainAttrs({ id: 'method-section', title: 'Method section', type: 'setting' })} style={{ marginBottom: 24 }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
               1 - METHOD
             </span>
@@ -149,8 +211,8 @@ export default function ExpandPage({ dataset, setDataset }) {
               {/* Bootstrap button */}
               <button
                 type="button"
+                {...explainAttrs({ id: 'bootstrap-option', title: 'Bootstrap option', type: 'setting' }, 'ax-expand-method-card', true)}
                 onClick={() => setMethod('bootstrap')}
-                className="ax-expand-method-card"
                 style={{
                   background: method === 'bootstrap' ? '#FFF8F2' : '#FFFFFF',
                   border: method === 'bootstrap' ? '1.5px solid #F97316' : '1.5px solid #E5E7EB',
@@ -172,8 +234,8 @@ export default function ExpandPage({ dataset, setDataset }) {
               {/* Synthetic button */}
               <button
                 type="button"
+                {...explainAttrs({ id: 'synthetic-option', title: 'Synthetic option', type: 'setting' }, 'ax-expand-method-card', true)}
                 onClick={() => setMethod('synthetic')}
-                className="ax-expand-method-card"
                 style={{
                   background: method === 'synthetic' ? '#FFF8F2' : '#FFFFFF',
                   border: method === 'synthetic' ? '1.5px solid #F97316' : '1.5px solid #E5E7EB',
@@ -199,7 +261,7 @@ export default function ExpandPage({ dataset, setDataset }) {
             <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
               2 - TARGET ROWS
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+            <div {...explainAttrs({ id: 'target-rows-control', title: 'Target Rows slider and input', type: 'setting' }, '', true)} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
               <input
                 type="range"
                 min={dataset.row_count + 1}
@@ -240,8 +302,8 @@ export default function ExpandPage({ dataset, setDataset }) {
                   <button
                     key={mult}
                     type="button"
+                    {...explainAttrs({ id: `multiplier-x${mult}`, title: `x${mult} target rows button`, type: 'setting', multiplier: mult }, 'ax-expand-multiplier-pill', true)}
                     onClick={() => setTargetRows(val)}
-                    className="ax-expand-multiplier-pill"
                     style={{
                       border: isSelected ? '1.5px solid #F97316' : '1.5px solid #E5E7EB',
                       background: isSelected ? '#FFF8F2' : '#FFFFFF',
@@ -258,7 +320,7 @@ export default function ExpandPage({ dataset, setDataset }) {
 
           {/* 3 - Noise on numerics (bootstrap only) */}
           {method === 'bootstrap' && (
-            <div>
+            <div {...explainAttrs({ id: 'noise-slider', title: 'Noise on Numerics slider', type: 'setting' }, '', true)}>
               <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 10 }}>
                 3 - NOISE ON NUMERICS
               </span>
@@ -290,7 +352,8 @@ export default function ExpandPage({ dataset, setDataset }) {
           )}
           <button
             className="ax-btn prim"
-            disabled={busy || previewing || targetTooLow || !preview}
+            disabled={!explainMode && (busy || previewing || targetTooLow || !preview)}
+            {...explainAttrs({ id: 'apply-expansion', title: 'Apply button', type: 'setting' }, 'ax-btn prim', true)}
             onClick={apply}
             style={{
               width: '100%',
@@ -305,7 +368,7 @@ export default function ExpandPage({ dataset, setDataset }) {
               color: '#fff',
               border: 'none',
               boxShadow: (busy || previewing || targetTooLow || !preview) ? 'none' : '0 4px 10px rgba(249, 115, 22, 0.15)',
-              cursor: (busy || previewing || targetTooLow || !preview) ? 'not-allowed' : 'pointer',
+              cursor: explainMode ? 'pointer' : (busy || previewing || targetTooLow || !preview) ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s'
             }}
             type="button"
@@ -337,15 +400,24 @@ export default function ExpandPage({ dataset, setDataset }) {
       {/* ── RIGHT PANEL ── */}
       <div className="ax-expand-right">
         <div className="ax-expand-right-scroll">
+          <div className="ax-expand-preview-head">
+            <span className="ax-expand-section-label">EXPANSION PREVIEW</span>
+            <button
+              type="button"
+              className={`ax-explain-mode-toggle ${explainMode ? 'active' : ''}`}
+              onClick={() => setExplainMode((current) => !current)}
+            >
+              <SparkleIcon size={12} />
+              Explain Mode
+              <span />
+            </button>
+          </div>
           {preview ? (
             <>
-              {/* Section label */}
-              <span className="ax-expand-section-label">EXPANSION PREVIEW</span>
-
               {/* Summary stats cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 20 }}>
                 {/* Rows Card */}
-                <div style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
+                <div {...explainAttrs({ id: 'metric-rows', title: 'Rows card', type: 'metric' })} style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     ROWS
                   </span>
@@ -355,7 +427,7 @@ export default function ExpandPage({ dataset, setDataset }) {
                 </div>
 
                 {/* Avg Drift Card */}
-                <div style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
+                <div {...explainAttrs({ id: 'metric-avg-drift', title: 'Avg Drift card', type: 'metric' })} style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     AVG DRIFT
                   </span>
@@ -368,7 +440,7 @@ export default function ExpandPage({ dataset, setDataset }) {
                 </div>
 
                 {/* Distinct Rows Card */}
-                <div style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
+                <div {...explainAttrs({ id: 'metric-distinct-rows', title: 'Distinct Rows card', type: 'metric' })} style={{ padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     DISTINCT ROWS
                   </span>
@@ -383,7 +455,7 @@ export default function ExpandPage({ dataset, setDataset }) {
 
               {/* Drift Table */}
               {preview.drift?.length > 0 && (
-                <div style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12, marginBottom: 20 }}>
+                <div {...explainAttrs({ id: 'drift-table', title: 'Distribution Drift table', type: 'drift-table' })} style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12, marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       DISTRIBUTION DRIFT · NUMERIC COLUMNS
@@ -397,14 +469,14 @@ export default function ExpandPage({ dataset, setDataset }) {
                       <thead>
                         <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
                           <th style={{ textAlign: 'left', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>COLUMN</th>
-                          <th style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>MEAN BEFORE</th>
-                          <th style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>MEAN AFTER</th>
-                          <th style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>DRIFT</th>
+                          <th {...explainAttrs({ id: 'drift-col-before', title: 'Mean Before column', type: 'drift-column', column: 'Mean Before' })} style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>MEAN BEFORE</th>
+                          <th {...explainAttrs({ id: 'drift-col-after', title: 'Mean After column', type: 'drift-column', column: 'Mean After' })} style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>MEAN AFTER</th>
+                          <th {...explainAttrs({ id: 'drift-col-drift', title: 'Drift column', type: 'drift-column', column: 'Drift' })} style={{ textAlign: 'right', padding: '8px 0', color: 'var(--color-text-tertiary)', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>DRIFT</th>
                         </tr>
                       </thead>
                       <tbody>
                         {preview.drift.map((d) => (
-                          <tr key={d.column} style={{ borderBottom: '1px solid #F3F4F6' }}>
+                          <tr key={d.column} {...explainAttrs({ id: `drift-row-${d.column}`, title: `${d.column} drift row`, type: 'drift-row', row: d })} style={{ borderBottom: '1px solid #F3F4F6' }}>
                             <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 650, textAlign: 'left', padding: '10px 0', color: 'var(--color-text-primary)' }}>{d.column}</td>
                             <td style={{ textAlign: 'right', padding: '10px 0' }}>{fmt(d.before_mean)}</td>
                             <td style={{ textAlign: 'right', padding: '10px 0' }}>{fmt(d.after_mean)}</td>
@@ -420,7 +492,7 @@ export default function ExpandPage({ dataset, setDataset }) {
               )}
 
               {/* Sample Table */}
-              <div style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
+              <div {...explainAttrs({ id: 'sample-table', title: 'Sample of New Rows table', type: 'sample-table' })} style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     SAMPLE OF NEW ROWS · {preview.sample?.length || 0} OF {preview.added_rows}
@@ -434,7 +506,15 @@ export default function ExpandPage({ dataset, setDataset }) {
                     <thead style={{ background: '#FAF6F0' }}>
                       <tr>
                         <th style={{ width: 45, padding: '8px 10px', background: '#FAF6F0' }}>#</th>
-                        {preview.columns.map((c) => <th key={c} style={{ padding: '8px 10px', background: '#FAF6F0' }}>{c}</th>)}
+                        {preview.columns.map((c) => (
+                          <th
+                            key={c}
+                            {...explainAttrs({ id: `sample-col-${c}`, title: `${c} sample column`, type: 'sample-column', column: c })}
+                            style={{ padding: '8px 10px', background: '#FAF6F0' }}
+                          >
+                            {c}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -486,8 +566,318 @@ export default function ExpandPage({ dataset, setDataset }) {
         </div>
       </div>
 
+      {explainPopup && (
+        <ExpandExplainPopup
+          datasetId={dataset.id}
+          element={explainPopup}
+          onClose={() => setExplainPopup(null)}
+        />
+      )}
     </div>
   )
+}
+
+function ExpandExplainPopup({ datasetId, element, onClose }) {
+  const [aiText, setAiText] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState('normal')
+  const [followUpInput, setFollowUpInput] = useState('')
+  const [followUpLoading, setFollowUpLoading] = useState(false)
+  const [position, setPosition] = useState({ top: 84, left: 24 })
+
+  useEffect(() => {
+    if (!element?.sourceRect) return
+    const popupW = 330
+    const popupH = 390
+    const { innerWidth, innerHeight } = window
+    let top = element.sourceRect.bottom + 8
+    let left = Math.max(12, Math.min(element.sourceRect.left, innerWidth - popupW - 12))
+    if (top + popupH > innerHeight - 16) top = Math.max(12, element.sourceRect.top - popupH - 8)
+    setPosition({ top, left })
+  }, [element?.sourceRect])
+
+  const fetchAI = async (variant = 'normal') => {
+    if (!datasetId || !element) return
+    setLoading(true)
+    try {
+      const question = variant === 'simple'
+        ? `Explain this Expand page UI section in very simple terms, one or two sentences: ${element.title}.`
+        : variant === 'technical'
+          ? `Give a concise technical explanation for this Expand page UI section: ${element.title}. Include the current values and statistical implication.`
+          : `Explain this Expand page UI section in plain language for a student using SimuCast: ${element.title}. Include what it does, what the current values imply, and whether it is safe to proceed.`
+      const payload = {
+        title: element.title,
+        type: element.type,
+        currentValues: element.values,
+        fallbackDatasetExplanation: element.datasetExplanation,
+        fallbackVerdict: element.verdict,
+      }
+      const response = await api.aiExplain(datasetId, `expand-${element.id}-${variant}`, payload, question, { element: payload })
+      setAiText(response?.explanation || element.datasetExplanation)
+    } catch {
+      setAiText(element.datasetExplanation)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const askFollowUp = async () => {
+    if (!datasetId || !followUpInput.trim()) return
+    setFollowUpLoading(true)
+    try {
+      const payload = {
+        title: element.title,
+        type: element.type,
+        currentValues: element.values,
+        previousExplanation: aiText || element.datasetExplanation,
+      }
+      const response = await api.aiExplain(datasetId, `expand-${element.id}-followup`, payload, followUpInput, { element: payload })
+      setAiText(response?.explanation || element.datasetExplanation)
+      setFollowUpInput('')
+      setMode('normal')
+    } catch {
+      setAiText(element.datasetExplanation)
+    } finally {
+      setFollowUpLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    setAiText(null)
+    fetchAI()
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [element?.id, datasetId])
+
+  return createPortal(
+    <div
+      className="ax-expand-explain-popup"
+      style={{ top: position.top, left: position.left }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${element.title} explanation`}
+    >
+      <div className="ax-expand-explain-popup-head">
+        <div>
+          <p>AI Explain · {element.title}</p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close explanation">&times;</button>
+      </div>
+      <div className="ax-expand-explain-popup-body">
+        <section>
+          <span>What this means</span>
+          <p>{element.simple}</p>
+        </section>
+        <section>
+          <span>In this dataset</span>
+          {loading ? (
+            <InlineSpinner label="Generating explanation..." />
+          ) : (
+            <p>{aiText || element.datasetExplanation}</p>
+          )}
+        </section>
+        <section>
+          <span>Verdict</span>
+          <p className={`ax-expand-explain-verdict ${element.verdictTone}`}>{element.verdict}</p>
+        </section>
+      </div>
+      {mode === 'followup' && (
+        <div className="ax-expand-explain-followup">
+          <input
+            type="text"
+            value={followUpInput}
+            onChange={(event) => setFollowUpInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') askFollowUp()
+            }}
+            placeholder="Ask a follow-up..."
+          />
+          <button type="button" onClick={askFollowUp} disabled={followUpLoading || !followUpInput.trim()}>
+            {followUpLoading ? '...' : 'Ask'}
+          </button>
+        </div>
+      )}
+      <div className="ax-expand-explain-popup-foot">
+        <button type="button" className="ax-btn mini" onClick={() => fetchAI('simple')} disabled={loading}>
+          {loading ? 'Retrying...' : 'Explain simpler'}
+        </button>
+        <button type="button" className="ax-btn mini" onClick={() => fetchAI('technical')} disabled={loading}>Technical details</button>
+        <button type="button" className="ax-btn mini" onClick={() => setMode(mode === 'followup' ? 'normal' : 'followup')}>
+          {mode === 'followup' ? 'Close chat' : 'Ask follow-up'}
+        </button>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function buildExpandExplainMeta(meta, context) {
+  const { dataset, preview, method, targetRows, noisePct, avgDrift, distinctRows, sourceRect } = context
+  const rowsBefore = Number(dataset?.row_count || 0)
+  const addedRows = Math.max(0, Number(targetRows || 0) - rowsBefore)
+  const values = {
+    rowsBefore,
+    targetRows,
+    addedRows,
+    method,
+    noisePct,
+    avgDrift,
+    distinctRows,
+    sampleRows: preview?.sample?.length || 0,
+  }
+  const base = {
+    id: meta.id,
+    title: meta.title,
+    type: meta.type,
+    values,
+    sourceRect,
+    verdictTone: 'good',
+  }
+
+  const row = meta.row
+  const column = meta.column
+  const drift = row?.mean_pct_change
+  const absDrift = drift == null ? 0 : Math.abs(Number(drift))
+  const driftTone = absDrift < 1 ? 'good' : absDrift < 5 ? 'warning' : 'risk'
+
+  const templates = {
+    'metric-rows': {
+      simple: 'This card compares the current row count with the expanded row target.',
+      datasetExplanation: `The dataset currently has ${rowsBefore.toLocaleString()} rows. The preview expands it to ${Number(targetRows || 0).toLocaleString()} rows, adding ${addedRows.toLocaleString()} new rows for downstream analysis and modeling.`,
+      verdict: addedRows > 0 ? 'Good. The preview is increasing the dataset size without changing the original stage until Apply is clicked.' : 'Needs adjustment. The target must be higher than the current row count.',
+      verdictTone: addedRows > 0 ? 'good' : 'warning',
+    },
+    'metric-avg-drift': {
+      simple: 'Average drift estimates how much numeric column means change after expansion.',
+      datasetExplanation: `The preview shows an average numeric drift of about ${avgDrift.toFixed(1)}%. Lower drift means the generated rows are staying close to the original numeric distribution.`,
+      verdict: avgDrift < 1 ? 'Good. Drift is very small, so the expansion is preserving numeric averages well.' : avgDrift < 5 ? 'Acceptable. Review individual columns before applying.' : 'Risky. Drift is high enough to inspect before applying.',
+      verdictTone: avgDrift < 1 ? 'good' : avgDrift < 5 ? 'warning' : 'risk',
+    },
+    'metric-distinct-rows': {
+      simple: 'Distinct rows estimates how many unique generated rows are present in the expanded preview.',
+      datasetExplanation: `${distinctRows.toLocaleString()} rows are expected to be distinct. Bootstrap without noise can repeat original rows, while synthetic generation or numeric noise tends to produce more unique rows.`,
+      verdict: distinctRows >= targetRows ? 'Good. The expanded preview should add varied rows.' : 'Acceptable. Some repeated rows are expected with bootstrap sampling.',
+      verdictTone: distinctRows >= targetRows ? 'good' : 'warning',
+    },
+    'method-section': {
+      simple: 'The method section controls how SimuCast creates additional rows.',
+      datasetExplanation: `The current method is ${method}. Bootstrap preserves relationships between columns more directly, while synthetic generation creates more variety but can weaken cross-column patterns.`,
+      verdict: method === 'bootstrap' ? 'Good default. Bootstrap is usually safer when preserving relationships matters.' : 'Use carefully. Synthetic rows are more varied but need drift review.',
+      verdictTone: method === 'bootstrap' ? 'good' : 'warning',
+    },
+    'bootstrap-option': {
+      simple: 'Bootstrap samples existing rows with replacement, then optionally adds numeric noise.',
+      datasetExplanation: `For this dataset, bootstrap will reuse the original ${rowsBefore.toLocaleString()} rows to reach ${Number(targetRows || 0).toLocaleString()} rows. With ${noisePct}% numeric noise, duplicates become less exact.`,
+      verdict: 'Good for preserving relationships between columns.',
+      verdictTone: 'good',
+    },
+    'synthetic-option': {
+      simple: 'Synthetic generation samples each column distribution to create new row combinations.',
+      datasetExplanation: `Synthetic mode can create varied rows for ${dataset?.name || 'this dataset'}, but it does not guarantee that relationships between columns remain the same.`,
+      verdict: 'Use after checking drift and sample rows.',
+      verdictTone: 'warning',
+    },
+    'target-rows-control': {
+      simple: 'Target rows sets the final size of the expanded dataset.',
+      datasetExplanation: `The target is ${Number(targetRows || 0).toLocaleString()} rows, which adds ${addedRows.toLocaleString()} rows beyond the current ${rowsBefore.toLocaleString()} rows.`,
+      verdict: addedRows > 0 ? 'Good. The target is valid.' : 'Needs adjustment. Choose a target above the current row count.',
+      verdictTone: addedRows > 0 ? 'good' : 'warning',
+    },
+    'noise-slider': {
+      simple: 'Noise on numerics adds a small jitter to numeric values during bootstrap expansion.',
+      datasetExplanation: noisePct === 0
+        ? 'Noise is off, so bootstrap rows may be exact duplicates of original rows.'
+        : `Numeric values are jittered by up to ${noisePct}% of each column standard deviation, which helps reduce exact duplicates while keeping values close to the source distribution.`,
+      verdict: noisePct <= 10 ? 'Good. This is a controlled amount of variation.' : 'Review carefully. Higher noise can distort numeric distributions.',
+      verdictTone: noisePct <= 10 ? 'good' : 'warning',
+    },
+    'apply-expansion': {
+      simple: 'Apply commits the preview as a new current dataset stage.',
+      datasetExplanation: `Clicking Apply would add ${addedRows.toLocaleString()} rows using ${method} and make the expanded dataset the active stage.`,
+      verdict: preview ? 'Ready when the preview and drift look acceptable.' : 'Preview first. Apply should wait until a valid preview exists.',
+      verdictTone: preview ? 'good' : 'warning',
+    },
+    'drift-table': {
+      simple: 'The drift table compares numeric column averages before and after expansion.',
+      datasetExplanation: `There are ${preview?.drift?.length || 0} numeric columns in the drift preview. Use this table to catch columns whose averages changed too much after expansion.`,
+      verdict: avgDrift < 5 ? 'Acceptable. The overall drift is within a practical review range.' : 'Risky. Inspect rows with larger drift before applying.',
+      verdictTone: avgDrift < 5 ? 'good' : 'risk',
+    },
+    'sample-table': {
+      simple: 'The sample table shows example rows that the expansion process generated.',
+      datasetExplanation: `The preview is showing ${preview?.sample?.length || 0} new rows out of ${preview?.added_rows || addedRows} added rows. Use it to check whether categories and numeric values look plausible.`,
+      verdict: 'Good check. Sampling helps verify that generated rows look realistic before applying.',
+      verdictTone: 'good',
+    },
+    'side-guide-tab': {
+      simple: 'The Guide tab opens the guided workflow panel for the current project.',
+      datasetExplanation: 'On the Expand page, the Guide panel helps connect expansion choices to the broader project workflow.',
+      verdict: 'Useful for step-by-step workflow support.',
+      verdictTone: 'good',
+    },
+    'side-history-tab': {
+      simple: 'The History tab opens the project activity and data-stage history.',
+      datasetExplanation: 'After expansion, History helps confirm what changed and lets users inspect or restore prior stages.',
+      verdict: 'Important for traceability before and after applying expansion.',
+      verdictTone: 'good',
+    },
+  }
+
+  if (meta.id?.startsWith('multiplier-')) {
+    const multiplier = meta.multiplier || 2
+    return {
+      ...base,
+      simple: `The x${multiplier} button quickly sets the target rows to ${multiplier} times the current dataset size.`,
+      datasetExplanation: `For ${rowsBefore.toLocaleString()} current rows, x${multiplier} sets the target to ${(rowsBefore * multiplier).toLocaleString()} rows.`,
+      verdict: multiplier <= 4 ? 'Good for moderate expansion.' : 'Use carefully. Larger multipliers need closer drift review.',
+      verdictTone: multiplier <= 4 ? 'good' : 'warning',
+    }
+  }
+
+  if (meta.type === 'drift-row' && row) {
+    return {
+      ...base,
+      simple: `This row shows how the mean of ${row.column} changes after expansion.`,
+      datasetExplanation: `${row.column} changes from ${fmt(row.before_mean)} before expansion to ${fmt(row.after_mean)} after expansion, with ${drift == null ? 'no measured' : `${drift > 0 ? '+' : ''}${Number(drift).toFixed(1)}%`} drift.`,
+      verdict: absDrift < 1 ? 'Good. This column stays very close to the original mean.' : absDrift < 5 ? 'Acceptable. Review if this column is important.' : 'Risky. This column changed enough to inspect.',
+      verdictTone: driftTone,
+    }
+  }
+
+  if (meta.type === 'drift-column') {
+    return {
+      ...base,
+      simple: `${column} explains one measurement used to compare before and after expansion.`,
+      datasetExplanation: column === 'Drift'
+        ? 'Drift shows the percent change between the before and after means. It is the quickest way to spot distribution shifts.'
+        : `${column} is used to compare the original numeric distribution against the expanded preview.`,
+      verdict: 'Use this column with the row values to decide whether expansion is preserving numeric patterns.',
+      verdictTone: 'good',
+    }
+  }
+
+  if (meta.type === 'sample-column') {
+    return {
+      ...base,
+      simple: `${column} is one of the fields shown in the generated row sample.`,
+      datasetExplanation: `Use the ${column} column to check whether generated values look valid for this dataset. Categorical columns should use familiar labels, while numeric columns should stay within plausible ranges.`,
+      verdict: 'Good to inspect before applying, especially if this column is used in models or reports.',
+      verdictTone: 'good',
+    }
+  }
+
+  return {
+    ...base,
+    ...(templates[meta.id] || {
+      simple: 'This selected area controls or summarizes part of the expansion preview.',
+      datasetExplanation: 'Use this area to understand how the expanded dataset will differ from the current dataset before applying changes.',
+      verdict: 'Review this before applying expansion.',
+      verdictTone: 'warning',
+    }),
+  }
 }
 
 // Selectable card button used to pick an expansion method with title and description.

@@ -7,13 +7,12 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import { useDatasetTableState } from './useDatasetTableState'
-import { Database, Sparkles, Highlighter, FileSpreadsheet } from 'lucide-react'
+import { Highlighter, Info, Sparkles } from 'lucide-react'
 
 const PAGE_SIZE = 100
 const VIEW_MODES = [
   { id: 'original', label: 'Original' },
-  { id: 'cleaned', label: 'Cleaned' },
-  { id: 'highlight', label: 'Highlight Changes' },
+  { id: 'modeling', label: 'For Modeling' },
 ]
 const TYPE_ICON = {
   numeric: '#',
@@ -67,6 +66,8 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   } = useDatasetTableState(datasetId)
   const [rows, setRows] = useState([])
   const [rowColumns, setRowColumns] = useState([])
+  const [originalColumns, setOriginalColumns] = useState([])
+  const [stageList, setStageList] = useState([])
   const [visibleColumns, setVisibleColumns] = useState([])
   const [page, setPage] = useState(1)
   const [totalRows, setTotalRows] = useState(0)
@@ -128,6 +129,16 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     () => visibleColumns.map((name) => tableVariables.find((variable) => variable.name === name)).filter(Boolean),
     [tableVariables, visibleColumns],
   )
+  const modelingStageId = useMemo(() => {
+    const stages = stageList.filter((stage) => stage.id !== 'original')
+    if (!stages.length) return dataset?.current_stage_id || 'original'
+    let latestModeling = 'original'
+    for (const stage of stages) {
+      if (isExploratoryScaleOrEncodeStage(stage)) break
+      latestModeling = stage.id
+    }
+    return latestModeling === 'original' ? (dataset?.current_stage_id ? 'original' : 'original') : latestModeling
+  }, [dataset?.current_stage_id, stageList])
 
   useEffect(() => {
     setOpen(false)
@@ -154,6 +165,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   useEffect(() => {
     const openPreview = (event) => {
       if (!hidden) {
+        if (event.detail?.viewMode) setViewMode(event.detail.viewMode)
         setOpen(true)
         event.detail?.onHandled?.(true)
         return
@@ -163,6 +175,12 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     window.addEventListener('simucast:open-dataset-preview', openPreview)
     return () => window.removeEventListener('simucast:open-dataset-preview', openPreview)
   }, [hidden])
+
+  useEffect(() => {
+    if (viewMode === 'cleaned') {
+      setViewMode('modeling')
+    }
+  }, [setViewMode, viewMode])
 
   useEffect(() => {
     setVisibleColumns((current) => {
@@ -182,8 +200,9 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     setChangeLoading(true)
     setError('')
 
+    const stageId = modelingStageId || 'current'
     api
-      .getTableChanges(datasetId, 'current')
+      .getTableChanges(datasetId, stageId)
       .then((tableChanges) => {
         if (cancelled) return
         setChangeStages(Array.isArray(tableChanges.stages) ? tableChanges.stages : [])
@@ -198,7 +217,31 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     return () => {
       cancelled = true
     }
-  }, [dataset?.current_stage_id, datasetId, open, setChangeLoading, setChangeStages, viewMode])
+  }, [dataset?.current_stage_id, datasetId, modelingStageId, open, setChangeLoading, setChangeStages, viewMode])
+
+  useEffect(() => {
+    if (!open || !datasetId) return
+    let cancelled = false
+    api.listStages(datasetId)
+      .then((response) => {
+        if (!cancelled) setStageList(Array.isArray(response.stages) ? response.stages : [])
+      })
+      .catch(() => {
+        if (!cancelled) setStageList([])
+      })
+    api.getRows(datasetId, 1, 1, 'original')
+      .then((response) => {
+        if (cancelled) return
+        const first = Array.isArray(response.rows) ? response.rows[0] : null
+        setOriginalColumns(first ? Object.keys(first).filter((key) => key !== '__row_index') : variableColumns)
+      })
+      .catch(() => {
+        if (!cancelled) setOriginalColumns(variableColumns)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [datasetId, open, variableColumns])
 
   useEffect(() => {
     setRows([])
@@ -206,14 +249,27 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     setPage(1)
     setHasMore(false)
     setError('')
-  }, [dataset?.current_stage_id, datasetId, open, viewMode])
+  }, [dataset?.current_stage_id, datasetId, modelingStageId, open, viewMode])
 
   useEffect(() => {
     if (!open || !datasetId || !dataset) return
+    if (viewMode !== 'original' && modelingStageId === 'original') {
+      setRows([])
+      setRowColumns([])
+      setTotalRows(Number(dataset?.row_count || 0))
+      setHasMore(false)
+      setLoadingRows(false)
+      setError('')
+      return
+    }
     let cancelled = false
     setLoadingRows(true)
     setError('')
-    const stageId = viewMode === 'original' ? 'original' : dataset.current_stage_id || undefined
+    const stageId = viewMode === 'original'
+      ? 'original'
+      : modelingStageId === 'original'
+        ? 'original'
+        : modelingStageId || dataset.current_stage_id || undefined
 
     api
       .getRows(datasetId, page, PAGE_SIZE, stageId)
@@ -238,7 +294,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     return () => {
       cancelled = true
     }
-  }, [dataset, datasetId, open, page, viewMode])
+  }, [dataset, datasetId, modelingStageId, open, page, viewMode])
 
   const scopedChangeStages = useMemo(() => {
     if (!changeStages.length) return []
@@ -256,6 +312,12 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     () => new Set(scopedChangeStages.flatMap((stage) => stage.new_columns || [])),
     [scopedChangeStages],
   )
+  const imputedColumns = useMemo(() => new Set(
+    scopedChangeStages.flatMap((stage) => stage.changes || [])
+      .filter((change) => change.change_kind === 'missing_fill' || String(change.action_type || '').toLowerCase().includes('missing'))
+      .map((change) => change.column)
+      .filter(Boolean)
+  ), [scopedChangeStages])
   const visibleChanges = useMemo(
     () => allVisibleChanges.filter((change) => changeType === 'all' || changeMatchesType(change, changeType, changedColumns)),
     [allVisibleChanges, changeType, changedColumns],
@@ -320,6 +382,21 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
   const latestStage = changeStages[changeStages.length - 1] || null
   const effectiveRows = totalRows || dataset?.row_count || 0
+  const modelingSummary = useMemo(() => {
+    const rowsRemoved = scopedChangeStages.reduce((sum, stage) => sum + ((stage.removed_rows || []).length), 0)
+    const valuesImputed = scopedChangeStages.reduce(
+      (sum, stage) => sum + (stage.changes || []).filter((change) => change.change_kind === 'missing_fill' || String(change.action_type || '').toLowerCase().includes('missing')).length,
+      0,
+    )
+    const currentCols = new Set(allColumns)
+    const droppedColumns = originalColumns.filter((name) => !currentCols.has(name))
+    return {
+      rowsRemoved,
+      valuesImputed,
+      columnsDropped: droppedColumns.length,
+      sameAsOriginal: !rowsRemoved && !valuesImputed && droppedColumns.length === 0 && (modelingStageId === 'original' || !dataset?.current_stage_id),
+    }
+  }, [allColumns, dataset?.current_stage_id, modelingStageId, originalColumns, scopedChangeStages])
   const highlightedRows = useMemo(() => {
     if (viewMode !== 'highlight' || changeScope === 'all_rows') return rows
     const affectedIndices = new Set(
@@ -345,7 +422,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
             </div>
             <div className="ax-floating-dataset-header-actions">
               <a
-                href={api.exportCsvUrl(datasetId, viewMode === 'original' ? 'original' : dataset.current_stage_id || undefined)}
+                href={api.exportCsvUrl(datasetId, viewMode === 'original' ? 'original' : modelingStageId === 'original' ? 'original' : modelingStageId || dataset.current_stage_id || undefined)}
                 download={(dataset.filename || dataset.name || 'dataset').replace(/\.[^.]+$/, '') + '.csv'}
                 className="ax-dd-icon-btn"
                 title="Download CSV"
@@ -366,38 +443,39 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
           </header>
 
           <div className="ax-floating-dataset-toolbar">
-            <div className="ax-segmented-control ax-floating-dataset-modes" role="tablist" aria-label="Preview dataset view">
-              <button
-                type="button"
-                className={`ax-segmented-item ${viewMode === 'original' ? 'active' : ''}`}
-                onClick={() => setViewMode('original')}
-                title="Original dataset"
-              >
-                <Database size={14} className="ax-segmented-icon" />
-                {viewMode === 'original' && <span className="ax-segmented-label">Original</span>}
-              </button>
-              <div className={`ax-segmented-item-wrap ${!hasChanges ? 'is-disabled' : ''}`} title={!hasChanges ? 'Apply a change first to enable this view' : undefined}>
-                <button
-                  type="button"
-                  className={`ax-segmented-item ${viewMode === 'cleaned' ? 'active' : ''} ${!hasChanges ? 'ax-tab-disabled' : ''}`}
-                  onClick={() => hasChanges && setViewMode('cleaned')}
-                  disabled={!hasChanges}
-                  style={!hasChanges ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : { transition: 'opacity 0.2s ease' }}
-                >
-                  <Sparkles size={14} className="ax-segmented-icon" />
-                  {viewMode === 'cleaned' && <span className="ax-segmented-label">Cleaned</span>}
-                </button>
+            <div className="ax-floating-dataset-tabbar">
+              <div className="ax-segmented-control ax-floating-dataset-modes" role="tablist" aria-label="Preview dataset view">
+                {VIEW_MODES.map((mode, index) => (
+                  <React.Fragment key={mode.id}>
+                    {index > 0 && <span className="ax-floating-dataset-tab-separator">·</span>}
+                    <button
+                      type="button"
+                      className={`ax-segmented-item ${viewMode === mode.id || (mode.id === 'modeling' && viewMode !== 'original') ? 'active' : ''}`}
+                      onClick={() => setViewMode(mode.id)}
+                    >
+                      <span className="ax-segmented-label">{mode.label}</span>
+                    </button>
+                  </React.Fragment>
+                ))}
               </div>
-              <div className={`ax-segmented-item-wrap ${!hasChanges ? 'is-disabled' : ''}`} title={!hasChanges ? 'Apply a change first to enable this view' : undefined}>
+              <div className="ax-floating-dataset-mode-icons" aria-label="Dataset view shortcuts">
                 <button
                   type="button"
-                  className={`ax-segmented-item ${viewMode === 'highlight' ? 'active' : ''} ${!hasChanges ? 'ax-tab-disabled' : ''}`}
-                  disabled={!hasChanges || (!changeStages.length && !changeLoading)}
-                  onClick={() => hasChanges && setViewMode('highlight')}
-                  style={!hasChanges ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : { transition: 'opacity 0.2s ease' }}
+                  className={viewMode !== 'original' && viewMode !== 'highlight' ? 'active' : ''}
+                  onClick={() => setViewMode('modeling')}
+                  title="For Modeling"
+                  aria-label="For Modeling"
                 >
-                  <Highlighter size={14} className="ax-segmented-icon" />
-                  {viewMode === 'highlight' && <span className="ax-segmented-label">Highlighted</span>}
+                  <Sparkles size={14} />
+                </button>
+                <button
+                  type="button"
+                  className={viewMode === 'highlight' ? 'active' : ''}
+                  onClick={() => setViewMode('highlight')}
+                  title="Highlight changes"
+                  aria-label="Highlight changes"
+                >
+                  <Highlighter size={14} />
                 </button>
               </div>
             </div>
@@ -408,6 +486,18 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
               </Link>
             </div>
           </div>
+
+          {viewMode !== 'original' && (
+            <section className="ax-floating-dataset-modeling-info">
+              <Info size={14} />
+              <span>Scaling and encoding are applied automatically during training and are not shown here.</span>
+              <strong>
+                {modelingSummary.sameAsOriginal
+                  ? 'Same as Original'
+                  : `${modelingSummary.rowsRemoved} rows removed · ${modelingSummary.columnsDropped} columns dropped · ${modelingSummary.valuesImputed} values imputed`}
+              </strong>
+            </section>
+          )}
 
           {viewMode === 'highlight' && (
             <section className="ax-dd-changebar ax-floating-dataset-changebar" aria-live="polite">
@@ -462,7 +552,12 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
           )}
 
           <div className="ax-floating-dataset-body">
-            {loadingRows && !rows.length && (
+            {viewMode !== 'original' && modelingSummary.sameAsOriginal ? (
+              <div className="ax-floating-dataset-modeling-empty">
+                <strong>Same as Original</strong>
+                <p>No cleaning changes have been applied yet, so the modeling dataset is identical to the uploaded dataset.</p>
+              </div>
+            ) : loadingRows && !rows.length && (
               <div className="ax-floating-dataset-loading" aria-live="polite">
                 <span />
                 <span />
@@ -471,13 +566,13 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
               </div>
             )}
 
-            {error && <p className="ax-floating-dataset-error">{error}</p>}
+            {!(viewMode !== 'original' && modelingSummary.sameAsOriginal) && error && <p className="ax-floating-dataset-error">{error}</p>}
 
-            {!loadingRows && !error && rows.length === 0 && (
+            {!(viewMode !== 'original' && modelingSummary.sameAsOriginal) && !loadingRows && !error && rows.length === 0 && (
               <p className="ax-floating-dataset-empty">No rows are available for this dataset stage.</p>
             )}
 
-            {rows.length > 0 && (
+            {!(viewMode !== 'original' && modelingSummary.sameAsOriginal) && rows.length > 0 && (
               <div className="ax-floating-dataset-table-wrap" ref={scrollRef}>
                 <table className="ax-dd-table ax-floating-dataset-table">
                   <thead>
@@ -486,7 +581,12 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                       {visibleVariables.map((variable) => (
                         <th key={variable.name} className={viewMode === 'highlight' && changedColumns.has(variable.name) && (changeType === 'all' || changeType === 'generated') ? 'ax-dd-new-column' : ''}>
                           <span className="ax-dd-typeicon" data-type={variable.dtype}>{TYPE_ICON[variable.dtype] || '?'}</span>
-                          <span className="ax-dd-colname">{variable.name}</span>
+                          <span className="ax-dd-colname">
+                            {variable.name}
+                            {viewMode !== 'original' && imputedColumns.has(variable.name) && (
+                              <i className="ax-modeling-imputed-dot" title="Missing values were imputed in this column" />
+                            )}
+                          </span>
                           <small className="ax-dd-coltype">{TYPE_LABEL[variable.dtype] || variable.dtype}</small>
                         </th>
                       ))}
@@ -538,7 +638,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
           <footer className="ax-floating-dataset-footer">
             <span>
-              Showing {rows.length.toLocaleString()} of {Number(effectiveRows || rows.length).toLocaleString()} rows from the {viewMode === 'original' ? 'uploaded' : 'current'} dataset.
+              Showing {rows.length.toLocaleString()} of {Number(effectiveRows || rows.length).toLocaleString()} rows from the {viewMode === 'original' ? 'uploaded' : 'modeling'} dataset.
             </span>
             {viewMode === 'highlight' && visibleChanges.length > 0 && (
               <strong>
@@ -616,6 +716,21 @@ function previewStatus(dataset, rowCount, columnCount) {
   const columns = Number(columnCount || dataset.col_count || dataset.variables?.length || 0).toLocaleString()
   const stage = dataset.current_stage_id ? 'current cleaned stage' : 'original upload'
   return `${rows} rows, ${columns} columns, ${stage}`
+}
+
+function isExploratoryScaleOrEncodeStage(stage) {
+  const op = String(stage?.op_type || '').toLowerCase()
+  const summary = String(stage?.summary || '').toLowerCase()
+  const text = `${op} ${summary}`
+  return (
+    text.includes('zscore') ||
+    text.includes('z-score') ||
+    text.includes('minmax') ||
+    text.includes('min-max') ||
+    text.includes('scaled') ||
+    text.includes('standardize_numeric') ||
+    text.includes('encoded')
+  )
 }
 
 function formatValue(value) {

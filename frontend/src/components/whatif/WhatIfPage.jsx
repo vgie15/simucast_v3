@@ -21,7 +21,7 @@ function saveDraft(draft) {
   try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft)) } catch {}
 }
 
-export default function WhatIfPage({ dataset, activeModel, initialData }) {
+export default function WhatIfPage({ dataset, activeModel, setActiveModel, initialData }) {
   const dialog = useDialog()
   const [fallbackModel, setFallbackModel] = useState(null)
   const initialModels = initialData?.tab === 'whatif' && initialData?.datasetId === dataset?.id ? (initialData.models || []) : []
@@ -35,7 +35,7 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
   const [scenarios, setScenarios] = useState([])
   const [selectedScenarioName, setSelectedScenarioName] = useState('')
   const draftRestored = useRef(false)
-  const selectedModel = activeModel || fallbackModel
+  const selectedModel = fallbackModel || activeModel
 
   // Restore draft from localStorage
   useEffect(() => {
@@ -71,19 +71,19 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
   }, [dataset?.id, modelFull?.id, inputs, pred, baseline, baselineInputs, scenarios, selectedModel?.id])
 
   useEffect(() => {
-    if (!dataset?.id || activeModel) return
+    if (!dataset?.id) return
     if (initialData?.tab === 'whatif' && initialData?.datasetId === dataset.id && initialData.models) {
       setAvailableModels(initialData.models || [])
-      setFallbackModel((initialData.models || []).find((m) => m.has_whatif) || null)
+      if (!activeModel && !fallbackModel) setFallbackModel((initialData.models || []).find((m) => m.has_whatif) || null)
       return
     }
     api.listModels(dataset.id)
       .then((models) => {
         setAvailableModels(models || [])
-        setFallbackModel((models || []).find((m) => m.has_whatif) || null)
+        if (!activeModel && !fallbackModel) setFallbackModel((models || []).find((m) => m.has_whatif) || null)
       })
       .catch(console.error)
-  }, [dataset?.id, activeModel?.id, initialData?.datasetId])
+  }, [dataset?.id, activeModel?.id, fallbackModel?.id, initialData?.datasetId])
 
   useEffect(() => {
     if (!selectedModel) return
@@ -156,6 +156,29 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
     setPred(null)
   }
 
+  const switchModel = async (modelId) => {
+    const next = availableModels.find((model) => String(model.id) === String(modelId))
+    if (!next || String(next.id) === String(selectedModel?.id)) return
+    try {
+      let ready = next
+      if (!next.has_whatif) {
+        await api.prepareModelForWhatIf(next.id)
+        ready = { ...next, has_whatif: true }
+      }
+      setFallbackModel(ready)
+      setActiveModel?.(ready)
+      setModelFull(null)
+      setInputs({})
+      setPred(null)
+      setBaseline(null)
+      setBaselineInputs(null)
+      setScenarios([])
+      setSelectedScenarioName('')
+    } catch (err) {
+      await dialog.alert({ title: 'Could Not Switch Model', message: err.message, variant: 'danger' })
+    }
+  }
+
   const rangeMin = Number(targetContext?.min ?? 0)
   const rangeMax = Number(targetContext?.max ?? 100)
   const rangeMean = Number(targetContext?.mean ?? (rangeMin + rangeMax) / 2)
@@ -163,6 +186,15 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
   const baselinePred = baseline?.prediction ?? rangeMean
   const pctPosition = rangeMax > rangeMin ? Math.min(100, Math.max(0, ((currentPred - rangeMin) / (rangeMax - rangeMin)) * 100)) : 50
   const baselinePct = rangeMax > rangeMin ? Math.min(100, Math.max(0, ((baselinePred - rangeMin) / (rangeMax - rangeMin)) * 100)) : 50
+  const activeModelName = modelFull.name || selectedModel?.name || modelFull.algorithm || 'Selected model'
+  const activeModelAlgorithm = modelFull.algorithm || selectedModel?.algorithm || activeModelName
+  const activeModelMetric = modelFull.metrics?.accuracy != null
+    ? `${Math.round(modelFull.metrics.accuracy * 100)}% accuracy`
+    : modelFull.metrics?.r2 != null
+      ? `R² ${Number(modelFull.metrics.r2).toFixed(3)}`
+      : modelFull.metrics?.rmse != null
+        ? `RMSE ${Number(modelFull.metrics.rmse).toFixed(3)}`
+        : null
 
   return (
     <div className="ax-whatif-layout">
@@ -170,9 +202,7 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
       <div className="ax-whatif-left">
         {/* Header (pinned) */}
         <div className="ax-whatif-left-head">
-          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-accent, #f97316)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            What-if · {modelFull.name}
-          </span>
+          <h2 className="ax-whatif-left-title">What-if scenario</h2>
           <p className="ax-whatif-left-sub">
             Adjust feature values to see how they affect the prediction
           </p>
@@ -180,6 +210,43 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
 
         {/* Scrollable body */}
         <div className="ax-whatif-left-scroll">
+          <div className="ax-whatif-model-card">
+            <span>Model in use</span>
+            <label className="ax-whatif-model-select-label" htmlFor="whatif-model-select">
+              <select
+                id="whatif-model-select"
+                className="ax-whatif-model-select"
+                value={selectedModel?.id || ''}
+                onChange={(event) => switchModel(event.target.value)}
+              >
+                {availableModels.some((model) => String(model.id) === String(selectedModel?.id)) ? null : (
+                  <option value={selectedModel?.id || ''}>{activeModelName}</option>
+                )}
+                {availableModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {(model.name || model.algorithm || 'Model')} · {model.target || 'target'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <dl>
+              <div>
+                <dt>Target</dt>
+                <dd>{modelFull.target}</dd>
+              </div>
+              <div>
+                <dt>Algorithm</dt>
+                <dd>{activeModelAlgorithm}</dd>
+              </div>
+              {activeModelMetric && (
+                <div>
+                  <dt>Metric</dt>
+                  <dd>{activeModelMetric}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+
           {categoricalFeatures.length > 0 && (
             <FeatureGroup label="Categorical features">
               {categoricalFeatures.map((f) => (
@@ -277,8 +344,6 @@ export default function WhatIfPage({ dataset, activeModel, initialData }) {
                 </div>
                 {/* Baseline marker */}
                 <div style={{ position: 'absolute', top: 6, left: `${baselinePct}%`, width: 2, height: 16, background: 'var(--color-text-secondary)', borderRadius: 1, transform: 'translateX(-1px)' }} />
-                {/* Current dot */}
-                <div style={{ position: 'absolute', top: 6, left: `${pctPosition}%`, width: 16, height: 16, background: '#fff', border: '3px solid var(--color-accent, #f97316)', borderRadius: '50%', transform: 'translate(-8px, 0)', boxShadow: '0 1px 4px rgba(0,0,0,0.15)', transition: 'left 0.3s ease' }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: 4 }}>
                 <span>{fmt(rangeMin)}</span>

@@ -196,6 +196,39 @@ def run_test(ds_id):
                 if len(clean_pair):
                     sample = clean_pair.sample(min(200, len(clean_pair)), random_state=42)
                     result["scatter_points"] = sample.values.tolist()
+        elif kind == "cramers_matrix":
+            cat_cols = body.get("variables") or [
+                c for c in df.columns
+                if not pd.api.types.is_numeric_dtype(df[c])
+                and df[c].nunique(dropna=True) <= 20
+            ]
+            if len(cat_cols) < 2:
+                return {"error": "Need at least 2 categorical columns."}, 400
+            matrix = {}
+            pairs = []
+            for a in cat_cols:
+                matrix[a] = {}
+                for b in cat_cols:
+                    if a == b:
+                        matrix[a][b] = 1.0
+                        continue
+                    if b in matrix and a in matrix[b]:
+                        matrix[a][b] = matrix[b][a]
+                        continue
+                    ct = pd.crosstab(df[a], df[b])
+                    chi2, _, _, _ = stats.chi2_contingency(ct)
+                    n = int(ct.to_numpy().sum())
+                    min_dim = max(min(ct.shape) - 1, 1)
+                    v = float(np.sqrt(chi2 / (n * min_dim))) if n and min_dim else 0.0
+                    matrix[a][b] = round(v, 3)
+                    pairs.append({"var_a": a, "var_b": b, "v": round(v, 3), "n": n})
+            pairs.sort(key=lambda r: abs(r["v"]), reverse=True)
+            result = {
+                "variables": cat_cols,
+                "matrix": matrix,
+                "pairs": pairs,
+                "strongest_pair": pairs[0] if pairs else None,
+            }
         else:
             return {"error": "unknown test kind"}, 400
 

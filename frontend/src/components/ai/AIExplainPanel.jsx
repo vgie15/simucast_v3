@@ -89,10 +89,10 @@ export function AIExplainToggle({ active, onToggle, disabled }) {
         opacity: disabled ? 0.5 : 1,
         transition: 'all .15s ease'
       }}
-      title={active ? 'Turn off AI Explain' : 'Turn on AI Explain'}
+      title={active ? 'Turn off Explain Mode' : 'Turn on Explain Mode'}
     >
       <Sparkles size={14} />
-      AI Explain
+      Explain Mode
       <span style={{
         display: 'inline-block',
         width: 10, height: 10, borderRadius: '50%',
