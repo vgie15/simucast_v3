@@ -326,6 +326,7 @@ export default function FloatingAIAssistant() {
               <button
                 type="button"
                 className="ax-floating-pill-action dataset"
+                id={activeTab === 'whatif' ? 'whatif-dataset-button' : undefined}
                 onClick={openDatasetPreview}
                 aria-label="Open dataset table"
                 title="Open dataset table"
@@ -339,6 +340,7 @@ export default function FloatingAIAssistant() {
           <button
             type="button"
             className="ax-floating-pill-action ai"
+            id={activeTab === 'whatif' ? 'whatif-ask-ai-button' : undefined}
             onClick={openAssistant}
             aria-label="Open AI assistant"
             title={!auth.isAuthenticated ? 'AI requires an account' : 'Open AI assistant'}
@@ -349,6 +351,7 @@ export default function FloatingAIAssistant() {
           <button
             type="button"
             className="ax-floating-pill-dismiss"
+            id={activeTab === 'whatif' ? 'whatif-ask-ai-close' : undefined}
             onClick={hideDock}
             aria-label="Hide quick project tools"
             title="Hide quick tools"

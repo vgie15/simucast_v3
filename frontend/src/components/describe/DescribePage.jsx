@@ -91,6 +91,26 @@ const CB_CHART_TYPES = [
 const describePageCache = new Map()
 
 export default function DescribePage({ dataset, initialData }) {
+  // Bust the module-level describePageCache when the dataset is refreshed
+  // (stage changes, or ProjectWorkspace increments refreshKey which remounts us).
+  // We track both the stage ID and a monotonically increasing counter so that
+  // cache is always cleared on remount even if the stage ID stayed the same.
+  const prevStageRef = useRef(null)
+  const mountCountRef = useRef(0)
+  useEffect(() => {
+    if (!dataset?.id) return
+    mountCountRef.current += 1
+    const stageChanged = prevStageRef.current !== null && prevStageRef.current !== dataset.current_stage_id
+    if (stageChanged || mountCountRef.current > 1) {
+      for (const key of describePageCache.keys()) {
+        if (key.startsWith(`${dataset.id}|`)) {
+          describePageCache.delete(key)
+        }
+      }
+    }
+    prevStageRef.current = dataset.current_stage_id
+  }, [dataset?.id, dataset?.current_stage_id])
+
   // Correlation heatmap
   const [corrResult, setCorrResult] = useState(null)
   const [corrLoading, setCorrLoading] = useState(false)
@@ -693,6 +713,7 @@ export default function DescribePage({ dataset, initialData }) {
       chartBuilderY,
       chartBuilderAgg,
       chartTitle,
+      sourceEl: target?.getBoundingClientRect ? target : null,
       sourceRect,
     }))
   }
@@ -2330,14 +2351,14 @@ export default function DescribePage({ dataset, initialData }) {
             </div>
           </div>
         )}
-        {explainPopup && (
-          <DescribeExplainPopup
-            datasetId={dataset.id}
-            element={explainPopup}
-            onClose={() => setExplainPopup(null)}
-          />
-        )}
       </div>}
+      {explainPopup && (
+        <DescribeExplainPopup
+          datasetId={dataset.id}
+          element={explainPopup}
+          onClose={() => setExplainPopup(null)}
+        />
+      )}
         </div>
       </main>
     </div>
@@ -2350,18 +2371,18 @@ function DescribeExplainPopup({ datasetId, element, onClose }) {
   const [mode, setMode] = useState('normal')
   const [followUpInput, setFollowUpInput] = useState('')
   const [followUpLoading, setFollowUpLoading] = useState(false)
-  const [position, setPosition] = useState({ top: 84, left: 24 })
+  const [position, setPosition] = useState(() => getDescribeExplainPosition(getLiveExplainRect(element)))
 
   useEffect(() => {
-    if (!element?.sourceRect) return
-    const popupW = 374
-    const popupH = 430
-    const { innerWidth, innerHeight } = window
-    let top = element.sourceRect.bottom + 8
-    let left = Math.max(12, Math.min(element.sourceRect.left, innerWidth - popupW - 12))
-    if (top + popupH > innerHeight - 16) top = Math.max(12, element.sourceRect.top - popupH - 8)
-    setPosition({ top, left })
-  }, [element?.sourceRect])
+    const updatePosition = () => setPosition(getDescribeExplainPosition(getLiveExplainRect(element)))
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [element?.id, element?.sourceEl, element?.sourceRect])
 
   const fetchAI = async (variant = 'normal') => {
     if (!datasetId || !element) return
@@ -2383,7 +2404,7 @@ function DescribeExplainPopup({ datasetId, element, onClose }) {
         },
       }
       const response = await api.aiExplain(datasetId, `describe-${element.id}-${variant}`, payload, question, { element: payload })
-      setAiText(response?.explanation || element.datasetExplanation)
+      setAiText(cleanDescribeExplainText(response?.explanation, element.datasetExplanation))
     } catch {
       setAiText(element.datasetExplanation)
     } finally {
@@ -2402,7 +2423,7 @@ function DescribeExplainPopup({ datasetId, element, onClose }) {
         previousExplanation: aiText || element.datasetExplanation,
       }
       const response = await api.aiExplain(datasetId, `describe-${element.id}-followup`, payload, followUpInput, { element: payload })
-      setAiText(response?.explanation || element.datasetExplanation)
+      setAiText(cleanDescribeExplainText(response?.explanation, element.datasetExplanation))
       setFollowUpInput('')
       setMode('normal')
     } catch {
@@ -2424,12 +2445,17 @@ function DescribeExplainPopup({ datasetId, element, onClose }) {
 
   return createPortal(
     <div
-      className="ax-expand-explain-popup"
-      style={{ top: position.top, left: position.left }}
+      className={`ax-expand-explain-popup ax-explain-placement-${position.placement}`}
+      style={{ top: position.top, left: position.left, '--explain-popup-max-height': `${position.maxHeight}px` }}
       role="dialog"
       aria-modal="true"
       aria-label={`${element.title} explanation`}
     >
+      <span
+        className="ax-expand-explain-arrow"
+        style={{ top: position.arrowTop, left: position.arrowLeft }}
+        aria-hidden="true"
+      />
       <div className="ax-expand-explain-popup-head">
         <div>
           <p>AI Explain · {element.title}</p>
@@ -2484,6 +2510,109 @@ function DescribeExplainPopup({ datasetId, element, onClose }) {
   )
 }
 
+function getDescribeExplainPosition(sourceRect) {
+  const popupW = 374
+  const gap = 8
+  const padding = 12
+  const viewportW = typeof window === 'undefined' ? 1280 : window.innerWidth
+  const viewportH = typeof window === 'undefined' ? 720 : window.innerHeight
+  const popupH = Math.max(280, Math.min(560, viewportH - (padding * 2)))
+  const anchor = normalizeExplainRect(sourceRect)
+  if (!anchor) {
+    return { top: 84, left: padding, placement: 'right-start', arrowTop: 24, arrowLeft: -6, maxHeight: popupH }
+  }
+
+  const placements = anchor.bottom > viewportH * 0.68
+    ? ['top-start', 'right-start', 'left-start', 'bottom-start']
+    : ['right-start', 'left-start', 'bottom-start', 'top-start']
+  for (const placement of placements) {
+    const candidate = buildExplainCandidate(placement, anchor, popupW, popupH, gap, padding, viewportW, viewportH)
+    if (!rectsOverlap(candidate.rect, anchor)) return candidate
+  }
+
+  const rightSpace = viewportW - anchor.right - gap - padding
+  const leftSpace = anchor.left - gap - padding
+  const fallbackPlacement = rightSpace >= leftSpace ? 'right-start' : 'left-start'
+  return buildExplainCandidate(fallbackPlacement, anchor, popupW, popupH, gap, padding, viewportW, viewportH)
+}
+
+function buildExplainCandidate(placement, anchor, popupW, popupH, gap, padding, viewportW, viewportH) {
+  let left = anchor.right + gap
+  let top = anchor.top
+  if (placement === 'left-start') {
+    left = anchor.left - popupW - gap
+    top = anchor.top
+  } else if (placement === 'bottom-start') {
+    left = anchor.left
+    top = anchor.bottom + gap
+  } else if (placement === 'top-start') {
+    left = anchor.left
+    top = anchor.top - popupH - gap
+  }
+
+  left = clamp(left, padding, Math.max(padding, viewportW - popupW - padding))
+  top = clamp(top, padding, Math.max(padding, viewportH - popupH - padding))
+
+  const rect = { left, top, right: left + popupW, bottom: top + popupH }
+  const arrow = getExplainArrowPosition(placement, anchor, rect, popupW, popupH)
+  return { top, left, placement, rect, maxHeight: popupH, ...arrow }
+}
+
+function getLiveExplainRect(element) {
+  if (element?.sourceEl?.isConnected && typeof element.sourceEl.getBoundingClientRect === 'function') {
+    return element.sourceEl.getBoundingClientRect()
+  }
+  return element?.sourceRect || null
+}
+
+function getExplainArrowPosition(placement, anchor, popup, popupW, popupH) {
+  if (placement === 'right-start' || placement === 'left-start') {
+    return {
+      arrowLeft: placement === 'right-start' ? -6 : popupW - 6,
+      arrowTop: clamp(anchor.top + Math.min(anchor.height / 2, 20) - popup.top, 18, popupH - 18),
+    }
+  }
+  return {
+    arrowLeft: clamp(anchor.left + Math.min(anchor.width / 2, 30) - popup.left, 18, popupW - 18),
+    arrowTop: placement === 'bottom-start' ? -6 : popupH - 6,
+  }
+}
+
+function normalizeExplainRect(rect) {
+  if (!rect) return null
+  const left = Number(rect.left)
+  const top = Number(rect.top)
+  const width = Number(rect.width || rect.right - rect.left)
+  const height = Number(rect.height || rect.bottom - rect.top)
+  if (![left, top, width, height].every(Number.isFinite)) return null
+  return { left, top, width, height, right: left + width, bottom: top + height }
+}
+
+function rectsOverlap(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function cleanDescribeExplainText(text, fallback) {
+  const value = String(text || '').trim()
+  if (!value) return fallback
+  const lower = value.toLowerCase()
+  const looksRaw =
+    value.startsWith('{') ||
+    value.startsWith('[') ||
+    lower.includes('anthropic_api_key') ||
+    lower.includes('api key') ||
+    lower.includes('traceback') ||
+    lower.includes('request payload') ||
+    lower.includes('"clickedmetric"') ||
+    lower.includes('"targetvariable"') ||
+    lower.includes('params: {')
+  return looksRaw ? fallback : value
+}
+
 function buildDescribeExplainMeta(meta, context) {
   const {
     dataset,
@@ -2505,6 +2634,7 @@ function buildDescribeExplainMeta(meta, context) {
     chartBuilderY,
     chartBuilderAgg,
     chartTitle,
+    sourceEl,
     sourceRect,
   } = context
   const variableCount = (numericStats?.length || 0) + (catStats?.length || 0)
@@ -2681,6 +2811,7 @@ function buildDescribeExplainMeta(meta, context) {
     whyItMatters,
     verdict,
     verdictTone,
+    sourceEl,
     sourceRect,
   }
 }

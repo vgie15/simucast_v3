@@ -363,6 +363,7 @@ export default function ProjectWorkspace() {
       </div>
 
       <EdgeSideTab
+        id={activeTab === 'whatif' ? 'whatif-guide-tab' : undefined}
         kind="guide"
         label="Guide"
         top={edgeTabPositions.guide}
@@ -374,6 +375,7 @@ export default function ProjectWorkspace() {
         onPointerCancel={(event) => endEdgeTabDrag(event, 'guide')}
       />
       <EdgeSideTab
+        id={activeTab === 'whatif' ? 'whatif-history-tab' : undefined}
         kind="history"
         label="History"
         top={edgeTabPositions.history}
@@ -436,9 +438,10 @@ export default function ProjectWorkspace() {
   )
 }
 
-function EdgeSideTab({ kind, label, top, active, dragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
+function EdgeSideTab({ id, kind, label, top, active, dragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
   return (
     <button
+      id={id}
       className={`ax-edge-tab ${kind} ${active ? 'active' : ''} ${dragging ? 'dragging' : ''}`}
       type="button"
       style={{ top }}
@@ -466,7 +469,7 @@ function highlightSection(section) {
       if (btn) {
         btn.click()
         setTimeout(() => {
-          const newEl = document.getElementById(section)
+          const newEl = document.getElementById(section) || document.querySelector('.ax-data-toolbar-popover') || btn
           if (newEl) {
             newEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
             newEl.classList.add('ax-fix-highlight')

@@ -233,6 +233,7 @@ def _parse_ai_plan_text(text):
 
 _GUIDANCE_QUESTION_INTENTS = {
     "prepare_data",
+    "analyze_relationships",
     "train_model",
     "compare_models",
     "what_if",
@@ -266,12 +267,12 @@ def _rule_based_guidance_questions(df, variables):
         },
         {
             "question": f"Which variables seem most related to {measure}?",
-            "intent": "full_workflow",
+            "intent": "analyze_relationships",
             "why": "Start with summaries and analysis before deciding whether modeling helps.",
         },
         {
             "question": f"How does {measure} compare with {compare} and the category groups in this dataset?",
-            "intent": "full_workflow",
+            "intent": "analyze_relationships",
             "why": "Use descriptive and statistical analysis to check patterns and group differences.",
         },
         {
@@ -394,9 +395,10 @@ def ai_project_plan(ds_id):
         variables = _current_variables(ds, s)
         guidance = jload(getattr(ds, "guidance", None)) or {}
         project_goal = guidance.get("goal") or guidance.get("intent")
+        project_question = guidance.get("question_text")
         profile = _plan_prompt_profile(ds, df, variables, s)
         if mode == "system":
-            return jsonify(_rule_based_project_plan(df, variables, project_goal))
+            return jsonify(_rule_based_project_plan(df, variables, project_goal, project_question))
         blocked = _ai_account_required_response(s)
         if blocked:
             return blocked
@@ -404,7 +406,8 @@ def ai_project_plan(ds_id):
         cache_key = _ai_cache_key(ds_id, ds.current_stage_id, "project_plan", {
             "mode": mode,
             "goal": project_goal,
-            "plan_version": 4,
+            "question": project_question,
+            "plan_version": 5,
         })
         cached = _AI_CACHE.get(cache_key) or _ai_db_get(s, cache_key)
         if cached is not None:
@@ -412,7 +415,7 @@ def ai_project_plan(ds_id):
 
         client = _ai_client()
         if client is None:
-            return jsonify(_rule_based_project_plan(df, variables, project_goal))
+            return jsonify(_rule_based_project_plan(df, variables, project_goal, project_question))
 
         system = (
             "You are SimuCast's project guide. Create an ordered analytics plan "
@@ -486,7 +489,7 @@ def ai_project_plan(ds_id):
             text = ai_call(profile, prompt, system=system, json_mode=False, max_tokens=1400)
             steps = _parse_ai_plan_text(text)
             steps = _filter_project_steps_for_dataset(steps, df, variables)
-            steps = _filter_project_steps_for_goal(steps, project_goal)
+            steps = _filter_project_steps_for_goal(steps, _effective_project_goal(project_goal, project_question))
             response = {
                 "ai": True,
                 "summary": f"AI suggested workflow for {len(df)} rows and {len(variables)} variables.",
@@ -507,7 +510,7 @@ def ai_project_plan(ds_id):
             raw = getattr(e, "raw_response", None)
             if raw:
                 print("AI project plan raw response:", raw[:4000], flush=True)
-            fallback = _rule_based_project_plan(df, variables, project_goal)
+            fallback = _rule_based_project_plan(df, variables, project_goal, project_question)
             fallback["error"] = "AI plan unavailable. Using built-in guided workflow."
             return jsonify(fallback)
     finally:
@@ -1333,11 +1336,49 @@ def _filter_project_steps_for_dataset(steps, df, variables):
         filtered.append(step)
     return filtered
 
-def _rule_based_project_plan(df, variables, project_goal=None):
+def _effective_project_goal(project_goal=None, project_question=None):
+    """Use the user's actual question to narrow broad starter goals."""
+    text = str(project_question or "").strip().lower()
+    if not text:
+        return project_goal
+    if re.search(r"(clean|prepare|missing|outlier|duplicate|standardi[sz]e|format)", text):
+        return "prepare_data"
+    if re.search(r"(what[- ]?if|scenario|change .*prediction|if .* change|simulate)", text):
+        return "what_if"
+    if re.search(r"(compare .*model|best model|which model|model performance)", text):
+        return "compare_models"
+    if re.search(r"(report|summary for|export findings|document)", text):
+        return "report"
+    if re.search(r"(predict|prediction|will .* pass|can .* pass|forecast|likely to|probability)", text):
+        return "train_model"
+    if re.search(r"(factor|affect|relationship|related|correlat|association|associated|difference|compare|trend|pattern|explain|explore)", text):
+        return "analyze_relationships"
+    return project_goal
+
+
+def _question_columns(project_question, variables):
+    """Return exact dataset columns mentioned in a natural-language question."""
+    text = re.sub(r"[^a-z0-9]+", " ", str(project_question or "").lower())
+    matches = []
+    for variable in variables or []:
+        name = variable.get("name")
+        if not name:
+            continue
+        normalized = re.sub(r"[^a-z0-9]+", " ", str(name).lower()).strip()
+        compact = re.sub(r"[^a-z0-9]+", "", str(name).lower())
+        if normalized and (normalized in text or compact in re.sub(r"[^a-z0-9]+", "", text)):
+            matches.append(name)
+    return matches
+
+
+def _rule_based_project_plan(df, variables, project_goal=None, project_question=None):
     """Heuristic project plan used when the AI key is unset or the call fails."""
+    effective_goal = _effective_project_goal(project_goal, project_question)
     nums = [v["name"] for v in variables if v.get("dtype") in ("numeric", "int", "float", "binary")]
     cats = _category_standardization_columns(df, variables)
     bins = [v["name"] for v in variables if v.get("dtype") == "binary"]
+    mentioned_cols = _question_columns(project_question, variables)
+    target_col = mentioned_cols[0] if mentioned_cols else (nums[0] if nums else ((variables[0] or {}).get("name") if variables else None))
     missing_cols = [v["name"] for v in variables if int(v.get("missing", 0) or 0) > 0]
     outlier_cols = []
     for col in nums:
@@ -1392,7 +1433,7 @@ def _rule_based_project_plan(df, variables, project_goal=None):
             "priority": "high" if len(cats) else "medium",
             "columns": cats[:5],
         })
-    if nums:
+    if nums and effective_goal != "analyze_relationships":
         steps.append({
             "id": "data-optional-feature-tools",
             "page": "data",
@@ -1402,7 +1443,7 @@ def _rule_based_project_plan(df, variables, project_goal=None):
             "priority": "low",
             "columns": nums[:5],
         })
-    if 0 < len(df) < 200:
+    if 0 < len(df) < 200 and effective_goal not in {"analyze_relationships", "prepare_data"}:
         steps.append({
             "id": "expand-optional",
             "page": "expand",
@@ -1415,21 +1456,32 @@ def _rule_based_project_plan(df, variables, project_goal=None):
     steps.append({
         "id": "describe-overview",
         "page": "describe",
-        "title": "Run descriptive statistics for key variables",
-        "rationale": "Start with distributions, averages, and category balance before formal testing.",
+        "title": f"Summarize variables related to {target_col}" if effective_goal == "analyze_relationships" and target_col else "Run descriptive statistics for key variables",
+        "rationale": "Check distributions and category balance before interpreting relationships." if effective_goal == "analyze_relationships" else "Start with distributions, averages, and category balance before formal testing.",
         "priority": "medium",
-        "columns": (nums[:3] + cats[:2])[:5],
+        "columns": (mentioned_cols + nums[:3] + cats[:2])[:5],
     })
     if len(nums) >= 2:
+        relationship_cols = (mentioned_cols + [c for c in nums if c not in mentioned_cols])[:5]
+        pair = relationship_cols[:2] if len(relationship_cols) >= 2 else nums[:2]
         steps.append({
             "id": "tests-correlation",
             "page": "tests",
-            "title": f"Check relationships between {nums[0]} and {nums[1]}",
-            "rationale": "Correlation or relationship tests help identify promising predictors.",
-            "priority": "medium",
-            "columns": nums[:2],
+            "title": f"Check which variables are most related to {target_col}" if effective_goal == "analyze_relationships" and target_col else f"Check relationships between {nums[0]} and {nums[1]}",
+            "rationale": "Use correlation and supported relationship tests to rank likely associations before modeling." if effective_goal == "analyze_relationships" else "Correlation or relationship tests help identify promising predictors.",
+            "priority": "high" if effective_goal == "analyze_relationships" else "medium",
+            "columns": pair,
         })
-    if bins or nums:
+    if effective_goal == "analyze_relationships":
+        steps.append({
+            "id": "report-final",
+            "page": "report",
+            "title": "Document the strongest relationships",
+            "rationale": "Summarize the strongest relationship evidence and any data-quality caveats.",
+            "priority": "medium",
+            "columns": [target_col] if target_col else [],
+        })
+    elif bins or nums:
         target = (bins[0] if bins else nums[-1])
         steps.append({
             "id": "models-train",
@@ -1447,24 +1499,34 @@ def _rule_based_project_plan(df, variables, project_goal=None):
             "priority": "medium",
             "columns": nums[:3],
         })
-    steps.append({
-        "id": "report-final",
-        "page": "report",
-        "title": "Generate a report with documentation and insights",
-        "rationale": "The report should summarize data prep, tests, models, scenarios, and notes.",
-        "priority": "medium",
-        "columns": [],
-    })
-    steps = _filter_project_steps_for_goal(steps, project_goal)
+        steps.append({
+            "id": "report-final",
+            "page": "report",
+            "title": "Generate a report with documentation and insights",
+            "rationale": "The report should summarize data prep, tests, models, scenarios, and notes.",
+            "priority": "medium",
+            "columns": [],
+        })
+    else:
+        steps.append({
+            "id": "report-final",
+            "page": "report",
+            "title": "Generate a report with documentation and insights",
+            "rationale": "The report should summarize the useful findings and notes.",
+            "priority": "medium",
+            "columns": [],
+        })
+    steps = _filter_project_steps_for_goal(steps, effective_goal)
     goal_summaries = {
         "prepare_data": "Preparation path",
+        "analyze_relationships": "Relationship analysis path",
         "train_model": "Prediction path",
         "compare_models": "Model comparison path",
         "what_if": "What-if path",
         "report": "Report path",
         "full_workflow": "Full workflow",
     }
-    prefix = goal_summaries.get(project_goal, "Suggested workflow")
+    prefix = goal_summaries.get(effective_goal, "Suggested workflow")
     return {
         "ai": False,
         "summary": f"{prefix} for {len(df)} rows and {len(variables)} variables.",
@@ -1476,6 +1538,7 @@ def _filter_project_steps_for_goal(steps, goal):
     """Keep deterministic and AI plans focused on the goal selected by the user."""
     allowed_pages = {
         "prepare_data": {"data", "expand", "describe"},
+        "analyze_relationships": {"data", "describe", "tests", "report"},
         "train_model": {"data", "expand", "describe", "models"},
         "compare_models": {"data", "expand", "describe", "models"},
         "what_if": {"data", "expand", "models", "whatif"},
@@ -1487,6 +1550,8 @@ def _filter_project_steps_for_goal(steps, goal):
     focused = [step for step in (steps or []) if (step.get("page") or "data") in allowed_pages]
     if goal == "prepare_data":
         return focused[:7]
+    if goal == "analyze_relationships":
+        return focused[:8]
     if goal == "what_if":
         return focused[:7]
     return focused

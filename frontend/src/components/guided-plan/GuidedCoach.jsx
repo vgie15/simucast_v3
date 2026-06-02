@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import { coachStepsForGoal, currentCoachStep, firstCoachStep } from './ProjectGuidanceSetup'
+import GuideFocusExplainCard from './GuideFocusExplainCard'
 
 // Spotlight walkthrough that routes users to exact workflow controls.
 export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
@@ -18,6 +19,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   const [spotlight, setSpotlight] = useState(null)
   const [coachStyle, setCoachStyle] = useState(null)
   const [progressTick, setProgressTick] = useState(0)
+  const [suggestionData, setSuggestionData] = useState(null)
   const isMountedRef = React.useRef(true)
   useEffect(() => {
     isMountedRef.current = true
@@ -56,6 +58,35 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
     window.addEventListener('simucast:guided-progress', refreshCompletion)
     return () => window.removeEventListener('simucast:guided-progress', refreshCompletion)
   }, [])
+
+  useEffect(() => {
+    if (!dataset?.id || !current) return undefined
+    const toolKey = current.id === 'data.suggested_fixes' ? 'missing'
+      : current.id === 'data.outliers' ? 'outliers'
+      : current.id === 'data.duplicates' ? 'duplicates'
+      : current.id === 'data.categories' ? 'labels'
+      : null
+    if (!toolKey) {
+      setSuggestionData(null)
+      return undefined
+    }
+    let cancelled = false
+    setSuggestionData(null)
+    const request = toolKey === 'labels'
+      ? api.categorySuggestions(dataset.id)
+      : api.cleanSuggestions(dataset.id)
+    request
+      .then((res) => {
+        if (!cancelled) setSuggestionData(res)
+      })
+      .catch(() => {
+        if (!cancelled) setSuggestionData(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [current?.id, dataset?.id, dataset?.current_stage_id])
+
 
   useEffect(() => {
     let cancelled = false
@@ -328,7 +359,25 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   const previousMicroStep = () => setMicroIndex((value) => Math.max(value - 1, 0))
   const canFinishRequired = current.requirement !== 'required' || completion.complete
   const microAtEnd = microIndex >= focusSteps.length - 1
-  const coach = (
+
+  const dataToolKey = current?.id === 'data.suggested_fixes' ? 'missing'
+    : current?.id === 'data.outliers' ? 'outliers'
+    : current?.id === 'data.duplicates' ? 'duplicates'
+    : current?.id === 'data.categories' ? 'labels'
+    : null
+  const isDataToolStep = Boolean(dataToolKey) && current?.page === 'data'
+
+  const coach = isDataToolStep ? (
+    <GuideFocusExplainCard
+      dataset={dataset}
+      guidance={guidance}
+      suggestionData={suggestionData}
+      onGuidanceUpdated={onGuidanceUpdated}
+      toolKey={dataToolKey}
+      taskLabel={current.title || dataToolKey}
+      onDismiss={() => persist({ guided_mode: false, walkthrough_step: null })}
+    />
+  ) : (
     <aside
       className={`guided-focus-card guided-focus ${coachStyle ? '' : 'wrong-page'}`}
       data-arrow-side={coachStyle?.arrowSide || 'none'}
@@ -367,7 +416,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
               {focusStep.detected}
             </p>
           )}
-          
+
           <p className="do-this-now" style={{ margin: 0 }}>
             <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Do this now:</span><br />
             {focusStep.action || current.action}
@@ -424,7 +473,7 @@ export default function GuidedCoach({ dataset, activeTab, onGuidanceUpdated }) {
   return (
     <>
       {coach}
-      {spotlight && <SpotlightMask rect={spotlight} />}
+      {spotlight && !isDataToolStep && <SpotlightMask rect={spotlight} />}
     </>
   )
 }
@@ -502,6 +551,13 @@ export function routeTarget(datasetId, target, activeTab, navigate) {
     section: target.section,
     ts: Date.now(),
   }))
+  window.dispatchEvent(new CustomEvent('simucast:route-target', {
+    detail: {
+      page: target.page,
+      section: target.section,
+      ts: Date.now(),
+    },
+  }))
   if (target.page === activeTab) {
     window.setTimeout(() => highlightSection(target.section), 60)
     return
@@ -511,7 +567,22 @@ export function routeTarget(datasetId, target, activeTab, navigate) {
 
 function highlightSection(section) {
   const el = document.getElementById(section)
-  if (!el) return
+  if (!el) {
+    if (section.startsWith('fix-cleaning-')) {
+      const suffix = section.replace('fix-cleaning-', '').split('-')[0]
+      const btn = document.getElementById(`tb-${suffix}`)
+      if (btn) {
+        btn.click()
+        window.setTimeout(() => {
+          const nextEl = document.getElementById(section) || document.querySelector('.ax-data-toolbar-popover') || btn
+          nextEl.scrollIntoView({ behavior: spotlightScrollBehavior(), block: 'center', inline: 'nearest' })
+          nextEl.classList.add('ax-fix-highlight')
+          window.setTimeout(() => nextEl.classList.remove('ax-fix-highlight'), 2200)
+        }, 140)
+      }
+    }
+    return
+  }
   const rect = el.getBoundingClientRect()
   const isVisible = (
     rect.top >= 0 &&
@@ -690,7 +761,7 @@ function spotlightStepsForStep(step, dataset, complete) {
   if (step.id === 'models.target') {
     return [
       {
-        section: 'models-step-1',
+        section: 'models-setup-target',
         title: 'Choose what the model should predict',
         detected: 'The prediction path needs one target column before features and model health can be evaluated.',
         action: 'Pick the target that matches your question.',
@@ -698,7 +769,7 @@ function spotlightStepsForStep(step, dataset, complete) {
         nextLabel: 'Show features',
       },
       {
-        section: 'fix-feature-selection',
+        section: 'models-setup-features',
         title: 'Choose the input features',
         detected: 'Features are the columns the model can use to predict the target.',
         action: 'Review the recommended features and remove anything that directly reveals the answer.',
@@ -706,7 +777,7 @@ function spotlightStepsForStep(step, dataset, complete) {
         nextLabel: 'Show validation',
       },
       {
-        section: 'models-step-4',
+        section: 'models-setup-validation',
         title: 'Set the validation method',
         detected: 'Validation compares learned patterns with unseen rows.',
         action: 'Review the train/test or cross-validation choice before training.',
@@ -714,7 +785,7 @@ function spotlightStepsForStep(step, dataset, complete) {
         nextLabel: 'Show training',
       },
       {
-        section: 'models-train-action',
+        section: 'models-train-action-setup',
         title: 'Train and save the model result',
         detected: 'The current guided question needs at least one saved model artifact.',
         action: 'Choose algorithms if needed, then click Train models.',

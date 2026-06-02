@@ -12,7 +12,7 @@ import { useAuth } from '../providers/AuthProvider'
 import { coachStepsForGoal, firstCoachStep, goalLabel } from './ProjectGuidanceSetup'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
-const PLAN_CACHE_VERSION = 'v5'
+const PLAN_CACHE_VERSION = 'v6'
 const DATA_CHANGE_ACTIONS = new Set([
   'cell_edit',
   'batch_cell_edit',
@@ -270,8 +270,10 @@ export default function AIProjectPlanPanel({
   }
 
   const toggleDone = (stepId) => {
-    const next = doneSet.has(stepId) ? done.filter((id) => id !== stepId) : [...done, stepId]
+    const isAlreadyDone = doneSet.has(stepId)
+    const next = isAlreadyDone ? done.filter((id) => id !== stepId) : [...done, stepId]
     setDone(next)
+    setExpandedCardId(stepId)
     if (doneKey) window.localStorage.setItem(doneKey, JSON.stringify(next))
   }
 
@@ -318,26 +320,13 @@ export default function AIProjectPlanPanel({
   const goToStep = (step) => {
     if (!datasetId || !step?.page) return
     const section = sectionForStep(step)
-    window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify({
+    const target = {
       page: step.page,
       section,
       ts: Date.now(),
-    }))
-    // Map the plan step ID to the client-side coach step ID
-    const planIdToWalkId = (planId) => {
-      if (planId === 'data-missing-values') return 'data.suggested_fixes'
-      if (planId === 'data-outliers') return 'data.outliers'
-      if (planId === 'data-duplicates') return 'data.duplicates'
-      if (planId === 'data-category-standardization') return 'data.categories'
-      if (planId === 'describe-overview') return 'describe.summaries'
-      if (planId === 'tests-correlation') return 'tests.setup'
-      if (planId === 'models-train') return 'models.target'
-      if (planId === 'whatif-scenario') return 'whatif.controls'
-      if (planId === 'report-final') return 'report.preview'
-      return planId
     }
-    const walkStepId = planIdToWalkId(step.id)
-    onStartGuideFocus?.(walkStepId)
+    window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify(target))
+    window.dispatchEvent(new CustomEvent('simucast:route-target', { detail: target }))
     if (step.page === activeTab) {
       window.setTimeout(() => highlightSection(section), 40)
       return
@@ -346,6 +335,7 @@ export default function AIProjectPlanPanel({
   }
 
   const guideFocusOnStep = (step) => {
+    if (!datasetId || !step?.page) return
     const planIdToWalkId = (planId) => {
       if (planId === 'data-missing-values') return 'data.suggested_fixes'
       if (planId === 'data-outliers') return 'data.outliers'
@@ -359,7 +349,20 @@ export default function AIProjectPlanPanel({
       return planId
     }
     const walkStepId = planIdToWalkId(step.id)
+    const section = sectionForStep(step)
+    const target = {
+      page: step.page,
+      section,
+      ts: Date.now(),
+    }
+    window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify(target))
+    window.dispatchEvent(new CustomEvent('simucast:route-target', { detail: target }))
     onStartGuideFocus?.(walkStepId)
+    if (step.page !== activeTab) {
+      navigate(`/projects/${datasetId}/${step.page}`)
+      return
+    }
+    window.setTimeout(() => highlightSection(section), 40)
   }
 
   const continueWhereLeftOff = () => {
@@ -608,10 +611,12 @@ export default function AIProjectPlanPanel({
                           <p className="ax-plan-step-title" style={{ fontSize: '13px', fontWeight: '750', color: 'var(--color-text-primary)', margin: 0, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}>
                             {step.title}
                           </p>
-                          {isCardExpanded && (
+                          {(isCardExpanded || isCompleted) && (
                             <div className="ax-plan-step-badges" style={{ display: 'flex', gap: '4px' }}>
                               <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
-                              <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
+                              {isCardExpanded && (
+                                <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1108,7 +1113,7 @@ function targetForStep(step) {
     }
     if (text.includes('outlier')) {
       return {
-        section: 'fix-cleaning-suggestions',
+        section: 'fix-cleaning-outliers',
         label: 'Outliers — Quality group in toolbar',
         shortLabel: 'Outliers',
         hint: 'Choose the issue group, select the method, then apply the grouped fix.',
@@ -1116,7 +1121,7 @@ function targetForStep(step) {
     }
     if (text.includes('duplicate')) {
       return {
-        section: 'fix-cleaning-suggestions',
+        section: 'fix-cleaning-duplicates',
         label: 'Duplicates — Quality group in toolbar',
         shortLabel: 'Duplicates',
         hint: 'Choose the issue group, select the method, then apply the grouped fix.',
@@ -1124,7 +1129,7 @@ function targetForStep(step) {
     }
     if (text.includes('missing')) {
       return {
-        section: 'fix-cleaning-suggestions',
+        section: 'fix-cleaning-missing',
         label: 'Missing — Quality group in toolbar',
         shortLabel: 'Missing',
         hint: 'Choose the issue group, select the method, then apply the grouped fix.',
@@ -1172,14 +1177,14 @@ function targetForStep(step) {
   if (step.page === 'models') {
     if (text.includes('feature')) {
       return {
-        section: 'fix-feature-selection',
+        section: 'models-setup-features',
         label: 'Models > Feature selection',
         shortLabel: 'feature selection',
         hint: 'Choose the input columns to use for model training.',
       }
     }
     return {
-      section: 'fix-target-handling',
+      section: 'models-setup-target',
       label: 'Models > Target setup',
       shortLabel: 'target setup',
       hint: 'Pick the target, validate task type, then configure split and algorithms.',
@@ -1228,7 +1233,7 @@ function highlightSection(section) {
       if (btn) {
         btn.click()
         setTimeout(() => {
-          const newEl = document.getElementById(section)
+          const newEl = document.getElementById(section) || document.querySelector('.ax-data-toolbar-popover') || btn
           if (newEl) {
             newEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
             newEl.classList.add('ax-fix-highlight')

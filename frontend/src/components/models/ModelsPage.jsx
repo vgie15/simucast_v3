@@ -3,6 +3,7 @@
  * Keywords: models, train, machine learning, regression, classification, linear, logistic, tree, random forest, feature importance
  * ============================================================ */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Bar } from 'react-chartjs-2'
 import {
@@ -21,7 +22,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../api'
 import { AIInsightCard, ExplainButton } from '../ai/AIExplainers'
-import { AIExplainToggle, ExplainPopup, ResultsSummary, FallbackLabel, r2FallbackLabel, rmseFallbackLabel, gapFallbackLabel } from '../ai/AIExplainPanel'
+import { ResultsSummary, FallbackLabel, r2FallbackLabel, rmseFallbackLabel, gapFallbackLabel } from '../ai/AIExplainPanel'
 import { useDialog } from '../common/DialogProvider'
 import { useAuth } from '../providers/AuthProvider'
 import { BusyOverlay, InlineSpinner, SkeletonCards } from '../common/LoadingStates'
@@ -105,6 +106,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
   const [cvFolds, setCvFolds] = useState(5)
   const [stratify, setStratify] = useState(true)
   const [classWeight, setClassWeight] = useState(false)
+  const [smote, setSmote] = useState(false)
   const [numericPreprocessing, setNumericPreprocessing] = useState({
     scaling: 'auto',
     log_columns: [],
@@ -140,8 +142,11 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
 
   const onExplain = useCallback((element, event) => {
     if (!aiExplainActive) return
-    const rect = event?.currentTarget?.getBoundingClientRect()
-    setExplainPopup(rect ? { ...element, sourceRect: rect } : element)
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    const sourceEl = event?.currentTarget || event?.target
+    const rect = sourceEl?.getBoundingClientRect?.()
+    setExplainPopup(rect ? { ...element, sourceEl, sourceRect: rect } : element)
   }, [aiExplainActive])
 
   const handleToggleExplain = useCallback(() => {
@@ -155,6 +160,21 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       return next
     })
   }, [])
+
+  useEffect(() => {
+    document.body.classList.toggle('ax-explain-mode-on', aiExplainActive)
+    return () => document.body.classList.remove('ax-explain-mode-on')
+  }, [aiExplainActive])
+
+  const explainAttrs = useCallback((element, className = '', capture = false) => {
+    const attrs = {
+      className: `${className} ${aiExplainActive ? 'ax-explain-selectable' : ''}`.trim(),
+      [capture ? 'onClickCapture' : 'onClick']: (event) => onExplain(element, event),
+      title: aiExplainActive ? `Explain ${element.title || element.label || element.section || 'this area'}` : undefined,
+    }
+    if (capture) attrs.onPointerDownCapture = (event) => onExplain(element, event)
+    return attrs
+  }, [aiExplainActive, onExplain])
 
   const handleFixAction = (fix) => {
     if (!fix?.route) return
@@ -251,6 +271,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       setCvFolds(saved.cvFolds || 5)
       setStratify(saved.stratify ?? true)
       setClassWeight(saved.classWeight ?? false)
+      setSmote(saved.smote ?? false)
       setFeatures(saved.features || [])
       setChosenAlgos(saved.chosenAlgos || ['logistic', 'rf'])
       setModelParams(saved.modelParams || defaultModelParams())
@@ -277,6 +298,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       cvFolds,
       stratify,
       classWeight,
+      smote,
       features,
       chosenAlgos,
       modelParams,
@@ -286,7 +308,15 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       results,
       activeResultIdx,
     }))
-  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders), JSON.stringify(results), activeResultIdx])
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, smote, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders), JSON.stringify(results), activeResultIdx])
+
+  const sectionForModelsTarget = (section) => {
+    if (!section) return 'setup'
+    if (section === 'models-results') return 'results'
+    if (section === 'models-tuning') return 'tune'
+    if (section === 'models-feature-influence') return 'features'
+    return 'setup'
+  }
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -299,7 +329,23 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
     }
     if (fixTarget?.page !== 'models') return
     window.sessionStorage.removeItem('simucast.fixTarget')
-    setTimeout(() => highlightSection(fixTarget.section), 180)
+    const nextSection = sectionForModelsTarget(fixTarget.section)
+    setActiveModelsSection(nextSection)
+    try { window.localStorage.setItem(`simucast.modelsSection.${dataset?.id}`, nextSection) } catch {}
+    setTimeout(() => highlightSection(fixTarget.section), 220)
+  }, [dataset?.id])
+
+  useEffect(() => {
+    const handleRouteTarget = (event) => {
+      const target = event?.detail
+      if (target?.page !== 'models' || !target.section) return
+      const nextSection = sectionForModelsTarget(target.section)
+      setActiveModelsSection(nextSection)
+      try { window.localStorage.setItem(`simucast.modelsSection.${dataset?.id}`, nextSection) } catch {}
+      window.setTimeout(() => highlightSection(target.section), 220)
+    }
+    window.addEventListener('simucast:route-target', handleRouteTarget)
+    return () => window.removeEventListener('simucast:route-target', handleRouteTarget)
   }, [dataset?.id])
 
   // Refresh plan whenever target/features/algos change.
@@ -318,7 +364,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
           target,
           features,
           algorithms: chosenAlgos,
-          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders),
+          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders, smote),
         })
         if (!cancelled) {
           setPlan(r)
@@ -339,7 +385,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders)])
+  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, smote, JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders)])
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -390,12 +436,16 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
         target,
         features,
         algorithms: selectedAlgos,
-        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders),
+        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders, smote),
         model_params: modelParams,
       })
       if (r.session) auth.updateSession(r.session)
       setResults(r)
       setActiveResultIdx(0)
+      setActiveModelsSection('results')
+      window.requestAnimationFrame(() => {
+        document.querySelector('.ax-models-main')?.scrollTo?.({ top: 0, behavior: 'smooth' })
+      })
       const list = await api.listModels(dataset.id)
       setModels(list)
       window.dispatchEvent(new CustomEvent('simucast:guided-progress', { detail: { type: 'models', datasetId: dataset.id } }))
@@ -453,9 +503,14 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
   }
 
   const navigateToFix = (page, section) => {
-    window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify({ page, section, ts: Date.now() }))
+    const target = { page, section, ts: Date.now() }
+    window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify(target))
+    window.dispatchEvent(new CustomEvent('simucast:route-target', { detail: target }))
     if (page === 'models') {
-      setTimeout(() => highlightSection(section), 80)
+      const nextSection = sectionForModelsTarget(section)
+      setActiveModelsSection(nextSection)
+      try { window.localStorage.setItem(`simucast.modelsSection.${dataset?.id}`, nextSection) } catch {}
+      setTimeout(() => highlightSection(section), 140)
     } else {
       onGo(page)
     }
@@ -476,15 +531,15 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
     const label = String(check?.label || '').toLowerCase()
     const detail = String(check?.detail || '').toLowerCase()
     if (label.includes('missing')) {
-      navigateToFix('data', 'fix-cleaning-suggestions')
+      navigateToFix('data', 'fix-cleaning-missing')
     } else if (label.includes('categor')) {
-      navigateToFix('data', 'fix-category-standardization')
+      navigateToFix('data', 'data-section-category_standardization')
     } else if (label.includes('class balance')) {
-      navigateToFix('models', 'fix-target-handling')
+      navigateToFix('models', 'models-setup-target')
     } else if (label.includes('multicollinearity')) {
       navigateToFix('tests', 'fix-correlation-test')
     } else if (label.includes('split') || detail.includes('split')) {
-      navigateToFix('models', 'fix-model-split')
+      navigateToFix('models', 'models-setup-validation')
     } else {
       navigateToFix('models', 'fix-numeric-preprocessing')
     }
@@ -702,6 +757,61 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
     { id: 'history', label: 'History', icon: History, badge: `${models.length} run${models.length === 1 ? '' : 's'}` },
   ]
 
+  useEffect(() => {
+    if (!aiExplainActive) return undefined
+    const onPersistentControl = (event) => {
+      const tab = event.target?.closest?.('.ax-edge-tab')
+      const floating = event.target?.closest?.('.ax-floating-pill-action, .ax-floating-pill-dismiss')
+      if (!tab && !floating) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (floating) {
+        const isDataset = floating.classList.contains('dataset')
+        const isDismiss = floating.classList.contains('ax-floating-pill-dismiss')
+        onExplain({
+          type: 'persistent-control',
+          metricKey: 'persistent-control',
+          section: 'Models',
+          title: isDismiss ? 'Floating tools close button' : isDataset ? 'Dataset button' : 'Ask AI button',
+          label: isDismiss ? 'Close/minimize' : isDataset ? 'Dataset' : 'Ask AI',
+          simple: isDismiss
+            ? 'This hides the floating utility pill.'
+            : isDataset
+              ? 'This opens the active dataset preview without leaving the Models page.'
+              : 'This opens the conversational assistant. It is different from Explain Mode.',
+          datasetExplanation: isDataset
+            ? `Use this to inspect ${dataset?.filename || dataset?.name || 'the dataset'} before or after training.`
+            : isDismiss
+              ? 'It only hides the floating utility controls; it does not change model settings.'
+              : 'Ask AI can answer broader questions, while Explain Mode explains the exact UI element you click.',
+          whyItMatters: 'These controls are persistent across the workspace and support the modeling workflow without changing the current page.',
+          verdict: isDataset ? 'Use it to verify the data behind model training.' : isDismiss ? 'Safe to use when the pill is in the way.' : 'Use Ask AI for broader follow-up questions.',
+          verdictTone: 'good',
+        }, event)
+        return
+      }
+      const isHistory = tab.classList.contains('history')
+      onExplain({
+        type: 'side-tab',
+        metricKey: 'side-tab',
+        section: 'Models',
+        title: isHistory ? 'History tab' : 'Guide tab',
+        label: isHistory ? 'History' : 'Guide',
+        simple: isHistory ? 'This opens the activity/history panel.' : 'This opens contextual guidance for the current workflow.',
+        datasetExplanation: isHistory ? 'History helps review earlier modeling runs and app actions.' : 'Guide explains the recommended path through setup, results, feature influence, tuning, and history.',
+        whyItMatters: 'Side tabs keep support available without taking you away from the Models page.',
+        verdict: isHistory ? 'Use it to audit previous decisions.' : 'Use it when you need workflow guidance.',
+        verdictTone: 'good',
+      }, event)
+    }
+    document.addEventListener('pointerdown', onPersistentControl, true)
+    document.addEventListener('click', onPersistentControl, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPersistentControl, true)
+      document.removeEventListener('click', onPersistentControl, true)
+    }
+  }, [aiExplainActive, dataset?.filename, dataset?.name, onExplain])
+
   return (
     <div className={`ax-models-layout ax-busy-host ax-operation-busy ${training ? 'is-busy' : ''}`}>
       <BusyOverlay
@@ -712,7 +822,17 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       />
 
       <aside className="ax-models-left">
-        <div className="ax-models-left-head">
+        <div {...explainAttrs({
+          type: 'sidebar',
+          metricKey: 'models-sidebar-header',
+          section: 'Models sidebar',
+          title: 'Build a model header',
+          simple: 'This sidebar organizes the modeling workflow from setup through history.',
+          datasetExplanation: `You are configuring predictive models for ${dataset?.filename || dataset?.name || 'the active dataset'}.`,
+          whyItMatters: 'Modeling has multiple steps, and this keeps setup, results, feature influence, tuning, and history separated.',
+          verdict: 'Use the sidebar to move through the model-building workflow.',
+          verdictTone: 'good',
+        }, 'ax-models-left-head')}>
           <h1 className="ax-models-title">Build a model</h1>
           <p className="ax-models-sub">Configure, train, and evaluate predictive models</p>
         </div>
@@ -723,8 +843,25 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
               <button
                 key={item.id}
                 type="button"
-                className={`ax-models-nav-item ${activeModelsSection === item.id ? 'active' : ''}`}
-                onClick={() => jumpToModelsSection(item.id)}
+                className={`ax-models-nav-item ${activeModelsSection === item.id ? 'active' : ''} ${aiExplainActive ? 'ax-explain-selectable' : ''}`}
+                onClick={(event) => {
+                  if (aiExplainActive) {
+                    return onExplain({
+                      type: 'models-nav',
+                      metricKey: `models-nav-${item.id}`,
+                      section: 'Models sidebar',
+                      title: `${item.label} navigation item`,
+                      label: item.label,
+                      value: item.badge,
+                      simple: `This navigation item opens the Models ${item.label} view.`,
+                      datasetExplanation: `${item.badge} is the current count or status for ${item.label}.`,
+                      whyItMatters: 'Each Models subpage answers a different part of the modeling workflow.',
+                      verdict: item.id === activeModelsSection ? 'You are currently viewing this section.' : 'Turn off Explain Mode to navigate here.',
+                      verdictTone: item.id === activeModelsSection ? 'good' : 'warning',
+                    }, event)
+                  }
+                  jumpToModelsSection(item.id)
+                }}
               >
                 <span className="ax-models-nav-icon"><Icon size={14} /></span>
                 <span>{item.label}</span>
@@ -741,13 +878,30 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
         <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-accent, #f97316)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Models · {modelsNavItems.find(i => i.id === activeModelsSection)?.label || activeModelsSection}
         </span>
-        <AIExplainToggle active={aiExplainActive} onToggle={handleToggleExplain} />
+        <button
+          type="button"
+          className={`ax-explain-mode-toggle ${aiExplainActive ? 'active' : ''}`}
+          onClick={handleToggleExplain}
+          title={aiExplainActive ? 'Turn off Explain Mode' : 'Turn on Explain Mode'}
+        >
+          ✨ Explain Mode <span />
+        </button>
       </div>
 
       {activeModelsSection === 'setup' && (
         <>
       <div className="ax-models-setup-grid">
-        <section className="ax-models-setup-section ax-models-setup-config">
+        <section id="models-setup-configuration" {...explainAttrs({
+          type: 'setup-card',
+          metricKey: 'models-setup-configuration-card',
+          section: 'Models setup',
+          title: 'Configuration card',
+          simple: 'This card defines what the model predicts, which columns it can use, which algorithms to train, and how validation will work.',
+          datasetExplanation: `Target: ${target || 'not selected'}. Features: ${features.length} of ${allFeatureNames.length}. Algorithms: ${selectedAlgos.length}. Validation: ${validationMethod === 'standard_split' ? `${setupTrainPct}/${setupTestPct} split` : `${cvFolds}-fold CV`}.`,
+          whyItMatters: 'These choices determine the exact training dataset, model family, and evaluation method.',
+          verdict: target && features.length && selectedAlgos.length ? 'Configuration is ready for training.' : 'Choose a target, at least one feature, and at least one algorithm before training.',
+          verdictTone: target && features.length && selectedAlgos.length ? 'good' : 'warning',
+        }, 'ax-models-setup-section ax-models-setup-config')}>
           <div className="ax-models-setup-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
               <h2>Configuration</h2>
@@ -755,7 +909,29 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
             </div>
             <button
               type="button"
-              onClick={() => {
+              {...explainAttrs({
+                type: 'setup-action',
+                metricKey: 'models-setup-reset',
+                section: 'Models setup',
+                title: 'Reset setup button',
+                simple: 'This resets the current model setup back to defaults.',
+                datasetExplanation: 'It clears the target, features, class options, and results for this page draft.',
+                whyItMatters: 'Reset is useful when you want to restart configuration without manually clearing every control.',
+                verdict: 'Turn off Explain Mode to reset settings.',
+                verdictTone: 'warning',
+              })}
+              onClick={(event) => {
+                if (aiExplainActive) return onExplain({
+                  type: 'setup-action',
+                  metricKey: 'models-setup-reset',
+                  section: 'Models setup',
+                  title: 'Reset setup button',
+                  simple: 'This resets the current model setup back to defaults.',
+                  datasetExplanation: 'It clears the target, features, class options, and results for this page draft.',
+                  whyItMatters: 'Reset is useful when you want to restart configuration without manually clearing every control.',
+                  verdict: 'Turn off Explain Mode to reset settings.',
+                  verdictTone: 'warning',
+                }, event)
                 setTarget('')
                 setTargetMode('auto')
                 setPositiveClass('')
@@ -769,6 +945,17 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
             </button>
           </div>
           <div className="ax-models-config-grid">
+            <div id="models-setup-target" {...explainAttrs({
+              type: 'setup-control',
+              metricKey: 'models-setup-target-variable',
+              section: 'Models setup',
+              title: 'Target variable dropdown',
+              simple: 'The target variable is the column the model learns to predict.',
+              datasetExplanation: target ? `${target} is the current prediction target.` : 'No target variable is selected yet.',
+              whyItMatters: 'The target decides whether the task is classification or regression and which metrics are meaningful.',
+              verdict: target ? 'Target is selected.' : 'Select a target before training.',
+              verdictTone: target ? 'good' : 'warning',
+            }, 'ax-models-config-control', true)}>
             <ConfigDropdown label="Target variable" value={target || 'Select target'}>
               {(close) => (
                 <div className="ax-models-config-menu">
@@ -793,6 +980,18 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                 </div>
               )}
             </ConfigDropdown>
+            </div>
+            <div id="models-setup-features" {...explainAttrs({
+              type: 'setup-control',
+              metricKey: 'models-setup-features',
+              section: 'Models setup',
+              title: 'Features dropdown',
+              simple: 'Features are the input columns the model can use to make predictions.',
+              datasetExplanation: `${features.length} of ${allFeatureNames.length} available features are selected.`,
+              whyItMatters: 'Too few features can underfit, while noisy or leaking features can create misleading performance.',
+              verdict: features.length ? 'Feature selection is available for training.' : 'Select at least one feature.',
+              verdictTone: features.length ? 'good' : 'warning',
+            }, 'ax-models-config-control', true)}>
             <ConfigDropdown label="Features" value={`${features.length} of ${allFeatureNames.length} selected`}>
               {() => (
                 <div className="ax-models-config-menu">
@@ -812,6 +1011,18 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                 </div>
               )}
             </ConfigDropdown>
+            </div>
+            <div id="models-setup-algorithms" {...explainAttrs({
+              type: 'setup-control',
+              metricKey: 'models-setup-algorithms',
+              section: 'Models setup',
+              title: 'Algorithms dropdown',
+              simple: 'Algorithms are the model types SimuCast will train and compare.',
+              datasetExplanation: `${selectedAlgos.length} compatible algorithm${selectedAlgos.length === 1 ? '' : 's'} are selected for ${inferredTask}.`,
+              whyItMatters: 'Training multiple algorithms helps compare accuracy, robustness, and overfitting risk.',
+              verdict: selectedAlgos.length ? 'At least one algorithm is selected.' : 'Select at least one algorithm.',
+              verdictTone: selectedAlgos.length ? 'good' : 'warning',
+            }, 'ax-models-config-control', true)}>
             <ConfigDropdown label="Algorithms" value={`${selectedAlgos.length} selected`}>
               {() => (
                 <div className="ax-models-config-menu">
@@ -837,6 +1048,20 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                 </div>
               )}
             </ConfigDropdown>
+            </div>
+            <div id="models-setup-validation" {...explainAttrs({
+              type: 'setup-control',
+              metricKey: 'models-setup-validation',
+              section: 'Models setup',
+              title: 'Validation dropdown',
+              simple: 'Validation controls how SimuCast separates training data from evaluation data.',
+              datasetExplanation: validationMethod === 'standard_split'
+                ? `Using a ${setupTrainPct}/${setupTestPct} train/test split with about ${setupTrainRows} train rows and ${setupTestRows} test rows.`
+                : `Using ${cvFolds}-fold cross-validation.`,
+              whyItMatters: 'Validation estimates how the model performs on rows it did not learn from.',
+              verdict: 'Use validation to detect overfitting and compare models fairly.',
+              verdictTone: 'good',
+            }, 'ax-models-config-control', true)}>
             <ValidationDropdown
               validationMethod={validationMethod}
               setValidationMethod={setValidationMethod}
@@ -845,11 +1070,23 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
               cvFolds={cvFolds}
               setCvFolds={setCvFolds}
             />
+            </div>
           </div>
           <button
             type="button"
-            className="ax-models-dataset-preview-link"
-            onClick={() => {
+            className={`ax-models-dataset-preview-link ${aiExplainActive ? 'ax-explain-selectable' : ''}`}
+            onClick={(event) => {
+              if (aiExplainActive) return onExplain({
+                type: 'setup-action',
+                metricKey: 'models-setup-preview-dataset',
+                section: 'Models setup',
+                title: 'Preview modeling dataset link',
+                simple: 'This opens the dataset preview directly on the modeling dataset view.',
+                datasetExplanation: 'The modeling view shows the cleaned data that will be used for training before scaling and encoding are applied inside the pipeline.',
+                whyItMatters: 'It lets you verify what rows and columns are being fed into model training.',
+                verdict: 'Use this before training if you want to audit the modeling data.',
+                verdictTone: 'good',
+              }, event)
               window.dispatchEvent(new CustomEvent('simucast:open-dataset-preview', {
                 detail: { viewMode: 'modeling' },
               }))
@@ -861,9 +1098,24 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
             <p>{planBlocked ? 'Resolve the active data issue before training.' : 'Ready when target, features, and at least one algorithm are selected.'}</p>
             <button
               id="models-train-action-setup"
-              className="ax-models-train-btn"
-              disabled={(!planBlocked && (training || !target || features.length === 0 || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit))}
-              onClick={planBlocked ? highlightActiveIssue : train}
+              className={`ax-models-train-btn ${aiExplainActive ? 'ax-explain-selectable' : ''}`}
+              disabled={!aiExplainActive && (!planBlocked && (training || !target || features.length === 0 || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit))}
+              onClick={(event) => {
+                if (aiExplainActive) return onExplain({
+                  type: 'setup-action',
+                  metricKey: 'models-setup-train-models-button',
+                  section: 'Models setup',
+                  title: 'Train models button',
+                  simple: 'This starts model training using the selected target, features, algorithms, validation method, preprocessing, and tuning parameters.',
+                  datasetExplanation: target && features.length && selectedAlgos.length
+                    ? `Ready to train ${selectedAlgos.length} algorithm${selectedAlgos.length === 1 ? '' : 's'} to predict ${target} with ${features.length} feature${features.length === 1 ? '' : 's'}.`
+                    : 'Training requires a target, at least one feature, and at least one algorithm.',
+                  whyItMatters: 'Training creates the saved models, metrics, feature influence, and What-if model options.',
+                  verdict: target && features.length && selectedAlgos.length && !planBlocked ? 'Ready to train.' : planBlocked ? 'Resolve the active issue before training.' : 'Complete the setup before training.',
+                  verdictTone: target && features.length && selectedAlgos.length && !planBlocked ? 'good' : 'warning',
+                }, event)
+                return planBlocked ? highlightActiveIssue() : train()
+              }}
               type="button"
             >
               {training ? <InlineSpinner label="Training..." /> : <><Sparkles size={14} /> Train models</>}
@@ -961,7 +1213,17 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       </div>
 
       {/* ── Preprocessing plan ─────────────────────────────────── */}
-      <div className="ax-preplan-card" id="models-preplan">
+      <div {...explainAttrs({
+        type: 'preplan-card',
+        metricKey: 'models-preplan-card',
+        section: 'Preprocessing plan',
+        title: 'Preprocessing plan card',
+        simple: 'This section details and lets you customize how the system handles numeric scaling and categorical encoding before model training.',
+        datasetExplanation: 'It automatically runs checks for missing values, category sizes, class balance, and collinearity.',
+        whyItMatters: 'Preprocessing choices (like scaling features or ordering category ranks) directly impact algorithm performance and convergence.',
+        verdict: 'Review the scaling and encoding configuration before kicking off training.',
+        verdictTone: 'good',
+      }, 'ax-preplan-card')} id="models-preplan">
         <div className="ax-preplan-head">
           <div>
             <span className="ax-preplan-title">Preprocessing plan</span>
@@ -993,14 +1255,38 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
         {plan && (
           <>
             {/* ── Data readiness checks ── */}
-            <div className="ax-preplan-section">
+            <div {...explainAttrs({
+              type: 'preplan-data-readiness',
+              metricKey: 'models-preplan-data-readiness',
+              section: 'Preprocessing plan',
+              title: 'Data readiness section',
+              simple: 'This section checks your dataset for common issues before model training.',
+              datasetExplanation: `Currently showing ${checks.length} readiness check${checks.length === 1 ? '' : 's'}.`,
+              whyItMatters: 'Verifying data health ensures that model assumptions are not violated.',
+              verdict: issueCount > 0 ? `Please review the ${issueCount} warning/blocker.` : 'All checklist items are in a healthy state.',
+              verdictTone: issueCount > 0 ? 'warning' : 'good',
+            }, 'ax-preplan-section')}>
               <h4 className="ax-preplan-section-title">Data readiness</h4>
               <div className="ax-preplan-checks">
                 {checks.map((check, idx) => {
                   const dismissed = dismissedChecks.includes(check.key)
                   const effective = dismissed && check.status === 'warning' ? 'ok' : check.status
                   return (
-                    <div key={check.key || idx} className={`ax-preplan-check ax-preplan-check--${effective}`}>
+                    <div
+                      key={check.key || idx}
+                      {...explainAttrs({
+                        type: 'preplan-readiness-check',
+                        metricKey: `preplan-readiness-check-${check.key || idx}`,
+                        section: 'Preprocessing plan',
+                        title: `${check.label} check`,
+                        label: check.label,
+                        simple: check.detail || 'Data readiness validation check.',
+                        datasetExplanation: `Check status: ${effective.toUpperCase()}.`,
+                        whyItMatters: 'Failing checks or unresolved warnings can lead to unstable model training or poor predictions.',
+                        verdict: dismissed ? 'This warning has been dismissed.' : check.status === 'ok' ? 'Check passed.' : 'Use the Fix Options dropdown to address this issue.',
+                        verdictTone: effective === 'ok' ? 'good' : effective === 'warning' ? 'warning' : 'risk',
+                      }, `ax-preplan-check ax-preplan-check--${effective}`)}
+                    >
                       <span className="ax-preplan-check-dot" />
                       <div className="ax-preplan-check-body">
                         <span className="ax-preplan-check-label">{check.label}</span>
@@ -1022,7 +1308,21 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
 
             {/* ── Numeric scaling ── */}
             <div className="ax-preplan-section">
-              <h4 className="ax-preplan-section-title">Numeric scaling</h4>
+              <h4
+                {...explainAttrs({
+                  type: 'preplan-numeric-scaling',
+                  metricKey: 'models-preplan-numeric-scaling',
+                  section: 'Preprocessing plan',
+                  title: 'Numeric scaling section',
+                  simple: 'Numeric scaling standardizes features so they have similar ranges, ensuring distance-based or linear models treat them equally.',
+                  datasetExplanation: `Current choice: ${numericPreprocessing.scaling.toUpperCase()}.`,
+                  whyItMatters: 'Without scaling, features with large absolute ranges dominate features with small ranges in linear/logistic models.',
+                  verdict: 'Choose Auto or StandardScaler if training linear models, or None for tree-based models.',
+                  verdictTone: 'good',
+                }, 'ax-preplan-section-title')}
+              >
+                Numeric scaling
+              </h4>
               <div className="ax-preplan-scale-cards">
                 {[
                   { value: 'auto',     label: 'Auto',           tag: 'Recommended', desc: 'StandardScaler for linear models; skipped for tree-based' },
@@ -1033,8 +1333,27 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                   <button
                     key={opt.value}
                     type="button"
-                    className={`ax-preplan-scale-card ${numericPreprocessing.scaling === opt.value ? 'is-active' : ''}`}
-                    onClick={() => setNumericPreprocessing(prev => ({ ...prev, scaling: opt.value }))}
+                    {...explainAttrs({
+                      type: 'preplan-scale-option',
+                      metricKey: `preplan-scale-option-${opt.value}`,
+                      section: 'Preprocessing plan',
+                      title: `${opt.label} scaling option`,
+                      label: opt.label,
+                      simple: opt.desc,
+                      datasetExplanation: numericPreprocessing.scaling === opt.value ? 'This option is currently selected.' : 'This option is not selected.',
+                      whyItMatters: opt.value === 'auto'
+                        ? 'Auto standardizes features only for models that need it (logistic/linear) and skips it for trees.'
+                        : opt.value === 'none'
+                          ? 'Tree-based models do not require scaled features.'
+                          : `Applies ${opt.label} to all features.`,
+                      verdict: numericPreprocessing.scaling === opt.value ? 'Currently active.' : 'Turn off Explain Mode to select this option.',
+                      verdictTone: 'good',
+                    }, `ax-preplan-scale-card ${numericPreprocessing.scaling === opt.value ? 'is-active' : ''}`, true)}
+                    onClick={() => {
+                      if (!aiExplainActive) {
+                        setNumericPreprocessing(prev => ({ ...prev, scaling: opt.value }))
+                      }
+                    }}
                   >
                     <span className="ax-preplan-scale-name">{opt.label}</span>
                     {opt.tag && <span className="ax-preplan-scale-tag">{opt.tag}</span>}
@@ -1055,7 +1374,21 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
               if (!categoricalColumns.length) return null
               return (
                 <div className="ax-preplan-section">
-                  <h4 className="ax-preplan-section-title">Encoding per column</h4>
+                  <h4
+                    {...explainAttrs({
+                      type: 'preplan-encoding-section',
+                      metricKey: 'models-preplan-encoding-section',
+                      section: 'Preprocessing plan',
+                      title: 'Encoding per column section',
+                      simple: 'Categorical variables must be converted to numeric values before models can learn from them.',
+                      datasetExplanation: `Currently encoding ${categoricalColumns.length} categorical feature${categoricalColumns.length === 1 ? '' : 's'}.`,
+                      whyItMatters: 'One-hot encoding is best for unordered categories, whereas Ordinal encoding is best when categories have a natural rank.',
+                      verdict: 'Configure the encoding method and category order per column.',
+                      verdictTone: 'good',
+                    }, 'ax-preplan-section-title')}
+                  >
+                    Encoding per column
+                  </h4>
                   <p className="ax-preplan-section-sub">Select how categorical variables are converted to numeric values before model training.</p>
                   <table className="ax-preplan-enc-table">
                     <thead>
@@ -1076,8 +1409,36 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                         const usesOrder = currentVal === 'ordinal' || currentVal === 'binary' || (!categoricalEncoding[col.name] && encItem?.method === 'ordinal')
                         return (
                           <tr key={col.name} style={{ opacity: isStandardized ? 0.72 : 1 }}>
-                            <td className="ax-preplan-enc-col">{col.name}</td>
-                            <td className="ax-preplan-enc-vals">
+                            <td
+                              {...explainAttrs({
+                                type: 'preplan-column-encoding',
+                                metricKey: `preplan-column-encoding-${col.name}`,
+                                section: 'Preprocessing plan',
+                                title: `Encoding for column ${col.name}`,
+                                label: col.name,
+                                simple: `Preprocessing configuration for the "${col.name}" categorical column.`,
+                                datasetExplanation: `It has data type ${col.dtype} and is ${isStandardized ? 'standardized' : 'raw'}.`,
+                                whyItMatters: 'Different columns have different categorical semantics (e.g. nominal vs ordinal).',
+                                verdict: `Method: ${currentVal.toUpperCase()}.`,
+                                verdictTone: 'good',
+                              }, 'ax-preplan-enc-col')}
+                            >
+                              {col.name}
+                            </td>
+                            <td
+                              {...explainAttrs({
+                                type: 'preplan-column-categories',
+                                metricKey: `preplan-column-categories-${col.name}`,
+                                section: 'Preprocessing plan',
+                                title: `Categories for column ${col.name}`,
+                                label: `${col.name} categories`,
+                                simple: `Displays categories in the "${col.name}" column. If Ordinal is selected, you can drag to define their ranks.`,
+                                datasetExplanation: `Categories: ${orderedCategories.join(', ')}.`,
+                                whyItMatters: 'Ordinal encoding maps ranks to numbers (0, 1, 2...). Correct ordering is vital for the model to capture directionality.',
+                                verdict: usesOrder ? 'Drag chips to change order. Turn off Explain Mode to reorder.' : 'Select Ordinal encoding to drag and reorder.',
+                                verdictTone: 'good',
+                              }, 'ax-preplan-enc-vals', true)}
+                            >
                               {orderedCategories.length ? (
                                 <div className={`ax-models-order-chips ${usesOrder ? 'is-reorderable' : ''}`}>
                                   {orderedCategories.map((value, chipIdx) => (
@@ -1101,7 +1462,20 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                                 <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>No samples</span>
                               )}
                             </td>
-                            <td className="ax-preplan-enc-method">
+                            <td
+                              {...explainAttrs({
+                                type: 'preplan-column-method',
+                                metricKey: `preplan-column-method-${col.name}`,
+                                section: 'Preprocessing plan',
+                                title: `Encoding method for column ${col.name}`,
+                                label: `${col.name} encoding method`,
+                                simple: 'Choose how categorical strings/booleans are converted to numerical values.',
+                                datasetExplanation: `Current selection: ${currentVal.toUpperCase()}. Recommendation: Auto (${recLabel}).`,
+                                whyItMatters: 'One-Hot splits a column into multiple binary flags. Ordinal encodes ranks into a single integer. Binary uses base-2 conversion to save dimensionality.',
+                                verdict: 'Turn off Explain Mode to change encoding method.',
+                                verdictTone: 'good',
+                              }, 'ax-preplan-enc-method', true)}
+                            >
                               {isStandardized ? (
                                 <select disabled style={{ fontSize: '11.5px', padding: '2px 6px', background: 'var(--color-background-secondary)' }}>
                                   <option>Standardized ✓</option>
@@ -1109,7 +1483,9 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                               ) : (
                                 <select
                                   value={currentVal}
-                                  onChange={e => setCategoricalEncoding(prev => ({ ...prev, [col.name]: e.target.value }))}
+                                  onChange={e => {
+                                    if (!aiExplainActive) setCategoricalEncoding(prev => ({ ...prev, [col.name]: e.target.value }))
+                                  }}
                                   style={{ fontSize: '11.5px', padding: '2px 6px' }}
                                 >
                                   <option value="auto">Auto ({recLabel})</option>
@@ -1320,6 +1696,10 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                     <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
                       <input type="checkbox" checked={classWeight} onChange={(e) => setClassWeight(e.target.checked)} />
                       Balanced class weights
+                    </label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                      <input type="checkbox" checked={smote} onChange={(e) => setSmote(e.target.checked)} />
+                      SMOTE oversampling
                     </label>
                   </div>
                 )}
@@ -1806,6 +2186,8 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
             prepareAndUseInWhatIf={prepareAndUseInWhatIf}
             deleteSavedModel={deleteSavedModel}
             setShowHistory={setShowHistory}
+            aiExplainActive={aiExplainActive}
+            onExplain={onExplain}
           />
         ) : (
           <div className="ax-models-ready-card" style={{ minHeight: 260 }}>
@@ -1903,7 +2285,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       </main>
 
       {explainPopup && (
-        <ExplainPopup
+        <ModelsExplainPopup
           element={explainPopup}
           onClose={() => setExplainPopup(null)}
           datasetId={dataset?.id}
@@ -1913,21 +2295,367 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
   )
 }
 
+function ModelsExplainPopup({ datasetId, element, onClose }) {
+  const [aiText, setAiText] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState('normal')
+  const [followUpInput, setFollowUpInput] = useState('')
+  const [followUpLoading, setFollowUpLoading] = useState(false)
+  const [position, setPosition] = useState(() => getModelsExplainPosition(getLiveModelsExplainRect(element)))
+
+  const title = element?.title || element?.label || element?.section || 'Models'
+  const context = buildModelsExplainContext(element)
+  const fallbackDatasetExplanation = cleanModelsExplainText(element?.datasetExplanation || buildModelsDatasetExplanation(element, context), 'This is part of the Models workflow.')
+  const simple = element?.simple || buildModelsSimpleExplanation(element)
+  const whyItMatters = element?.whyItMatters || buildModelsWhyItMatters(element)
+  const verdict = element?.verdict || buildModelsVerdict(element)
+  const verdictTone = element?.verdictTone || buildModelsVerdictTone(element)
+
+  useEffect(() => {
+    const updatePosition = () => setPosition(getModelsExplainPosition(getLiveModelsExplainRect(element)))
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [element?.sourceEl, element?.sourceRect, element?.metricKey, element?.type, element?.title])
+
+  const fetchAI = async (variant = 'normal') => {
+    if (!datasetId || !element) return
+    setLoading(true)
+    try {
+      const question = variant === 'simple'
+        ? `Explain this Models page element in very simple terms, one or two sentences: ${title}.`
+        : variant === 'technical'
+          ? `Give concise technical details for this Models page element: ${title}. Include relevant metrics, parameters, or model implications.`
+          : `Explain this Models page element in plain language for a student using SimuCast: ${title}. Include what it means, how it applies to the current dataset/model, why it matters, and a recommendation.`
+      const payload = {
+        title,
+        type: element.type,
+        metricKey: element.metricKey,
+        context,
+        fallbackDatasetExplanation,
+        fallbackVerdict: verdict,
+      }
+      const response = await api.aiExplain(datasetId, `models-${element.metricKey || element.type || element.title}-${variant}`, payload, question, { element: payload })
+      setAiText(cleanModelsExplainText(response?.explanation, fallbackDatasetExplanation))
+    } catch {
+      setAiText(fallbackDatasetExplanation)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const askFollowUp = async () => {
+    if (!datasetId || !followUpInput.trim()) return
+    setFollowUpLoading(true)
+    try {
+      const payload = {
+        title,
+        type: element.type,
+        metricKey: element.metricKey,
+        context,
+        previousExplanation: aiText || fallbackDatasetExplanation,
+      }
+      const response = await api.aiExplain(datasetId, `models-${element.metricKey || element.type || element.title}-followup`, payload, followUpInput, { element: payload })
+      setAiText(cleanModelsExplainText(response?.explanation, fallbackDatasetExplanation))
+      setFollowUpInput('')
+      setMode('normal')
+    } catch {
+      setAiText(fallbackDatasetExplanation)
+    } finally {
+      setFollowUpLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    setAiText(null)
+    fetchAI()
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [element?.metricKey, element?.type, element?.title, datasetId])
+
+  return createPortal(
+    <div
+      className={`ax-expand-explain-popup ax-explain-placement-${position.placement}`}
+      style={{ top: position.top, left: position.left, '--explain-popup-max-height': `${position.maxHeight}px` }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${title} explanation`}
+    >
+      <span
+        className="ax-expand-explain-arrow"
+        style={{ top: position.arrowTop, left: position.arrowLeft }}
+        aria-hidden="true"
+      />
+      <div className="ax-expand-explain-popup-head">
+        <div>
+          <p>AI Explain &middot; {title}</p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close explanation">&times;</button>
+      </div>
+      <div className="ax-expand-explain-popup-body">
+        <section>
+          <span>What this means</span>
+          <p>{simple}</p>
+        </section>
+        <section>
+          <span>In your dataset</span>
+          {loading ? (
+            <div className="ax-expand-explain-loading">
+              <InlineSpinner label="" />
+              <strong>Generating explanation...</strong>
+            </div>
+          ) : (
+            <p>{aiText || fallbackDatasetExplanation}</p>
+          )}
+        </section>
+        <section>
+          <span>Why it matters</span>
+          <p>{whyItMatters}</p>
+        </section>
+        <section>
+          <span>Verdict / recommendation</span>
+          <p className={`ax-expand-explain-verdict ${verdictTone}`}>{verdict}</p>
+        </section>
+      </div>
+      {mode === 'followup' && (
+        <div className="ax-expand-explain-followup">
+          <input
+            type="text"
+            value={followUpInput}
+            onChange={(event) => setFollowUpInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') askFollowUp()
+            }}
+            placeholder="Ask a follow-up..."
+          />
+          <button type="button" onClick={askFollowUp} disabled={followUpLoading || !followUpInput.trim()}>
+            {followUpLoading ? '...' : 'Ask'}
+          </button>
+        </div>
+      )}
+      <div className="ax-expand-explain-popup-foot">
+        <button type="button" className="ax-btn mini" onClick={() => fetchAI('simple')} disabled={loading}>
+          {loading ? 'Retrying...' : 'Explain simpler'}
+        </button>
+        <button type="button" className="ax-btn mini" onClick={() => fetchAI('technical')} disabled={loading}>Technical details</button>
+        <button type="button" className="ax-btn mini" onClick={() => setMode(mode === 'followup' ? 'normal' : 'followup')}>
+          {mode === 'followup' ? 'Close chat' : 'Ask follow-up'}
+        </button>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function buildModelsExplainContext(element) {
+  const context = { page: 'Models', clickedElement: element?.title || element?.label || element?.section || element?.metricKey || element?.type }
+  if (element?.model) {
+    const model = element.model
+    context.selectedModel = algoLabelForTask(model.algorithm, model.metrics?.task)
+    context.targetVariable = model.target
+    context.task = model.metrics?.task
+    context.metrics = model.metrics
+    context.features = model.features
+  }
+  if (element?.value != null) context.metricValue = element.value
+  if (element?.featureName) {
+    context.featureName = element.featureName
+    context.importancePercent = element.value
+    context.rank = element.rank
+    context.totalFeatures = element.totalFeatures
+  }
+  if (element?.paramKey) {
+    context.parameter = element.paramKey
+    context.parameterValue = element.paramValue
+    context.parameterLabel = element.paramLabel
+    context.algorithm = element.algoName
+  }
+  return context
+}
+
+function buildModelsSimpleExplanation(element) {
+  if (element?.simple) return element.simple
+  if (element?.type === 'preplan-card') return 'The Preprocessing plan shows how raw data is cleaned, scaled, and encoded before model training.'
+  if (element?.type === 'preplan-data-readiness') return 'Data readiness verifies whether your chosen variables have missing values, clean categories, or collinearity.'
+  if (element?.type === 'preplan-readiness-check') return 'This check reviews your dataset for compatibility issues with the chosen algorithms.'
+  if (element?.type === 'preplan-numeric-scaling') return 'Numeric scaling standardizes different feature ranges (like income vs. age) so models treat them fairly.'
+  if (element?.type === 'preplan-scale-option') return 'This option defines the scaler function applied to numeric features.'
+  if (element?.type === 'preplan-encoding-section') return 'Encoding converts categorical labels into numbers so the mathematical model can process them.'
+  if (element?.type === 'preplan-column-encoding') return 'This row displays the active encoding options and ranks for a single categorical column.'
+  if (element?.type === 'preplan-column-categories') return 'This list displays the categories found in the column, allowing drag-and-drop ordinal sorting.'
+  if (element?.type === 'preplan-column-method') return 'This setting determines how string or boolean values are mapped to numeric values.'
+  if (element?.type === 'parameter') return 'This parameter changes how the selected algorithm learns from data.'
+  if (element?.type === 'featureInfluence') return 'This row shows how much one feature contributes to the selected model prediction.'
+  if (element?.type === 'comparisonRow') return 'This row compares one trained model against the others.'
+  if (element?.type === 'modelHealth') return 'This card compares train and test behavior to show whether the model generalizes.'
+  if (element?.metricKey === 'accuracy') return 'Accuracy is the share of predictions the model got right.'
+  if (element?.metricKey === 'f1') return 'F1-score is the harmonic mean of precision and recall, balancing both.'
+  if (element?.metricKey === 'gap') return 'The train-test gap shows whether the model may be overfitting.'
+  if (element?.metricKey === 'r2') return 'R squared measures how much target variation a regression model explains.'
+  if (element?.metricKey === 'rmse') return 'RMSE is the typical prediction error size in the target units.'
+  return 'This control or section is part of the model-building workflow.'
+}
+
+function buildModelsDatasetExplanation(element, context) {
+  if (element?.model) {
+    const modelName = context.selectedModel || 'this model'
+    const targetName = context.targetVariable || 'the target'
+    const metrics = context.metrics || {}
+    if (metrics.task === 'classification') {
+      return `${modelName} predicts ${targetName}. Accuracy is ${pct(metrics.accuracy)}, F1 is ${metrics.f1 != null ? num(metrics.f1) : 'not available'}, and the train-test gap is ${metrics.generalization_gap != null ? num(metrics.generalization_gap) : 'not available'}.`
+    }
+    return `${modelName} predicts ${targetName}. R squared is ${metrics.r2 != null ? num(metrics.r2) : 'not available'}, RMSE is ${metrics.rmse != null ? num(metrics.rmse) : 'not available'}, and the train-test gap is ${metrics.generalization_gap != null ? num(metrics.generalization_gap) : 'not available'}.`
+  }
+  if (element?.featureName) return `${element.featureName} is ranked ${element.rank || '?'} of ${element.totalFeatures || '?'} with ${element.value ?? 0}% relative influence.`
+  if (element?.paramKey) return `${element.paramLabel || element.paramKey} is currently set to ${element.paramValue ?? 'default'} for ${element.algoName || 'the selected algorithm'}.`
+  return 'This page uses the current dataset, selected target, features, algorithms, preprocessing plan, and saved model results.'
+}
+
+function buildModelsWhyItMatters(element) {
+  if (element?.whyItMatters) return element.whyItMatters
+  if (element?.type === 'parameter') return 'Parameter changes can improve accuracy, reduce overfitting, or make training more stable, but they can also make a model too complex.'
+  if (element?.type === 'featureInfluence') return 'Feature influence helps explain what the model relies on, but it should not be treated as causation.'
+  if (element?.type === 'comparisonRow') return 'Comparing rows helps choose a model using multiple metrics instead of one score.'
+  if (element?.type === 'modelHealth') return 'A model that performs well on test data is more trustworthy than one that only performs well on training data.'
+  return 'Understanding this element helps keep the modeling workflow explainable and defensible.'
+}
+
+function buildModelsVerdict(element) {
+  if (element?.verdict) return element.verdict
+  if (element?.type?.startsWith('preplan-')) {
+    if (element?.type === 'preplan-readiness-check') return 'Ensure warnings are resolved or dismissed before starting training.'
+    if (element?.type === 'preplan-column-categories') return 'Define a natural hierarchy for Ordinal columns to improve model performance.'
+    return 'Confirm configuration is correct before training the model.'
+  }
+  if (element?.type === 'parameter') return 'Tune carefully and compare the next run against the previous result.'
+  if (element?.type === 'featureInfluence') return Number(element?.value || 0) >= 15 ? 'Treat this as a key predictor to explain in the report.' : 'This is a supporting predictor; review before removing it.'
+  if (element?.metricKey === 'gap') return Math.abs(Number(element?.value || 0)) < 0.05 ? 'Low overfitting risk.' : 'Review model health before relying on this result.'
+  return 'Use this as supporting context for model setup and interpretation.'
+}
+
+function buildModelsVerdictTone(element) {
+  if (element?.verdictTone) return element.verdictTone
+  if (element?.type?.startsWith('preplan-')) return 'good'
+  if (element?.metricKey === 'gap' && Math.abs(Number(element?.value || 0)) >= 0.2) return 'risk'
+  if (element?.type === 'parameter') return 'warning'
+  return 'good'
+}
+
+function cleanModelsExplainText(text, fallback) {
+  const value = String(text || '').trim()
+  if (!value) return fallback
+  const lower = value.toLowerCase()
+  const looksRaw =
+    value.startsWith('{') ||
+    value.startsWith('[') ||
+    lower.includes('anthropic_api_key') ||
+    lower.includes('api key') ||
+    lower.includes('traceback') ||
+    lower.includes('request payload') ||
+    lower.includes('"clickedmetric"') ||
+    lower.includes('"targetvariable"') ||
+    lower.includes('params: {')
+  return looksRaw ? fallback : value
+}
+
+function getModelsExplainPosition(sourceRect) {
+  const popupW = 374
+  const gap = 8
+  const padding = 12
+  const viewportW = typeof window === 'undefined' ? 1280 : window.innerWidth
+  const viewportH = typeof window === 'undefined' ? 720 : window.innerHeight
+  const popupH = Math.max(280, Math.min(560, viewportH - (padding * 2)))
+  const anchor = normalizeModelsExplainRect(sourceRect)
+  if (!anchor) return { top: 84, left: padding, placement: 'right-start', arrowTop: 24, arrowLeft: -6, maxHeight: popupH }
+  const placements = anchor.bottom > viewportH * 0.68
+    ? ['top-start', 'right-start', 'left-start', 'bottom-start']
+    : ['right-start', 'left-start', 'bottom-start', 'top-start']
+  for (const placement of placements) {
+    const candidate = buildModelsExplainCandidate(placement, anchor, popupW, popupH, gap, padding, viewportW, viewportH)
+    if (!modelsRectsOverlap(candidate.rect, anchor)) return candidate
+  }
+  const rightSpace = viewportW - anchor.right - gap - padding
+  const leftSpace = anchor.left - gap - padding
+  return buildModelsExplainCandidate(rightSpace >= leftSpace ? 'right-start' : 'left-start', anchor, popupW, popupH, gap, padding, viewportW, viewportH)
+}
+
+function buildModelsExplainCandidate(placement, anchor, popupW, popupH, gap, padding, viewportW, viewportH) {
+  let left = anchor.right + gap
+  let top = anchor.top
+  if (placement === 'left-start') {
+    left = anchor.left - popupW - gap
+  } else if (placement === 'bottom-start') {
+    left = anchor.left
+    top = anchor.bottom + gap
+  } else if (placement === 'top-start') {
+    left = anchor.left
+    top = anchor.top - popupH - gap
+  }
+  left = modelsClamp(left, padding, Math.max(padding, viewportW - popupW - padding))
+  top = modelsClamp(top, padding, Math.max(padding, viewportH - popupH - padding))
+  const rect = { left, top, right: left + popupW, bottom: top + popupH }
+  const arrow = getModelsExplainArrowPosition(placement, anchor, rect, popupW, popupH)
+  return { top, left, placement, rect, maxHeight: popupH, ...arrow }
+}
+
+function getLiveModelsExplainRect(element) {
+  if (element?.sourceEl?.isConnected && typeof element.sourceEl.getBoundingClientRect === 'function') {
+    return element.sourceEl.getBoundingClientRect()
+  }
+  return element?.sourceRect || null
+}
+
+function getModelsExplainArrowPosition(placement, anchor, popup, popupW, popupH) {
+  if (placement === 'right-start' || placement === 'left-start') {
+    return {
+      arrowLeft: placement === 'right-start' ? -6 : popupW - 6,
+      arrowTop: modelsClamp(anchor.top + Math.min(anchor.height / 2, 20) - popup.top, 18, popupH - 18),
+    }
+  }
+  return {
+    arrowLeft: modelsClamp(anchor.left + Math.min(anchor.width / 2, 30) - popup.left, 18, popupW - 18),
+    arrowTop: placement === 'bottom-start' ? -6 : popupH - 6,
+  }
+}
+
+function normalizeModelsExplainRect(rect) {
+  if (!rect) return null
+  const left = Number(rect.left)
+  const top = Number(rect.top)
+  const width = Number(rect.width || rect.right - rect.left)
+  const height = Number(rect.height || rect.bottom - rect.top)
+  if (![left, top, width, height].every(Number.isFinite)) return null
+  return { left, top, width, height, right: left + width, bottom: top + height }
+}
+
+function modelsRectsOverlap(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+}
+
+function modelsClamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
 // Dropdown menu that houses config selectors for the model build page.
-// Standalone Previous Models history table with filter pills, BEST AUC badge, health badges, and icon actions.
-function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhatIf, deleteSavedModel, setShowHistory }) {
+// Standalone Previous Models history table with filter pills, health badges, and icon actions.
+function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhatIf, deleteSavedModel, setShowHistory, aiExplainActive, onExplain }) {
   const [filterTarget, setFilterTarget] = useState('all')
   const [checkedIds, setCheckedIds] = useState(new Set())
+  const explainAttrs = (element, className = '') => ({
+    className: `${className} ${aiExplainActive ? 'ax-explain-selectable' : ''}`.trim(),
+    onClick: (event) => onExplain?.(element, event),
+    title: aiExplainActive ? `Explain ${element.title || element.label || 'this history area'}` : undefined,
+  })
 
   const targets = [...new Set(models.map((m) => m.target).filter(Boolean))]
   const filtered = filterTarget === 'all' ? models : models.filter((m) => m.target === filterTarget)
-
-  // Find best AUC model id
-  let bestAucId = null, bestAucVal = -Infinity
-  models.forEach((m) => {
-    const v = m.metrics?.auc ?? -Infinity
-    if (v > bestAucVal) { bestAucVal = v; bestAucId = m.id }
-  })
 
   const settingsSummary = (m) => {
     const defs = defaultModelParams()
@@ -1957,13 +2685,12 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
   }
 
   const exportCSV = () => {
-    const rows = [['Algorithm', 'Target', 'Accuracy', 'AUC', 'F1', 'Settings', 'Trained']]
+    const rows = [['Algorithm', 'Target', 'Accuracy', 'F1', 'Settings', 'Trained']]
     models.forEach((m) => {
       rows.push([
         algoLabelForTask(m.algorithm, m.metrics?.task),
         m.target,
         m.metrics?.accuracy != null ? (m.metrics.accuracy * 100).toFixed(1) + '%' : '',
-        m.metrics?.auc != null ? Number(m.metrics.auc).toFixed(3) : '',
         m.metrics?.f1 != null ? Number(m.metrics.f1).toFixed(3) : '',
         settingsSummary(m),
         m.trained_at || '',
@@ -1991,17 +2718,40 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
       borderRadius: 14, marginBottom: 18, overflow: 'hidden',
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 12px' }}>
+      <div {...explainAttrs({
+        type: 'history-card',
+        metricKey: 'models-history-previous-models-card',
+        section: 'Models history',
+        title: 'Previous models card',
+        simple: 'This card lists saved model runs for the current project.',
+        datasetExplanation: `${models.length} model run${models.length === 1 ? '' : 's'} are available and can be filtered by target.`,
+        whyItMatters: 'History lets you compare defaults, tuned runs, and algorithms without retraining from scratch.',
+        verdict: 'Use this table to audit and restore previous model configurations.',
+        verdictTone: 'good',
+      })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 12px' }}>
         <div>
           <h2 style={{ fontSize: 16, fontWeight: 800, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>Previous models</h2>
           <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: 0 }}>
-            {models.length} run{models.length !== 1 ? 's' : ''} · sorted by AUC
+            {models.length} run{models.length !== 1 ? 's' : ''}
           </p>
         </div>
         <button
-          className="ax-btn mini"
+          className={`ax-btn mini ${aiExplainActive ? 'ax-explain-selectable' : ''}`}
           type="button"
-          onClick={exportCSV}
+          onClick={(event) => {
+            if (aiExplainActive) return onExplain?.({
+              type: 'history-action',
+              metricKey: 'models-history-export-csv',
+              section: 'Models history',
+              title: 'Export CSV button',
+              simple: 'This exports the model history table as a CSV file.',
+              datasetExplanation: `${models.length} saved run${models.length === 1 ? '' : 's'} would be included.`,
+              whyItMatters: 'CSV export is useful for documentation, reporting, or offline comparison.',
+              verdict: 'Turn off Explain Mode to export.',
+              verdictTone: 'good',
+            }, event)
+            exportCSV()
+          }}
           style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600 }}
         >
           ↓ Export CSV
@@ -2017,7 +2767,26 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
             <button
               key={t}
               type="button"
-              onClick={() => setFilterTarget(t)}
+              className={aiExplainActive ? 'ax-explain-selectable' : ''}
+              onClick={(event) => {
+                if (aiExplainActive) {
+                  return onExplain?.({
+                    type: 'history-filter',
+                    metricKey: `models-history-filter-${String(t).replace(/\W+/g, '-').toLowerCase()}`,
+                    section: 'Models history',
+                    title: `${t === 'all' ? 'All' : t} target filter`,
+                    label: t === 'all' ? 'All targets' : t,
+                    simple: 'This filter narrows the history table to model runs for one target variable.',
+                    datasetExplanation: t === 'all'
+                      ? `${filtered.length} visible run${filtered.length === 1 ? '' : 's'} are currently shown across all targets.`
+                      : `${filtered.length} visible run${filtered.length === 1 ? '' : 's'} are currently shown for ${t}.`,
+                    whyItMatters: 'Classification and regression targets use different metrics, so filtering keeps comparisons cleaner.',
+                    verdict: 'Turn off Explain Mode to apply this filter.',
+                    verdictTone: 'good',
+                  }, event)
+                }
+                setFilterTarget(t)
+              }}
               style={{
                 padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer',
                 border: active ? 'none' : '1.5px solid var(--color-border-tertiary)',
@@ -2041,14 +2810,11 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
           <thead>
             <tr style={{ borderTop: '1.5px solid var(--color-border-tertiary)', borderBottom: '1.5px solid var(--color-border-tertiary)' }}>
               <th style={{ width: 40, padding: '8px 0 8px 20px' }}></th>
-              <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+              <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>
                 ALGORITHM · TARGET
               </th>
               <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
                 ACCURACY ↕
-              </th>
-              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
-                AUC ↓
               </th>
               <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
                 F1 ↕
@@ -2066,7 +2832,6 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
             {filtered.map((m, idx) => {
               const h = assessModelHealth(m)
               const t = h ? healthTone(h.color) : null
-              const isBestAuc = m.id === bestAucId && m.metrics?.auc != null
               const isChecked = checkedIds.has(m.id)
               const summary = settingsSummary(m)
               const isDefaultSettings = summary === 'defaults'
@@ -2086,7 +2851,24 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
                     <input
                       type="checkbox"
                       checked={isChecked}
-                      onChange={() => toggleCheck(m.id)}
+                      onClick={(event) => {
+                        if (aiExplainActive) {
+                          return onExplain?.({
+                            type: 'history-checkbox',
+                            metricKey: `models-history-checkbox-${m.id}`,
+                            section: 'Models history',
+                            title: 'Compare row checkbox',
+                            simple: 'This checkbox selects a saved model run for side-by-side comparison.',
+                            datasetExplanation: `${algoLabelForTask(m.algorithm, m.metrics?.task)} predicts ${m.target || 'the selected target'}.`,
+                            whyItMatters: 'Selecting rows helps compare tuned versus default runs or different algorithms.',
+                            verdict: 'Turn off Explain Mode to select this row.',
+                            verdictTone: 'good',
+                          }, event)
+                        }
+                      }}
+                      onChange={() => {
+                        if (!aiExplainActive) toggleCheck(m.id)
+                      }}
                       style={{ accentColor: 'var(--color-accent)', width: 14, height: 14, cursor: 'pointer' }}
                     />
                   </td>
@@ -2095,12 +2877,6 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
                       <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
                         {algoLabelForTask(m.algorithm, m.metrics?.task)}
                       </span>
-                      {isBestAuc && (
-                        <span style={{
-                          fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em',
-                          background: 'var(--color-accent)', color: '#fff', padding: '2px 7px', borderRadius: 999,
-                        }}>BEST AUC</span>
-                      )}
                       {h && h.color === 'red' && t && (
                         <span style={{ fontSize: 10, fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: 3 }}>
                           <AlertTriangle size={11} /> {h.label.toLowerCase()}
@@ -2113,9 +2889,6 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
                   </td>
                   <td style={{ padding: '14px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)' }}>
                     {m.metrics?.accuracy != null ? (m.metrics.accuracy * 100).toFixed(1) + '%' : (m.metrics?.r2 != null ? `R²\u00a0${Number(m.metrics.r2).toFixed(3)}` : '—')}
-                  </td>
-                  <td style={{ padding: '14px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)' }}>
-                    {m.metrics?.auc != null ? Number(m.metrics.auc).toFixed(3) : '—'}
                   </td>
                   <td style={{ padding: '14px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)' }}>
                     {m.metrics?.f1 != null ? Number(m.metrics.f1).toFixed(3) : '—'}
@@ -2135,15 +2908,57 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
                   <td style={{ padding: '14px 20px 14px 0' }}>
                     <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                       <button title="Restore settings" type="button"
-                        onClick={() => { restoreModelSettings(m) }}
+                        className={aiExplainActive ? 'ax-explain-selectable' : ''}
+                        onClick={(event) => {
+                          if (aiExplainActive) return onExplain?.({
+                            type: 'history-action',
+                            metricKey: `models-history-action-restore-${m.id}`,
+                            section: 'Models history',
+                            title: 'Restore settings action',
+                            simple: 'This restores the setup choices from a previous model run.',
+                            datasetExplanation: `${algoLabelForTask(m.algorithm, m.metrics?.task)} used ${settingsSummary(m)} settings for target ${m.target || 'unknown'}.`,
+                            whyItMatters: 'Restoring settings lets you rerun or adjust a known configuration without rebuilding it manually.',
+                            verdict: 'Turn off Explain Mode to restore this run.',
+                            verdictTone: 'good',
+                          }, event)
+                          restoreModelSettings(m)
+                        }}
                         style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}
                       >↺</button>
                       <button title="Use in What-if" type="button"
-                        onClick={() => prepareAndUseInWhatIf(m)}
+                        className={aiExplainActive ? 'ax-explain-selectable' : ''}
+                        onClick={(event) => {
+                          if (aiExplainActive) return onExplain?.({
+                            type: 'history-action',
+                            metricKey: `models-history-action-what-if-${m.id}`,
+                            section: 'Models history',
+                            title: 'Use in What-if action',
+                            simple: 'This sends the saved model to the What-if page for scenario testing.',
+                            datasetExplanation: `${algoLabelForTask(m.algorithm, m.metrics?.task)} can be used to simulate predictions for ${m.target || 'the target'}.`,
+                            whyItMatters: 'What-if analysis turns model results into interactive scenario exploration.',
+                            verdict: 'Turn off Explain Mode to use this model in What-if.',
+                            verdictTone: 'good',
+                          }, event)
+                          prepareAndUseInWhatIf(m)
+                        }}
                         style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}
                       >→</button>
                       <button title="Delete" type="button"
-                        onClick={() => deleteSavedModel(m)}
+                        className={aiExplainActive ? 'ax-explain-selectable' : ''}
+                        onClick={(event) => {
+                          if (aiExplainActive) return onExplain?.({
+                            type: 'history-action',
+                            metricKey: `models-history-action-delete-${m.id}`,
+                            section: 'Models history',
+                            title: 'Delete history row action',
+                            simple: 'This deletes a saved model run from history.',
+                            datasetExplanation: `${algoLabelForTask(m.algorithm, m.metrics?.task)} for ${m.target || 'the target'} would be removed.`,
+                            whyItMatters: 'Deleting removes clutter, but it also removes the ability to restore or compare that run.',
+                            verdict: 'Turn off Explain Mode to delete. Review carefully before deleting saved runs.',
+                            verdictTone: 'warning',
+                          }, event)
+                          deleteSavedModel(m)
+                        }}
                         style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #FECACA', background: 'var(--color-background-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', fontSize: 14 }}
                       >✕</button>
                     </div>
@@ -3145,12 +3960,12 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
       }
     }
 
-    // Best AUC / RMSE
+    // Best F1 / RMSE
     let bestAucModel = models[0]
     let bestAucVal = isClassification ? -Infinity : Infinity
     for (const m of models) {
       if (isClassification) {
-        const val = m.metrics?.auc ?? 0
+        const val = m.metrics?.f1 ?? 0
         if (val > bestAucVal) {
           bestAucVal = val
           bestAucModel = m
@@ -3195,9 +4010,9 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
         model: bestAccModel
       },
       bestAuc: {
-        label: isClassification ? 'BEST ON AUC' : 'SMALLEST RMSE',
-        value: isClassification ? (bestAucModel.metrics?.auc == null ? 'n/a' : num(bestAucModel.metrics?.auc)) : num(bestAucModel.metrics?.rmse),
-        rawValue: isClassification ? bestAucModel.metrics?.auc : bestAucModel.metrics?.rmse,
+        label: isClassification ? 'BEST ON F1-SCORE' : 'SMALLEST RMSE',
+        value: isClassification ? (bestAucModel.metrics?.f1 == null ? 'n/a' : num(bestAucModel.metrics?.f1)) : num(bestAucModel.metrics?.rmse),
+        rawValue: isClassification ? bestAucModel.metrics?.f1 : bestAucModel.metrics?.rmse,
         modelName: algoLabelForTask(bestAucModel.algorithm, bestAucModel.metrics?.task),
         model: bestAucModel
       },
@@ -3266,10 +4081,10 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
           <FallbackLabel text={isClassification ? null : r2FallbackLabel(leaderboard.bestAccuracy.rawValue)} />
         </div>
 
-        {/* Card 2: Best AUC / RMSE */}
+        {/* Card 2: Best F1 / RMSE */}
         <div
           onClick={(e) => aiExplainActive && onExplain?.({
-            type: 'metric', metricKey: isClassification ? 'auc' : 'rmse',
+            type: 'metric', metricKey: isClassification ? 'f1' : 'rmse',
             value: leaderboard.bestAuc.rawValue, section: 'Leaderboard',
             label: leaderboard.bestAuc.label,
             model: leaderboard.bestAuc.model
@@ -3826,7 +4641,6 @@ function ComparisonTable({ models, activeIdx, onPick, aiExplainActive, onExplain
                 <th>Precision</th>
                 <th>Recall</th>
                 <th>F1</th>
-                <th>AUC</th>
               </>
             ) : (
               <>
@@ -3858,10 +4672,9 @@ function ComparisonTable({ models, activeIdx, onPick, aiExplainActive, onExplain
                   if (aiExplainActive) {
                     onExplain?.({ type: 'comparisonRow', metricKey: 'comparisonRow', section: 'Comparison Table', model: m, label: m.label, index: i }, e)
                   }
-                  onPick(i)
                 }}
                 style={{
-                  cursor: aiExplainActive ? 'help' : 'pointer',
+                  cursor: aiExplainActive ? 'help' : 'default',
                   background: i === activeIdx ? 'var(--color-accent-light)' : undefined,
                 }}
               >
@@ -3891,7 +4704,6 @@ function ComparisonTable({ models, activeIdx, onPick, aiExplainActive, onExplain
                     <td>{num(mt.precision)}</td>
                     <td>{num(mt.recall)}</td>
                     <td>{num(mt.f1)}</td>
-                    <td>{mt.auc == null ? 'n/a' : num(mt.auc)}</td>
                   </>
                 ) : (
                   <>
@@ -4493,7 +5305,7 @@ function formatMetrics(m) {
   if (!m) return ''
   if (m.task === 'classification') {
     const parts = [`accuracy ${pct(m.accuracy)}`]
-    if (m.auc != null) parts.push(`AUC ${num(m.auc)}`)
+    if (m.f1 != null) parts.push(`F1 ${num(m.f1)}`)
     return parts.join(' · ')
   }
   return `R² ${num(m.r2)} · RMSE ${num(m.rmse)}`
@@ -4562,7 +5374,7 @@ function algoLabelForTask(algo, task) {
 }
 
 // Builds the training target options payload from the user's validation and class-weight choices.
-function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders) {
+function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders, smote) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
@@ -4571,6 +5383,7 @@ function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds,
   if (options.validation_method === 'cross_validation') options.cv_folds = cvFolds || 5
   options.stratify = stratify
   if (classWeight) options.class_weight = 'balanced'
+  if (smote) options.smote = true
   options.numeric_preprocessing = numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] }
   options.categorical_encoding = categoricalEncoding || {}
   options.categorical_order = categoricalOrders || {}
@@ -4580,20 +5393,20 @@ function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds,
 // Maps a fix-action route key to the destination page and section id used for navigation.
 function routeToFixTarget(route) {
   const map = {
-    'data.missing_values': { page: 'data', section: 'fix-cleaning-suggestions' },
-    'data.cleaning_suggestions': { page: 'data', section: 'fix-cleaning-suggestions' },
+    'data.missing_values': { page: 'data', section: 'fix-cleaning-missing' },
+    'data.cleaning_suggestions': { page: 'data', section: 'fix-cleaning-missing' },
     'data.category_standardization': { page: 'data', section: 'data-section-category_standardization' },
-    'data.outliers': { page: 'data', section: 'fix-cleaning-suggestions' },
-    'data.duplicates': { page: 'data', section: 'fix-cleaning-suggestions' },
+    'data.outliers': { page: 'data', section: 'fix-cleaning-outliers' },
+    'data.duplicates': { page: 'data', section: 'fix-cleaning-duplicates' },
     'data.manual_transforms': { page: 'data', section: 'data-section-manual_transforms' },
-    'models.target_handling': { page: 'models', section: 'models-step-1' },
-    'models.validation_split': { page: 'models', section: 'models-step-4' },
-    'models.class_weight': { page: 'models', section: 'models-step-4' },
-    'models.algorithms': { page: 'models', section: 'models-step-5' },
+    'models.target_handling': { page: 'models', section: 'models-setup-target' },
+    'models.validation_split': { page: 'models', section: 'models-setup-validation' },
+    'models.class_weight': { page: 'models', section: 'models-setup-validation' },
+    'models.algorithms': { page: 'models', section: 'models-setup-algorithms' },
     'models.tuning': { page: 'models', section: 'models-tuning' },
     'models.scaling': { page: 'models', section: 'fix-numeric-preprocessing' },
     'models.numeric_preprocessing': { page: 'models', section: 'fix-numeric-preprocessing' },
-    'models.features': { page: 'models', section: 'fix-feature-selection' },
+    'models.features': { page: 'models', section: 'models-setup-features' },
     'tests.correlation': { page: 'tests', section: 'fix-correlation-test' },
     'expand.recommendation': { page: 'expand', section: 'expand-section-controls' },
   }
@@ -4609,27 +5422,27 @@ function fixTargetFromBackendFix(fix) {
   const page = fix.route
   const sectionMap = {
     manual_transforms: { page: 'data', section: 'data-section-manual_transforms' },
-    cleaning_suggestions: { page: 'data', section: 'fix-cleaning-suggestions' },
-    missing_values: { page: 'data', section: 'fix-cleaning-suggestions' },
-    outliers: { page: 'data', section: 'fix-cleaning-suggestions' },
-    duplicates: { page: 'data', section: 'fix-cleaning-suggestions' },
+    cleaning_suggestions: { page: 'data', section: 'fix-cleaning-missing' },
+    missing_values: { page: 'data', section: 'fix-cleaning-missing' },
+    outliers: { page: 'data', section: 'fix-cleaning-outliers' },
+    duplicates: { page: 'data', section: 'fix-cleaning-duplicates' },
     category_standardization: { page: 'data', section: 'data-section-category_standardization' },
-    target_options: { page: 'models', section: 'models-step-1' },
-    target_handling: { page: 'models', section: 'models-step-1' },
-    features: { page: 'models', section: 'fix-feature-selection' },
-    feature_selection: { page: 'models', section: 'fix-feature-selection' },
+    target_options: { page: 'models', section: 'models-setup-target' },
+    target_handling: { page: 'models', section: 'models-setup-target' },
+    features: { page: 'models', section: 'models-setup-features' },
+    feature_selection: { page: 'models', section: 'models-setup-features' },
     numeric_preprocessing: { page: 'models', section: 'fix-numeric-preprocessing' },
     scaling: { page: 'models', section: 'fix-numeric-preprocessing' },
-    validation_split: { page: 'models', section: 'models-step-4' },
-    class_weight: { page: 'models', section: 'models-step-4' },
-    algorithms: { page: 'models', section: 'models-step-5' },
+    validation_split: { page: 'models', section: 'models-setup-validation' },
+    class_weight: { page: 'models', section: 'models-setup-validation' },
+    algorithms: { page: 'models', section: 'models-setup-algorithms' },
     tuning: { page: 'models', section: 'models-tuning' },
     correlation: { page: 'tests', section: 'fix-correlation-test' },
   }
   const mapped = sectionMap[fix.section]
   if (mapped) return mapped
-  if (page === 'models') return { page: 'models', section: 'models-step-1' }
-  if (page === 'data') return { page: 'data', section: 'fix-cleaning-suggestions' }
+  if (page === 'models') return { page: 'models', section: 'models-setup-target' }
+  if (page === 'data') return { page: 'data', section: 'fix-cleaning-missing' }
   if (page === 'tests') return { page: 'tests', section: 'fix-correlation-test' }
   return null
 }

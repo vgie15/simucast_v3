@@ -2,7 +2,7 @@
  * PAGE: DATA VIEW (UPLOAD, GRID, EDIT)
  * Keywords: data view, upload, grid, edit cell, variable view, columns
  * ============================================================ */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../api'
 import ColumnValuesModal from './ColumnValuesModal'
@@ -16,6 +16,8 @@ import PageGuide from '../common/PageGuide'
 import { SparkleIcon } from '../ai/AIExplainers'
 import { useAuth } from '../providers/AuthProvider'
 
+let lastLoadedDatasetId = null
+
 // Page component for uploading, editing, cleaning, and exploring the active dataset.
 export default function DataPage({ dataset, setDataset, viewStageRequest, initialData }) {
   const dialog = useDialog()
@@ -26,7 +28,10 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
   const [viewStageLabel, setViewStageLabel] = useState(null)
   const [activeVar, setActiveVar] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
+  const isFirstMountForDataset = lastLoadedDatasetId !== dataset?.id
   const initialSuggestions = initialData?.tab === 'data' && initialData?.datasetId === dataset?.id ? initialData.suggestions : null
+  // Track whether we've already consumed the pre-loaded initialSuggestions once
+  const suggestionsBootstrapped = useRef(false)
   const [suggestions, setSuggestions] = useState(initialSuggestions?.suggestions || [])
   const [suggestionGroups, setSuggestionGroups] = useState(initialSuggestions?.groups || {})
   const [statuses, setStatuses] = useState({})
@@ -57,7 +62,10 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
 
   useEffect(() => {
     if (!dataset) return
-    if (initialSuggestions) {
+    // On the very first run use the pre-loaded suggestions to avoid a flash,
+    // but on every subsequent run (stage change, reset, undo) always reload.
+    if (initialSuggestions && !suggestionsBootstrapped.current && isFirstMountForDataset) {
+      suggestionsBootstrapped.current = true
       const nextSuggestions = initialSuggestions.suggestions || []
       setSuggestions(nextSuggestions)
       setSuggestionGroups(initialSuggestions.groups || {})
@@ -70,8 +78,28 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
       )
       return
     }
+    suggestionsBootstrapped.current = true
     loadSuggestions()
-  }, [dataset?.id, initialData?.datasetId])
+    // Re-run whenever the active stage changes (reset, undo, apply, etc.)
+  }, [dataset?.id, dataset?.current_stage_id, initialData?.datasetId])
+
+  // Guide Focus: ensure the table is in highlight mode + filter is cleared
+  // so the user sees the previously-missing rows during step 10 review.
+  useEffect(() => {
+    const handler = () => {
+      setTableViewMode('highlight')
+      setShowChangePreview(true)
+      setDataChangePulse(true)
+      window.setTimeout(() => setDataChangePulse(false), 2200)
+      // Scroll the data detail to the top so the highlighted rows are visible
+      const el = document.querySelector('.ax-data-detail')
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }
+    window.addEventListener('simucast:guide-filter-missing', handler)
+    return () => window.removeEventListener('simucast:guide-filter-missing', handler)
+  }, [])
 
   useEffect(() => {
     const raw = window.sessionStorage.getItem('simucast.fixTarget')
@@ -110,6 +138,15 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
       console.error('Failed to refresh dataset', err)
     }
   }
+
+  // Every time we mount / return to the Data tab, force reload dataset details
+  // if this isn't the first time mounting for this dataset.
+  useEffect(() => {
+    if (lastLoadedDatasetId && lastLoadedDatasetId === dataset?.id) {
+      refreshDataset()
+    }
+    lastLoadedDatasetId = dataset?.id
+  }, [dataset?.id])
 
   const loadSuggestions = async () => {
     setSuggestionsLoading(true)
@@ -154,6 +191,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
       setViewStageLabel(null)
       setHistoryKey((k) => k + 1)
       setShowChangePreview(true)
+      await refreshDataset()
+      await loadSuggestions()
     } catch (err) {
       console.error('Undo failed', err)
     } finally {
@@ -169,6 +208,8 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
       setViewStageLabel(null)
       setHistoryKey((k) => k + 1)
       setShowChangePreview(true)
+      await refreshDataset()
+      await loadSuggestions()
     } catch (err) {
       console.error('Redo failed', err)
     } finally {
@@ -332,28 +373,6 @@ export default function DataPage({ dataset, setDataset, viewStageRequest, initia
               Show current stage
             </button>
           </div>
-        )}
-        {appliedFixSummary.length > 0 && viewStageId === 'current' && (
-          <section className="ax-data-change-preview" aria-live="polite">
-            <div>
-              <strong>Current cleaned stage updated</strong>
-              <span>Review the dataset preview and History before moving on.</span>
-            </div>
-            <button className="ax-link-btn" type="button" onClick={() => setShowChangePreview((value) => !value)}>
-              {showChangePreview ? 'Hide recent changes' : 'Show recent changes'}
-            </button>
-            {showChangePreview && (
-              <ul>
-                {appliedFixSummary.slice(0, 4).map((item, idx) => (
-                  <li key={`${item.variable}-${item.action}-${idx}`}>
-                    <KindBadge kind={item.kind} />
-                    <b>{item.variable}</b>
-                    <span>{cleanActionLabel(item.action)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
         )}
       </div>
 
@@ -524,7 +543,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center', fontSize: 12 }}>
               <label style={{ color: 'var(--color-text-secondary)' }}>Keep occurrence</label>
-              <select value={keep} onChange={(e) => setKeep(e.target.value)}>
+              <select id="duplicates-keep-occurrence" value={keep} onChange={(e) => setKeep(e.target.value)}>
                 <option value="first">First row</option>
                 <option value="last">Last row</option>
               </select>
@@ -557,7 +576,10 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            <div
+              id={kind === 'missing' ? 'missing-affected-columns' : kind === 'outliers' ? 'outliers-affected-columns' : undefined}
+              style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}
+            >
               {items.map((item) => (
                 <label key={item.variable} className="ax-chip" style={{ cursor: 'pointer' }}>
                   <input
@@ -575,7 +597,13 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
               ))}
             </div>
 
-            <button className="ax-text-action" style={{ marginTop: 10, alignSelf: 'flex-start' }} onClick={() => setAdvanced(!advanced)} type="button">
+            <button
+              id={kind === 'missing' ? 'missing-overrides-toggle' : kind === 'outliers' ? 'outliers-overrides-toggle' : undefined}
+              className="ax-text-action"
+              style={{ marginTop: 10, alignSelf: 'flex-start' }}
+              onClick={() => setAdvanced(!advanced)}
+              type="button"
+            >
               {advanced ? 'Hide per-column overrides' : 'Per-column overrides'}
             </button>
             {advanced && (
@@ -671,8 +699,18 @@ function DataToolsToolbar({
     if (openTool) {
       const event = new CustomEvent('simucast:popover-open', { detail: { tool: openTool } })
       window.dispatchEvent(event)
+    } else {
+      const event = new CustomEvent('simucast:popover-close', { detail: { tool: null } })
+      window.dispatchEvent(event)
     }
   }, [openTool])
+
+  // Notify the Missing Values focus flow when the Recommendations toggle changes
+  useEffect(() => {
+    if (openTool === 'missing') {
+      window.dispatchEvent(new CustomEvent('simucast:recommendations-changed', { detail: { visible: showRecommendations } }))
+    }
+  }, [showRecommendations, openTool])
   const variables = dataset?.variables || []
   const missingCount = suggestionGroups.missing?.columns?.length || 0
   const outlierCount = suggestionGroups.outliers?.columns?.length || 0

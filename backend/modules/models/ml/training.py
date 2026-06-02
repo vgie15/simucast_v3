@@ -83,6 +83,75 @@ def _cross_validation_metrics(algo, X, y, is_classification, params, plan):
         return {"enabled": True, "available": False, "reason": friendly_error_message(exc, "Cross-validation could not be computed for this setup.")}
 
 
+def _apply_smote(X, y, k_neighbors=5, random_state=42):
+    """Applies Synthetic Minority Over-sampling Technique (SMOTE) to balance classes."""
+    import numpy as np
+    import pandas as pd
+    from scipy.spatial.distance import cdist
+
+    np_rand = np.random.RandomState(random_state)
+    X_clean = X.reset_index(drop=True)
+    y_clean = pd.Series(y).reset_index(drop=True)
+    
+    class_counts = y_clean.value_counts()
+    if len(class_counts) <= 1:
+        return X, y
+        
+    majority_class = class_counts.idxmax()
+    majority_count = class_counts.max()
+    
+    X_new = X_clean.copy()
+    y_new = y_clean.copy()
+    
+    for cls, count in class_counts.items():
+        if cls == majority_class:
+            continue
+        
+        needed = majority_count - count
+        if needed <= 0:
+            continue
+            
+        cls_indices = y_clean[y_clean == cls].index
+        X_cls = X_clean.loc[cls_indices].values
+        
+        n_samples = len(X_cls)
+        if n_samples < 2:
+            extra_indices = np_rand.choice(cls_indices, size=needed, replace=True)
+            X_extra = X_clean.loc[extra_indices].copy()
+            y_extra = pd.Series([cls] * needed)
+            X_new = pd.concat([X_new, X_extra], axis=0, ignore_index=True)
+            y_new = pd.concat([y_new, y_extra], axis=0, ignore_index=True)
+            continue
+            
+        k = min(k_neighbors, n_samples - 1)
+        dists = cdist(X_cls, X_cls, metric='euclidean')
+        
+        neighbors_idx = np.argsort(dists, axis=1)[:, 1:k+1]
+        
+        synthetic_samples = []
+        for _ in range(needed):
+            idx = np_rand.randint(0, n_samples)
+            neighbor_list_idx = np_rand.randint(0, k)
+            neighbor_idx = neighbors_idx[idx, neighbor_list_idx]
+            
+            diff = X_cls[neighbor_idx] - X_cls[idx]
+            step = np_rand.rand()
+            synth = X_cls[idx] + step * diff
+            synthetic_samples.append(synth)
+            
+        X_synth = pd.DataFrame(synthetic_samples, columns=X_clean.columns)
+        y_synth = pd.Series([cls] * needed)
+        
+        X_new = pd.concat([X_new, X_synth], axis=0, ignore_index=True)
+        y_new = pd.concat([y_new, y_synth], axis=0, ignore_index=True)
+        
+    shuffled_indices = np_rand.permutation(len(X_new))
+    X_final = X_new.iloc[shuffled_indices].reset_index(drop=True)
+    y_final = y_new.iloc[shuffled_indices].reset_index(drop=True)
+    
+    return X_final, y_final
+
+
 def _train_one(df, target, features, algo, test_size, plan, model_params=None):
     """Train a single model. Returns a dict with metrics + importance.
 
@@ -142,6 +211,9 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
         scaler = MinMaxScaler() if scaler_kind == "minmax" else StandardScaler()
         X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X.columns, index=X_train.index)
         X_test = pd.DataFrame(scaler.transform(X_test), columns=X.columns, index=X_test.index)
+
+    if is_classification and plan.get("smote"):
+        X_train, y_train = _apply_smote(X_train, y_train, random_state=42)
 
     if is_classification:
         clf = _build_model_estimator(algo, True, params, plan.get("class_weight"))

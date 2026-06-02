@@ -18,6 +18,11 @@ export const INTENTS = [
     path: ['Prepare data', 'Choose a target', 'Train models'],
   },
   {
+    id: 'analyze_relationships',
+    title: 'Analyze relationships',
+    path: ['Prepare data', 'Summarize variables', 'Check relationships'],
+  },
+  {
     id: 'compare_models',
     title: 'Compare prediction models',
     path: ['Prepare data', 'Train candidates', 'Compare health and metrics'],
@@ -429,13 +434,13 @@ export function systemQuestionSuggestions(dataset) {
     },
     {
       question: `Which variables seem most related to ${measure}?`,
-      intent: 'full_workflow',
+      intent: 'analyze_relationships',
       source: 'system',
       why: 'Start with summaries and evidence before deciding on modeling.',
     },
     {
       question: `How does ${measure} compare with ${compare} and the category groups here?`,
-      intent: 'full_workflow',
+      intent: 'analyze_relationships',
       source: 'system',
       why: 'Check relationships and group differences that the dataset can support.',
     },
@@ -456,13 +461,13 @@ export function inferIntent(question) {
   if (/(compare .*model|best model|which model|model performance)/.test(text)) return 'compare_models'
   if (/(report|summary for|export findings|document)/.test(text)) return 'report'
   if (/(predict|prediction|will .* pass|can .* pass|forecast|likely to|probability)/.test(text)) return 'train_model'
-  if (/(factor|affect|relationship|related|difference|compare|trend|pattern|explain|explore)/.test(text)) return 'full_workflow'
+  if (/(factor|affect|relationship|related|correlat|association|associated|difference|compare|trend|pattern|explain|explore)/.test(text)) return 'analyze_relationships'
   return ''
 }
 
 function closestIntentChoices(question) {
   const inferred = inferIntent(question)
-  return [...new Set([inferred, 'full_workflow', 'train_model', 'prepare_data'].filter(Boolean))].slice(0, 3)
+  return [...new Set([inferred, 'analyze_relationships', 'full_workflow', 'train_model', 'prepare_data'].filter(Boolean))].slice(0, 3)
 }
 
 export function coachStepsForGoal(goal, dataset) {
@@ -541,7 +546,7 @@ export function coachStepsForGoal(goal, dataset) {
     models: coachStep(
       'models.target',
       'models',
-      'fix-target-handling',
+      'models-setup-target',
       'Train the model path for your question',
       'Prediction and what-if work need a saved trained model.',
       'Choose the target, review model setup, and train at least one model.',
@@ -589,6 +594,7 @@ export function coachStepsForGoal(goal, dataset) {
   ]
   const paths = {
     prepare_data: [...preparePath, common.describe],
+    analyze_relationships: [...preparePath, common.describe, common.analysis, common.report],
     train_model: [...preparePath, common.describe, common.models],
     compare_models: [...preparePath, common.describe, common.models],
     what_if: [...preparePath, common.models, common.whatif],

@@ -5268,6 +5268,22 @@ button.ax-module-head:focus-visible {
   border-top: 0.5px solid var(--color-border-tertiary);
 }
 
+.ax-dd-modeling-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 18px;
+  background: #f0fdf4;
+  border-bottom: 1px solid #bbf7d0;
+  font-size: 11px;
+  color: #166534;
+  flex-shrink: 0;
+}
+.ax-dd-modeling-banner-icon {
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
 .ax-dd-pending {
   display: flex;
   align-items: center;
@@ -8306,8 +8322,11 @@ button.ax-module-head:focus-visible {
 }
 
 .ax-plan-step-redesigned.state-completed {
-  opacity: 0.75;
-  border-color: var(--color-border-tertiary);
+  opacity: 1;
+  background: #f0fdf4;
+  border-color: rgba(22, 163, 74, 0.32);
+  border-left: 3px solid #16a34a;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.08);
 }
 
 .ax-plan-step-redesigned.state-pending {
@@ -8536,9 +8555,9 @@ button.ax-module-head:focus-visible {
 }
 
 .ax-plan-step-redesigned.state-completed .ax-plan-step-header .ax-plan-check {
-  background: #dcfce7 !important;
-  border-color: #dcfce7 !important;
-  color: #16a34a !important;
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #ffffff !important;
 }
 
 .ax-plan-step-redesigned.state-active .ax-plan-step-header .ax-plan-check {
@@ -8548,8 +8567,9 @@ button.ax-module-head:focus-visible {
 }
 
 .ax-plan-step-redesigned .ax-plan-status.completed {
-  background: #e6f4ea !important;
+  background: #dcfce7 !important;
   color: #137333 !important;
+  border: 1px solid rgba(22, 163, 74, 0.18) !important;
 }
 
 .ax-plan-step-redesigned .ax-plan-requirement.required {
@@ -9012,6 +9032,30 @@ button.ax-module-head:focus-visible {
 
 #spotlight-hole {
   transition: x 300ms ease, y 300ms ease, width 300ms ease, height 300ms ease;
+}
+
+/* ── Missing Values Guided Focus: interaction blocking overlay ── */
+/* Full-screen transparent shield that prevents clicks on off-target elements */
+.guide-interaction-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 1999;
+  background: transparent;
+  pointer-events: all;
+  cursor: default;
+}
+
+/* Elevates the spotlighted target above the blocker so it can be clicked */
+.guide-step-target-active {
+  position: relative !important;
+  z-index: 2001 !important;
+}
+
+/* Same as above, but also preserves scrollability for table-like targets */
+.guide-step-target-scrollable {
+  position: relative !important;
+  z-index: 2001 !important;
+  overflow-y: auto !important;
 }
 
 .guided-focus-card {
@@ -11668,18 +11712,58 @@ button.ax-module-head:focus-visible {
 .ax-explain-mode-on .ax-edge-tab {
   cursor: help !important;
 }
+.ax-explain-mode-on .ax-floating-pill-action:hover {
+  outline: 1.5px solid rgba(249, 115, 22, 0.65);
+  outline-offset: 3px;
+}
+.ax-explain-mode-on .ax-floating-pill-action {
+  cursor: help !important;
+}
 .ax-expand-explain-popup {
   position: fixed;
   width: 374px;
+  max-height: var(--explain-popup-max-height, calc(100vh - 24px));
   z-index: 9999;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   background: #fff;
-  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.14);
+  box-shadow:
+    0 22px 48px rgba(249, 115, 22, 0.18),
+    0 8px 22px rgba(15, 23, 42, 0.10);
   color: #1e293b;
-  overflow: hidden;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+.ax-expand-explain-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  transform: rotate(45deg);
+  z-index: 0;
+  pointer-events: none;
+}
+.ax-explain-placement-right-start .ax-expand-explain-arrow {
+  border-right: 0;
+  border-top: 0;
+}
+.ax-explain-placement-left-start .ax-expand-explain-arrow {
+  border-left: 0;
+  border-bottom: 0;
+}
+.ax-explain-placement-bottom-start .ax-expand-explain-arrow {
+  border-right: 0;
+  border-bottom: 0;
+}
+.ax-explain-placement-top-start .ax-expand-explain-arrow {
+  border-left: 0;
+  border-top: 0;
 }
 .ax-expand-explain-popup-head {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -11717,7 +11801,10 @@ button.ax-module-head:focus-visible {
   color: #475569;
 }
 .ax-expand-explain-popup-body {
-  max-height: 430px;
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 14px 18px;
   display: grid;
@@ -11738,6 +11825,20 @@ button.ax-module-head:focus-visible {
   font-size: 12px;
   line-height: 1.5;
 }
+.ax-expand-explain-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  color: #f97316;
+}
+.ax-expand-explain-loading strong {
+  color: #f97316;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .ax-expand-explain-verdict {
   display: inline-flex;
   padding: 7px 9px;
@@ -11757,6 +11858,9 @@ button.ax-module-head:focus-visible {
   color: #b91c1c;
 }
 .ax-expand-explain-popup-foot {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-start;
   flex-wrap: wrap;
@@ -11766,6 +11870,9 @@ button.ax-module-head:focus-visible {
   background: #fff;
 }
 .ax-expand-explain-followup {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
   display: flex;
   gap: 6px;
   padding: 8px 18px 12px;
@@ -12226,6 +12333,10 @@ button.ax-module-head:focus-visible {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));
   gap: 12px;
+}
+.ax-models-config-control {
+  min-width: 0;
+  display: flex;
 }
 .ax-models-config-grid .models-config-dropdown-container {
   min-width: 0 !important;

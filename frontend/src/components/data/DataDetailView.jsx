@@ -120,6 +120,7 @@ export default function DataDetailView({
   const [loading, setLoading] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [rowError, setRowError] = useState(null)
+  const [stageList, setStageList] = useState([])
 
   const [aboutData, setAboutData] = useState(null)
   const [aboutLoading, setAboutLoading] = useState(false)
@@ -161,17 +162,17 @@ export default function DataDetailView({
     })
   }, [rows, undoStack])
 
-  // Sync hasChanges to global table state
+  // Sync hasChanges to global table state — also true when backend stages already exist
   useEffect(() => {
-    setHasChanges(undoStack.length > 0)
-  }, [undoStack.length, setHasChanges])
+    setHasChanges(undoStack.length > 0 || Boolean(currentStageId))
+  }, [undoStack.length, currentStageId, setHasChanges])
 
-  // Switch back to original view when all changes are undone
+  // Switch back to original view only when undoStack is empty AND no backend stages exist
   useEffect(() => {
-    if (undoStack.length === 0 && viewMode !== 'original') {
+    if (undoStack.length === 0 && !currentStageId && viewMode !== 'original') {
       setViewMode('original')
     }
-  }, [undoStack.length, viewMode, setViewMode])
+  }, [undoStack.length, currentStageId, viewMode, setViewMode])
 
   const [headerEdit, setHeaderEdit] = useState(null)
   const [savingHeader, setSavingHeader] = useState(false)
@@ -192,7 +193,42 @@ export default function DataDetailView({
     [effectiveVisibleColumns, tableVariables],
   )
 
-  const effectiveStageId = viewMode === 'original' ? 'original' : stageId
+  // Fetch the ordered stage list so "For Modeling" can stop before scale/encode stages.
+  useEffect(() => {
+    if (!datasetId) return
+    let cancelled = false
+    api.listStages(datasetId)
+      .then((r) => { if (!cancelled) setStageList(Array.isArray(r.stages) ? r.stages : []) })
+      .catch(() => { if (!cancelled) setStageList([]) })
+    return () => { cancelled = true }
+  }, [datasetId, currentStageId])
+
+  // Last stage BEFORE any exploratory scale/encode operations — used for "For Modeling" view.
+  const modelingStageId = useMemo(() => {
+    const stages = stageList.filter((s) => s.id !== 'original')
+    if (!stages.length) return currentStageId || null
+    let latest = null
+    for (const s of stages) {
+      const text = `${s.op_type || ''} ${s.summary || ''}`.toLowerCase()
+      const isScaleEncode = (
+        text.includes('zscore') || text.includes('z-score') ||
+        text.includes('minmax') || text.includes('min-max') ||
+        text.includes('scaled') || text.includes('standardize_numeric') ||
+        text.includes('encoded')
+      )
+      if (isScaleEncode) break
+      latest = s.id
+    }
+    return latest || currentStageId || null
+  }, [currentStageId, stageList])
+
+  // For "For Modeling", use the last pre-scale/pre-encode stage.
+  // For other views, use stageId as-is (null means backend infers the current stage).
+  const effectiveStageId = viewMode === 'original'
+    ? 'original'
+    : viewMode === 'modeling'
+      ? (modelingStageId || currentStageId || null)
+      : (stageId || null)
   const readOnly = viewMode === 'original' || (!!stageId && stageId !== currentStageId)
 
   // load AI describe
@@ -221,8 +257,10 @@ export default function DataDetailView({
     }
   }, [datasetId, dataset?.current_stage_id, auth.isGuest])
 
-  // reset on stage / refresh
+  // reset on stage / refresh — also clear any stale page-1 cache entry so the
+  // next load always goes to the network rather than serving a cached empty result.
   useEffect(() => {
+    tablePageCache.delete(`${datasetId}|${effectiveStageId}|${refreshKey}|${viewMode}|1`)
     setRows([])
     setRowColumns([])
     setVisibleColumns([])
@@ -235,6 +273,12 @@ export default function DataDetailView({
     setUndoStack([])
     setRedoStack([])
   }, [datasetId, effectiveStageId, refreshKey, viewMode])
+
+  // Clear the table page cache on component mount to ensure fresh data loads
+  // when navigating back to this tab.
+  useEffect(() => {
+    tablePageCache.clear()
+  }, [])
 
   // Restore persisted table state on mount (runs after reset, so it overrides)
   useEffect(() => {
@@ -280,12 +324,23 @@ export default function DataDetailView({
       .getRows(datasetId, page, PAGE_SIZE, effectiveStageId)
       .then((r) => {
         if (cancelled) return
-        const columns = r.rows?.[0] ? Object.keys(r.rows[0]).filter((key) => key !== '__row_index') : []
-        tablePageCache.set(ck, { rows: r.rows, columns, total: r.total || 0, hasMore: page * PAGE_SIZE < (r.total || 0) })
-        setRows(r.rows)
+        const fetchedRows = Array.isArray(r.rows) ? r.rows : []
+        const fetchedTotal = r.total || 0
+        const maxPage = Math.max(1, Math.ceil(fetchedTotal / PAGE_SIZE))
+        if (fetchedTotal > 0 && fetchedRows.length === 0 && page > maxPage) {
+          setPage(maxPage)
+          return
+        }
+        const columns = fetchedRows[0] ? Object.keys(fetchedRows[0]).filter((key) => key !== '__row_index') : []
+        // Only cache non-empty responses — empty results may be transient (stage not yet ready,
+        // backend reset in progress) and must never permanently block subsequent fetches.
+        if (fetchedRows.length > 0 || fetchedTotal > 0) {
+          tablePageCache.set(ck, { rows: fetchedRows, columns, total: fetchedTotal, hasMore: page * PAGE_SIZE < fetchedTotal })
+        }
+        setRows(fetchedRows)
         if (columns.length) setRowColumns(columns)
-        setTotal(r.total || 0)
-        setHasMore(page * PAGE_SIZE < (r.total || 0))
+        setTotal(fetchedTotal)
+        setHasMore(page * PAGE_SIZE < fetchedTotal)
       })
       .catch((err) => {
         if (!cancelled) {
@@ -896,6 +951,16 @@ export default function DataDetailView({
         <div className="ax-dd-pending">
           {savingEdits && <span>Saving cell edit...</span>}
           {cellError && <span className="ax-dd-error">{cellError}</span>}
+        </div>
+      )}
+
+      {viewMode === 'modeling' && (
+        <div className="ax-dd-modeling-banner">
+          <span className="ax-dd-modeling-banner-icon">✦</span>
+          <span>
+            Showing data as it enters the model — scaled and encoded columns are excluded.
+            Scaling and encoding are applied automatically during training.
+          </span>
         </div>
       )}
 

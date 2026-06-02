@@ -71,6 +71,23 @@ export default function FloatingAIAssistant() {
     inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 132)}px`
   }, [input])
 
+  useEffect(() => {
+    const handleOpenAi = (e) => {
+      if (auth.loading) return
+      if (!auth.isAuthenticated) {
+        auth.requireAccountForAI()
+        return
+      }
+      setOpen(true)
+      const prompt = e?.detail?.prompt
+      if (prompt && typeof prompt === 'string') {
+        setInput(prompt)
+      }
+    }
+    window.addEventListener('simucast:open-ai', handleOpenAi)
+    return () => window.removeEventListener('simucast:open-ai', handleOpenAi)
+  }, [auth])
+
   const openAssistant = () => {
     if (auth.loading) return
     if (!auth.isAuthenticated) {

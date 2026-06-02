@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
  * COMPONENT: GuidedFocusCard
  * Keywords: guided workflow, spotlight, contextual card
  * ============================================================ */
@@ -8,6 +8,23 @@ import { api } from '../../api'
 import { coachStepsForGoal, currentCoachStep, nextCoachStep } from './ProjectGuidanceSetup'
 import { checkCoachCompletion, routeTarget } from './GuidedCoach'
 import { Check, ArrowRight, AlertTriangle, Tag, BarChart2, Sliders, FileCheck } from 'lucide-react'
+import GuideFocusExplainCard from './GuideFocusExplainCard'
+import GuidedTaskCompletionModal from './GuidedTaskCompletionModal'
+
+const isIssueTool = (toolKey) => ['missing', 'outliers', 'duplicates', 'labels'].includes(toolKey)
+
+const issuePendingForTool = (toolKey, suggestionData, dataset) => {
+  if (!suggestionData?.groups) return true
+  if (toolKey === 'missing') {
+    const hasMissing = (dataset?.variables || []).some((v) => Number(v.missing || 0) > 0)
+    const cols = suggestionData.groups.missing?.columns || []
+    return hasMissing && cols.length > 0
+  }
+  if (toolKey === 'outliers') return (suggestionData.groups.outliers?.columns?.length || 0) > 0
+  if (toolKey === 'duplicates') return (suggestionData.groups.duplicates?.count || 0) > 0
+  if (toolKey === 'labels') return (suggestionData.suggestions || []).length > 0
+  return false
+}
 
 const STEP_CONFIGS = {
   'data.suggested_fixes': {
@@ -107,7 +124,7 @@ const STEP_CONFIGS = {
 const completionModalConfig = {
   missing: {
     title: "Missing values handled!",
-    subtitle: "SimuCast filled blanks using median and mode — no rows were removed.",
+    subtitle: "SimuCast filled blanks using median and mode â€” no rows were removed.",
     stats: (snapshot, ds) => {
       const cols = snapshot?.groups?.missing?.columns || []
       const cellsFilled = cols.reduce((sum, col) => sum + (col.count || col.missing || 5), 0) || 26
@@ -207,7 +224,7 @@ const completionModalConfig = {
     confetti: false
   },
   all: {
-    title: "Dataset is ready! 🎉",
+    title: "Dataset is ready! ðŸŽ‰",
     subtitle: "All steps complete. Your data is clean, consistent, and prepared for modeling.",
     stats: (snapshot, ds) => {
       const rows = ds?.row_count || 344
@@ -888,328 +905,20 @@ export default function GuidedFocusCard({ dataset, activeTab, onGuidanceUpdated 
   if (!dataset?.id || !guidance.guided_mode || !current || !config || activeTab !== 'data') return null
   if (isIssueTool(config.toolKey) && suggestionData && !issueStepPending && subStep === 1 && !showModal && !cardDismissed) return null
 
-  // Calculate descriptive what simucast sees text
-  const getSeesText = () => {
-    if (!suggestionData) return 'Checking columns for issues...'
-    const key = config.toolKey
-    if (key === 'missing') {
-      const count = suggestionData.groups?.missing?.columns?.length || 0
-      return count > 0 
-        ? `${count} column${count === 1 ? '' : 's'} have missing values.` 
-        : 'No missing values detected in the current stage.'
-    }
-    if (key === 'outliers') {
-      const count = suggestionData.groups?.outliers?.columns?.length || 0
-      return count > 0 
-        ? `${count} column${count === 1 ? '' : 's'} have outliers.` 
-        : 'No outliers detected in the current stage.'
-    }
-    if (key === 'duplicates') {
-      const count = suggestionData.groups?.duplicates?.count || 0
-      return count > 0 
-        ? `${count} duplicate row${count === 1 ? '' : 's'} detected.` 
-        : 'No duplicate rows detected in the current stage.'
-    }
-    if (key === 'labels') {
-      return 'Inconsistent or fuzzy categories detected in categorical columns.'
-    }
-    return 'Analyzing active data stage...'
-  }
-
-  const persist = async (body) => {
-    // Optimistically update parent state so guidance modes/overlays close instantly
-    onGuidanceUpdated?.({ ...guidance, ...body })
-    if (isMountedRef.current) setBusy(true)
-    try {
-      const response = await api.updateGuidance(dataset.id, body)
-      onGuidanceUpdated?.(response.guidance)
-    } catch (err) {
-      console.error(err)
-      onGuidanceUpdated?.(guidance)
-    } finally {
-      if (isMountedRef.current) setBusy(false)
-    }
-  }
-
-  const handleDoneReviewing = () => {
-    const btn = document.getElementById(`tb-${config.toolKey}`)
-    if (btn) {
-      btn.click()
-    }
-    setSubStep(2)
-  }
-
-  const handleDoneReviewingChanges = () => {
-    if (config) {
-      const toolKey = config.toolKey
-      const dismissed = guidance.dismissed_tips || []
-      const nextStepObj = nextActionableCoachStep(guidance.goal || guidance.intent, dataset, current.id, dismissed, suggestionData)
-      const isAllComplete = !nextStepObj || nextStepObj.page !== 'data'
-      let type = toolKey
-      if (isAllComplete) {
-        type = 'all'
-      }
-      const activeContent = completionModalConfig[type]
-      if (activeContent) {
-        const stats = typeof activeContent.stats === 'function'
-          ? activeContent.stats(suggestionData, dataset)
-          : activeContent.stats
-        let finalTitle = activeContent.title
-        let finalSub = activeContent.subtitle || activeContent.sub
-        let finalStats = stats
-        let finalNext = activeContent.next
-        let finalCont = activeContent.continueLabel || activeContent.cont
-        let finalStep = activeContent.stepIndex
-        let isFinalSuccess = isAllComplete
-
-        if (nextStepObj) {
-          if (nextStepObj.id === 'data.outliers') {
-            finalNext = {
-              icon: "AlertTriangle",
-              title: "Review outliers in numeric columns",
-              description: "Some columns have extreme values that may affect accuracy.",
-              badge: "Recommended",
-              cls: "ax-completion-nb-rec"
-            }
-            finalCont = "Go to Outliers"
-          } else if (nextStepObj.id === 'data.duplicates') {
-            finalNext = {
-              icon: "FileCheck",
-              title: "Remove duplicate rows",
-              description: "Repeated rows can overcount records and skew statistical patterns.",
-              badge: "Required",
-              cls: "ax-completion-nb-req"
-            }
-            finalCont = "Go to Duplicates"
-          } else if (nextStepObj.id === 'data.categories') {
-            finalNext = {
-              icon: "Tag",
-              title: "Standardize categorical labels",
-              description: "Inconsistent labels like True/Yes/graduated need to be unified.",
-              badge: "Required",
-              cls: "ax-completion-nb-req"
-            }
-            finalCont = "Go to Labels"
-          } else {
-            const pageTitle = nextStepObj.page.charAt(0).toUpperCase() + nextStepObj.page.slice(1)
-            const icoName = nextStepObj.page === 'describe' ? 'BarChart2' : nextStepObj.page === 'models' ? 'Sliders' : 'ArrowRight'
-            finalNext = {
-              icon: icoName,
-              title: nextStepObj.title,
-              description: nextStepObj.unlocks || nextStepObj.action,
-              badge: "Next",
-              cls: "ax-completion-nb-next"
-            }
-            finalCont = `Go to ${pageTitle}`
-          }
-        }
-
-        setModalConfig({
-          type,
-          title: finalTitle,
-          sub: finalSub,
-          stats: finalStats,
-          next: finalNext,
-          cont: finalCont,
-          step: finalStep,
-          nextStepObj,
-          isFinalSuccess
-        })
-      }
-    }
-
-    setAnimationState('closing')
-    setTimeout(() => {
-      setCardDismissed(true)
-      setAnimationState('')
-      setTimeout(() => {
-        setShowModal(true)
-      }, 220)
-    }, 180)
-  }
-
-  const currentSub = config.subSteps[displaySubStep]
-
-  const closeCardAndPersist = (body) => {
-    setAnimationState('closing')
-    setTimeout(() => {
-      persist(body)
-    }, 180)
-  }
-
+  // Guide focus explain card â€” single concise card replacing all multi-step flows
   return (
     <>
-      <aside
-        className={`guided-focus-card guided-focus ${animationState}`}
-        data-arrow-side={cardPosition.arrowSide}
-        style={{
-          top: `${cardPosition.top}px`,
-          left: `${cardPosition.left}px`,
-          '--arrow-left': `${cardPosition.arrowLeft}px`,
-          '--arrow-top': `${cardPosition.arrowTop}px`,
-          zIndex: 2010
-        }}
-      >
-        <div className={`gf-content ${contentAnimClass}`} style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-          <div className="ax-guided-coach-step-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-            <p className="ax-kicker" style={{ margin: 0, textTransform: 'uppercase', fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.08em', color: '#f97316' }}>
-              Guided Focus · {displaySubStep} of 3
-            </p>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>{config.title}</span>
-          </div>
-
-          <strong style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-text-primary)', display: 'block', margin: '2px 0 2px' }}>
-            {currentSub?.title}
-          </strong>
-
-          <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: 1.45 }}>
-            {displaySubStep === 1 && (
-              <p style={{ margin: 0 }}>
-                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>What SimuCast sees:</span><br />
-                {getSeesText()}
-              </p>
-            )}
-            
-            <p className="do-this-now" style={{ margin: 0 }}>
-              <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Do this now:</span><br />
-              {currentSub?.action}
-            </p>
-
-            {displaySubStep === 1 && config.why && (
-              <p style={{ margin: 0, fontSize: '11.5px', opacity: 0.85, borderLeft: '2px solid #fdba74', paddingLeft: '8px' }}>
-                <span style={{ fontWeight: 600 }}>Why:</span> {config.why}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="ax-guided-coach-actions" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
-          {displaySubStep === 1 && (
-            <button className="ax-btn mini prim" type="button" onClick={handleDoneReviewing} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
-              I am done reviewing
-            </button>
-          )}
-          
-          {displaySubStep === 2 && (
-            <button
-              className="ax-btn mini ghost"
-              type="button"
-              onClick={() => {
-                closingPopoverRef.current = true
-                setTimeout(() => {
-                  closingPopoverRef.current = false
-                }, 400)
-                const closeBtn = document.querySelector('.ax-popover-close')
-                if (closeBtn) {
-                  closeBtn.click()
-                } else {
-                  const activeBtn = document.getElementById(`tb-${config.toolKey}`)
-                  if (activeBtn?.classList.contains('active')) {
-                    activeBtn.click()
-                  }
-                }
-                setSubStep(1)
-              }}
-            >
-              Back
-            </button>
-          )}
-
-          {displaySubStep === 3 && (
-            <button className="ax-btn mini prim" type="button" disabled={busy || !suggestionData} onClick={handleDoneReviewingChanges} style={{ background: '#f97316', borderColor: '#f97316', color: '#ffffff' }}>
-              {!suggestionData ? 'Loading...' : 'Done reviewing'}
-            </button>
-          )}
-
-          <button className="ax-link-btn" type="button" disabled={busy} onClick={() => closeCardAndPersist({ guided_mode: false })} style={{ marginLeft: 'auto', fontSize: '11.5px', color: 'var(--color-text-secondary)' }}>
-            Explore freely
-          </button>
-        </div>
-      </aside>
-      {targetRect && !showModal && !cardDismissed && (
-        <SpotlightMask rect={targetRect} />
-      )}
+      <GuideFocusExplainCard
+        dataset={dataset}
+        guidance={guidance}
+        suggestionData={suggestionData}
+        onGuidanceUpdated={onGuidanceUpdated}
+        toolKey={config.toolKey}
+        taskLabel={config.title || config.toolKey}
+        onDismiss={() => setCardDismissed(true)}
+      />
       {renderModal()}
     </>
   )
-}
 
-function SpotlightMask({ rect }) {
-  if (!rect) return null
-  return (
-    <svg
-      className="spotlight-overlay show"
-      width="100%"
-      height="100%"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 2000,
-        pointerEvents: 'none'
-      }}
-    >
-      <defs>
-        <mask id="spotlight-mask-focus">
-          <rect width="100%" height="100%" fill="white" />
-          <rect
-            id="spotlight-hole-focus"
-            style={{
-              transition: 'x 150ms ease, y 150ms ease, width 150ms ease, height 150ms ease'
-            }}
-            x={rect.left - 8}
-            y={rect.top - 8}
-            width={rect.width + 16}
-            height={rect.height + 16}
-            rx="8"
-            fill="black"
-          />
-        </mask>
-      </defs>
-      <rect
-        width="100%"
-        height="100%"
-        fill="rgba(0,0,0,0.6)"
-        mask="url(#spotlight-mask-focus)"
-      />
-    </svg>
-  )
-}
-
-function isIssueTool(toolKey) {
-  return ['missing', 'outliers', 'duplicates', 'labels'].includes(toolKey)
-}
-
-function issuePendingForTool(toolKey, suggestionData, dataset) {
-  if (toolKey === 'missing') {
-    const suggested = suggestionData?.groups?.missing?.columns || []
-    if (suggested.length) return true
-    return (dataset?.variables || []).some((variable) => Number(variable.missing || 0) > 0)
   }
-  if (toolKey === 'outliers') return Boolean((suggestionData?.groups?.outliers?.columns || []).length)
-  if (toolKey === 'duplicates') return Number(suggestionData?.groups?.duplicates?.count || 0) > 0
-  if (toolKey === 'labels') return Boolean((suggestionData?.suggestions || []).length)
-  return true
-}
-
-function stepStillActionable(step, suggestionData, dataset) {
-  if (!step?.completion) return true
-  if (step.completion === 'missing') return issuePendingForTool('missing', suggestionData, dataset)
-  if (step.completion === 'outliers') return issuePendingForTool('outliers', suggestionData, dataset)
-  if (step.completion === 'duplicates') return issuePendingForTool('duplicates', suggestionData, dataset)
-  if (step.completion === 'categories') {
-    if (suggestionData && 'suggestions' in suggestionData) {
-      return (suggestionData.suggestions || []).length > 0
-    }
-    return true
-  }
-  return true
-}
-
-function nextActionableCoachStep(goal, dataset, currentId, dismissedTips, suggestionData) {
-  const hidden = new Set(dismissedTips || [])
-  const steps = coachStepsForGoal(goal, dataset)
-  const currentIndex = steps.findIndex((step) => step.id === currentId)
-  return steps
-    .slice(Math.max(currentIndex + 1, 0))
-    .find((step) => !hidden.has(step.id) && stepStillActionable(step, suggestionData, dataset)) || null
-}

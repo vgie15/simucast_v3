@@ -114,7 +114,17 @@ export default function ExpandPage({ dataset, setDataset }) {
     event?.stopPropagation?.()
     const target = event?.currentTarget || event?.target
     const sourceRect = target?.getBoundingClientRect ? target.getBoundingClientRect() : null
-    setExplainPopup(buildExpandExplainMeta(meta, { dataset, preview, method, targetRows, noisePct, avgDrift, distinctRows, sourceRect }))
+    setExplainPopup(buildExpandExplainMeta(meta, {
+      dataset,
+      preview,
+      method,
+      targetRows,
+      noisePct,
+      avgDrift,
+      distinctRows,
+      sourceEl: target?.getBoundingClientRect ? target : null,
+      sourceRect,
+    }))
   }
 
   const explainAttrs = (meta, className = '', capture = false) => {
@@ -149,6 +159,7 @@ export default function ExpandPage({ dataset, setDataset }) {
         noisePct,
         avgDrift,
         distinctRows,
+        sourceEl: tab,
         sourceRect: tab.getBoundingClientRect(),
       }))
     }
@@ -583,18 +594,18 @@ function ExpandExplainPopup({ datasetId, element, onClose }) {
   const [mode, setMode] = useState('normal')
   const [followUpInput, setFollowUpInput] = useState('')
   const [followUpLoading, setFollowUpLoading] = useState(false)
-  const [position, setPosition] = useState({ top: 84, left: 24 })
+  const [position, setPosition] = useState(() => getExpandExplainPosition(getLiveExpandExplainRect(element)))
 
   useEffect(() => {
-    if (!element?.sourceRect) return
-    const popupW = 330
-    const popupH = 390
-    const { innerWidth, innerHeight } = window
-    let top = element.sourceRect.bottom + 8
-    let left = Math.max(12, Math.min(element.sourceRect.left, innerWidth - popupW - 12))
-    if (top + popupH > innerHeight - 16) top = Math.max(12, element.sourceRect.top - popupH - 8)
-    setPosition({ top, left })
-  }, [element?.sourceRect])
+    const updatePosition = () => setPosition(getExpandExplainPosition(getLiveExpandExplainRect(element)))
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [element?.id, element?.sourceEl, element?.sourceRect])
 
   const fetchAI = async (variant = 'normal') => {
     if (!datasetId || !element) return
@@ -613,7 +624,7 @@ function ExpandExplainPopup({ datasetId, element, onClose }) {
         fallbackVerdict: element.verdict,
       }
       const response = await api.aiExplain(datasetId, `expand-${element.id}-${variant}`, payload, question, { element: payload })
-      setAiText(response?.explanation || element.datasetExplanation)
+      setAiText(cleanExpandExplainText(response?.explanation, element.datasetExplanation))
     } catch {
       setAiText(element.datasetExplanation)
     } finally {
@@ -632,7 +643,7 @@ function ExpandExplainPopup({ datasetId, element, onClose }) {
         previousExplanation: aiText || element.datasetExplanation,
       }
       const response = await api.aiExplain(datasetId, `expand-${element.id}-followup`, payload, followUpInput, { element: payload })
-      setAiText(response?.explanation || element.datasetExplanation)
+      setAiText(cleanExpandExplainText(response?.explanation, element.datasetExplanation))
       setFollowUpInput('')
       setMode('normal')
     } catch {
@@ -654,15 +665,20 @@ function ExpandExplainPopup({ datasetId, element, onClose }) {
 
   return createPortal(
     <div
-      className="ax-expand-explain-popup"
-      style={{ top: position.top, left: position.left }}
+      className={`ax-expand-explain-popup ax-explain-placement-${position.placement}`}
+      style={{ top: position.top, left: position.left, '--explain-popup-max-height': `${position.maxHeight}px` }}
       role="dialog"
       aria-modal="true"
       aria-label={`${element.title} explanation`}
     >
+      <span
+        className="ax-expand-explain-arrow"
+        style={{ top: position.arrowTop, left: position.arrowLeft }}
+        aria-hidden="true"
+      />
       <div className="ax-expand-explain-popup-head">
         <div>
-          <p>AI Explain · {element.title}</p>
+          <p>AI Explain &middot; {element.title}</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close explanation">&times;</button>
       </div>
@@ -674,7 +690,10 @@ function ExpandExplainPopup({ datasetId, element, onClose }) {
         <section>
           <span>In this dataset</span>
           {loading ? (
-            <InlineSpinner label="Generating explanation..." />
+            <div className="ax-expand-explain-loading">
+              <InlineSpinner label="" />
+              <strong>Generating explanation...</strong>
+            </div>
           ) : (
             <p>{aiText || element.datasetExplanation}</p>
           )}
@@ -714,8 +733,111 @@ function ExpandExplainPopup({ datasetId, element, onClose }) {
   )
 }
 
+function getExpandExplainPosition(sourceRect) {
+  const popupW = 374
+  const gap = 8
+  const padding = 12
+  const viewportW = typeof window === 'undefined' ? 1280 : window.innerWidth
+  const viewportH = typeof window === 'undefined' ? 720 : window.innerHeight
+  const popupH = Math.max(280, Math.min(560, viewportH - (padding * 2)))
+  const anchor = normalizeExpandExplainRect(sourceRect)
+  if (!anchor) {
+    return { top: 84, left: padding, placement: 'right-start', arrowTop: 24, arrowLeft: -6, maxHeight: popupH }
+  }
+
+  const placements = anchor.bottom > viewportH * 0.68
+    ? ['top-start', 'right-start', 'left-start', 'bottom-start']
+    : ['right-start', 'left-start', 'bottom-start', 'top-start']
+  for (const placement of placements) {
+    const candidate = buildExpandExplainCandidate(placement, anchor, popupW, popupH, gap, padding, viewportW, viewportH)
+    if (!expandRectsOverlap(candidate.rect, anchor)) return candidate
+  }
+
+  const rightSpace = viewportW - anchor.right - gap - padding
+  const leftSpace = anchor.left - gap - padding
+  const fallbackPlacement = rightSpace >= leftSpace ? 'right-start' : 'left-start'
+  return buildExpandExplainCandidate(fallbackPlacement, anchor, popupW, popupH, gap, padding, viewportW, viewportH)
+}
+
+function buildExpandExplainCandidate(placement, anchor, popupW, popupH, gap, padding, viewportW, viewportH) {
+  let left = anchor.right + gap
+  let top = anchor.top
+  if (placement === 'left-start') {
+    left = anchor.left - popupW - gap
+    top = anchor.top
+  } else if (placement === 'bottom-start') {
+    left = anchor.left
+    top = anchor.bottom + gap
+  } else if (placement === 'top-start') {
+    left = anchor.left
+    top = anchor.top - popupH - gap
+  }
+
+  left = expandClamp(left, padding, Math.max(padding, viewportW - popupW - padding))
+  top = expandClamp(top, padding, Math.max(padding, viewportH - popupH - padding))
+
+  const rect = { left, top, right: left + popupW, bottom: top + popupH }
+  const arrow = getExpandExplainArrowPosition(placement, anchor, rect, popupW, popupH)
+  return { top, left, placement, rect, maxHeight: popupH, ...arrow }
+}
+
+function getLiveExpandExplainRect(element) {
+  if (element?.sourceEl?.isConnected && typeof element.sourceEl.getBoundingClientRect === 'function') {
+    return element.sourceEl.getBoundingClientRect()
+  }
+  return element?.sourceRect || null
+}
+
+function getExpandExplainArrowPosition(placement, anchor, popup, popupW, popupH) {
+  if (placement === 'right-start' || placement === 'left-start') {
+    return {
+      arrowLeft: placement === 'right-start' ? -6 : popupW - 6,
+      arrowTop: expandClamp(anchor.top + Math.min(anchor.height / 2, 20) - popup.top, 18, popupH - 18),
+    }
+  }
+  return {
+    arrowLeft: expandClamp(anchor.left + Math.min(anchor.width / 2, 30) - popup.left, 18, popupW - 18),
+    arrowTop: placement === 'bottom-start' ? -6 : popupH - 6,
+  }
+}
+
+function normalizeExpandExplainRect(rect) {
+  if (!rect) return null
+  const left = Number(rect.left)
+  const top = Number(rect.top)
+  const width = Number(rect.width || rect.right - rect.left)
+  const height = Number(rect.height || rect.bottom - rect.top)
+  if (![left, top, width, height].every(Number.isFinite)) return null
+  return { left, top, width, height, right: left + width, bottom: top + height }
+}
+
+function expandRectsOverlap(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+}
+
+function expandClamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function cleanExpandExplainText(text, fallback) {
+  const value = String(text || '').trim()
+  if (!value) return fallback
+  const lower = value.toLowerCase()
+  const looksRaw =
+    value.startsWith('{') ||
+    value.startsWith('[') ||
+    lower.includes('anthropic_api_key') ||
+    lower.includes('api key') ||
+    lower.includes('traceback') ||
+    lower.includes('request payload') ||
+    lower.includes('"clickedmetric"') ||
+    lower.includes('"targetvariable"') ||
+    lower.includes('params: {')
+  return looksRaw ? fallback : value
+}
+
 function buildExpandExplainMeta(meta, context) {
-  const { dataset, preview, method, targetRows, noisePct, avgDrift, distinctRows, sourceRect } = context
+  const { dataset, preview, method, targetRows, noisePct, avgDrift, distinctRows, sourceEl, sourceRect } = context
   const rowsBefore = Number(dataset?.row_count || 0)
   const addedRows = Math.max(0, Number(targetRows || 0) - rowsBefore)
   const values = {
@@ -733,6 +855,7 @@ function buildExpandExplainMeta(meta, context) {
     title: meta.title,
     type: meta.type,
     values,
+    sourceEl,
     sourceRect,
     verdictTone: 'good',
   }

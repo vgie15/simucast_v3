@@ -65,6 +65,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     setActiveChangeIndex,
     setChangeStages,
     setChangeLoading,
+    setHasChanges,
   } = useDatasetTableState(datasetId)
   const [rows, setRows] = useState([])
   const [rowColumns, setRowColumns] = useState([])
@@ -152,6 +153,11 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     setHasMore(false)
     setError('')
   }, [datasetId])
+
+  // Seed hasChanges from persisted dataset stage so tabs are enabled on load
+  useEffect(() => {
+    if (dataset?.current_stage_id) setHasChanges(true)
+  }, [dataset?.current_stage_id, setHasChanges])
 
   useEffect(() => {
     if (!hidden) return

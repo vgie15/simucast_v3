@@ -253,6 +253,7 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         "validation_method": validation_config["validation_method"],
         "cv_folds": validation_config["cv_folds"] if validation_config["validation_method"] == "cross_validation" else None,
         "class_weight": validation_config["class_weight"] if task == "classification" else None,
+        "smote": bool(target_options.get("smote", False)),
         "model_params": {a: _model_default_params(a) for a in algorithms or [] if a in ALGORITHM_CATALOG},
         "multicollinearity": multicollinearity,
         "available_algorithms": available_algorithms,

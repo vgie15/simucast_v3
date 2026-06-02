@@ -32,6 +32,7 @@ bp = Blueprint("datasets", __name__)
 
 _GUIDANCE_GOALS = {
     "prepare_data",
+    "analyze_relationships",
     "train_model",
     "compare_models",
     "what_if",
@@ -55,15 +56,15 @@ def _guidance_intent_for_question(question):
         return "report"
     if re.search(r"(predict|prediction|will .* pass|can .* pass|forecast|likely to|probability)", text):
         return "train_model"
-    if re.search(r"(factor|affect|relationship|related|difference|compare|trend|pattern|explain|explore)", text):
-        return "full_workflow"
+    if re.search(r"(factor|affect|relationship|related|correlat|association|associated|difference|compare|trend|pattern|explain|explore)", text):
+        return "analyze_relationships"
     return None
 
 
 def _guidance_closest_intents(question):
     """Return safe fallback paths when a typed question is still vague."""
     inferred = _guidance_intent_for_question(question)
-    options = [item for item in (inferred, "full_workflow", "train_model", "prepare_data") if item]
+    options = [item for item in (inferred, "analyze_relationships", "full_workflow", "train_model", "prepare_data") if item]
     return list(dict.fromkeys(options))[:3]
 
 
