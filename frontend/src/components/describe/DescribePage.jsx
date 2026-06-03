@@ -42,6 +42,7 @@ import {
   Play,
   Sigma,
   Tags,
+  Trash2,
   X,
   LayoutGrid
 } from 'lucide-react'
@@ -87,6 +88,96 @@ const CB_CHART_TYPES = [
   { key: 'horizontal bar', label: 'H. Bar' },
   { key: 'bubble', label: 'Bubble' },
 ]
+const CB_LAYER_TYPES = [
+  { key: 'bar', label: 'Bar' },
+  { key: 'line', label: 'Line' },
+  { key: 'scatter', label: 'Scatter' },
+]
+const CB_COMBINABLE_TYPES = new Set(CB_LAYER_TYPES.map(t => t.key))
+
+const chartTypeLabel = (type) => {
+  if (type === 'horizontal bar') return 'H. Bar'
+  if (!type) return 'Chart'
+  return type.charAt(0).toUpperCase() + type.slice(1)
+}
+
+const normalizeHexColor = (value, fallback = '#f97316') => {
+  const text = String(value || '').trim()
+  if (/^#[0-9a-fA-F]{6}$/.test(text)) return text
+  if (/^[0-9a-fA-F]{6}$/.test(text)) return `#${text}`
+  return fallback
+}
+
+const makeChartLayer = (index = 0, base = {}) => ({
+  id: base.id || `layer-${Date.now()}-${index}`,
+  type: base.type || 'bar',
+  x: base.x || '',
+  y: base.y || '',
+  color: normalizeHexColor(base.color, CB_COLORS[index % CB_COLORS.length]),
+})
+
+const normalizeChartLayers = (layers, fallback = {}) => {
+  const source = Array.isArray(layers) && layers.length
+    ? layers
+    : [{ type: fallback.type, x: fallback.xAxis, y: fallback.yAxis, color: fallback.color }]
+  return source.slice(0, 3).map((layer, index) => makeChartLayer(index, {
+    id: layer.id,
+    type: layer.type || fallback.type || 'bar',
+    x: layer.x ?? fallback.xAxis ?? '',
+    y: layer.y ?? fallback.yAxis ?? '',
+    color: layer.color || CB_COLORS[index % CB_COLORS.length],
+  }))
+}
+
+const buildMixedChartData = (rows, layers, agg = 'Mean') => {
+  const activeLayers = (layers || []).filter(layer => layer?.x && layer?.y && CB_COMBINABLE_TYPES.has(layer.type))
+  if (!rows?.length || activeLayers.length < 2) return null
+  const xAxis = activeLayers[0].x
+  if (!xAxis || activeLayers.some(layer => layer.x !== xAxis)) return null
+  const labels = Array.from(new Set(rows.map(row => String(row[xAxis] ?? 'None')))).sort()
+  const aggregateValue = (groupRows, col, type) => {
+    if (type === 'Count') return groupRows.length
+    const nums = groupRows.map(row => Number(row[col])).filter(Number.isFinite)
+    if (!nums.length) return 0
+    if (type === 'Sum') return nums.reduce((a, b) => a + b, 0)
+    if (type === 'Mean') return nums.reduce((a, b) => a + b, 0) / nums.length
+    if (type === 'Max') return Math.max(...nums)
+    return 0
+  }
+  return {
+    labels,
+    datasets: activeLayers.map((layer, index) => {
+      const color = layer.color || CB_COLORS[index % CB_COLORS.length]
+      if (layer.type === 'scatter') {
+        return {
+          type: 'scatter',
+          label: `${layer.y} (scatter)`,
+          data: rows
+            .map(row => ({ x: String(row[xAxis] ?? 'None'), y: Number(row[layer.y]) }))
+            .filter(point => point.x && Number.isFinite(point.y))
+            .slice(0, 500),
+          backgroundColor: color,
+          borderColor: color,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        }
+      }
+      return {
+        type: layer.type,
+        label: `${layer.y} (${layer.type})`,
+        data: labels.map(label => aggregateValue(rows.filter(row => String(row[xAxis] ?? 'None') === label), layer.y, agg)),
+        backgroundColor: layer.type === 'bar' ? color : `${color}22`,
+        borderColor: color,
+        borderWidth: layer.type === 'line' ? 2.5 : 1,
+        borderRadius: layer.type === 'bar' ? 4 : undefined,
+        tension: layer.type === 'line' ? 0.25 : undefined,
+        fill: false,
+        pointRadius: layer.type === 'line' ? 4 : undefined,
+        pointHoverRadius: layer.type === 'line' ? 6 : undefined,
+      }
+    })
+  }
+}
 
 const describePageCache = new Map()
 
@@ -127,6 +218,8 @@ export default function DescribePage({ dataset, initialData }) {
   const [chartBuilderGroupBy, setChartBuilderGroupBy] = useState('')
   const [chartBuilderAgg, setChartBuilderAgg] = useState('Mean')
   const [chartBuilderColor, setChartBuilderColor] = useState('#f97316')
+  const [chartLayersEnabled, setChartLayersEnabled] = useState(false)
+  const [chartLayers, setChartLayers] = useState(() => [makeChartLayer(0, { type: 'bar', color: '#f97316' })])
   const [chartTitle, setChartTitle] = useState('Bar chart')
   const [savedCharts, setSavedCharts] = useState([])
   const [savedChartsDatasetId, setSavedChartsDatasetId] = useState(null)
@@ -197,6 +290,13 @@ export default function DescribePage({ dataset, initialData }) {
         if (s.chartBuilderGroupBy !== undefined) setChartBuilderGroupBy(s.chartBuilderGroupBy)
         if (s.chartBuilderAgg) setChartBuilderAgg(s.chartBuilderAgg)
         if (s.chartBuilderColor) setChartBuilderColor(s.chartBuilderColor)
+        if (s.chartLayersEnabled !== undefined) setChartLayersEnabled(Boolean(s.chartLayersEnabled))
+        if (Array.isArray(s.chartLayers)) setChartLayers(normalizeChartLayers(s.chartLayers, {
+          type: s.chartBuilderType,
+          xAxis: s.chartBuilderX,
+          yAxis: s.chartBuilderY,
+          color: s.chartBuilderColor,
+        }))
         if (s.chartTitle) setChartTitle(s.chartTitle)
         if (s.chartNote !== undefined) setChartNote(s.chartNote)
         if (s.cbShowLabels !== undefined) setCbShowLabels(s.cbShowLabels)
@@ -217,9 +317,25 @@ export default function DescribePage({ dataset, initialData }) {
     window.localStorage.setItem(`simucast.chartBuilder.${dataset.id}`, JSON.stringify({
       chartBuilderType, chartBuilderX, chartBuilderY,
       chartBuilderGroupBy, chartBuilderAgg, chartBuilderColor,
-      chartTitle, chartNote, cbShowLabels, cbShowLegend, cbSortOrder
+      chartLayersEnabled, chartLayers, chartTitle, chartNote, cbShowLabels, cbShowLegend, cbSortOrder
     }))
-  }, [dataset?.id, chartBuilderType, chartBuilderX, chartBuilderY, chartBuilderGroupBy, chartBuilderAgg, chartBuilderColor, chartTitle, chartNote, cbShowLabels, cbShowLegend, cbSortOrder])
+  }, [dataset?.id, chartBuilderType, chartBuilderX, chartBuilderY, chartBuilderGroupBy, chartBuilderAgg, chartBuilderColor, chartLayersEnabled, chartLayers, chartTitle, chartNote, cbShowLabels, cbShowLegend, cbSortOrder])
+
+  useEffect(() => {
+    setChartLayers(prev => {
+      const base = prev[0] || makeChartLayer(0)
+      const nextBase = {
+        ...base,
+        type: chartBuilderType,
+        x: chartBuilderX,
+        y: chartBuilderY,
+        color: chartBuilderColor,
+      }
+      const next = [nextBase, ...prev.slice(1).map(layer => ({ ...layer, x: chartBuilderX }))]
+      const same = JSON.stringify(prev) === JSON.stringify(next)
+      return same ? prev : next
+    })
+  }, [chartBuilderType, chartBuilderX, chartBuilderY, chartBuilderColor])
 
   // Restore latest correlation result; auto-run if none saved yet
   useEffect(() => {
@@ -391,7 +507,111 @@ export default function DescribePage({ dataset, initialData }) {
     }
   }
 
+  const effectiveLayers = normalizeChartLayers(chartLayers, {
+    type: chartBuilderType,
+    xAxis: chartBuilderX,
+    yAxis: chartBuilderY,
+    color: chartBuilderColor,
+  })
+  const canLayerChart = CB_COMBINABLE_TYPES.has(chartBuilderType)
+  const layersAvailable = chartLayersEnabled && canLayerChart
+  const activeLayerCount = layersAvailable ? effectiveLayers.filter(layer => layer.x && layer.y && CB_COMBINABLE_TYPES.has(layer.type)).length : 1
+  const isMixedChart = layersAvailable && effectiveLayers.length > 1 && activeLayerCount > 1
+  const mixedTypeLabel = isMixedChart
+    ? `${[...new Set(effectiveLayers.slice(0, activeLayerCount).map(layer => chartTypeLabel(layer.type)))].join(' + ')} chart`
+    : null
+  const mixedSubtitle = isMixedChart
+    ? `${effectiveLayers[0]?.x || 'X field'} vs ${effectiveLayers.slice(0, activeLayerCount).map(layer => layer.y).filter(Boolean).join(', ')} - ${chartBuilderAgg}`
+    : null
+
+  const updateChartLayer = (index, patch) => {
+    setActiveChartId(null)
+    if (!chartLayersEnabled) setChartLayersEnabled(true)
+    setChartLayers(prev => {
+      const next = normalizeChartLayers(prev, {
+        type: chartBuilderType,
+        xAxis: chartBuilderX,
+        yAxis: chartBuilderY,
+        color: chartBuilderColor,
+      })
+      next[index] = { ...next[index], ...patch }
+      if (index === 0) {
+        if (patch.type) setChartBuilderType(patch.type)
+        if (patch.x !== undefined) setChartBuilderX(patch.x)
+        if (patch.y !== undefined) setChartBuilderY(patch.y)
+        if (patch.color) setChartBuilderColor(patch.color)
+        next.forEach((layer, layerIndex) => {
+          if (layerIndex > 0) layer.x = next[0].x
+        })
+      }
+      const filled = next.filter(layer => layer.y && CB_COMBINABLE_TYPES.has(layer.type))
+      if (filled.length > 1) setChartTitle(`${[...new Set(filled.map(layer => chartTypeLabel(layer.type)))].join(' + ')} chart`)
+      return next
+    })
+  }
+
+  const addChartLayer = () => {
+    if (!canLayerChart || effectiveLayers.length >= 3) return
+    setActiveChartId(null)
+    setChartLayersEnabled(true)
+    setChartLayers(prev => {
+      const next = normalizeChartLayers(prev, {
+        type: chartBuilderType,
+        xAxis: chartBuilderX,
+        yAxis: chartBuilderY,
+        color: chartBuilderColor,
+      })
+      const layerIndex = next.length
+      next.push(makeChartLayer(layerIndex, {
+        type: chartBuilderType === 'bar' ? 'line' : 'bar',
+        x: next[0]?.x || chartBuilderX,
+        y: '',
+        color: CB_COLORS[layerIndex % CB_COLORS.length],
+      }))
+      setChartTitle(`${chartTypeLabel(next[0]?.type || chartBuilderType)} + ${chartTypeLabel(next[layerIndex].type)} chart`)
+      return next
+    })
+  }
+
+  const removeChartLayer = (index) => {
+    if (index === 0) return
+    setActiveChartId(null)
+    setChartLayers(prev => {
+      const next = normalizeChartLayers(prev, {
+      type: chartBuilderType,
+      xAxis: chartBuilderX,
+      yAxis: chartBuilderY,
+      color: chartBuilderColor,
+      }).filter((_, i) => i !== index)
+      if (next.length === 1) setChartTitle(`${chartTypeLabel(next[0]?.type || chartBuilderType)} chart`)
+      return next
+    })
+  }
+
   const renderLiveChart = () => {
+    if (isMixedChart) {
+      const mixedData = buildMixedChartData(datasetRows, effectiveLayers, chartBuilderAgg)
+      if (!mixedData) {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', color: '#9ca3af', gap: '12px' }}>
+            <BarChart3 size={48} strokeWidth={1} />
+            <span style={{ fontSize: '13px', fontWeight: '500', color: '#6b7280' }}>Complete each layer to see the mixed chart</span>
+          </div>
+        )
+      }
+      const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: 10 } } } },
+        scales: {
+          x: { type: 'category', ticks: { font: { size: 10 } } },
+          y: { ticks: { font: { size: 10 } }, beginAtZero: true }
+        }
+      }
+      return <Chart key={`mixed-${effectiveLayers.map(l => `${l.type}-${l.x}-${l.y}-${l.color}`).join('|')}`} ref={chartRef} type="bar" data={mixedData} options={options} />
+    }
+
     let chartData = prepareChartData(
       datasetRows, chartBuilderType, chartBuilderX, chartBuilderY,
       chartBuilderGroupBy, chartBuilderAgg, chartBuilderColor
@@ -488,6 +708,24 @@ export default function DescribePage({ dataset, initialData }) {
   }
 
   const renderCompareChart = (sc) => {
+    if (Array.isArray(sc.layers) && sc.layers.length > 1) {
+      const layers = normalizeChartLayers(sc.layers, sc)
+      const cd = buildMixedChartData(datasetRows, layers, sc.aggregation || 'Mean')
+      if (!cd) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 11 }}>No data</div>
+      return (
+        <Chart
+          type="bar"
+          data={cd}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { display: true, labels: { font: { size: 9 }, boxWidth: 9 } } },
+            scales: { x: { type: 'category', ticks: { font: { size: 9 } } }, y: { ticks: { font: { size: 9 } }, beginAtZero: true } }
+          }}
+        />
+      )
+    }
     const cd = prepareChartData(datasetRows, sc.type, sc.xAxis, sc.yAxis, sc.colorBy, sc.aggregation, sc.color)
     if (!cd) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 11 }}>No data</div>
     const opts = {
@@ -522,10 +760,13 @@ export default function DescribePage({ dataset, initialData }) {
   }
 
   const handleSaveChart = () => {
+    const savedLayers = isMixedChart ? effectiveLayers.slice(0, activeLayerCount).map(({ type, x, y, color }) => ({ type, x, y, color })) : undefined
+    const savedType = isMixedChart ? 'mixed' : chartBuilderType
     const newChart = {
-      id: Date.now(), title: chartTitle, type: chartBuilderType,
+      id: Date.now(), title: isMixedChart ? (chartTitle || mixedTypeLabel) : chartTitle, type: savedType,
       xAxis: chartBuilderX, yAxis: chartBuilderY, colorBy: chartBuilderGroupBy,
-      aggregation: chartBuilderAgg, color: chartBuilderColor,
+      aggregation: chartBuilderAgg, color: chartBuilderColor, layers: savedLayers,
+      layersEnabled: isMixedChart,
       note: chartNote, showLabels: cbShowLabels, showLegend: cbShowLegend, sortOrder: cbSortOrder
     }
     const willTruncate = savedCharts.length >= 8
@@ -535,7 +776,11 @@ export default function DescribePage({ dataset, initialData }) {
   }
 
   const handleLoadChart = (sc) => {
-    setChartBuilderType(sc.type); setChartBuilderX(sc.xAxis); setChartBuilderY(sc.yAxis)
+    const loadedLayers = normalizeChartLayers(sc.layers, sc)
+    const baseLayer = loadedLayers[0]
+    setChartLayersEnabled(Array.isArray(sc.layers) && sc.layers.length > 1)
+    setChartLayers(loadedLayers)
+    setChartBuilderType(baseLayer?.type || sc.type); setChartBuilderX(baseLayer?.x ?? sc.xAxis); setChartBuilderY(baseLayer?.y ?? sc.yAxis)
     setChartBuilderGroupBy(sc.colorBy); setChartBuilderAgg(sc.aggregation); setChartBuilderColor(sc.color)
     setChartTitle(sc.title); setActiveChartId(sc.id)
     setChartNote(sc.note || '')
@@ -552,10 +797,13 @@ export default function DescribePage({ dataset, initialData }) {
   }
 
   const handleDuplicateChart = () => {
+    const savedLayers = isMixedChart ? effectiveLayers.slice(0, activeLayerCount).map(({ type, x, y, color }) => ({ type, x, y, color })) : undefined
+    const savedType = isMixedChart ? 'mixed' : chartBuilderType
     const newChart = {
-      id: Date.now(), title: `Copy of ${chartTitle}`, type: chartBuilderType,
+      id: Date.now(), title: `Copy of ${chartTitle}`, type: savedType,
       xAxis: chartBuilderX, yAxis: chartBuilderY, colorBy: chartBuilderGroupBy,
-      aggregation: chartBuilderAgg, color: chartBuilderColor,
+      aggregation: chartBuilderAgg, color: chartBuilderColor, layers: savedLayers,
+      layersEnabled: isMixedChart,
       note: chartNote, showLabels: cbShowLabels, showLegend: cbShowLegend, sortOrder: cbSortOrder
     }
     setSavedCharts(prev => { const u = [...prev, newChart]; return u.length > 8 ? u.slice(1) : u })
@@ -576,7 +824,7 @@ export default function DescribePage({ dataset, initialData }) {
     } catch { showCbToast('Download failed') }
   }
 
-  const cbTypeLabel = chartBuilderType === 'horizontal bar' ? 'H. Bar' : chartBuilderType.charAt(0).toUpperCase() + chartBuilderType.slice(1)
+  const cbTypeLabel = isMixedChart ? 'Mixed' : chartTypeLabel(chartBuilderType)
 
   const cbInsight = (() => {
     if (!chartBuilderX || !datasetRows.length) return null
@@ -2145,7 +2393,7 @@ export default function DescribePage({ dataset, initialData }) {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid #f3f4f6', background: '#fafafa' }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>{sc.title}</span>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <span style={{ fontSize: 10, background: ORANGE_LIGHT, color: ORANGE_ACCENT, borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>{sc.type === 'horizontal bar' ? 'H. Bar' : sc.type.charAt(0).toUpperCase() + sc.type.slice(1)}</span>
+                          <span style={{ fontSize: 10, background: ORANGE_LIGHT, color: ORANGE_ACCENT, borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>{Array.isArray(sc.layers) && sc.layers.length > 1 ? 'Mixed' : chartTypeLabel(sc.type)}</span>
                           <button type="button" onClick={() => setCompareSelected(prev => prev.filter(x => x !== id))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', padding: 0 }}><X size={13} /></button>
                         </div>
                       </div>
@@ -2162,7 +2410,7 @@ export default function DescribePage({ dataset, initialData }) {
             <div style={{ borderRight: '1px solid #e5e7eb', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', overflowX: 'hidden' }}>
               {/* Chart type pills */}
               <div>
-                <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Chart Type</p>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Base Chart Type</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {CB_CHART_TYPES.map(t => (
                     <button key={t.key} type="button"
@@ -2206,6 +2454,157 @@ export default function DescribePage({ dataset, initialData }) {
                     </select>
                   </div>
                 </div>
+              </div>
+
+              {/* Layers */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Layers</p>
+                  <button
+                    type="button"
+                    disabled={!canLayerChart}
+                    onClick={() => {
+                      if (!canLayerChart) return
+                      setChartLayersEnabled((value) => !value)
+                      setActiveChartId(null)
+                    }}
+                    title={canLayerChart ? 'Toggle layered chart mode' : `${chartTypeLabel(chartBuilderType)} charts cannot use layers`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      border: `1px solid ${chartLayersEnabled && canLayerChart ? ORANGE_ACCENT : '#d1d5db'}`,
+                      borderRadius: 999,
+                      background: chartLayersEnabled && canLayerChart ? ORANGE_LIGHT : '#fff',
+                      color: chartLayersEnabled && canLayerChart ? ORANGE_ACCENT : canLayerChart ? '#6b7280' : '#b6aea5',
+                      padding: '4px 9px',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: canLayerChart ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    <span>Use layers</span>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 999,
+                        background: chartLayersEnabled && canLayerChart ? ORANGE_ACCENT : '#d1d5db',
+                      }}
+                    />
+                  </button>
+                </div>
+                {canLayerChart && chartLayersEnabled ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {effectiveLayers.map((layer, index) => (
+                      <div
+                        key={layer.id || index}
+                        style={{
+                          border: `1px solid ${index === 0 ? '#fdba74' : '#e5e7eb'}`,
+                          background: index === 0 ? '#fff7ed' : '#fafaf9',
+                          borderRadius: 10,
+                          padding: 10,
+                          display: 'grid',
+                          gap: 8
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 9, height: 9, borderRadius: 999, background: layer.color || CB_COLORS[index % CB_COLORS.length], flexShrink: 0 }} />
+                          <strong style={{ fontSize: 12, color: '#1f2937', flex: 1 }}>Layer {index + 1}</strong>
+                          <select
+                            value={layer.type}
+                            onChange={e => updateChartLayer(index, { type: e.target.value })}
+                            style={{ border: '1px solid #d6c9bd', borderRadius: 8, padding: '6px 28px 6px 9px', background: '#fff', fontSize: 11, outline: 'none', color: '#1f2937', fontWeight: 600, minWidth: 86 }}
+                          >
+                            {CB_LAYER_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => removeChartLayer(index)}
+                            title={index === 0 ? 'Layer 1 cannot be deleted' : 'Remove layer'}
+                            style={{ border: '1px solid #e5e7eb', borderRadius: 7, background: '#fff', color: index === 0 ? '#d1d5db' : '#6b7280', width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: index === 0 ? 'not-allowed' : 'pointer' }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 112px', gap: 8 }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: 10, color: '#78716c', marginBottom: 3, fontWeight: 700 }}>Y axis</label>
+                            <select
+                              value={layer.y}
+                              onChange={e => updateChartLayer(index, { y: e.target.value })}
+                              style={{ width: '100%', border: '1px solid #d6c9bd', borderRadius: 8, padding: '8px 28px 8px 10px', background: '#fff', fontSize: 12, outline: 'none', color: '#111827' }}
+                            >
+                              <option value="">select</option>
+                              {(dataset.variables || []).filter(v => ['numeric', 'int', 'float'].includes(v.dtype)).map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: 10, color: '#78716c', marginBottom: 3, fontWeight: 700 }}>Color</label>
+                            <label
+                              style={{
+                                width: '100%',
+                                height: 36,
+                                border: '1px solid #d6c9bd',
+                                borderRadius: 8,
+                                background: '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 7,
+                                padding: '5px 8px',
+                                cursor: 'pointer',
+                                boxSizing: 'border-box',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: 999,
+                                  background: normalizeHexColor(layer.color, CB_COLORS[index % CB_COLORS.length]),
+                                  border: '1px solid rgba(0,0,0,.12)',
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span style={{ fontSize: 11, color: '#374151', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {normalizeHexColor(layer.color, CB_COLORS[index % CB_COLORS.length])}
+                              </span>
+                              <input
+                                aria-label={`Layer ${index + 1} color`}
+                                type="color"
+                                value={normalizeHexColor(layer.color, CB_COLORS[index % CB_COLORS.length])}
+                                onChange={e => updateChartLayer(index, { color: e.target.value })}
+                                style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 10, color: '#78716c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          X: {index === 0 ? (layer.x || 'select X axis above') : `${effectiveLayers[0]?.x || 'locked to Layer 1'} (locked)`}
+                        </div>
+                      </div>
+                    ))}
+                    {effectiveLayers.length < 3 && (
+                      <button
+                        type="button"
+                        onClick={addChartLayer}
+                        style={{ border: '1px dashed #fdba74', borderRadius: 10, background: '#fff', color: '#c2410c', padding: '8px 10px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                      >
+                        + Add layer
+                      </button>
+                    )}
+                  </div>
+                ) : canLayerChart ? (
+                  <div style={{ border: '1px dashed #e7d8c8', background: '#fffdfa', borderRadius: 10, padding: 10, fontSize: 11, lineHeight: 1.45, color: '#78716c' }}>
+                    Turn on layers to combine Bar, Line, or Scatter on one shared X axis.
+                  </div>
+                ) : (
+                  <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: 10, padding: 10, fontSize: 11, lineHeight: 1.45, color: '#9a3412' }}>
+                    {chartTypeLabel(chartBuilderType)} charts cannot be combined. Use Bar, Line, or Scatter to add layers.
+                  </div>
+                )}
               </div>
 
               {/* Aggregation */}
@@ -2292,7 +2691,7 @@ export default function DescribePage({ dataset, initialData }) {
                     onBlur={e => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent' }}
                   />
                   <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                    {chartBuilderX && (chartBuilderType === 'histogram' || chartBuilderY) ? `${chartBuilderX}${chartBuilderY ? ` vs ${chartBuilderY}` : ''} - ${chartBuilderAgg}` : 'Configure fields to preview'}
+                    {isMixedChart ? mixedSubtitle : chartBuilderX && (chartBuilderType === 'histogram' || chartBuilderY) ? `${chartBuilderX}${chartBuilderY ? ` vs ${chartBuilderY}` : ''} - ${chartBuilderAgg}` : 'Configure fields to preview'}
                   </div>
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: ORANGE_LIGHT, color: ORANGE_ACCENT, borderRadius: 12, padding: '2px 10px', border: `1px solid #fed7aa`, flexShrink: 0 }}>
@@ -2301,7 +2700,7 @@ export default function DescribePage({ dataset, initialData }) {
               </div>
               <div style={{ display: 'none' }}>
                 <span style={{ fontSize: 12, color: '#6b7280' }}>
-                  {chartBuilderX && (chartBuilderType === 'histogram' || chartBuilderY) ? `${chartBuilderX}${chartBuilderY ? ` vs ${chartBuilderY}` : ''} — ${chartBuilderAgg}` : 'Configure fields to preview'}
+                  {isMixedChart ? mixedSubtitle : chartBuilderX && (chartBuilderType === 'histogram' || chartBuilderY) ? `${chartBuilderX}${chartBuilderY ? ` vs ${chartBuilderY}` : ''} — ${chartBuilderAgg}` : 'Configure fields to preview'}
                 </span>
                 <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: ORANGE_LIGHT, color: ORANGE_ACCENT, borderRadius: 12, padding: '2px 10px', border: `1px solid #fed7aa`, flexShrink: 0 }}>
                   {cbTypeLabel}

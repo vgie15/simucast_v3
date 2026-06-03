@@ -70,6 +70,7 @@ const DATA_VIEW_MODES = [
   { id: 'highlight', label: 'Highlighted', icon: Highlighter },
   { id: 'modeling', label: 'For Modeling', icon: Sparkles },
 ]
+const AFFECTED_ROW_FILTERS = new Set(['missing', 'outlier', 'duplicate'])
 
 // Detail view that paginates dataset rows with column visibility controls and the about panel.
 export default function DataDetailView({
@@ -88,6 +89,7 @@ export default function DataDetailView({
 }) {
   const datasetId = dataset?.id
   const [rowColumns, setRowColumns] = useState([])
+  const [rowVariables, setRowVariables] = useState([])
   const {
     viewMode,
     changeScope,
@@ -104,14 +106,15 @@ export default function DataDetailView({
     setChangeLoading,
     setHasChanges,
   } = useDatasetTableState(datasetId, preferredViewMode)
-  const variableColumns = useMemo(() => (variables || []).map((v) => v.name), [variables])
+  const effectiveVariables = rowVariables.length ? rowVariables : (variables || [])
+  const variableColumns = useMemo(() => (effectiveVariables || []).map((v) => v.name), [effectiveVariables])
   const allColumns = useMemo(
     () => (rowColumns.length ? rowColumns : variableColumns),
     [rowColumns, variableColumns],
   )
   const tableVariables = useMemo(
-    () => allColumns.map((name) => (variables || []).find((v) => v.name === name) || { name, dtype: 'text' }),
-    [allColumns, variables],
+    () => allColumns.map((name) => (effectiveVariables || []).find((v) => v.name === name) || { name, dtype: 'text' }),
+    [allColumns, effectiveVariables],
   )
 
   const [rows, setRows] = useState([])
@@ -129,6 +132,14 @@ export default function DataDetailView({
   const [visibleColumns, setVisibleColumns] = useState([])
   const [viewSort, setViewSort] = useState({ column: '', order: 'asc' })
   const [viewFilter, setViewFilter] = useState({ column: '', condition: 'contains', value: '' })
+  const affectedRowsFilterActive = Boolean(
+    viewFilter?.source === 'affected_rows' &&
+    (viewFilter?.column || viewFilter?.condition === 'duplicate') &&
+    AFFECTED_ROW_FILTERS.has(viewFilter?.condition),
+  )
+  const loadPageSize = affectedRowsFilterActive
+    ? Math.min(Math.max(Number(dataset?.row_count || total || PAGE_SIZE), PAGE_SIZE), 1000)
+    : PAGE_SIZE
 
   useEffect(() => {
     setVisibleColumns((prev) => {
@@ -229,7 +240,7 @@ export default function DataDetailView({
     : viewMode === 'modeling'
       ? (modelingStageId || currentStageId || null)
       : (stageId || null)
-  const readOnly = viewMode === 'original' || (!!stageId && stageId !== currentStageId)
+  const readOnly = false
 
   // load AI describe
   useEffect(() => {
@@ -263,6 +274,7 @@ export default function DataDetailView({
     tablePageCache.delete(`${datasetId}|${effectiveStageId}|${refreshKey}|${viewMode}|1`)
     setRows([])
     setRowColumns([])
+    setRowVariables([])
     setVisibleColumns([])
     setPage(1)
     setHasMore(true)
@@ -303,14 +315,31 @@ export default function DataDetailView({
     }))
   }, [datasetId, page, visibleColumns, viewSort, viewFilter])
 
+  useEffect(() => {
+    setRows([])
+    setPage(1)
+    setHasMore(true)
+    setRowError(null)
+  }, [
+    viewFilter?.column,
+    viewFilter?.condition,
+    viewFilter?.value,
+    viewFilter?.lower_bound,
+    viewFilter?.upper_bound,
+    viewFilter?.lowerBound,
+    viewFilter?.upperBound,
+    viewFilter?.source,
+  ])
+
   // load rows page (checks module-level cache first)
   useEffect(() => {
     if (!datasetId) return
-    const ck = `${datasetId}|${effectiveStageId}|${refreshKey}|${viewMode}|${page}`
+    const ck = `${datasetId}|${effectiveStageId}|${refreshKey}|${viewMode}|${loadPageSize}|${page}`
     const cached = tablePageCache.get(ck)
     if (cached) {
-      setRows(cached.rows)
+      setRows((prev) => page === 1 ? cached.rows : mergeRowsByIndex(prev, cached.rows))
       if (cached.columns) setRowColumns(cached.columns)
+      if (cached.variables) setRowVariables(cached.variables)
       setTotal(cached.total)
       setHasMore(cached.hasMore)
       setRowError(null)
@@ -321,26 +350,28 @@ export default function DataDetailView({
     setLoading(true)
     setRowError(null)
     api
-      .getRows(datasetId, page, PAGE_SIZE, effectiveStageId)
+      .getRows(datasetId, page, loadPageSize, effectiveStageId)
       .then((r) => {
         if (cancelled) return
         const fetchedRows = Array.isArray(r.rows) ? r.rows : []
         const fetchedTotal = r.total || 0
-        const maxPage = Math.max(1, Math.ceil(fetchedTotal / PAGE_SIZE))
+        const maxPage = Math.max(1, Math.ceil(fetchedTotal / loadPageSize))
         if (fetchedTotal > 0 && fetchedRows.length === 0 && page > maxPage) {
           setPage(maxPage)
           return
         }
         const columns = fetchedRows[0] ? Object.keys(fetchedRows[0]).filter((key) => key !== '__row_index') : []
+        const fetchedVariables = Array.isArray(r.variables) ? r.variables : []
         // Only cache non-empty responses — empty results may be transient (stage not yet ready,
         // backend reset in progress) and must never permanently block subsequent fetches.
         if (fetchedRows.length > 0 || fetchedTotal > 0) {
-          tablePageCache.set(ck, { rows: fetchedRows, columns, total: fetchedTotal, hasMore: page * PAGE_SIZE < fetchedTotal })
+          tablePageCache.set(ck, { rows: fetchedRows, columns, variables: fetchedVariables, total: fetchedTotal, hasMore: page * loadPageSize < fetchedTotal })
         }
-        setRows(fetchedRows)
+        setRows((prev) => page === 1 ? fetchedRows : mergeRowsByIndex(prev, fetchedRows))
         if (columns.length) setRowColumns(columns)
+        if (fetchedVariables.length) setRowVariables(fetchedVariables)
         setTotal(fetchedTotal)
-        setHasMore(page * PAGE_SIZE < fetchedTotal)
+        setHasMore(page * loadPageSize < fetchedTotal)
       })
       .catch((err) => {
         if (!cancelled) {
@@ -359,7 +390,7 @@ export default function DataDetailView({
     return () => {
       cancelled = true
     }
-  }, [datasetId, effectiveStageId, page, refreshKey, viewMode])
+  }, [datasetId, effectiveStageId, page, refreshKey, viewMode, loadPageSize])
 
   useEffect(() => {
     if (!datasetId) {
@@ -449,6 +480,7 @@ export default function DataDetailView({
   const scrollRef = useRef(null)
   useEffect(() => {
     if (!hasMore || loading) return
+    if (affectedRowsFilterActive) return
     const sentinel = sentinelRef.current
     const root = scrollRef.current
     if (!sentinel || !root) return
@@ -462,7 +494,7 @@ export default function DataDetailView({
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasMore, loading, rows.length])
+  }, [affectedRowsFilterActive, hasMore, loading, rows.length])
 
   // cell edit helpers
   const startEdit = (row, column, value) => {
@@ -618,11 +650,11 @@ export default function DataDetailView({
       }
       return (
         <span className="ax-dd-cell-value">
-          {row[column] === null || row[column] === undefined || row[column] === '' ? <em className="ax-dd-cell-empty">—</em> : String(row[column])}
+          {row[column] === null || row[column] === undefined || row[column] === '' ? <em className="ax-dd-cell-empty">—</em> : formatCellValueForType(row[column], tableVariables.find((v) => v.name === column)?.dtype)}
         </span>
       )
     },
-    [editing, savingEdits],
+    [editing, savingEdits, tableVariables],
   )
 
   // header edit
@@ -994,8 +1026,8 @@ export default function DataDetailView({
                     type="button"
                     className="ax-dd-col-button"
                     onClick={() => openHeaderEdit(v)}
-                    disabled={readOnly}
-                    title={readOnly ? 'Read-only stage' : 'Rename column or change type'}
+                    disabled={savingHeader}
+                    title="Rename column or change type"
                   >
                     <span className="ax-dd-typeicon" data-type={v.dtype}>{TYPE_ICON[v.dtype] || '?'}</span>
                     <span className="ax-dd-colname">{v.name}</span>
@@ -1214,6 +1246,19 @@ function formatChangeValue(value) {
   return String(value)
 }
 
+function formatCellValueForType(value, dtype) {
+  if (value === null || value === undefined || value === '') return ''
+  if (dtype === 'int') {
+    const number = Number(value)
+    return Number.isFinite(number) ? String(Math.trunc(number)) : String(value)
+  }
+  if (dtype === 'float' || dtype === 'numeric') {
+    const number = Number(value)
+    return Number.isFinite(number) ? String(number) : String(value)
+  }
+  return String(value)
+}
+
 function formatVisibleChangeCount(cellCount, rowCount) {
   const parts = []
   if (cellCount > 0) parts.push(`${cellCount} changed cell${cellCount === 1 ? '' : 's'}`)
@@ -1283,6 +1328,17 @@ function mergeRemovedRows(rows, removedRows, viewMode) {
   })
 }
 
+function mergeRowsByIndex(currentRows, nextRows) {
+  const merged = new Map()
+  for (const row of currentRows || []) {
+    merged.set(normalizeRowIndex(row.__row_index), row)
+  }
+  for (const row of nextRows || []) {
+    merged.set(normalizeRowIndex(row.__row_index), row)
+  }
+  return Array.from(merged.values()).sort((a, b) => normalizeRowIndex(a.__row_index) - normalizeRowIndex(b.__row_index))
+}
+
 function applyViewTools(rows, sort, filter) {
   let next = rows
   if (filter?.column && filter.condition) {
@@ -1293,22 +1349,30 @@ function applyViewTools(rows, sort, filter) {
     let outlierHi = Infinity
     let hasOutliersCalculated = false
     if (filter.condition === 'outlier') {
-      const values = rows
-        .map((r) => {
-          const val = r[filter.column]
-          return (val !== null && val !== undefined && val !== '') ? Number(val) : NaN
-        })
-        .filter((v) => !Number.isNaN(v))
-        .sort((a, b) => a - b)
-      if (values.length >= 4) {
-        const q1Idx = Math.floor(values.length * 0.25)
-        const q3Idx = Math.floor(values.length * 0.75)
-        const q1 = values[q1Idx]
-        const q3 = values[q3Idx]
-        const iqr = q3 - q1
-        outlierLo = q1 - 1.5 * iqr
-        outlierHi = q3 + 1.5 * iqr
+      const fixedLo = Number(filter.lower_bound ?? filter.lowerBound)
+      const fixedHi = Number(filter.upper_bound ?? filter.upperBound)
+      if (Number.isFinite(fixedLo) && Number.isFinite(fixedHi)) {
+        outlierLo = fixedLo
+        outlierHi = fixedHi
         hasOutliersCalculated = true
+      } else {
+        const values = rows
+          .map((r) => {
+            const val = r[filter.column]
+            return (val !== null && val !== undefined && val !== '') ? Number(val) : NaN
+          })
+          .filter((v) => !Number.isNaN(v))
+          .sort((a, b) => a - b)
+        if (values.length >= 4) {
+          const q1Idx = Math.floor(values.length * 0.25)
+          const q3Idx = Math.floor(values.length * 0.75)
+          const q1 = values[q1Idx]
+          const q3 = values[q3Idx]
+          const iqr = q3 - q1
+          outlierLo = q1 - 1.5 * iqr
+          outlierHi = q3 + 1.5 * iqr
+          hasOutliersCalculated = true
+        }
       }
     }
 

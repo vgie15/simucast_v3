@@ -23,7 +23,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js'
-import { Bar, Line, Scatter, Pie, Radar, Bubble } from 'react-chartjs-2'
+import { Bar, Line, Scatter, Pie, Radar, Bubble, Chart } from 'react-chartjs-2'
 import { api } from '../../api'
 
 const reportPageCache = new Map()
@@ -3358,6 +3358,17 @@ export default function ReportPage({ dataset, initialData }) {
 
 // Chart mini thumbnail component
 function ChartMiniThumbnail({ type }) {
+  if (type === 'mixed') {
+    return (
+      <svg className="ci-thumb" width="40" height="30" viewBox="0 0 40 30" style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
+        <rect x="6" y="17" width="6" height="9" fill="#f97316" opacity="0.75" rx="1" />
+        <rect x="16" y="12" width="6" height="14" fill="#f97316" opacity="0.75" rx="1" />
+        <rect x="26" y="15" width="6" height="11" fill="#f97316" opacity="0.75" rx="1" />
+        <path d="M8,14 L19,9 L30,11" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="19" cy="9" r="2" fill="#3b82f6" />
+      </svg>
+    )
+  }
   if (type === 'bar' || type === 'horizontal bar' || type === 'histogram') {
     return (
       <svg className="ci-thumb" width="40" height="30" viewBox="0 0 40 30" style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
@@ -3395,11 +3406,62 @@ function ChartMiniThumbnail({ type }) {
 }
 
 // Chart mockup component inside Preview
+function buildReportMixedChartData(rows, layers, aggregation = 'Mean') {
+  const activeLayers = (layers || []).filter(layer => layer?.x && layer?.y && ['bar', 'line', 'scatter'].includes(layer.type))
+  if (!rows?.length || activeLayers.length < 2) return null
+  const xAxis = activeLayers[0].x
+  if (!xAxis || activeLayers.some(layer => layer.x !== xAxis)) return null
+  const labels = Array.from(new Set(rows.map(row => String(row[xAxis] ?? 'None')))).sort()
+  const aggregateValue = (groupRows, col, type) => {
+    if (type === 'Count') return groupRows.length
+    const nums = groupRows.map(row => Number(row[col])).filter(Number.isFinite)
+    if (!nums.length) return 0
+    if (type === 'Sum') return nums.reduce((a, b) => a + b, 0)
+    if (type === 'Mean') return nums.reduce((a, b) => a + b, 0) / nums.length
+    if (type === 'Max') return Math.max(...nums)
+    return 0
+  }
+  return {
+    labels,
+    datasets: activeLayers.map((layer, index) => {
+      const color = layer.color || getReportCohortColor('#f97316', index, activeLayers.length)
+      if (layer.type === 'scatter') {
+        return {
+          type: 'scatter',
+          label: `${layer.y} (scatter)`,
+          data: rows
+            .map(row => ({ x: String(row[xAxis] ?? 'None'), y: Number(row[layer.y]) }))
+            .filter(point => point.x && Number.isFinite(point.y))
+            .slice(0, 500),
+          backgroundColor: color,
+          borderColor: color,
+          pointRadius: 3,
+        }
+      }
+      return {
+        type: layer.type,
+        label: `${layer.y} (${layer.type})`,
+        data: labels.map(label => aggregateValue(rows.filter(row => String(row[xAxis] ?? 'None') === label), layer.y, aggregation)),
+        backgroundColor: layer.type === 'bar' ? color : `${color}22`,
+        borderColor: color,
+        borderWidth: layer.type === 'line' ? 2.5 : 1,
+        borderRadius: layer.type === 'bar' ? 4 : undefined,
+        tension: layer.type === 'line' ? 0.25 : undefined,
+        fill: false,
+        pointRadius: layer.type === 'line' ? 3 : undefined,
+      }
+    })
+  }
+}
+
 function PreviewMockupChart({ chart, rows = [] }) {
   if (!chart) return null
   const { type, xAxis, yAxis } = chart
   const color = chart.color || '#f97316'
-  const chartDataRaw = prepareChartData(rows, type, xAxis, yAxis, chart.colorBy || '', chart.aggregation || 'Mean', color)
+  const isMixed = Array.isArray(chart.layers) && chart.layers.length > 1
+  const chartDataRaw = isMixed
+    ? buildReportMixedChartData(rows, chart.layers, chart.aggregation || 'Mean')
+    : prepareChartData(rows, type, xAxis, yAxis, chart.colorBy || '', chart.aggregation || 'Mean', color)
 
   if (!chartDataRaw) {
     return (
@@ -3437,7 +3499,7 @@ function PreviewMockupChart({ chart, rows = [] }) {
       },
       tooltip: { enabled: true },
     },
-    scales: type !== 'pie' && type !== 'radar' ? {
+    scales: isMixed || (type !== 'pie' && type !== 'radar') ? {
       x: { ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 0 } },
       y: { ticks: { font: { size: 10 } }, beginAtZero: true },
     } : undefined,
@@ -3489,6 +3551,7 @@ function PreviewMockupChart({ chart, rows = [] }) {
   const chartPlugins = labelPlugin ? [labelPlugin] : []
 
   const renderChart = () => {
+    if (isMixed) return <Chart type="bar" data={chartJsData} options={{ ...chartOptions, interaction: { mode: 'index', intersect: false }, plugins: { ...chartOptions.plugins, legend: { ...chartOptions.plugins.legend, display: true } } }} plugins={chartPlugins} />
     if (type === 'line') return <Line data={chartJsData} options={chartOptions} plugins={chartPlugins} />
     if (type === 'scatter') return <Scatter data={chartJsData} options={chartOptions} plugins={chartPlugins} />
     if (type === 'pie') return <Pie data={chartJsData} options={chartOptions} plugins={chartPlugins} />

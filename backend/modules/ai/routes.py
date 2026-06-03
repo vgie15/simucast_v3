@@ -313,10 +313,130 @@ def _normalize_guidance_questions(payload, fallback):
     }
 
 
+def _goal_assistant_fallback(columns=None, user_message=""):
+    """Return a deterministic project-goal chat response when AI is unavailable."""
+    columns = [str(col).strip() for col in (columns or []) if str(col).strip()]
+    text = str(user_message or "").lower()
+    target = columns[-1] if columns else "your main outcome"
+    first = columns[0] if columns else "one variable"
+    second = columns[1] if len(columns) > 1 else target
+    if "compare" in text or "group" in text:
+        question = f"How does {first} compare across groups in this dataset?"
+        why = "This helps you see whether groups behave differently before deciding on prediction."
+        workflow = ["Describe", "Analysis", "Report"]
+    elif "pattern" in text or "related" in text or "relationship" in text:
+        question = f"Which variables seem most related to {target}?"
+        why = "This is a practical first goal because SimuCast can summarize columns and check relationships."
+        workflow = ["Describe", "Analysis", "Report"]
+    elif "not sure" in text or "decide" in text:
+        question = f"Can SimuCast find useful patterns around {target}?"
+        why = "This keeps the goal broad while still using summaries, analysis, modeling, what-if scenarios, and reports."
+        workflow = ["Describe", "Analysis", "Models", "What-if", "Report"]
+    else:
+        question = f"Can I predict {target} from the other variables in this dataset?"
+        why = "This turns the dataset into a clear prediction goal and can lead into what-if testing."
+        workflow = ["Describe", "Models", "What-if", "Report"]
+    return {
+        "message": "Here is a clear goal SimuCast can guide without needing technical setup.",
+        "suggestions": [{
+            "question": question[:240],
+            "why": why[:260],
+            "workflow": workflow,
+        }],
+    }
+
+
+def _normalize_goal_assistant_response(payload, fallback):
+    """Sanitize AI goal assistant JSON before sending it to the UI."""
+    message = str((payload or {}).get("message") or fallback.get("message") or "").strip()
+    suggestions = []
+    allowed = {"Describe", "Analysis", "Models", "What-if", "Report"}
+    for item in (payload or {}).get("suggestions") or []:
+        question = str(item.get("question") or "").strip()
+        why = str(item.get("why") or item.get("rationale") or "").strip()
+        workflow = [
+            str(step).strip()
+            for step in (item.get("workflow") or [])
+            if str(step).strip() in allowed
+        ]
+        if not question:
+            continue
+        suggestions.append({
+            "question": question[:240],
+            "why": (why or "This gives SimuCast a concrete goal to guide.").strip()[:260],
+            "workflow": workflow or ["Describe", "Analysis", "Report"],
+        })
+        if len(suggestions) == 2:
+            break
+    if not suggestions:
+        suggestions = fallback.get("suggestions") or []
+    return {
+        "message": (message or "Here is a goal SimuCast can help with.")[:360],
+        "suggestions": suggestions,
+    }
+
+
 # ===========================================================================
 # SECTION: AI FEATURES - PLAN, RECOMMEND, EXPLAIN, CHAT, SUGGEST
 # Keywords: ai, claude, anthropic, project plan, recommend, explain, chat, suggest, llm
 # ===========================================================================
+# ANCHOR: AI: Goal Assistant Chat
+@bp.route("/api/describe/ai_goal_suggest", methods=["POST"])
+def ai_goal_suggest():
+    """Mini project-goal consultant for the Project Start modal."""
+    body = request.get_json() or {}
+    user_message = str(body.get("user_message") or "").strip()
+    columns = body.get("columns") or []
+    history = body.get("conversation_history") or []
+    fallback = _goal_assistant_fallback(columns, user_message)
+    client = _ai_client()
+    if client is None:
+        return jsonify(fallback)
+    safe_history = []
+    for item in history[-10:]:
+        role = "assistant" if item.get("role") == "assistant" else "user"
+        content = str(item.get("content") or "").strip()
+        if content:
+            safe_history.append({"role": role, "content": content[:500]})
+    profile = {
+        "columns": [str(col)[:120] for col in columns[:80]],
+        "conversation_history": safe_history,
+        "simucast_capabilities": [
+            "regression modeling",
+            "classification modeling",
+            "descriptive statistics",
+            "correlation and relationship analysis",
+            "group comparison",
+            "what-if scenario testing",
+            "report generation",
+        ],
+    }
+    system = (
+        "You are an AI goal assistant inside SimuCast, a machine learning platform "
+        "for non-technical users. Help the user choose a clear project goal from "
+        "their dataset columns. Keep responses short, friendly, and plain English. "
+        "Avoid technical jargon. Mention SimuCast capabilities naturally when useful: "
+        "descriptive statistics, relationship analysis, modeling, what-if scenarios, "
+        "and report generation."
+    )
+    prompt = (
+        "The user has uploaded a dataset with these columns: "
+        f"{', '.join([str(col) for col in columns[:80]]) or 'unknown columns'}.\n"
+        f"User message: {user_message or 'Suggest a useful goal.'}\n"
+        "Suggest 1-2 specific questions they could answer with this dataset. "
+        "For each suggestion include the question, why it is useful in plain English, "
+        "and the recommended SimuCast workflow using only this subset: "
+        "Describe, Analysis, Models, What-if, Report. "
+        'Respond as JSON: {"message": str, "suggestions": [{"question": str, "why": str, "workflow": [str]}]}'
+    )
+    try:
+        payload = ai_call(profile, prompt, system=system, json_mode=True, max_tokens=700)
+        return jsonify(clean_json(_normalize_goal_assistant_response(payload, fallback)))
+    except Exception as exc:
+        print(f"AI goal assistant failed: {exc}", flush=True)
+        return jsonify(fallback)
+
+
 # ANCHOR: AI: Suggest Guidance Questions
 @bp.route("/api/datasets/<ds_id>/ai/guidance_questions", methods=["POST"])
 def ai_guidance_questions(ds_id):

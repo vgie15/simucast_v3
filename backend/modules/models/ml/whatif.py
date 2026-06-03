@@ -14,7 +14,7 @@ def _whatif_input_matrix(bundle, inputs):
         name = feature.get("name")
         if not name:
             continue
-        value = inputs.get(name, feature.get("default") if feature.get("kind") == "categorical" else feature.get("mean"))
+        value = inputs.get(name, feature.get("default") if feature.get("kind") == "categorical" else feature.get("default", feature.get("mean")))
         if feature.get("kind") == "categorical":
             row[name] = "" if value is None else str(value)
         else:

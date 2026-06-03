@@ -497,8 +497,16 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
               style={{ fontSize: 11, padding: '4px 10px' }}
               onClick={() => {
                 const col = selected[0]
+                const item = items.find((entry) => entry.variable === col) || {}
                 pushViewUndoSnapshot(datasetId, `Filtered by ${col} (${kind === 'outliers' ? 'outlier' : kind})`, { viewSort: { ...visibilityProps.viewSort }, viewFilter: { ...visibilityProps.viewFilter } })
-                visibilityProps?.setViewFilter?.({ column: col, condition: kind === 'outliers' ? 'outlier' : kind })
+                visibilityProps?.setViewFilter?.({
+                  column: col,
+                  condition: kind === 'outliers' ? 'outlier' : kind,
+                  source: 'affected_rows',
+                  ...(kind === 'outliers'
+                    ? { lower_bound: item.lower_bound, upper_bound: item.upper_bound }
+                    : {}),
+                })
                 close?.()
               }}
               type="button"
@@ -512,7 +520,7 @@ function CleanGroupCard({ datasetId, stageId, group, kind, title, description, a
               style={{ fontSize: 11, padding: '4px 10px' }}
               onClick={() => {
                 pushViewUndoSnapshot(datasetId, 'Filtered by duplicates', { viewSort: { ...visibilityProps.viewSort }, viewFilter: { ...visibilityProps.viewFilter } })
-                visibilityProps?.setViewFilter?.({ column: '', condition: 'duplicate', value: '' })
+                visibilityProps?.setViewFilter?.({ column: '', condition: 'duplicate', value: '', source: 'affected_rows' })
                 close?.()
               }}
               type="button"
@@ -663,6 +671,8 @@ function DataToolsToolbar({
   const [openTool, setOpenTool] = useState(null)
   const [popoverX, setPopoverX] = useState(18)
   const [showRecommendations, setShowRecommendations] = useState(false)
+  const [labelIssueCount, setLabelIssueCount] = useState(0)
+  const [collapsed, setCollapsed] = useState(() => window.localStorage.getItem('simucast.dataToolsCollapsed') === '1')
   const close = () => setOpenTool(null)
 
   const [renderedTool, setRenderedTool] = useState(null)
@@ -711,17 +721,35 @@ function DataToolsToolbar({
       window.dispatchEvent(new CustomEvent('simucast:recommendations-changed', { detail: { visible: showRecommendations } }))
     }
   }, [showRecommendations, openTool])
-  const variables = dataset?.variables || []
+
+  useEffect(() => {
+    if (!dataset?.id) {
+      setLabelIssueCount(0)
+      return
+    }
+    let cancelled = false
+    api.categorySuggestions(dataset.id)
+      .then((r) => {
+        if (cancelled) return
+        const count = (r.suggestions || []).filter((item) => (item.groups || []).length > 0).length
+        setLabelIssueCount(count)
+      })
+      .catch(() => {
+        if (!cancelled) setLabelIssueCount(0)
+      })
+    return () => { cancelled = true }
+  }, [dataset?.id, dataset?.current_stage_id])
+
   const missingCount = suggestionGroups.missing?.columns?.length || 0
   const outlierCount = suggestionGroups.outliers?.columns?.length || 0
   const duplicateCount = suggestionGroups.duplicates?.count || 0
-  const labelCount = variables.filter((v) => ['category', 'text', 'binary'].includes(v.dtype)).length
   const hasIssue = {
     missing: missingCount > 0,
     outliers: outlierCount > 0,
     duplicates: duplicateCount > 0,
-    labels: labelCount > 0,
+    labels: labelIssueCount > 0,
   }
+  const issueCount = Object.values(hasIssue).filter(Boolean).length
 
   const groups = [
     {
@@ -769,7 +797,18 @@ function DataToolsToolbar({
     ? { key: 'columns', label: 'Columns', icon: 'eye' }
     : toolMap[openTool]
   const recommendationTools = new Set(['missing', 'outliers', 'duplicates', 'labels', 'bin', 'scale', 'encode', 'format'])
-  const hasRecommendationToggle = recommendationTools.has(openTool)
+  const hasRecommendationToggle = recommendationTools.has(openTool) && (openTool !== 'labels' || labelIssueCount > 0)
+  const effectiveShowRecommendations = renderedTool === 'labels'
+    ? showRecommendations && labelIssueCount > 0
+    : showRecommendations
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current
+      window.localStorage.setItem('simucast.dataToolsCollapsed', next ? '1' : '0')
+      if (next) close()
+      return next
+    })
+  }
   const openFromButton = (toolKey, event) => {
     const shell = event.currentTarget.closest('.ax-data-toolbar-shell')
     const shellLeft = shell?.getBoundingClientRect().left || 0
@@ -781,36 +820,54 @@ function DataToolsToolbar({
   }
 
   return (
-    <div className="ax-data-toolbar-shell">
+    <div className={`ax-data-toolbar-shell ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="ax-data-toolbar" role="toolbar" aria-label="Dataset tools">
-        <span className="ax-data-toolbar-title">Dataset tools</span>
-        {groups.map((group) => (
-          <div className="ax-data-toolbar-group" key={group.label}>
-            <span className="ax-data-toolbar-group-label">{group.label}</span>
-            {group.tools.map((tool) => (
-              <ToolbarButton
-                key={tool.key}
-                tool={tool}
-                active={openTool === tool.key}
-                onClick={(event) => openFromButton(tool.key, event)}
-              />
-            ))}
+        <button
+          className="ax-data-toolbar-collapse"
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Show dataset tools' : 'Hide dataset tools'}
+        >
+          <span className="ax-data-toolbar-title">Dataset tools</span>
+          <span className="ax-data-toolbar-collapse-icon" aria-hidden="true">{collapsed ? '▾' : '▴'}</span>
+        </button>
+        {collapsed ? (
+          <div className="ax-data-toolbar-collapsed-summary">
+            <span>{issueCount ? `${issueCount} issue group${issueCount === 1 ? '' : 's'} flagged` : 'No active issue flags'}</span>
+            <span>{visibilityProps.visibleColumns.length}/{visibilityProps.allColumns.length} columns visible</span>
           </div>
-        ))}
-        <div className="ax-data-toolbar-group ax-data-toolbar-group-last">
-          <ToolbarButton
-            tool={{
-              key: 'columns',
-              label: `${visibilityProps.visibleColumns.length}/${visibilityProps.allColumns.length}`,
-              icon: 'eye',
-              tip: 'Show or hide columns',
-            }}
-            active={openTool === 'columns'}
-            onClick={(event) => openFromButton('columns', event)}
-          />
-        </div>
+        ) : (
+          <>
+            {groups.map((group) => (
+              <div className="ax-data-toolbar-group" key={group.label}>
+                <span className="ax-data-toolbar-group-label">{group.label}</span>
+                {group.tools.map((tool) => (
+                  <ToolbarButton
+                    key={tool.key}
+                    tool={tool}
+                    active={openTool === tool.key}
+                    onClick={(event) => openFromButton(tool.key, event)}
+                  />
+                ))}
+              </div>
+            ))}
+            <div className="ax-data-toolbar-group ax-data-toolbar-group-last">
+              <ToolbarButton
+                tool={{
+                  key: 'columns',
+                  label: `${visibilityProps.visibleColumns.length}/${visibilityProps.allColumns.length}`,
+                  icon: 'eye',
+                  tip: 'Show or hide columns',
+                }}
+                active={openTool === 'columns'}
+                onClick={(event) => openFromButton('columns', event)}
+              />
+            </div>
+          </>
+        )}
       </div>
-      {renderedTool && (
+      {!collapsed && renderedTool && (
         <>
           <button className={`ax-data-toolbar-overlay dim-overlay ${popoverState === 'closing' ? 'hiding' : 'show'}`} type="button" aria-label="Close data tool" onClick={close} />
           <div className={`ax-data-toolbar-popover popover ${renderedTool === 'columns' ? 'columns-popover' : ''} ${popoverState}`} style={{ left: popoverX }}>
@@ -849,7 +906,7 @@ function DataToolsToolbar({
                     await onApplied?.(...args)
                   }}
                   visibilityProps={visibilityProps}
-                  showRecommendations={showRecommendations}
+                  showRecommendations={effectiveShowRecommendations}
                   close={close}
                 />
               )}

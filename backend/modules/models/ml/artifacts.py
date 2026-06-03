@@ -102,13 +102,22 @@ def _whatif_raw_features(X_raw):
         if pd.api.types.is_numeric_dtype(s):
             mean = float(present.mean()) if len(present) else 0.0
             std = float(present.std() or 1.0) if len(present) else 1.0
+            numeric_present = pd.to_numeric(present, errors="coerce").dropna()
+            is_integer = bool(
+                len(numeric_present)
+                and np.all(np.isclose(numeric_present.to_numpy(dtype=float), np.round(numeric_present.to_numpy(dtype=float))))
+            )
+            default = int(round(mean)) if is_integer else mean
             features.append({
                 "name": col,
                 "kind": "numeric",
+                "dtype": "int" if is_integer else "float",
+                "step": 1 if is_integer else None,
+                "default": default,
                 "mean": mean,
                 "std": std,
-                "min": float(present.min()) if len(present) else mean - 2 * std,
-                "max": float(present.max()) if len(present) else mean + 2 * std,
+                "min": int(present.min()) if is_integer and len(present) else float(present.min()) if len(present) else mean - 2 * std,
+                "max": int(present.max()) if is_integer and len(present) else float(present.max()) if len(present) else mean + 2 * std,
             })
         else:
             counts = present.astype(str).value_counts()

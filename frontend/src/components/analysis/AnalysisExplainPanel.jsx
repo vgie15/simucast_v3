@@ -307,17 +307,17 @@ export function WhatThisMeans({ kind, result, setup }) {
 export function DecisionTakeaway({ kind, result }) {
   const d = buildDecisionTakeaway(kind, result)
   return (
-    <div style={{ padding: '14px 18px', background: 'linear-gradient(135deg, #1e1e2e, #2d2d44)', borderRadius: 10, marginBottom: 16 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: '#f97316', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>
+    <div style={{ padding: '14px 18px', background: '#fffaf4', border: '1px solid #fdba74', borderLeft: '4px solid #f97316', borderRadius: 10, marginBottom: 16 }}>
+      <p style={{ fontSize: 10, fontWeight: 800, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>
         Decision Takeaway
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: '#a8a29e' }}>Can help prediction?</span>
+          <span style={{ fontSize: 12, color: '#57534e' }}>Can help prediction?</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: d.color }}>{d.label}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: '#a8a29e' }}>Strength:</span>
+          <span style={{ fontSize: 12, color: '#57534e' }}>Strength:</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: d.strengthColor }}>{d.strength}</span>
         </div>
       </div>

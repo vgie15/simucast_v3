@@ -580,6 +580,7 @@ function renderTab(tab, props) {
           activeModel={props.activeModel}
           setActiveModel={props.setActiveModel}
           initialData={props.initialData}
+          onGo={props.go}
         />
       )
     case 'report':

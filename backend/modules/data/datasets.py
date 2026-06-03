@@ -601,6 +601,7 @@ def get_rows(ds_id):
         if not ds:
             return {"error": "not found"}, 404
         rows = _rows_for_stage(ds, stage_id, s)
+        variables = infer_variables(pd.DataFrame(rows)) if rows else []
         start = (page - 1) * page_size
         end = start + page_size
         page_rows = []
@@ -614,6 +615,7 @@ def get_rows(ds_id):
             "page_size": page_size,
             "total": len(rows),
             "stage_id": stage_id or ds.current_stage_id or "original",
+            "variables": variables,
         }
     finally:
         s.close()
@@ -1042,7 +1044,7 @@ def column_stats(ds_id, col_name):
         if col_name not in df.columns:
             return {"error": "column not found"}, 404
 
-        variables = jload(ds.variables) or []
+        variables = infer_variables(df)
         var = next((v for v in variables if v["name"] == col_name), None)
         dtype = var["dtype"] if var else "text"
 

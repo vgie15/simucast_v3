@@ -2,7 +2,8 @@
  * COMPONENT: PROJECT GUIDANCE SETUP
  * Keywords: onboarding, question, guided workflow, coach
  * ============================================================ */
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeft, BarChart3, ChevronDown, GitBranch, Lightbulb, LineChart, Send, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { api } from '../../api'
 import { useAuth } from '../providers/AuthProvider'
 
@@ -64,6 +65,13 @@ const CLEAN_QUESTION = {
   why: 'Start with dataset quality before deciding on analysis or modeling.',
 }
 
+const AI_QUICK_REPLIES = [
+  'I want to predict something',
+  'I want to compare groups',
+  'I want to find patterns',
+  "I'm not sure — help me decide",
+]
+
 // Short post-create setup that turns a user question into a supported workflow.
 export default function ProjectGuidanceSetup({
   dataset,
@@ -88,6 +96,11 @@ export default function ProjectGuidanceSetup({
   const [intentChoiceOpen, setIntentChoiceOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const [assistantMessages, setAssistantMessages] = useState([])
+  const [assistantInput, setAssistantInput] = useState('')
+  const [assistantLoading, setAssistantLoading] = useState(false)
+  const feedRef = useRef(null)
 
   useEffect(() => {
     if (!open) return
@@ -106,6 +119,10 @@ export default function ProjectGuidanceSetup({
     setClosestIntents([])
     setIntentChoiceOpen(false)
     setError('')
+    setAssistantOpen(false)
+    setAssistantMessages([])
+    setAssistantInput('')
+    setAssistantLoading(false)
   }, [open, current.goal, current.guided_mode, current.intent, current.question_source, current.question_text])
 
   useEffect(() => {
@@ -141,13 +158,41 @@ export default function ProjectGuidanceSetup({
   }
 
   const toggleSuggestions = () => {
-    if (suggestionsAI) {
-      setSuggestions(systemQuestionSuggestions(dataset))
-      setSuggestionsAI(false)
-    } else {
+    if (!assistantOpen) {
+      openAssistant()
       loadAISuggestions()
+      return
     }
+    closeAssistant()
   }
+
+  const closeAssistant = () => {
+    setAssistantOpen(false)
+    setAssistantMessages([])
+    setAssistantInput('')
+    setAssistantLoading(false)
+    setSuggestions(systemQuestionSuggestions(dataset))
+    setSuggestionsAI(false)
+  }
+
+  const openAssistant = () => {
+    if (assistantOpen) return
+    const first = aiSuggestions[0] || suggestions[0] || systemQuestionSuggestions(dataset)[0]
+    setAssistantOpen(true)
+    setAssistantMessages([
+      {
+        id: `ai-open-${Date.now()}`,
+        role: 'assistant',
+        content: "Hi! I looked at your dataset. Here's a goal that fits well based on your columns:",
+        suggestions: first ? [goalChatSuggestionFromQuestion(first)] : [],
+      },
+    ])
+  }
+
+  useEffect(() => {
+    if (!assistantOpen || !feedRef.current) return
+    feedRef.current.scrollTop = feedRef.current.scrollHeight
+  }, [assistantMessages, assistantLoading, assistantOpen])
 
   const derivedIntent = useMemo(() => inferIntent(question), [question])
   const supportedIntent = mappedIntent || derivedIntent
@@ -218,18 +263,68 @@ export default function ProjectGuidanceSetup({
     setIntentChoiceOpen(false)
   }
 
+  const useAssistantSuggestion = (item) => {
+    selectQuestion({
+      question: item.question,
+      intent: item.intent || intentFromGoalWorkflow(item.workflow, item.question),
+      source: 'ai',
+      why: item.why,
+    })
+  }
+
+  const sendAssistantMessage = async (text = '') => {
+    const content = String(text || assistantInput || '').trim()
+    if (!content || assistantLoading) return
+    const userMessage = { id: `user-${Date.now()}`, role: 'user', content }
+    const history = [...assistantMessages, userMessage]
+      .filter((message) => ['assistant', 'user'].includes(message.role))
+      .map((message) => ({ role: message.role, content: message.content }))
+    setAssistantMessages((prev) => [...prev, userMessage])
+    setAssistantInput('')
+    setAssistantLoading(true)
+    try {
+      const response = await api.aiGoalSuggest({
+        user_message: content,
+        columns: (dataset?.variables || []).map((variable) => variable.name).filter(Boolean),
+        conversation_history: history,
+      })
+      setAssistantMessages((prev) => [
+        ...prev,
+        {
+          id: `ai-${Date.now()}`,
+          role: 'assistant',
+          content: response?.message || 'Here is a goal SimuCast can help with.',
+          suggestions: (response?.suggestions || []).map(normalizeGoalChatSuggestion),
+        },
+      ])
+    } catch {
+      const fallback = goalChatFallback(dataset, content)
+      setAssistantMessages((prev) => [
+        ...prev,
+        {
+          id: `ai-fallback-${Date.now()}`,
+          role: 'assistant',
+          content: fallback.message,
+          suggestions: fallback.suggestions,
+        },
+      ])
+    } finally {
+      setAssistantLoading(false)
+    }
+  }
+
   if (!open) return null
 
   return (
     <div className="ax-guidance-backdrop" role="presentation">
-      <section className="ax-guidance-modal" role="dialog" aria-modal="true" aria-label="Choose project guidance">
+      <section className={`ax-guidance-modal ${assistantOpen && step === 'question' ? 'with-assistant' : ''}`} role="dialog" aria-modal="true" aria-label="Choose project guidance">
         <div className="ax-guidance-head">
           <div>
             <p className="ax-kicker">Project start</p>
             <h2>{step === 'question' ? 'What would you like to find out from this dataset?' : 'Would you like SimuCast to guide you step by step?'}</h2>
             <p>
               {step === 'question'
-                ? 'Choose a question or write your own. SimuCast will map it to a workflow it can actually support.'
+                ? 'Choose a goal below or let the AI suggest one based on your dataset.'
                 : 'The Guided Workflow stays visible either way. Guided Mode focuses the next required task when you want supervision.'}
             </p>
           </div>
@@ -246,33 +341,35 @@ export default function ProjectGuidanceSetup({
         </div>
 
         {step === 'question' ? (
-          <>
+          <div className="ax-guidance-question-layout">
+          <div className="ax-guidance-question-main">
             <div className="ax-question-suggestions-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <strong>{suggestionsAI ? 'AI suggested questions' : 'Questions SimuCast can guide'}</strong>
-                <span>{suggestionsLoading ? 'Thinking with the current dataset...' : 'Pick one or ask your own below.'}</span>
+                <span>
+                  {suggestionsLoading
+                    ? 'Thinking with the current dataset...'
+                    : assistantOpen
+                      ? 'Pick one below or keep chatting with the assistant.'
+                      : 'Pick one below or ask the assistant.'}
+                </span>
               </div>
               {!auth.isGuest && (
                 <button
                   type="button"
-                  className="ax-btn mini"
+                  className={`ax-btn mini ax-ai-suggest-toggle ${assistantOpen ? 'active' : ''}`}
                   disabled={suggestionsLoading}
                   onClick={toggleSuggestions}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid var(--color-border-secondary)', padding: '4px 8px', borderRadius: '6px', background: 'var(--color-background-primary)', cursor: 'pointer' }}
                 >
-                  {suggestionsAI ? (
+                  {assistantOpen ? (
                     <>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ display: 'block' }}>
-                        <path d="M19 12H5M12 19l-7-7 7-7" />
-                      </svg>
-                      <span style={{ fontSize: '11px', fontWeight: '750', color: 'var(--color-text-secondary)' }}>Show standard</span>
+                      <ArrowLeft size={13} />
+                      <span>Back to standard</span>
                     </>
                   ) : (
                     <>
-                      <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ display: 'block' }}>
-                        <path d="M7 1L8.3 5.1L12.5 6L8.3 8.2L7 13L5.7 8.2L1.5 6L5.7 5.1L7 1Z" fill="var(--color-accent)" />
-                      </svg>
-                      <span style={{ fontSize: '11px', fontWeight: '750', color: 'var(--color-text-secondary)' }}>Suggest with AI</span>
+                      <Sparkles size={12} />
+                      <span>Suggest with AI</span>
                     </>
                   )}
                 </button>
@@ -286,29 +383,13 @@ export default function ProjectGuidanceSetup({
                   className={`ax-goal-card ${picked?.question === item.question ? 'selected' : ''}`}
                   onClick={() => selectQuestion(item)}
                 >
-                  <strong>{item.question}</strong>
-                  <span>{item.why || goalLabel(item.intent)}</span>
+                  <GoalCardIcon item={item} />
+                  <div>
+                    <strong>{item.question}</strong>
+                    <span>{item.why || goalLabel(item.intent)}</span>
+                  </div>
                 </button>
               ))}
-            </div>
-            <div className="ax-guidance-question-entry">
-              <label htmlFor="simucast-project-question">Ask your own question</label>
-              <textarea
-                id="simucast-project-question"
-                rows={2}
-                value={question}
-                placeholder="For example: Can I predict whether a student will pass math from reading score and attendance?"
-                onChange={(event) => {
-                  setQuestion(event.target.value)
-                  setSelected(null)
-                  setMappedIntent('')
-                  setClosestIntents([])
-                  setIntentChoiceOpen(false)
-                }}
-              />
-              {derivedIntent && question.trim() && (
-                <p>SimuCast will start with: <strong>{goalLabel(derivedIntent)}</strong>.</p>
-              )}
             </div>
             <button
               type="button"
@@ -339,7 +420,19 @@ export default function ProjectGuidanceSetup({
                 </div>
               </div>
             )}
-          </>
+          </div>
+          {assistantOpen && (
+            <GoalAssistantPanel
+              messages={assistantMessages}
+              loading={assistantLoading}
+              input={assistantInput}
+              setInput={setAssistantInput}
+              onSend={sendAssistantMessage}
+              onUseSuggestion={useAssistantSuggestion}
+              feedRef={feedRef}
+            />
+          )}
+          </div>
         ) : (
           <>
             {selectedIntent && <QuestionPathPreview question={picked.question} intent={selectedIntent} />}
@@ -397,6 +490,136 @@ export default function ProjectGuidanceSetup({
   )
 }
 
+function GoalAssistantPanel({ messages, loading, input, setInput, onSend, onUseSuggestion, feedRef }) {
+  const [quickRepliesOpen, setQuickRepliesOpen] = useState(true)
+  return (
+    <aside className="ax-goal-assistant-panel" aria-label="AI goal assistant">
+      <header className="ax-goal-assistant-head">
+        <span className="ax-goal-assistant-icon"><Sparkles size={14} /></span>
+        <div>
+          <strong>AI goal assistant</strong>
+          <small>Ask me anything about your goal</small>
+        </div>
+      </header>
+      <div className="ax-goal-assistant-feed" ref={feedRef}>
+        {messages.map((message) => (
+          <GoalAssistantMessage key={message.id} message={message} onUseSuggestion={onUseSuggestion} />
+        ))}
+        {loading && (
+          <div className="ax-goal-chat-row ai">
+            <span className="ax-goal-chat-avatar"><Sparkles size={12} /></span>
+            <div className="ax-goal-chat-bubble ai typing" aria-label="AI is typing">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        )}
+      </div>
+      <div className={`ax-goal-quick-replies ${quickRepliesOpen ? 'open' : 'collapsed'}`}>
+        <button
+          className="ax-goal-quick-replies-toggle"
+          type="button"
+          onClick={() => setQuickRepliesOpen((open) => !open)}
+          aria-expanded={quickRepliesOpen}
+        >
+          <span>Quick replies</span>
+          <ChevronDown size={14} />
+        </button>
+        {quickRepliesOpen && (
+          <div>
+            {AI_QUICK_REPLIES.map((reply) => (
+              <button key={reply} type="button" onClick={() => onSend(reply)} disabled={loading}>
+                {reply}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <form
+        className="ax-goal-chat-input"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onSend()
+        }}
+      >
+        <textarea
+          rows={2}
+          value={input}
+          placeholder="Ask me anything..."
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              onSend()
+            }
+          }}
+        />
+        <button type="submit" disabled={!input.trim() || loading} aria-label="Send goal assistant message">
+          <Send size={15} />
+        </button>
+      </form>
+    </aside>
+  )
+}
+
+function GoalAssistantMessage({ message, onUseSuggestion }) {
+  const isUser = message.role === 'user'
+  return (
+    <div className={`ax-goal-chat-row ${isUser ? 'user' : 'ai'}`}>
+      {!isUser && <span className="ax-goal-chat-avatar"><Sparkles size={12} /></span>}
+      <div className={`ax-goal-chat-bubble ${isUser ? 'user' : 'ai'}`}>
+        <p>{message.content}</p>
+        {(message.suggestions || []).map((suggestion) => (
+          <div className="ax-goal-suggestion-card" key={suggestion.question}>
+            <div className="ax-goal-suggestion-top">
+              <Lightbulb size={14} />
+              <strong>{suggestion.question}</strong>
+            </div>
+            <div className="ax-goal-suggestion-body">
+              <div>
+                <span>Why this helps:</span>
+                <p>{suggestion.why}</p>
+              </div>
+              <div>
+                <span>Recommended path:</span>
+                <div className="ax-goal-workflow-pills">
+                  {(suggestion.workflow || []).map((step, index) => (
+                    <React.Fragment key={`${suggestion.question}:${step}:${index}`}>
+                      <span className={['Describe', 'Analysis', 'Models', 'What-if', 'Report'].includes(step) ? 'active' : ''}>{step}</span>
+                      {index < suggestion.workflow.length - 1 && <em>{'>'}</em>}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <button type="button" onClick={() => onUseSuggestion(suggestion)}>
+              Use this goal
+            </button>
+          </div>
+        ))}
+      </div>
+      {isUser && <span className="ax-goal-chat-avatar user">U</span>}
+    </div>
+  )
+}
+
+function GoalCardIcon({ item }) {
+  const text = `${item?.intent || ''} ${item?.question || ''}`.toLowerCase()
+  const Icon = text.includes('what') || text.includes('scenario')
+    ? SlidersHorizontal
+    : text.includes('compare') || text.includes('group')
+      ? BarChart3
+      : text.includes('related') || text.includes('relationship')
+        ? GitBranch
+        : LineChart
+  return (
+    <span className="ax-goal-card-icon" aria-hidden="true">
+      <Icon size={15} strokeWidth={2.1} />
+    </span>
+  )
+}
+
 function QuestionPathPreview({ question, intent }) {
   return (
     <div className="ax-goal-path">
@@ -415,6 +638,54 @@ function QuestionPathPreview({ question, intent }) {
 
 export function goalLabel(goal) {
   return INTENTS.find((item) => item.id === goal)?.title || 'Choose a project question'
+}
+
+function workflowForIntent(intent) {
+  if (intent === 'prepare_data') return ['Describe', 'Report']
+  if (intent === 'train_model' || intent === 'compare_models') return ['Describe', 'Models', 'Report']
+  if (intent === 'what_if') return ['Describe', 'Models', 'What-if', 'Report']
+  if (intent === 'report') return ['Describe', 'Analysis', 'Report']
+  if (intent === 'full_workflow') return ['Describe', 'Analysis', 'Models', 'What-if', 'Report']
+  return ['Describe', 'Analysis', 'Report']
+}
+
+function intentFromGoalWorkflow(workflow = [], question = '') {
+  const text = `${workflow.join(' ')} ${question}`.toLowerCase()
+  if (text.includes('what-if') || text.includes('what if')) return 'what_if'
+  if (text.includes('models') || text.includes('predict')) return 'train_model'
+  if (text.includes('report')) return 'report'
+  return inferIntent(question) || 'analyze_relationships'
+}
+
+function normalizeGoalChatSuggestion(item = {}) {
+  const question = String(item.question || '').trim()
+  const intent = item.intent || intentFromGoalWorkflow(item.workflow, question)
+  return {
+    question,
+    intent,
+    why: String(item.why || 'This gives SimuCast a clear path to guide your next steps.').trim(),
+    workflow: Array.isArray(item.workflow) && item.workflow.length ? item.workflow : workflowForIntent(intent),
+  }
+}
+
+function goalChatSuggestionFromQuestion(item = {}) {
+  return normalizeGoalChatSuggestion({
+    question: item.question,
+    intent: item.intent,
+    why: item.why,
+    workflow: workflowForIntent(item.intent),
+  })
+}
+
+function goalChatFallback(dataset, message = '') {
+  const first = systemQuestionSuggestions(dataset).find((item) => {
+    const intent = inferIntent(message)
+    return intent ? item.intent === intent : true
+  }) || systemQuestionSuggestions(dataset)[0]
+  return {
+    message: 'A good next step is to turn your question into one clear goal SimuCast can guide.',
+    suggestions: [goalChatSuggestionFromQuestion(first)],
+  }
 }
 
 export function systemQuestionSuggestions(dataset) {

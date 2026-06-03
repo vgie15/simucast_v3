@@ -219,6 +219,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  aiGoalSuggest: (body) =>
+    request('/api/describe/ai_goal_suggest', {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
   aiExplain: (id, step, params, question, result, includeInReport = false) =>
     request(`/api/datasets/${id}/ai/explain`, {
       method: 'POST',

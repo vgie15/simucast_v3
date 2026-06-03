@@ -6,8 +6,9 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
-import { ExplainButton, SparkleIcon } from '../ai/AIExplainers'
+import { SparkleIcon } from '../ai/AIExplainers'
 import { InlineSpinner } from '../common/LoadingStates'
+import { ArrowRight, LineChart, SlidersHorizontal, Sparkles } from 'lucide-react'
 
 const SCENARIO_MAX = 8
 const STORAGE_KEY = 'simucast.whatif'
@@ -25,7 +26,23 @@ function saveDraft(draft) {
 
 const kebab = (str) => String(str).toLowerCase().replace(/['`’]/g, '').replace(/[^a-z0-9]+/g, '-')
 
-export default function WhatIfPage({ dataset, activeModel, setActiveModel, initialData }) {
+function formatModelAlgorithmLabel(value) {
+  const key = String(value || '').trim().toLowerCase().replace(/[_-]+/g, ' ')
+  if (!key) return 'Selected model'
+  if (key.includes('random forest') || key === 'rf') return 'Random Forest'
+  if (key.includes('decision tree') || key === 'tree') return 'Decision Tree'
+  if (key.includes('linear')) return 'Linear Regression'
+  if (key.includes('logistic')) return 'Logistic Regression'
+  return key.replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function formatWhatIfModelLabel(model) {
+  const algorithm = formatModelAlgorithmLabel(model?.algorithm || model?.name)
+  const target = model?.target || model?.target_variable || ''
+  return target ? `${algorithm} · ${target}` : algorithm
+}
+
+export default function WhatIfPage({ dataset, activeModel, setActiveModel, initialData, onGo }) {
   const dialog = useDialog()
   const [fallbackModel, setFallbackModel] = useState(null)
   const initialModels = initialData?.tab === 'whatif' && initialData?.datasetId === dataset?.id ? (initialData.models || []) : []
@@ -39,10 +56,14 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
   const [scenarios, setScenarios] = useState([])
   const [selectedScenarioName, setSelectedScenarioName] = useState('')
   const draftRestored = useRef(false)
+  const predictionRequestRef = useRef(0)
   const selectedModel = fallbackModel || activeModel
 
   const [explainMode, setExplainMode] = useState(false)
   const [explainPopup, setExplainPopup] = useState(null)
+  const [resultInsightOpen, setResultInsightOpen] = useState(false)
+  const [resultInsightText, setResultInsightText] = useState('')
+  const [resultInsightLoading, setResultInsightLoading] = useState(false)
 
   // Restore draft from localStorage
   useEffect(() => {
@@ -102,7 +123,7 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
       setModelFull(hydratedModel)
       const init = {}
       for (const f of currentFeatures || []) {
-        init[f.name] = f.kind === 'categorical' ? (f.default || f.values?.[0] || '') : f.mean
+        init[f.name] = f.kind === 'categorical' ? (f.default || f.values?.[0] || '') : defaultNumericFeatureValue(f)
       }
       setInputs(init)
       setPred(null)
@@ -113,22 +134,96 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
   }, [selectedModel?.id, dataset?.current_stage_id])
 
   useEffect(() => {
-    if (!modelFull || !Object.keys(inputs).length) return
+    if (!modelFull || !Object.keys(inputs).length) return undefined
     // Skip prediction if we already have one for these exact inputs (restored from draft)
-    if (pred && JSON.stringify(pred.inputs) === JSON.stringify(inputs)) return
-    api.predict(modelFull.id, inputs).then((p) => {
-      setPred(p)
-      setBaseline((current) => {
-        if (!current) setBaselineInputs({ ...inputs })
-        return current || p
+    if (pred && JSON.stringify(pred.inputs) === JSON.stringify(inputs)) return undefined
+    const predictionInputs = normalizeInputsForFeatures(inputs, modelFull.whatif_features || [])
+    const requestId = predictionRequestRef.current + 1
+    predictionRequestRef.current = requestId
+    let active = true
+    const timer = window.setTimeout(() => {
+      api.predict(modelFull.id, predictionInputs).then((p) => {
+        if (!active || predictionRequestRef.current !== requestId) return
+        setPred(p)
+        setBaseline((current) => {
+          if (!current) setBaselineInputs({ ...predictionInputs })
+          return current || p
+        })
+      }).catch((err) => {
+        if (active && predictionRequestRef.current === requestId) console.error(err)
       })
-    }).catch(console.error)
+    }, 180)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
   }, [inputs, modelFull?.id])
+
+  useEffect(() => {
+    if (!modelFull?.whatif_features?.length || !Object.keys(inputs).length) return
+    let changed = false
+    const normalized = { ...inputs }
+    for (const feature of modelFull.whatif_features) {
+      if (feature.kind === 'categorical' || !(feature.name in normalized) || normalized[feature.name] === '') continue
+      const next = normalizeNumericFeatureValue(feature, normalized[feature.name])
+      if (String(next) !== String(normalized[feature.name])) {
+        normalized[feature.name] = next
+        changed = true
+      }
+    }
+    if (changed) setInputs(normalized)
+  }, [modelFull?.id, modelFull?.whatif_features])
 
   useEffect(() => {
     document.body.classList.toggle('ax-explain-mode-on', explainMode)
     return () => document.body.classList.remove('ax-explain-mode-on')
   }, [explainMode])
+
+  useEffect(() => {
+    setResultInsightText('')
+    setResultInsightLoading(false)
+  }, [modelFull?.id])
+
+  useEffect(() => {
+    if (!resultInsightOpen || !dataset?.id || !pred || !baseline || !modelFull) return undefined
+    let cancelled = false
+    const currentPrediction = Number(pred.prediction)
+    const baselinePrediction = Number(baseline.prediction)
+    const payload = {
+      target: modelFull.target,
+      model: formatWhatIfModelLabel(modelFull),
+      algorithm: formatModelAlgorithmLabel(modelFull.algorithm || modelFull.name),
+      currentPrediction,
+      baselinePrediction,
+      difference: currentPrediction - baselinePrediction,
+      percentDifference: Math.abs(baselinePrediction) > 1e-9 ? ((currentPrediction - baselinePrediction) / Math.abs(baselinePrediction)) * 100 : 0,
+      inputs,
+      baselineInputs,
+      risk: computeExtrapolation(inputs, modelFull.whatif_features || []),
+    }
+
+    setResultInsightLoading(true)
+    api.aiExplain(
+      dataset.id,
+      'whatif-result-inline-interpretation',
+      payload,
+      'Explain this what-if prediction in plain English. Focus on which input values likely drive the prediction, whether the result makes intuitive sense, and what the user could change to increase or decrease the prediction.',
+      { prediction: pred, baseline, inputs, baselineInputs }
+    )
+      .then((response) => {
+        if (cancelled) return
+        setResultInsightText(cleanWhatIfExplainText(response?.explanation || response?.message || response?.text, makeWhatIfResultFallback(payload)))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setResultInsightText(makeWhatIfResultFallback(payload))
+      })
+      .finally(() => {
+        if (!cancelled) setResultInsightLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [resultInsightOpen, dataset?.id, modelFull?.id, pred?.prediction, baseline?.prediction, JSON.stringify(inputs), JSON.stringify(baselineInputs)])
 
   useEffect(() => {
     const handleGlobalEsc = (event) => {
@@ -240,7 +335,7 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
   }, [explainMode, modelFull, inputs, pred, baseline, scenarios])
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
-  if (!selectedModel) return <NoModelView availableModels={availableModels} setFallbackModel={setFallbackModel} dialog={dialog} />
+  if (!selectedModel) return <NoModelView availableModels={availableModels} setFallbackModel={setFallbackModel} dialog={dialog} onGo={onGo} />
   if (!modelFull) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Loading model...</p>
 
   const features = modelFull.whatif_features || []
@@ -254,7 +349,7 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
 
   const resetToMean = () => {
     const init = {}
-    for (const f of features) init[f.name] = f.kind === 'categorical' ? (f.default || f.values?.[0] || '') : f.mean
+    for (const f of features) init[f.name] = f.kind === 'categorical' ? (f.default || f.values?.[0] || '') : defaultNumericFeatureValue(f)
     setInputs(init)
     setBaseline(null)
     setBaselineInputs(null)
@@ -307,8 +402,8 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
   const baselinePred = baseline?.prediction ?? rangeMean
   const pctPosition = rangeMax > rangeMin ? Math.min(100, Math.max(0, ((currentPred - rangeMin) / (rangeMax - rangeMin)) * 100)) : 50
   const baselinePct = rangeMax > rangeMin ? Math.min(100, Math.max(0, ((baselinePred - rangeMin) / (rangeMax - rangeMin)) * 100)) : 50
-  const activeModelName = modelFull.name || selectedModel?.name || modelFull.algorithm || 'Selected model'
-  const activeModelAlgorithm = modelFull.algorithm || selectedModel?.algorithm || activeModelName
+  const activeModelName = formatWhatIfModelLabel(modelFull || selectedModel)
+  const activeModelAlgorithm = formatModelAlgorithmLabel(modelFull.algorithm || selectedModel?.algorithm || activeModelName)
   const activeModelMetric = modelFull.metrics?.accuracy != null
     ? `${Math.round(modelFull.metrics.accuracy * 100)}% accuracy`
     : modelFull.metrics?.r2 != null
@@ -316,6 +411,37 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
       : modelFull.metrics?.rmse != null
         ? `RMSE ${Number(modelFull.metrics.rmse).toFixed(3)}`
         : null
+  const resultInterpretation = buildWhatIfResultInterpretation({
+    current: currentPred,
+    baseline: baselinePred,
+    target: modelFull.target,
+    isProb,
+  })
+  const interpretationChips = (modelFull.whatif_features || [])
+    .map((feature) => {
+      const name = feature.name
+      const baselineValue = baselineInputs?.[name]
+      const currentValue = inputs?.[name]
+      if (baselineValue === undefined || currentValue === undefined) return null
+      return {
+        name,
+        baselineValue: formatScenarioCompareValue(baselineValue, feature),
+        currentValue: formatScenarioCompareValue(currentValue, feature),
+        changed: String(baselineValue) !== String(currentValue),
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => Number(b.changed) - Number(a.changed))
+    .slice(0, 4)
+
+  const toggleResultInsight = () => {
+    setResultInsightOpen((open) => {
+      const nextOpen = !open
+      if (!nextOpen) setResultInsightLoading(false)
+      return nextOpen
+    })
+  }
+  const resultInsightRegenerating = resultInsightOpen && resultInsightLoading && Boolean(resultInsightText)
 
   return (
     <div className="ax-whatif-layout">
@@ -356,11 +482,11 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
                 onChange={(event) => switchModel(event.target.value)}
               >
                 {availableModels.some((model) => String(model.id) === String(selectedModel?.id)) ? null : (
-                  <option value={selectedModel?.id || ''}>{activeModelName}</option>
+                  <option value={selectedModel?.id || ''}>{formatWhatIfModelLabel(modelFull || selectedModel)}</option>
                 )}
                 {availableModels.map((model) => (
                   <option key={model.id} value={model.id}>
-                    {(model.name || model.algorithm || 'Model')} · {model.target || 'target'}
+                    {formatWhatIfModelLabel(model)}
                   </option>
                 ))}
               </select>
@@ -461,22 +587,6 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
                 <SparkleIcon size={14} />
                 Explain Mode <span aria-hidden="true" />
               </button>
-              {pred && (
-                <div
-                  id="whatif-explain-button"
-                  {...explainAttrs({ id: 'whatif-explain-button', title: 'AI Explain Button', type: 'explain-button' }, '', true)}
-                  style={{ flexShrink: 0 }}
-                >
-                  <ExplainButton
-                    datasetId={dataset.id}
-                    step="whatif-prediction"
-                    params={{ target: modelFull.target, inputs, baseline_inputs: baselineInputs }}
-                    result={{ prediction: pred, baseline, delta, extrapolation }}
-                    question="Explain this scenario prediction in plain English: what changed from the baseline, why the prediction shifted, and how confident the user should be."
-                    label="Why this result?"
-                  />
-                </div>
-              )}
             </div>
           </div>
 
@@ -539,6 +649,70 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
             </div>
           )}
 
+          {pred && baseline && (
+            <div
+              id="whatif-result-interpretation-card"
+              {...explainAttrs({ id: 'whatif-result-interpretation-card', title: 'Prediction Interpretation Card', type: 'prediction-card' }, `ax-whatif-interpretation-card ${resultInterpretation.tone}`)}
+            >
+              <div className="ax-whatif-interpretation-main">
+                <div>
+                  <span className="ax-whatif-interpretation-kicker">Auto interpretation</span>
+                  <p>{resultInterpretation.summary}</p>
+                </div>
+                <strong className="ax-whatif-interpretation-badge">{resultInterpretation.badge}</strong>
+              </div>
+              {interpretationChips.length > 0 && (
+                <div className="ax-whatif-interpretation-chips" aria-label="Changed scenario inputs">
+                  {interpretationChips.map((chip) => (
+                      <span key={chip.name} className={`ax-whatif-interpretation-chip ${chip.changed ? 'changed' : 'muted'}`}>
+                        <strong>{chip.name}</strong>
+                        <em>{chip.baselineValue} {'->'} {chip.currentValue}</em>
+                      </span>
+                  ))}
+                </div>
+              )}
+              <div className="ax-whatif-interpretation-toggle-row">
+                <button
+                  type="button"
+                  className={`ax-whatif-interpretation-toggle ${resultInsightOpen ? 'active' : ''}`}
+                  onClick={(event) => {
+                    if (explainMode) {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      openExplain({ id: 'whatif-result-interpretation-toggle', title: 'AI Insight Toggle', type: 'prediction-card' }, event)
+                      return
+                    }
+                    toggleResultInsight()
+                  }}
+                  aria-pressed={resultInsightOpen}
+                >
+                  <SparkleIcon size={13} />
+                  <span>AI insight</span>
+                  <i aria-hidden="true" />
+                </button>
+                {resultInsightRegenerating && (
+                  <span className="ax-whatif-interpretation-regen">
+                    Regenerating
+                    <span className="ax-whatif-ai-dots" aria-hidden="true"><b /><b /><b /></span>
+                  </span>
+                )}
+              </div>
+              <div className={`ax-whatif-interpretation-ai ${resultInsightOpen ? 'open' : ''}`}>
+                {resultInsightOpen && (
+                  resultInsightLoading
+                    ? (
+                      <div className="ax-whatif-interpretation-loading">
+                        <SparkleIcon size={13} />
+                        <span>{resultInsightText ? 'Regenerating insight' : 'Generating insight'}</span>
+                        <span className="ax-whatif-ai-dots" aria-hidden="true"><b /><b /><b /></span>
+                      </div>
+                    )
+                    : <p>{resultInsightText || makeWhatIfResultFallback({ target: modelFull.target, currentPrediction: currentPred, baselinePrediction: baselinePred, difference: delta, percentDifference: resultInterpretation.percent, inputs, baselineInputs })}</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Note box */}
           {pred?.note && (
             <div
@@ -566,7 +740,7 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
                   {baselineInputs && Object.entries(baselineInputs).slice(0, 8).map(([k, v]) => (
                     <div id={`whatif-baseline-row-${kebab(k)}`} {...explainAttrs({ id: `whatif-baseline-row-${kebab(k)}`, title: `Baseline Row: ${k}`, type: 'compare-row', featureName: k, baselineValue: String(v), currentValue: String(inputs[k]), isChanged: String(inputs[k]) !== String(v) })} key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
                       <span style={{ color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k}</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>{String(v)}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>{formatScenarioCompareValue(v, featureByName(features, k))}</span>
                     </div>
                   ))}
                 </div>
@@ -588,7 +762,7 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
                     return (
                       <div id={`whatif-current-row-${kebab(k)}`} {...explainAttrs({ id: `whatif-current-row-${kebab(k)}`, title: `Current Row: ${k}`, type: 'compare-row', featureName: k, baselineValue: String(baselineInputs?.[k]), currentValue: String(v), isChanged: changed })} key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
                         <span style={{ color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', color: changed ? 'var(--color-accent, #f97316)' : 'var(--color-text-secondary)', fontWeight: changed ? 700 : 400 }}>{String(v)}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: changed ? 'var(--color-accent, #f97316)' : 'var(--color-text-secondary)', fontWeight: changed ? 700 : 400 }}>{formatScenarioCompareValue(v, featureByName(features, k))}</span>
                       </div>
                     )
                   })}
@@ -716,11 +890,12 @@ function CategoricalPill({ feature, value, onChange, explainAttrs }) {
 }
 
 function NumericSlider({ feature, value, onChange, explainAttrs }) {
-  const numericVal = Number(value ?? feature.mean)
+  const integerFeature = isIntegerFeature(feature)
+  const numericVal = Number(value ?? defaultNumericFeatureValue(feature))
   const min = Number(feature.min)
   const max = Number(feature.max)
   const mean = Number(feature.mean)
-  const step = Math.max((max - min) / 200, 0.01)
+  const step = integerFeature ? 1 : Number(feature.step) || Math.max((max - min) / 200, 0.01)
   const deltaFromMean = numericVal - mean
 
   return (
@@ -737,12 +912,12 @@ function NumericSlider({ feature, value, onChange, explainAttrs }) {
           id={`whatif-feature-${feature.name}-input`}
           {...explainAttrs({ id: `whatif-feature-${feature.name}-input`, title: `${feature.name} input`, type: 'numeric-input', featureName: feature.name, currentValue: numericVal }, '', true)}
           type="number"
-          value={Number.isFinite(numericVal) ? numericVal : ''}
+          value={Number.isFinite(numericVal) ? formatFeatureValue(feature, numericVal) : ''}
           step={step}
           onChange={(e) => {
             const raw = e.target.value
             if (raw === '') { onChange(''); return }
-            const next = Number(raw)
+            const next = normalizeNumericFeatureValue(feature, raw)
             if (Number.isFinite(next)) onChange(next)
           }}
           style={{ width: 64, fontSize: 11, fontFamily: 'var(--font-mono)', textAlign: 'right', padding: '2px 4px', border: '1px solid var(--color-border-tertiary)', borderRadius: 4 }}
@@ -758,7 +933,7 @@ function NumericSlider({ feature, value, onChange, explainAttrs }) {
           max={max}
           step={step}
           value={clamp(numericVal, min, max)}
-          onChange={(e) => onChange(+e.target.value)}
+          onChange={(e) => onChange(normalizeNumericFeatureValue(feature, e.target.value))}
           style={{ width: '100%', height: 24, cursor: 'pointer', accentColor: 'var(--color-accent, #f97316)' }}
         />
         {/* Mean tick marker */}
@@ -772,8 +947,8 @@ function NumericSlider({ feature, value, onChange, explainAttrs }) {
         {...explainAttrs({ id: `whatif-feature-${feature.name}-range`, title: `${feature.name} dataset range`, type: 'numeric-range', featureName: feature.name, currentValue: numericVal, min, max })}
         style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: -2 }}
       >
-        <span>{fmt(min)}</span>
-        <span>{fmt(max)}</span>
+        <span>{formatFeatureValue(feature, min)}</span>
+        <span>{formatFeatureValue(feature, max)}</span>
       </div>
       {/* Change from mean indicator */}
       <div
@@ -793,21 +968,55 @@ function NumericSlider({ feature, value, onChange, explainAttrs }) {
   )
 }
 
-function NoModelView({ availableModels, setFallbackModel, dialog }) {
+function NoModelView({ availableModels, setFallbackModel, dialog, onGo }) {
+  const usableModels = (availableModels || []).filter(Boolean)
   return (
-    <>
-      <div style={{ marginBottom: 12 }}>
-        <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-accent, #f97316)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>What-if</span>
-      </div>
-      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Train or choose a model on the Models page to enable what-if.</p>
-      {availableModels.length > 0 && (
-        <div className="ax-card" style={{ padding: 14, marginTop: 12 }}>
-          <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Choose a model for What-if</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-            {availableModels.slice(0, 5).map((model) => (
-              <div key={model.id} className="ax-card" style={{ padding: '8px 10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 12 }}>{model.algorithm} - {model.target}</span>
+    <div className="ax-whatif-empty-page">
+      <div className="ax-whatif-empty-shell">
+        <div className="ax-whatif-empty-card">
+          <div className="ax-whatif-empty-icon">
+            <SlidersHorizontal size={24} />
+          </div>
+          <span className="ax-whatif-empty-kicker">What-if</span>
+          <h2>Train a model before running scenarios</h2>
+          <p>
+            What-if needs a trained model so SimuCast can calculate how changed inputs affect the prediction.
+            Start in Models, then return here to test scenarios.
+          </p>
+          <div className="ax-whatif-empty-steps" aria-label="What-if setup steps">
+            <div>
+              <LineChart size={15} />
+              <span>Train a prediction model</span>
+            </div>
+            <div>
+              <Sparkles size={15} />
+              <span>Choose a supported result</span>
+            </div>
+            <div>
+              <SlidersHorizontal size={15} />
+              <span>Adjust inputs and compare outcomes</span>
+            </div>
+          </div>
+          <div className="ax-whatif-empty-actions">
+            <button type="button" className="ax-btn ax-primary" onClick={() => onGo?.('models')}>
+              Open Models setup <ArrowRight size={15} />
+            </button>
+          </div>
+        </div>
+
+        {usableModels.length > 0 && (
+          <div className="ax-whatif-empty-models">
+            <div className="ax-whatif-empty-models-head">
+              <span>Available trained models</span>
+              <em>{usableModels.length} found</em>
+            </div>
+            <div className="ax-whatif-empty-model-list">
+              {usableModels.slice(0, 5).map((model) => (
+                <div key={model.id} className="ax-whatif-empty-model-row">
+                  <div>
+                    <strong>{formatWhatIfModelLabel(model)}</strong>
+                    <span>{formatModelAlgorithmLabel(model.algorithm || model.name)} model</span>
+                  </div>
                   <button className="ax-btn" onClick={async () => {
                     try {
                       if (!model.has_whatif) await api.prepareModelForWhatIf(model.id)
@@ -815,14 +1024,16 @@ function NoModelView({ availableModels, setFallbackModel, dialog }) {
                     } catch (err) {
                       await dialog.alert({ title: 'Could Not Prepare Model', message: err.message, variant: 'danger' })
                     }
-                  }}>Use in What-if</button>
+                  }}>
+                    Use
+                  </button>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-    </>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -862,6 +1073,45 @@ function computeExtrapolation(inputs, features) {
   return { overall_risk: overall, out_of_range_features: details.map((d) => d.feature), details }
 }
 
+function featureByName(features, name) {
+  return (features || []).find((feature) => feature.name === name) || null
+}
+
+function isIntegerFeature(feature) {
+  if (!feature || feature.kind === 'categorical') return false
+  if (feature.dtype === 'int' || feature.display_dtype === 'int' || feature.is_integer === true) return true
+  const min = Number(feature.min)
+  const max = Number(feature.max)
+  const step = Number(feature.step)
+  return Number.isInteger(min) && Number.isInteger(max) && (!Number.isFinite(step) || step >= 1)
+}
+
+function normalizeNumericFeatureValue(feature, value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return n
+  return isIntegerFeature(feature) ? Math.round(n) : n
+}
+
+function defaultNumericFeatureValue(feature) {
+  const fallback = feature?.default ?? feature?.mean ?? feature?.min ?? 0
+  return normalizeNumericFeatureValue(feature, fallback)
+}
+
+function formatFeatureValue(feature, value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return isIntegerFeature(feature) ? String(Math.round(n)) : fmt(n)
+}
+
+function normalizeInputsForFeatures(inputs, features) {
+  const next = { ...(inputs || {}) }
+  for (const feature of features || []) {
+    if (!feature || feature.kind === 'categorical' || !(feature.name in next) || next[feature.name] === '') continue
+    next[feature.name] = normalizeNumericFeatureValue(feature, next[feature.name])
+  }
+  return next
+}
+
 function riskStyle(risk) {
   if (risk === 'high') return { bg: '#FEF2F2', fg: '#991B1B', border: '#FECACA' }
   if (risk === 'medium') return { bg: '#FFFBEB', fg: '#92400E', border: '#FDE68A' }
@@ -888,6 +1138,70 @@ function formatDelta(delta, isProb) {
   if (delta === null || delta === undefined || !Number.isFinite(delta)) return '-'
   const sign = delta > 0 ? '+' : ''
   return isProb ? `${sign}${Math.round(delta * 100)} pts` : `${sign}${fmt(delta)}`
+}
+
+function formatScenarioCompareValue(value, feature = null) {
+  if (feature && isIntegerFeature(feature)) return formatFeatureValue(feature, value)
+  if (typeof value === 'number') return Number.isFinite(value) ? value.toFixed(2) : '-'
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value).toFixed(2)
+  return String(value ?? '-')
+}
+
+function buildWhatIfResultInterpretation({ current, baseline, target, isProb }) {
+  const currentNum = Number(current)
+  const baselineNum = Number(baseline)
+  const targetLabel = target || 'prediction'
+  if (!Number.isFinite(currentNum) || !Number.isFinite(baselineNum)) {
+    return {
+      tone: 'equal',
+      percent: 0,
+      badge: '0.0% vs baseline',
+      summary: 'The current inputs match the dataset average. No significant change from baseline.',
+    }
+  }
+
+  const diff = currentNum - baselineNum
+  const equal = Math.abs(diff) < 1e-9
+  const denominator = Math.abs(baselineNum)
+  const percent = denominator > 1e-9 ? (diff / denominator) * 100 : 0
+  const absPercent = Math.abs(percent)
+  const baselineText = isProb ? `${Math.round(baselineNum * 100)}%` : fmt(baselineNum)
+  const direction = diff > 0 ? 'above' : diff < 0 ? 'below' : 'vs'
+  const tone = equal ? 'equal' : diff > 0 ? 'above' : 'below'
+  const badge = equal
+    ? '0.0% vs baseline'
+    : `${diff > 0 ? '+' : '-'}${absPercent.toFixed(1)}% ${direction} baseline`
+
+  let summary = 'The prediction is close to the baseline average. The current inputs produce a typical result.'
+  if (equal) {
+    summary = 'The current inputs match the dataset average. No significant change from baseline.'
+  } else if (absPercent > 10 && diff > 0) {
+    summary = `The predicted ${targetLabel} is ${absPercent.toFixed(1)}% above the baseline average of ${baselineText}. This combination of inputs pushes the prediction higher than typical.`
+  } else if (absPercent > 10 && diff < 0) {
+    summary = `The predicted ${targetLabel} is ${absPercent.toFixed(1)}% below the baseline average of ${baselineText}. This combination of inputs results in a lower-than-average prediction.`
+  }
+
+  return { tone, percent, badge, summary }
+}
+
+function makeWhatIfResultFallback(payload) {
+  const target = payload?.target || 'the target'
+  const current = fmt(payload?.currentPrediction)
+  const baseline = fmt(payload?.baselinePrediction)
+  const diff = Number(payload?.difference || 0)
+  const changed = Object.entries(payload?.inputs || {})
+    .filter(([key, value]) => String(payload?.baselineInputs?.[key]) !== String(value))
+    .slice(0, 3)
+    .map(([key, value]) => `${key} = ${formatScenarioCompareValue(value)}`)
+  const driverText = changed.length
+    ? `The main changed inputs are ${changed.join(', ')}. These are the values most likely influencing the new prediction.`
+    : 'The inputs are close to the baseline profile, so the prediction remains near the average.'
+  const directionText = diff > 0
+    ? `Changing these inputs can help test what lowers ${target} back toward the baseline.`
+    : diff < 0
+      ? `Moving the changed inputs back toward their baseline values may raise ${target} closer to the average.`
+      : `To change ${target}, adjust one or more feature values away from the baseline profile.`
+  return `${driverText} The current prediction is ${current} compared with a baseline of ${baseline}. ${directionText}`
 }
 
 /* ─── Explain Mode Helpers ─── */

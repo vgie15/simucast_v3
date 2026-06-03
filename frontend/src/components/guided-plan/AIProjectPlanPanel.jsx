@@ -103,7 +103,7 @@ export default function AIProjectPlanPanel({
   }
 
   const cacheKeyFor = (targetMode = mode, targetStage = stageKey) => {
-    const scope = targetMode === 'auto' ? 'latest' : targetStage
+    const scope = targetStage
     return `simucast.aiPlan.${PLAN_CACHE_VERSION}.${datasetId}.${scope}.${guidanceGoal}.${guidanceQuestionKey}.${targetMode}`
   }
 
@@ -197,13 +197,9 @@ export default function AIProjectPlanPanel({
 
   useEffect(() => {
     if (mode === 'system') return
-    if (mode === 'auto' && plan && planDatasetId === datasetId) {
-      loadActivity()
-      return
-    }
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, guidanceGoal, guidanceQuestionKey, mode])
+  }, [datasetId, guidanceGoal, guidanceQuestionKey, stageKey, mode])
 
   useEffect(() => {
     if (mode !== 'system') return

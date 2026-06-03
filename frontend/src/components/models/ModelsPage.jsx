@@ -2656,6 +2656,7 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
 
   const targets = [...new Set(models.map((m) => m.target).filter(Boolean))]
   const filtered = filterTarget === 'all' ? models : models.filter((m) => m.target === filterTarget)
+  const metricColumns = getHistoryMetricColumns(filtered.length ? filtered : models)
 
   const settingsSummary = (m) => {
     const defs = defaultModelParams()
@@ -2685,13 +2686,12 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
   }
 
   const exportCSV = () => {
-    const rows = [['Algorithm', 'Target', 'Accuracy', 'F1', 'Settings', 'Trained']]
+    const rows = [['Algorithm', 'Target', ...metricColumns.map((metric) => metric.label), 'Settings', 'Trained']]
     models.forEach((m) => {
       rows.push([
         algoLabelForTask(m.algorithm, m.metrics?.task),
         m.target,
-        m.metrics?.accuracy != null ? (m.metrics.accuracy * 100).toFixed(1) + '%' : '',
-        m.metrics?.f1 != null ? Number(m.metrics.f1).toFixed(3) : '',
+        ...metricColumns.map((metric) => formatHistoryMetricValue(m.metrics?.[metric.key], metric.key, true)),
         settingsSummary(m),
         m.trained_at || '',
       ])
@@ -2813,12 +2813,15 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
               <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>
                 ALGORITHM · TARGET
               </th>
-              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
-                ACCURACY ↕
-              </th>
-              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
-                F1 ↕
-              </th>
+              {metricColumns.map((metric) => (
+                <th
+                  key={metric.key}
+                  style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}
+                  title={metric.label}
+                >
+                  {metric.label}
+                </th>
+              ))}
               <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>
                 SETTINGS
               </th>
@@ -2887,12 +2890,15 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
                       target: {m.target}
                     </div>
                   </td>
-                  <td style={{ padding: '14px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)' }}>
-                    {m.metrics?.accuracy != null ? (m.metrics.accuracy * 100).toFixed(1) + '%' : (m.metrics?.r2 != null ? `R²\u00a0${Number(m.metrics.r2).toFixed(3)}` : '—')}
-                  </td>
-                  <td style={{ padding: '14px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)' }}>
-                    {m.metrics?.f1 != null ? Number(m.metrics.f1).toFixed(3) : '—'}
-                  </td>
+                  {metricColumns.map((metric) => (
+                    <td
+                      key={metric.key}
+                      style={{ padding: '14px 10px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}
+                      title={`${metric.label}: ${formatHistoryMetricValue(m.metrics?.[metric.key], metric.key)}`}
+                    >
+                      {formatHistoryMetricValue(m.metrics?.[metric.key], metric.key)}
+                    </td>
+                  ))}
                   <td style={{ padding: '14px 12px' }}>
                     <span style={{
                       fontSize: 11, fontFamily: 'var(--font-mono)',
@@ -2971,6 +2977,97 @@ function PreviousModelsTable({ models, restoreModelSettings, prepareAndUseInWhat
       </div>
     </div>
   )
+}
+
+const HISTORY_METRIC_EXCLUDE = new Set([
+  'task',
+  'model_params',
+  'params',
+  'confusion_matrix',
+  'classification_report',
+  'feature_importance',
+  'feature_importances',
+  'per_class',
+  'target',
+  'algorithm',
+])
+
+const HISTORY_METRIC_ORDER = [
+  'accuracy',
+  'f1',
+  'precision',
+  'recall',
+  'roc_auc',
+  'r2',
+  'rmse',
+  'mae',
+  'mse',
+  'train_score',
+  'test_score',
+  'train_r2',
+  'test_r2',
+  'train_rmse',
+  'test_rmse',
+  'generalization_gap',
+  'train_test_gap',
+  'cv_score',
+]
+
+function getHistoryMetricColumns(models = []) {
+  const keys = new Set()
+  models.forEach((model) => {
+    Object.entries(model.metrics || {}).forEach(([key, value]) => {
+      if (HISTORY_METRIC_EXCLUDE.has(key)) return
+      if (value == null) return
+      if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
+        keys.add(key)
+      }
+    })
+  })
+  return [...keys]
+    .sort((a, b) => {
+      const ai = HISTORY_METRIC_ORDER.indexOf(a)
+      const bi = HISTORY_METRIC_ORDER.indexOf(b)
+      if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      return a.localeCompare(b)
+    })
+    .map((key) => ({ key, label: historyMetricLabel(key) }))
+}
+
+function historyMetricLabel(key) {
+  const labels = {
+    accuracy: 'Accuracy',
+    f1: 'F1',
+    precision: 'Precision',
+    recall: 'Recall',
+    roc_auc: 'ROC AUC',
+    r2: 'R²',
+    rmse: 'RMSE',
+    mae: 'MAE',
+    mse: 'MSE',
+    train_score: 'Train',
+    test_score: 'Test',
+    train_r2: 'Train R²',
+    test_r2: 'Test R²',
+    train_rmse: 'Train RMSE',
+    test_rmse: 'Test RMSE',
+    generalization_gap: 'Gap',
+    train_test_gap: 'Gap',
+    cv_score: 'CV',
+  }
+  return labels[key] || String(key).replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function formatHistoryMetricValue(value, key, plain = false) {
+  if (value == null || value === '') return plain ? '' : '—'
+  if (typeof value === 'boolean') return value ? 'yes' : 'no'
+  if (typeof value === 'string') return value
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return plain ? '' : '—'
+  if (['accuracy', 'precision', 'recall'].includes(key)) return `${(numeric * 100).toFixed(1)}%`
+  if (Math.abs(numeric) >= 100) return numeric.toFixed(1)
+  if (Math.abs(numeric) >= 10) return numeric.toFixed(2)
+  return numeric.toFixed(3)
 }
 
 // Dropdown menu that houses config selectors for the model build page.
@@ -4543,14 +4640,14 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
 
           {/* 5. Business Takeaways Card */}
           {businessTakeaways.length > 0 && (
-            <div style={{ marginTop: 20, padding: '16px 18px', background: 'linear-gradient(135deg, #1e1e2e, #2d2d44)', borderRadius: 12, position: 'relative' }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#f97316', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>
+            <div style={{ marginTop: 20, padding: '16px 18px', background: '#fffaf4', border: '1px solid #fdba74', borderLeft: '4px solid #f97316', borderRadius: 12, position: 'relative' }}>
+              <p style={{ fontSize: 10, fontWeight: 800, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>
                 Key Takeaways
               </p>
               <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                 {businessTakeaways.map((t, i) => (
-                  <li key={i} style={{ fontSize: 12, color: '#e2e8f0', lineHeight: 1.6, display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: i < businessTakeaways.length - 1 ? 4 : 0 }}>
-                    <span style={{ color: '#22c55e', flexShrink: 0 }}>✓</span>
+                  <li key={i} style={{ fontSize: 12, color: '#1f2937', lineHeight: 1.6, display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: i < businessTakeaways.length - 1 ? 4 : 0 }}>
+                    <span style={{ color: '#16a34a', flexShrink: 0 }}>✓</span>
                     {t}
                   </li>
                 ))}
@@ -4558,7 +4655,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
               <button
                 type="button"
                 className="ax-btn mini"
-                style={{ marginTop: 12, background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.2)', color: '#fff', fontSize: 10, fontWeight: 600 }}
+                style={{ marginTop: 12, background: '#fff', border: '1px solid #fdba74', color: '#c2410c', fontSize: 10, fontWeight: 700 }}
                 onClick={() => {
                   if (dataset?.id) {
                     window.sessionStorage.setItem('simucast.reportTakeaways', JSON.stringify({ model: algoLabelForTask(featureModel.algorithm, featureModel.metrics?.task), takeaways: businessTakeaways, ts: Date.now() }))
