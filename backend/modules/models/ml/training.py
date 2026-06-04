@@ -25,18 +25,19 @@ from backend.modules.models.ml.health import _model_health_diagnostics
 
 def _build_model_estimator(algo, is_classification, params, class_weight=None):
     """Construct the appropriate sklearn estimator for the (algo, task) pair."""
+    rs = params.get("random_state", 42)
     if is_classification:
         if algo == "rf":
-            return RandomForestClassifier(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42, class_weight=class_weight)
+            return RandomForestClassifier(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=rs, class_weight=class_weight)
         if algo == "tree":
-            return DecisionTreeClassifier(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42, class_weight=class_weight)
+            return DecisionTreeClassifier(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=rs, class_weight=class_weight)
         if algo == "logistic":
-            return LogisticRegression(C=params["C"], max_iter=params["max_iter"], class_weight=class_weight)
+            return LogisticRegression(C=params["C"], max_iter=params["max_iter"], random_state=rs, class_weight=class_weight)
         raise ValueError(f"algorithm '{algo}' not supported for classification")
     if algo == "rf":
-        return RandomForestRegressor(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42)
+        return RandomForestRegressor(n_estimators=params["n_estimators"], max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=rs)
     if algo == "tree":
-        return DecisionTreeRegressor(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=42)
+        return DecisionTreeRegressor(max_depth=params["max_depth"], min_samples_leaf=params["min_samples_leaf"], random_state=rs)
     if algo == "linear":
         return LinearRegression(fit_intercept=params["fit_intercept"])
     raise ValueError(f"algorithm '{algo}' not supported for regression")

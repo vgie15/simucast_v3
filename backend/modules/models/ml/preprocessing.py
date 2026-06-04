@@ -225,6 +225,11 @@ def _build_preprocessing_plan(df, target, features, algorithms, target_options=N
         stratify_split=validation_config["stratify_split"],
         validation_method=validation_config["validation_method"],
         cv_folds=validation_config["cv_folds"],
+        class_weight=validation_config["class_weight"],
+        smote=bool(target_options.get("smote", False)),
+        df=df,
+        sub_clean=sub_clean,
+        features=features,
     )
 
     return {
@@ -674,6 +679,104 @@ def _multicollinearity_pairs(sub_clean, features):
     return pairs
 
 
+def _duplicates_check(df, features, target):
+    modeling_cols = [c for c in features + [target] if c in df.columns]
+    count = int(df[modeling_cols].duplicated().sum()) if modeling_cols else 0
+    if count == 0:
+        return {
+            "key": "duplicate_rows",
+            "label": "Duplicate rows",
+            "status": "ok",
+            "detail": "No duplicate rows detected in the modeling columns.",
+            "type": "data",
+            "causes": [],
+            "fixes": [],
+        }
+    return {
+        "key": "duplicate_rows",
+        "label": "Duplicate rows",
+        "status": "warning",
+        "detail": f"{count} duplicate row{'' if count == 1 else 's'} detected — these may appear in both the training and test sets, inflating accuracy.",
+        "type": "data",
+        "causes": ["identical records imported more than once", "data merged from overlapping sources"],
+        "fixes": [
+            {
+                "label": "Remove duplicate rows",
+                "description": "Data → Cleaning — drop duplicate rows before training to prevent data leakage",
+                "route": "data",
+                "section": "duplicates",
+            }
+        ],
+    }
+
+
+def _outliers_check(sub_clean, features, algorithms):
+    numeric_cols = [c for c in features if c in sub_clean.columns and pd.api.types.is_numeric_dtype(sub_clean[c])]
+    if not numeric_cols:
+        return {
+            "key": "outliers",
+            "label": "Outliers",
+            "status": "ok",
+            "detail": "No numeric feature columns to check for outliers.",
+            "type": "data",
+            "causes": [],
+            "fixes": [],
+        }
+
+    linear_selected = [a for a in (algorithms or []) if a in ("linear", "logistic")]
+    affected = []
+    for col in numeric_cols:
+        series = sub_clean[col].dropna()
+        if len(series) < 4:
+            continue
+        q1, q3 = series.quantile(0.25), series.quantile(0.75)
+        iqr = q3 - q1
+        if iqr == 0:
+            continue
+        count = int(((series < q1 - 1.5 * iqr) | (series > q3 + 1.5 * iqr)).sum())
+        if count > 0:
+            affected.append((col, count))
+
+    if not affected:
+        return {
+            "key": "outliers",
+            "label": "Outliers",
+            "status": "ok",
+            "detail": "No IQR outliers detected in numeric feature columns.",
+            "type": "data",
+            "causes": [],
+            "fixes": [],
+        }
+
+    total = sum(c for _, c in affected)
+    col_names = ", ".join(col for col, _ in affected[:3]) + ("…" if len(affected) > 3 else "")
+    if linear_selected:
+        status = "warning"
+        detail = f"{total} outlier row{'' if total == 1 else 's'} across {len(affected)} column{'' if len(affected) == 1 else 's'} ({col_names}). Linear models are sensitive to extreme values."
+    else:
+        status = "ok"
+        detail = f"{total} outlier row{'' if total == 1 else 's'} across {len(affected)} column{'' if len(affected) == 1 else 's'} ({col_names}). Tree-based models are resilient to outliers."
+
+    fixes = [
+        {
+            "label": "Cap or remove outlier rows",
+            "description": "Data → Cleaning — winsorize or drop outlier rows to reduce their influence on linear models",
+            "route": "data",
+            "section": "outliers",
+        }
+    ] if status == "warning" else []
+
+    return {
+        "key": "outliers",
+        "label": "Outliers",
+        "status": status,
+        "detail": detail,
+        "type": "data",
+        "causes": ["genuine extreme values", "data entry errors", "different measurement scales"],
+        "fixes": fixes,
+    }
+
+
 def _validation_checks(
     target,
     task,
@@ -689,14 +792,24 @@ def _validation_checks(
     stratify_split,
     validation_method,
     cv_folds,
+    class_weight=None,
+    smote=False,
+    df=None,
+    sub_clean=None,
+    features=None,
 ):
-    return [
+    checks = [
         _missing_values_check(missing_report),
         _category_consistency_check(target, hard_blocks),
-        _class_balance_check(target, task, n_per_class, hard_blocks, target_mode, positive_class),
+        _class_balance_check(target, task, n_per_class, hard_blocks, target_mode, positive_class, class_weight=class_weight, smote=smote),
         _multicollinearity_check(task, algorithms, available_algorithms, multicollinearity),
         _split_check(task, test_size, stratify_split, validation_method, cv_folds),
     ]
+    if df is not None and features is not None:
+        checks.insert(1, _duplicates_check(df, features, target))
+    if sub_clean is not None and features is not None:
+        checks.insert(2, _outliers_check(sub_clean, features, algorithms))
+    return checks
 
 
 def _missing_values_check(missing_report):
@@ -709,7 +822,7 @@ def _missing_values_check(missing_report):
         "causes": ["incomplete records", "import errors"] if missing_report else [],
         "fixes": [{
             "label": "Impute or drop missing values",
-            "description": "Data -> Manual Transforms - fill or drop rows with missing values",
+            "description": "Data → Manual Transforms — fill or drop rows with missing values",
             "route": "data",
             "section": "manual_transforms",
         }] if missing_report else [],
@@ -727,14 +840,14 @@ def _category_consistency_check(target, hard_blocks):
         "causes": ["typos", "inconsistent label formatting"] if dirty_block else [],
         "fixes": [{
             "label": "Standardize categories",
-            "description": "Data -> Category Standardization - merge similar labels in the target column",
+            "description": "Data → Category Standardization — merge similar labels in the target column",
             "route": "data",
             "section": "category_standardization",
         }] if dirty_block else [],
     }
 
 
-def _class_balance_check(target, task, n_per_class, hard_blocks, target_mode, positive_class):
+def _class_balance_check(target, task, n_per_class, hard_blocks, target_mode, positive_class, class_weight=None, smote=False):
     if task != "classification" or not n_per_class:
         return {
             "key": "class_balance",
@@ -757,14 +870,36 @@ def _class_balance_check(target, task, n_per_class, hard_blocks, target_mode, po
     ratio = largest / total if total else 0
     is_multi = len(n_per_class) > 2
 
-    if smallest < 5:
-        label = "example" if smallest == 1 else "examples"
-        detail = f"Smallest class has only {smallest} {label}."
-        if is_multi:
-            detail += " Multiclass target detected; use binary mode if the analysis needs one selected category versus the rest."
-        return _class_balance_warning(detail, include_binary=True)
-    if ratio >= 0.75:
-        return _class_balance_warning(f"Class imbalance detected - largest class is {ratio:.0%} of usable rows.")
+    imbalance_detected = smallest < 5 or ratio >= 0.75
+
+    if imbalance_detected:
+        if smote:
+            return {
+                "key": "class_balance",
+                "label": "Class balance",
+                "status": "ok",
+                "detail": "Class imbalance detected — mitigated with SMOTE oversampling on the training set.",
+                "type": "modeling",
+                "causes": [],
+                "fixes": [],
+            }
+        if class_weight == "balanced":
+            return {
+                "key": "class_balance",
+                "label": "Class balance",
+                "status": "ok",
+                "detail": "Class imbalance detected — mitigated with balanced class weights.",
+                "type": "modeling",
+                "causes": [],
+                "fixes": [],
+            }
+        if smallest < 5:
+            label = "example" if smallest == 1 else "examples"
+            detail = f"Smallest class has only {smallest} {label}."
+            if is_multi:
+                detail += " Multiclass target detected; use binary mode if the analysis needs one selected category versus the rest."
+            return _class_balance_warning(detail, include_binary=True)
+        return _class_balance_warning(f"Class imbalance detected — largest class is {ratio:.0%} of usable rows.")
 
     detail = "No severe class imbalance detected."
     if len(n_per_class) > 2 and target_mode == "binary":
@@ -787,19 +922,25 @@ def _class_balance_blocked(target):
         "key": "class_balance",
         "label": "Class balance",
         "status": "block",
-        "detail": "Target has only one effective class for the current setup - cannot train.",
+        "detail": (
+            f"Target '{target}' has only one effective class after incomplete rows are dropped. "
+            "This usually means missing values in the selected feature columns are removing all rows from one class."
+        ),
         "type": "modeling",
-        "causes": ["class count collapsed to one due to binary mode or missing categories"],
+        "causes": [
+            "missing values in feature columns are dropping all rows that belong to one class",
+            "target column has only one distinct value in the rows that remain after cleaning",
+        ],
         "fixes": [
             {
-                "label": "Standardize categories",
-                "description": "Data -> Category Standardization - merge similar labels to restore valid classes",
+                "label": "Fix missing values first",
+                "description": "Data → Manual Transforms — impute or drop columns with missing values so rows from both classes survive",
                 "route": "data",
-                "section": "category_standardization",
+                "section": "manual_transforms",
             },
             {
-                "label": "Change positive class",
-                "description": "Models -> Target handling - select a different positive class",
+                "label": "Select a different target variable",
+                "description": "Models → Target variable — choose a column that has at least two distinct class values after cleaning",
                 "route": "models",
                 "section": "target_options",
             },
@@ -810,22 +951,22 @@ def _class_balance_blocked(target):
 def _class_balance_warning(detail, include_binary=False):
     fixes = [
         {
-            "label": "Standardize categories",
-            "description": "Data -> Category Standardization - merge similar labels to consolidate small classes",
-            "route": "data",
-            "section": "category_standardization",
+            "label": "Use balanced class weights",
+            "description": "Models → Validation → Class Balance — select Balanced class weights to penalise minority-class errors more",
+            "route": "models",
+            "section": "class_weight",
         },
         {
-            "label": "Use balanced class weights",
-            "description": "Models -> Imbalance handling - compensate for unequal class sizes",
+            "label": "Enable SMOTE oversampling",
+            "description": "Models → Validation → Class Balance — select SMOTE to generate synthetic minority samples (best for >5:1 imbalance)",
             "route": "models",
             "section": "class_weight",
         },
     ]
     if include_binary:
-        fixes.insert(1, {
-            "label": "Use binary mode",
-            "description": "Models -> Target handling - treat one class vs. rest",
+        fixes.insert(0, {
+            "label": "Select a different target variable",
+            "description": "Models → Target variable — choose a column with more balanced class representation",
             "route": "models",
             "section": "target_options",
         })
@@ -932,17 +1073,26 @@ def _multicollinearity_fixes(task, algorithms, available_algorithms):
     tree_options = [a for a in available_set if a in ("rf", "tree")]
     tree_selected = [a for a in algorithms if a in ("rf", "tree")]
     logistic_available = is_classification and "logistic" in available_set
-    fixes = [{
-        "label": "Remove overlapping features",
-        "description": "Recommended - drop one column from each highly correlated pair before training.",
-        "route": "data",
-        "section": "manual_transforms",
-        "category": "recommended",
-    }]
+    fixes = [
+        {
+            "label": "Review correlated pairs",
+            "description": "Tests → Correlations — see which feature pairs overlap and decide which to keep",
+            "route": "tests",
+            "section": "correlation",
+            "category": "recommended",
+        },
+        {
+            "label": "Deselect overlapping features",
+            "description": "Models → Features — uncheck one feature from each correlated pair to reduce redundancy",
+            "route": "models",
+            "section": "features",
+            "category": "recommended",
+        },
+    ]
     if tree_selected or tree_options:
         fixes.append({
             "label": "Use tree-based regressors" if is_regression else "Use tree-based classifiers",
-            "description": "Decision Trees and Random Forests are less sensitive to overlapping inputs.",
+            "description": "Models → Algorithms — Decision Trees and Random Forests are naturally resilient to overlapping features",
             "route": "models",
             "section": "algorithms",
             "category": "alternative",
@@ -950,7 +1100,7 @@ def _multicollinearity_fixes(task, algorithms, available_algorithms):
     if logistic_available:
         fixes.append({
             "label": "Use Logistic Regression mindfully",
-            "description": "Logistic Regression can work, but highly correlated features make coefficients harder to interpret.",
+            "description": "Models → Algorithms — Logistic Regression works but correlated features make coefficients harder to interpret",
             "route": "models",
             "section": "algorithms",
             "category": "alternative",

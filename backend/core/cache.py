@@ -114,13 +114,13 @@ def _ai_cache_key(ds_id, stage_id, kind, payload):
     """Build a stable cache key for an AI request.
 
     Returns a (ds_id, sha1_hex) tuple. Why both?
-    - The hash captures stage_id + kind + payload in a fixed-length string,
-      so we don't store the raw payload (which can be large) as the key.
+    - The hash captures ds_id + stage_id + kind + payload, making every key
+      unique to the dataset so cross-dataset cache collisions are impossible.
     - Keeping ds_id as a separate tuple element lets us filter the cache
       by dataset for invalidation.
     """
     raw = json.dumps(
-        {"stage": stage_id, "kind": kind, "payload": payload},
+        {"ds": str(ds_id), "stage": stage_id, "kind": kind, "payload": payload},
         sort_keys=True,
         default=str,
     )

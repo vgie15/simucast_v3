@@ -470,7 +470,7 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
         </div>
 
         {/* Scrollable body */}
-        <div className="ax-whatif-left-scroll">
+        <div id="whatif-inputs-panel" className="ax-whatif-left-scroll">
           <div id="whatif-model-card" {...explainAttrs({ id: 'whatif-model-card', title: 'Model in Use Card', type: 'model-card' }, 'ax-whatif-model-card')}>
             <span>Model in use</span>
             <label className="ax-whatif-model-select-label" htmlFor="whatif-model-select">

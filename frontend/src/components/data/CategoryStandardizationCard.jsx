@@ -2,7 +2,7 @@
  * COMPONENT: CATEGORY STANDARDIZATION CARD
  * Keywords: category, standardize, fuzzy, suggestions, manual edit
  * ============================================================ */
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
 import { api } from '../../api'
 import { useDialog } from '../common/DialogProvider'
 import { InlineSpinner } from '../common/LoadingStates'
@@ -267,6 +267,42 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
     } finally { setBusy(false) }
   }
 
+  const applyAll = async () => {
+    const columnsToApply = visibleSuggestions.filter((s) => (drafts[s.column] || []).length > 0)
+    if (!columnsToApply.length) return
+    setBusy(true)
+    let applied = 0
+    try {
+      for (const suggestion of columnsToApply) {
+        const colGroups = drafts[suggestion.column] || []
+        const mapping = {}
+        const assigned = {}
+        let hasDuplicate = false
+        for (const group of colGroups) {
+          const label = (group.suggested_label || '').trim()
+          if (!label) continue
+          for (const [value, selected] of Object.entries(group.selected || {})) {
+            if (selected && assigned[value] && assigned[value] !== label) { hasDuplicate = true; break }
+            if (selected) { assigned[value] = label; mapping[value] = label }
+          }
+          if (hasDuplicate) break
+        }
+        if (!Object.keys(mapping).length || hasDuplicate) continue
+        await api.applyCategoryStandardization(dataset.id, { column: suggestion.column, mapping })
+        applied++
+      }
+      if (applied > 0) {
+        setAppliedSummary({ column: 'all', summary: `Applied standardization to ${applied} column${applied === 1 ? '' : 's'}.`, mapping: {} })
+        await onApplied?.()
+        await load()
+      }
+    } catch (err) {
+      await dialog.alert({ title: 'Category Standardization Failed', message: err.message, variant: 'danger' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const resetManualEdits = () => {
     setManualEdits((prev) => ({ ...prev, [selectedColumn]: {} }))
   }
@@ -435,6 +471,8 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
           aiSuggestion={aiSuggestion}
           askAiForRecommendation={askAiForRecommendation}
           apply={applyDetected}
+          applyAll={applyAll}
+          pendingCount={visibleSuggestions.filter((s) => (drafts[s.column] || []).length > 0).length}
           skipCurrent={skipCurrent}
           busy={busy}
           compact={compact}
@@ -463,7 +501,15 @@ export default function CategoryStandardizationCard({ dataset, onApplied, compac
 }
 
 // ─── MODE 1: Detected issues ───
-function DetectedMode({ groups, uniqueValues, selectedColumn, setGroup, deleteGroup, addGroup, editingGroups, setEditingGroups, showRecommendations, aiLoading, aiSuggestion, askAiForRecommendation, apply, skipCurrent, busy, compact }) {
+function DetectedMode({ groups, uniqueValues, selectedColumn, setGroup, deleteGroup, addGroup, editingGroups, setEditingGroups, showRecommendations, aiLoading, aiSuggestion, askAiForRecommendation, apply, applyAll, pendingCount, skipCurrent, busy, compact }) {
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef()
+  useEffect(() => {
+    if (!dropdownOpen) return
+    const handler = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [dropdownOpen])
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {showRecommendations && (
@@ -536,7 +582,51 @@ function DetectedMode({ groups, uniqueValues, selectedColumn, setGroup, deleteGr
       <div className="ax-row pop-section pop-apply">
         <button className={compact ? 'ax-text-action' : 'ax-btn'} onClick={addGroup} disabled={busy}>Add group</button>
         {compact && <button className="ax-text-action" onClick={skipCurrent} disabled={busy} type="button">Skip this column</button>}
-        <button className="ax-btn prim papply" onClick={apply} disabled={busy || !groups.length}>{busy ? 'Applying...' : 'Apply and go next'}</button>
+        <div ref={dropdownRef} style={{ position: 'relative', display: 'flex' }}>
+          <button
+            className="ax-btn prim papply"
+            onClick={apply}
+            disabled={busy || !groups.length}
+            style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: '1px solid rgba(255,255,255,0.25)' }}
+          >
+            {busy ? 'Applying...' : 'Apply and go next'}
+          </button>
+          <button
+            className="ax-btn prim"
+            type="button"
+            onClick={() => setDropdownOpen((v) => !v)}
+            disabled={busy}
+            style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, padding: '0 8px' }}
+            aria-label="More apply options"
+          >
+            ▾
+          </button>
+          {dropdownOpen && (
+            <div style={{
+              position: 'absolute', bottom: 'calc(100% + 4px)', right: 0,
+              background: 'var(--color-background-primary)',
+              border: '1px solid var(--color-border-secondary, #e5e7eb)',
+              borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+              minWidth: 180, zIndex: 100, overflow: 'hidden',
+            }}>
+              <button
+                type="button"
+                onClick={() => { setDropdownOpen(false); applyAll() }}
+                disabled={busy || pendingCount === 0}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '10px 14px', background: 'none', border: 'none',
+                  fontSize: 13, fontWeight: 600, cursor: pendingCount === 0 ? 'not-allowed' : 'pointer',
+                  color: pendingCount === 0 ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Apply all
+                {pendingCount > 1 && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--color-text-tertiary)', marginLeft: 6 }}>{pendingCount} columns</span>}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

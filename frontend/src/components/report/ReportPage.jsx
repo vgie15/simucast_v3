@@ -100,6 +100,7 @@ export default function ReportPage({ dataset, initialData }) {
   const [activity, setActivity] = useState([])
   const [models, setModels] = useState([])
   const [correlationPairs, setCorrelationPairs] = useState([])
+  const [corrResult, setCorrResult] = useState(null)
   const [savedCharts, setSavedCharts] = useState([])
   const [datasetRows, setDatasetRows] = useState([])
   const [loadingData, setLoadingData] = useState(true)
@@ -160,6 +161,7 @@ export default function ReportPage({ dataset, initialData }) {
       setModels(modelsList)
       setDatasetRows(initialData.rows?.rows || [])
       setCorrelationPairs(pairs)
+      setCorrResult(initialData.corr?.analyses?.[0]?.result || null)
 
       const defaultChecked = []
       const defaultOutline = []
@@ -226,6 +228,7 @@ export default function ReportPage({ dataset, initialData }) {
       setModels(cached.models)
       setDatasetRows(cached.rows)
       setCorrelationPairs(cached.pairs)
+      setCorrResult(cached.corrResult || null)
       // Rebuild outline with fresh charts
       const defaultChecked = []
       const defaultOutline = []
@@ -283,6 +286,7 @@ export default function ReportPage({ dataset, initialData }) {
         const latestCorr = corrRes.analyses?.[0]
         const pairs = latestCorr?.result?.pairs || []
         setCorrelationPairs(pairs)
+        setCorrResult(latestCorr?.result || null)
 
         // Auto-check all items by default to initialize a rich report
         const defaultChecked = []
@@ -376,6 +380,7 @@ export default function ReportPage({ dataset, initialData }) {
           charts,
           checkedIds: nextChecked,
           outline: nextOutline,
+          corrResult: latestCorr?.result || null
         })
 
         setCheckedIds(nextChecked)
@@ -2315,7 +2320,7 @@ export default function ReportPage({ dataset, initialData }) {
       )}
 
       {/* LEFT PANEL — CONTENT PICKER */}
-      <div className="left-panel">
+      <div id="report-builder-panel" className="left-panel">
         <div className="lh">
           <div className="lh-title">Build your report</div>
           <div className="lh-sub">Choose what to include from your project</div>
@@ -2374,7 +2379,7 @@ export default function ReportPage({ dataset, initialData }) {
               </div>
 
               {/* GROUP: Visualizations */}
-              <div className="cgroup">
+              <div id="report-viz-section" className="cgroup">
                 <div className="cg-header">
                   <div className="cg-title">
                     <BarChart3 {...smallIconProps} />
@@ -2458,7 +2463,7 @@ export default function ReportPage({ dataset, initialData }) {
               </div>
 
               {/* GROUP: Models */}
-              <div className="cgroup">
+              <div id="report-models-section" className="cgroup">
                 <div className="cg-header">
                   <div className="cg-title">
                     <Brain {...smallIconProps} />
@@ -2508,7 +2513,7 @@ export default function ReportPage({ dataset, initialData }) {
               </div>
 
               {/* GROUP: What-if */}
-              <div className="cgroup">
+              <div id="report-whatif-section" className="cgroup">
                 <div className="cg-header">
                   <div className="cg-title">
                     <Shuffle {...smallIconProps} />
@@ -2628,6 +2633,7 @@ export default function ReportPage({ dataset, initialData }) {
             <div className="rt-title">Report Builder</div>
             <div className="rt-actions">
               <button
+                id="report-export-btn"
                 type="button"
                 className={`rt-btn ${activeToolbar === 'theme' ? 'active' : ''}`}
                 onClick={() => setActiveToolbar(activeToolbar === 'theme' ? null : 'theme')}
@@ -3026,7 +3032,7 @@ export default function ReportPage({ dataset, initialData }) {
                               <span className="ds-badge sb-desc" style={{ background: '#f0fdf4', color: '#15803d' }}>Visualization</span>
                             </div>
                             {renderSectionDescription(section)}
-                            <PreviewMockupChart chart={section.data} rows={datasetRows} />
+                            <PreviewMockupChart chart={section.data} rows={datasetRows} corrResult={corrResult} />
                           </>
                         )}
 
@@ -3454,10 +3460,68 @@ function buildReportMixedChartData(rows, layers, aggregation = 'Mean') {
   }
 }
 
-function PreviewMockupChart({ chart, rows = [] }) {
+function PreviewMockupChart({ chart, rows = [], corrResult = null }) {
   if (!chart) return null
   const { type, xAxis, yAxis } = chart
   const color = chart.color || '#f97316'
+
+  if (type === 'correlation-heatmap') {
+    if (!corrResult || !corrResult.variables || corrResult.variables.length < 2) {
+      return <div style={{ fontSize: 11, color: '#9ca3af', padding: 20, textAlign: 'center' }}>No correlation data available.</div>
+    }
+    const getCorrelationColor = (val) => {
+      const abs = Math.abs(val)
+      if (val > 0) return `rgba(234, 88, 12, ${abs * 0.7})`
+      return `rgba(2, 132, 199, ${abs * 0.7})`
+    }
+    const fmt = (val) => val === 1 ? '1.0' : val.toFixed(2)
+    return (
+      <div className="report-heatmap-container" style={{ overflowX: 'auto', padding: '10px 0' }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: '4px', fontSize: 9, fontFamily: 'var(--font-mono)', minWidth: Math.max(300, corrResult.variables.length * 52), margin: '0 auto' }}>
+          <thead>
+            <tr>
+              <th style={{ padding: '4px 6px', background: 'transparent', border: 'none' }}></th>
+              {corrResult.variables.map((v) => (
+                <th key={v} title={v} style={{ padding: '4px 6px', color: '#6b7280', fontWeight: 600, fontSize: 8.5, maxWidth: 55, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: 'none', background: 'transparent' }}>{v}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {corrResult.variables.map((r) => (
+              <tr key={r}>
+                <td title={r} style={{ padding: '4px 6px', fontWeight: 600, fontSize: 8.5, color: '#4b5563', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: 'none' }}>{r}</td>
+                {corrResult.variables.map((c) => {
+                  const val = Number(corrResult.matrix?.[r]?.[c] ?? 0)
+                  const abs = Math.abs(val)
+                  const isSelf = r === c
+                  const bg = isSelf ? '#ea580c' : getCorrelationColor(val)
+                  const textColor = isSelf || abs > 0.5 ? '#fff' : '#111827'
+                  return (
+                    <td
+                      key={c}
+                      style={{
+                        padding: '4px 5px',
+                        textAlign: 'center',
+                        backgroundColor: bg,
+                        color: textColor,
+                        borderRadius: 4,
+                        fontWeight: 700,
+                        fontSize: 9,
+                        border: 'none'
+                      }}
+                    >
+                      {fmt(val)}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   const isMixed = Array.isArray(chart.layers) && chart.layers.length > 1
   const chartDataRaw = isMixed
     ? buildReportMixedChartData(rows, chart.layers, chart.aggregation || 'Mean')

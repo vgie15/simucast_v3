@@ -819,6 +819,26 @@ function DataToolsToolbar({
     setShowRecommendations(false)
   }
 
+  useEffect(() => {
+    const onOpenTool = (event) => {
+      const toolKey = event.detail?.tool
+      if (!toolKey || !toolMap[toolKey]) return
+      setCollapsed(false)
+      setShowRecommendations(false)
+      requestAnimationFrame(() => {
+        const shell = document.querySelector('.ax-data-toolbar-shell')
+        const btn = document.getElementById(`tb-${toolKey}`)
+        const shellLeft = shell?.getBoundingClientRect().left || 0
+        const buttonLeft = btn?.getBoundingClientRect().left ?? shellLeft
+        const maxLeft = Math.max(8, (shell?.clientWidth || 430) - 420)
+        setPopoverX(Math.min(maxLeft, Math.max(8, buttonLeft - shellLeft)))
+        setOpenTool(toolKey)
+      })
+    }
+    window.addEventListener('simucast:data-tool-open', onOpenTool)
+    return () => window.removeEventListener('simucast:data-tool-open', onOpenTool)
+  }, [toolMap])
+
   return (
     <div className={`ax-data-toolbar-shell ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="ax-data-toolbar" role="toolbar" aria-label="Dataset tools">
@@ -870,7 +890,7 @@ function DataToolsToolbar({
       {!collapsed && renderedTool && (
         <>
           <button className={`ax-data-toolbar-overlay dim-overlay ${popoverState === 'closing' ? 'hiding' : 'show'}`} type="button" aria-label="Close data tool" onClick={close} />
-          <div className={`ax-data-toolbar-popover popover ${renderedTool === 'columns' ? 'columns-popover' : ''} ${popoverState}`} style={{ left: popoverX }}>
+          <div id={`data-tool-popover-${renderedTool}`} className={`ax-data-toolbar-popover popover ${renderedTool === 'columns' ? 'columns-popover' : ''} ${popoverState}`} style={{ left: popoverX }}>
             <div className="ax-data-toolbar-popover-head pop-section pop-head">
               <div>
                 <TablerIcon name={activeTool?.icon || 'tool'} />

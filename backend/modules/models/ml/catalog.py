@@ -18,8 +18,8 @@ AVAILABLE_ALGOS_BY_TASK = {
 
 MODEL_PARAM_DEFAULTS = {
     "logistic": {"C": 1.0, "max_iter": 1000},
-    "rf": {"n_estimators": 100, "max_depth": None, "min_samples_leaf": 1},
-    "tree": {"max_depth": None, "min_samples_leaf": 1},
+    "rf": {"n_estimators": 100, "max_depth": None, "min_samples_leaf": 1, "random_state": 42},
+    "tree": {"max_depth": None, "min_samples_leaf": 1, "random_state": 42},
     "linear": {"fit_intercept": True},
 }
 
@@ -50,10 +50,12 @@ def _sanitize_model_params(algo, params=None):
         depth = params.get("max_depth", clean["max_depth"])
         clean["max_depth"] = None if depth in (None, "", "none", "None") else min(max(_parse_num(depth, 10, int), 1), 50)
         clean["min_samples_leaf"] = min(max(_parse_num(params.get("min_samples_leaf"), clean["min_samples_leaf"], int), 1), 50)
+        clean["random_state"] = min(max(_parse_num(params.get("random_state"), clean["random_state"], int), 0), 999)
     elif algo == "tree":
         depth = params.get("max_depth", clean["max_depth"])
         clean["max_depth"] = None if depth in (None, "", "none", "None") else min(max(_parse_num(depth, 10, int), 1), 50)
         clean["min_samples_leaf"] = min(max(_parse_num(params.get("min_samples_leaf"), clean["min_samples_leaf"], int), 1), 50)
+        clean["random_state"] = min(max(_parse_num(params.get("random_state"), clean["random_state"], int), 0), 999)
     elif algo == "linear":
         clean["fit_intercept"] = bool(params.get("fit_intercept", clean["fit_intercept"]))
     return clean
@@ -90,8 +92,16 @@ def _issue_check(label, issue, issue_type, severity, message, causes=None, actio
 
 def _detect_task(y):
     """Heuristic: small distinct count + non-continuous → classification."""
-    return (
+    if (
         pd.api.types.is_object_dtype(y)
         or pd.api.types.is_categorical_dtype(y)
         or pd.api.types.is_bool_dtype(y)
-    )
+    ):
+        return True
+    if pd.api.types.is_integer_dtype(y):
+        try:
+            return y.dropna().nunique() <= 10
+        except Exception:
+            return False
+    return False
+

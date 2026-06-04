@@ -9,7 +9,7 @@ import { api } from '../../api'
 import { SkeletonCards } from '../common/LoadingStates'
 import HelpButton from '../common/HelpButton'
 import { useAuth } from '../providers/AuthProvider'
-import { coachStepsForGoal, firstCoachStep, goalLabel } from './ProjectGuidanceSetup'
+import { goalLabel } from './ProjectGuidanceSetup'
 
 const PAGE_ORDER = { data: 0, expand: 1, describe: 2, tests: 3, models: 4, whatif: 5, report: 6 }
 const PLAN_CACHE_VERSION = 'v6'
@@ -51,6 +51,8 @@ export default function AIProjectPlanPanel({
   onOpenGuidanceSetup,
   onGuidanceUpdated,
   onStartGuideFocus,
+  onDismissOnboarding,
+  showOnboarding,
   panelOpen,
 }) {
   const navigate = useNavigate()
@@ -234,26 +236,10 @@ export default function AIProjectPlanPanel({
       .sort((a, b) => workflowSort(a.step, a.index) - workflowSort(b.step, b.index)),
     [steps, stepStates],
   )
-  const nextStepState = useMemo(() => {
-    if (guidance.guided_mode && guidance.walkthrough_step) {
-      const walkToPlanId = (walkId) => {
-        if (walkId === 'data.suggested_fixes') return 'data-missing-values'
-        if (walkId === 'data.outliers') return 'data-outliers'
-        if (walkId === 'data.duplicates') return 'data-duplicates'
-        if (walkId === 'data.categories') return 'data-category-standardization'
-        if (walkId === 'describe.summaries') return 'describe-overview'
-        if (walkId === 'tests.setup') return 'tests-correlation'
-        if (walkId === 'models.target') return 'models-train'
-        if (walkId === 'whatif.controls') return 'whatif-scenario'
-        if (walkId === 'report.preview') return 'report-final'
-        return walkId
-      }
-      const pId = walkToPlanId(guidance.walkthrough_step)
-      const guidedItem = planItems.find((item) => item.step.id === pId)
-      if (guidedItem) return guidedItem.state
-    }
-    return planItems.find((item) => ['blocked', 'warning', 'stale', 'pending'].includes(item.state.status))?.state
-  }, [guidance.guided_mode, guidance.walkthrough_step, planItems])
+  const nextStepState = useMemo(
+    () => planItems.find((item) => ['blocked', 'warning', 'stale', 'pending'].includes(item.state.status))?.state,
+    [planItems],
+  )
   const isAI = plan?.ai === true
   const isAutoFallback = mode === 'auto' && plan && plan.ai !== true
   const toggleCollapsed = () => {
@@ -269,8 +255,15 @@ export default function AIProjectPlanPanel({
     const isAlreadyDone = doneSet.has(stepId)
     const next = isAlreadyDone ? done.filter((id) => id !== stepId) : [...done, stepId]
     setDone(next)
-    setExpandedCardId(stepId)
     if (doneKey) window.localStorage.setItem(doneKey, JSON.stringify(next))
+    if (!isAlreadyDone) {
+      // Collapse the just-completed card and auto-expand the next pending one
+      const newDoneSet = new Set(next)
+      const nextPending = planItems.find(
+        (item) => !newDoneSet.has(item.step.id) && item.state.status !== 'completed'
+      )
+      setExpandedCardId(nextPending ? nextPending.step.id : null)
+    }
   }
 
   const toggleSkip = (stepId) => {
@@ -332,33 +325,7 @@ export default function AIProjectPlanPanel({
 
   const guideFocusOnStep = (step) => {
     if (!datasetId || !step?.page) return
-    const planIdToWalkId = (planId) => {
-      if (planId === 'data-missing-values') return 'data.suggested_fixes'
-      if (planId === 'data-outliers') return 'data.outliers'
-      if (planId === 'data-duplicates') return 'data.duplicates'
-      if (planId === 'data-category-standardization') return 'data.categories'
-      if (planId === 'describe-overview') return 'describe.summaries'
-      if (planId === 'tests-correlation') return 'tests.setup'
-      if (planId === 'models-train') return 'models.target'
-      if (planId === 'whatif-scenario') return 'whatif.controls'
-      if (planId === 'report-final') return 'report.preview'
-      return planId
-    }
-    const walkStepId = planIdToWalkId(step.id)
-    const section = sectionForStep(step)
-    const target = {
-      page: step.page,
-      section,
-      ts: Date.now(),
-    }
-    window.sessionStorage.setItem('simucast.fixTarget', JSON.stringify(target))
-    window.dispatchEvent(new CustomEvent('simucast:route-target', { detail: target }))
-    onStartGuideFocus?.(walkStepId)
-    if (step.page !== activeTab) {
-      navigate(`/projects/${datasetId}/${step.page}`)
-      return
-    }
-    window.setTimeout(() => highlightSection(section), 40)
+    onStartGuideFocus?.(step)
   }
 
   const continueWhereLeftOff = () => {
@@ -411,55 +378,6 @@ export default function AIProjectPlanPanel({
     window.setTimeout(() => setChangedStepIds([]), 3000)
   }, [plan, planDatasetId, datasetId, addToast, doneKey])
 
-  const updateGuidance = async (body) => {
-    if (!datasetId) return
-    onGuidanceUpdated?.({ ...guidance, ...body })
-    try {
-      const response = await api.updateGuidance(datasetId, body)
-      onGuidanceUpdated?.(response.guidance)
-    } catch (err) {
-      console.error(err)
-      onGuidanceUpdated?.(guidance)
-    }
-  }
-
-  const toggleGuidedMode = async () => {
-    if (!guidance.goal && !guidance.intent) {
-      onOpenGuidanceSetup?.()
-      return
-    }
-    const isEnabling = !guidance.guided_mode
-    const planIdToWalkId = (planId) => {
-      if (planId === 'data-missing-values') return 'data.suggested_fixes'
-      if (planId === 'data-outliers') return 'data.outliers'
-      if (planId === 'data-duplicates') return 'data.duplicates'
-      if (planId === 'data-category-standardization') return 'data.categories'
-      if (planId === 'describe-overview') return 'describe.summaries'
-      if (planId === 'tests-correlation') return 'tests.setup'
-      if (planId === 'models-train') return 'models.target'
-      if (planId === 'whatif-scenario') return 'whatif.controls'
-      if (planId === 'report-final') return 'report.preview'
-      return planId
-    }
-    const start = firstCoachStep(guidance.goal || guidance.intent, dataset)
-    const targetStepId = guidance.walkthrough_step || planIdToWalkId(nextStepState?.step?.id) || start?.id || null
-    if (!isEnabling) {
-      await updateGuidance({ guided_mode: false })
-      return
-    }
-    await updateGuidance({
-      guided_mode: true,
-      walkthrough_step: targetStepId,
-    })
-    if (targetStepId) {
-      const steps = coachStepsForGoal(guidance.goal || guidance.intent, dataset)
-      const targetStep = steps.find((s) => s.id === targetStepId)
-      if (targetStep && targetStep.page && targetStep.page !== activeTab) {
-        navigate(`/projects/${datasetId}/${targetStep.page}`)
-      }
-    }
-  }
-
   const completedCount = planItems.filter((item) => item.state.status === 'completed').length
   const totalCount = planItems.length
 
@@ -474,6 +392,18 @@ export default function AIProjectPlanPanel({
       style={planH ? { height: planH, maxHeight: 'none' } : undefined}
     >
       <div className="ax-plan-wrapper-fixed">
+        {/* Guide onboarding card — rendered via portal so it floats outside the panel */}
+        {showOnboarding && plan && createPortal(
+          <GuideOnboardingCard
+            guidance={guidance}
+            plan={plan}
+            completedCount={completedCount}
+            totalCount={totalCount}
+            onDismiss={onDismissOnboarding}
+          />,
+          document.body,
+        )}
+
         {/* Pinned Top Header */}
         <div className="ax-plan-header-fixed">
           {/* 1. Goal Header */}
@@ -488,22 +418,16 @@ export default function AIProjectPlanPanel({
               <div className="ax-plan-goal-stats">
                 {Number(dataset?.row_count || 0).toLocaleString()} rows · {dataset?.col_count || 0} variables{plan?.task ? ` · ${plan.task}` : ''}
               </div>
-              <div className="ax-plan-goal-actions">
-                <button className="ax-plan-goal-change-btn" type="button" onClick={onOpenGuidanceSetup}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z" />
-                  </svg>
+              {!guidance.goal && (
+                <button className="ax-plan-set-goal-btn" type="button" onClick={onOpenGuidanceSetup}>
+                  Set project goal →
+                </button>
+              )}
+              {guidance.goal && (
+                <button className="ax-plan-set-goal-btn ax-plan-set-goal-btn--change" type="button" onClick={onOpenGuidanceSetup}>
                   Change goal
                 </button>
-                <button
-                  className="ax-plan-goal-change-btn ax-plan-guidance-toggle"
-                  type="button"
-                  onClick={toggleGuidedMode}
-                >
-                  {guidance.guided_mode ? 'Turn off guide' : 'Turn on step-by-step guide'}
-                </button>
-              </div>
+              )}
             </div>
           </div>
 
@@ -527,12 +451,6 @@ export default function AIProjectPlanPanel({
             {/* 3. Progress Bar */}
             <div style={{ padding: '0 14px' }}>
               <div className="ax-plan-progress-container">
-                <div className="ax-plan-progress-bar-track">
-                  <div
-                    className="ax-plan-progress-bar-fill"
-                    style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
-                  />
-                </div>
                 <span className="ax-plan-progress-label">
                   {completedCount} of {totalCount} done
                 </span>
@@ -584,156 +502,153 @@ export default function AIProjectPlanPanel({
                 {planItems.map(({ step, state }, position) => {
                   const isCompleted = state.status === 'completed'
                   const isNext = nextStepState?.step?.id === step.id
-                  const displayStatus = isNext && !isCompleted ? 'active' : state.status
-                  const isCardExpanded = activeExpandedId === step.id
+                  const isCardExpanded = !isCompleted && activeExpandedId === step.id
                   const target = targetForStep(step)
                   const requirement = requirementForStep(step)
-
+                  const cardVariant = isCompleted ? 'completed' : isNext ? 'active' : 'pending'
                   const highlightCard = changedStepIds.includes(step.id)
-                  const cardClass = `ax-plan-step-redesigned state-${isCompleted ? 'completed' : isNext ? 'active' : 'pending'}${highlightCard ? ' ax-plan-step-changed' : ''}`
+
+                  const handleHeaderClick = () => {
+                    if (isCompleted) return
+                    setExpandedCardId(isCardExpanded ? null : step.id)
+                  }
+
+                  // ── Tool icon SVG path selection ──
+                  const iconText = `${step.id} ${step.title}`.toLowerCase()
+                  let iconPath = null
+                  if (iconText.includes('missing')) {
+                    iconPath = <><circle cx="12" cy="12" r="8" /><path d="M12 4v.01M12 20v.01M4 12h.01M20 12h.01" /></>
+                  } else if (iconText.includes('outlier')) {
+                    iconPath = <><path d="M12 3l9 16H3L12 3z" /><path d="M12 9v4M12 17h.01" /></>
+                  } else if (iconText.includes('duplicate')) {
+                    iconPath = <><path d="M8 8h8v8H8z" /><path d="M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1M4 4l16 16" /></>
+                  } else if (iconText.includes('categor') || iconText.includes('label')) {
+                    iconPath = <><path d="M4 4h6l10 10-6 6L4 10V4z" /><circle cx="8" cy="8" r="1" /></>
+                  } else if (iconText.includes('bin')) {
+                    iconPath = <><path d="M4 19h16" /><path d="M7 16V9M12 16V5M17 16v-3" /></>
+                  } else if (iconText.includes('format')) {
+                    iconPath = <><path d="M5 9h14M5 15h14M9 4L7 20M17 4l-2 16" /></>
+                  } else if (step.page === 'expand') {
+                    iconPath = <><path d="M4 15l11-11 5 5-11 11-5-5z" /><path d="M8 15l-1-1M11 12l-1-1M14 9l-1-1" /></>
+                  } else {
+                    iconPath = <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 17V7l7 5-7 5z" /></>
+                  }
 
                   return (
-                    <article key={`${step.id}-${position}`} className={cardClass}>
-                      {/* Card Header (always visible) */}
-                      <div className="ax-plan-step-header" onClick={() => setExpandedCardId(isCardExpanded ? 'none' : step.id)}>
-                        <span className="ax-plan-check">
+                    <article
+                      key={`${step.id}-${position}`}
+                      className={`ax-pcard ax-pcard--${cardVariant}${highlightCard ? ' ax-plan-step-changed' : ''}`}
+                    >
+                      {/* ── Card Header ── */}
+                      <div
+                        className="ax-pcard-header"
+                        onClick={handleHeaderClick}
+                        style={{ cursor: isCompleted ? 'default' : 'pointer' }}
+                      >
+                        {/* Step circle */}
+                        <span className={`ax-pcard-circle ax-pcard-circle--${cardVariant}`}>
                           {isCompleted ? (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
-                          ) : position + 1}
-                        </span>
-                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                          <p className="ax-plan-step-title" style={{ fontSize: '13px', fontWeight: '750', color: 'var(--color-text-primary)', margin: 0, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}>
-                            {step.title}
-                          </p>
-                          {(isCardExpanded || isCompleted) && (
-                            <div className="ax-plan-step-badges" style={{ display: 'flex', gap: '4px' }}>
-                              <span className={`ax-plan-status ${displayStatus}`}>{statusLabel(displayStatus)}</span>
-                              {isCardExpanded && (
-                                <span className={`ax-plan-requirement ${requirement}`}>{requirement}</span>
-                              )}
-                            </div>
+                          ) : (
+                            position + 1
                           )}
+                        </span>
+
+                        {/* Title + badges */}
+                        <div className="ax-pcard-title-col">
+                          <span className={`ax-pcard-title${isCompleted ? ' ax-pcard-title--done' : ''}`}>
+                            {step.title}
+                          </span>
+                          <div className="ax-pcard-badges">
+                            {isCompleted && (
+                              <span className="ax-pcard-badge ax-pcard-badge--done">Done</span>
+                            )}
+                            {!isCompleted && isNext && (
+                              <span className="ax-pcard-badge ax-pcard-badge--current">Current</span>
+                            )}
+                            {!isCompleted && requirement === 'optional' && (
+                              <span className="ax-pcard-badge ax-pcard-badge--optional">Optional</span>
+                            )}
+                            {state.status === 'stale' && (
+                              <span className="ax-pcard-badge ax-pcard-badge--stale">Stale</span>
+                            )}
+                          </div>
                         </div>
-                        <div className={`ax-plan-step-chevron${isCardExpanded ? ' open' : ''}`}>
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                            <path d="M1 3.5L5 7.5L9 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                          </svg>
-                        </div>
+
+                        {/* Chevron */}
+                        {!isCompleted && (
+                          <span className={`ax-pcard-chevron${isCardExpanded ? ' ax-pcard-chevron--open' : ''}`}>
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                              <path d="M1 3.5L5 7.5L9 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                            </svg>
+                          </span>
+                        )}
                       </div>
 
-                      {/* Card Body (only visible if expanded) */}
+                      {/* ── Card Body (expanded only) ── */}
                       {isCardExpanded && (
-                        <div className="ax-plan-step-body">
-                          {/* Affects Section */}
+                        <div className="ax-pcard-body">
+
+                          {/* Affects row */}
                           {step.columns?.length > 0 && (
-                            <div className="ax-plan-affects-container">
-                              <span className="ax-plan-affects-label">Affects:</span>
-                              <div className="ax-plan-column-chips">
+                            <div className="ax-pcard-affects">
+                              <span className="ax-pcard-affects-label">Affects</span>
+                              <div className="ax-pcard-col-chips">
                                 {step.columns.map((col, idx) => (
-                                  <span key={idx} className="ax-plan-column-chip">
-                                    {col}
-                                  </span>
+                                  <span key={idx} className="ax-pcard-col-chip">{col}</span>
                                 ))}
                               </div>
                             </div>
                           )}
 
-                          {/* Stale Warning */}
-                          {state.status === 'stale' && (
-                            <p style={{ fontSize: 11, color: 'var(--color-text-warning)', margin: '0 0 8px', fontWeight: 500 }}>
-                              Re-run recommended because the dataset changed after this step.
-                            </p>
-                          )}
-
-                          {/* Toolbar Pointer Row */}
-                          <div className="ax-plan-pointer-box">
-                            <div className="ax-plan-pointer-icon-wrap">
-                              {(() => {
-                                const text = `${step.id} ${step.title}`.toLowerCase();
-                                let path = null;
-                                if (text.includes('missing')) {
-                                  path = <><circle cx="12" cy="12" r="8" /><path d="M12 4v.01M12 20v.01M4 12h.01M20 12h.01" /></>;
-                                } else if (text.includes('outlier')) {
-                                  path = <><path d="M12 3l9 16H3L12 3z" /><path d="M12 9v4M12 17h.01" /></>;
-                                } else if (text.includes('duplicate')) {
-                                  path = <><path d="M8 8h8v8H8z" /><path d="M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1M4 4l16 16" /></>;
-                                } else if (text.includes('categor') || text.includes('label')) {
-                                  path = <><path d="M4 4h6l10 10-6 6L4 10V4z" /><circle cx="8" cy="8" r="1" /></>;
-                                } else if (text.includes('bin')) {
-                                  path = <><path d="M4 19h16" /><path d="M7 16V9M12 16V5M17 16v-3" /></>;
-                                } else if (text.includes('format')) {
-                                  path = <><path d="M5 9h14M5 15h14M9 4L7 20M17 4l-2 16" /></>;
-                                } else if (step.page === 'expand') {
-                                  path = <><path d="M4 15l11-11 5 5-11 11-5-5z" /><path d="M8 15l-1-1M11 12l-1-1M14 9l-1-1" /></>;
-                                } else {
-                                  path = <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 17V7l7 5-7 5z" /></>;
-                                }
-                                return (
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-                                    {path}
-                                  </svg>
-                                );
-                              })()}
+                          {/* Tool row */}
+                          <div className="ax-pcard-tool-row">
+                            <div className="ax-pcard-tool-icon-sq">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                {iconPath}
+                              </svg>
                             </div>
-                            <div className="ax-plan-pointer-info">
-                              <div className="ax-plan-pointer-tool">{target.shortLabel || step.title}</div>
-                              <div className="ax-plan-pointer-path">
-                                {target.label.includes(' — ') ? (
-                                  <>
-                                    {target.label.split(' — ')[0]} —
-                                    <br />
-                                    <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-                                      {target.label.split(' — ')[1]}
-                                    </span>
-                                  </>
-                                ) : target.label.includes(' → ') ? (
-                                  <>
-                                    {target.label.split(' → ')[0]} →
-                                    <br />
-                                    {target.label.split(' → ')[1]}
-                                  </>
-                                ) : target.label}
+                            <div className="ax-pcard-tool-info">
+                              <div className="ax-pcard-tool-name">{target.shortLabel || step.title}</div>
+                              <div className="ax-pcard-tool-desc">
+                                {target.label.includes(' — ') ? target.label.split(' — ')[1] : target.label.includes(' → ') ? target.label.split(' → ')[1] : target.hint}
                               </div>
                             </div>
-                            <button
-                              className="ax-plan-pointer-open-btn"
-                              type="button"
-                              onClick={() => goToStep(step)}
-                            >
-                              Open ↑
+                            <button className="ax-pcard-open-btn" type="button" onClick={() => goToStep(step)}>
+                              Open ↗
                             </button>
                           </div>
 
-                          {/* Actions Row */}
-                          <div className="ax-plan-card-actions-row">
-                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                              {step.rationale ? (
-                                <WhyThisMattersInline text={step.rationale} />
-                              ) : (
-                                <div />
-                              )}
-                              <button className="ax-guide-focus-btn" type="button" onClick={() => guideFocusOnStep(step)}>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-                                </svg>
-                                Guide Focus
-                              </button>
+                          {/* Why this matters box */}
+                          {step.rationale && (
+                            <div className="ax-pcard-why-box">
+                              {step.rationale}
                             </div>
-                            {isCompleted ? (
-                              <span style={{ color: '#16a34a', fontSize: '11px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
-                                ✓ Completed
-                              </span>
-                            ) : (
-                              <button
-                                className="ax-plan-mark-done-btn"
-                                type="button"
-                                onClick={() => toggleDone(step.id)}
-                              >
-                                ✓ Mark done
-                              </button>
-                            )}
+                          )}
+
+                          {/* Stale warning */}
+                          {state.status === 'stale' && (
+                            <div className="ax-pcard-why-box" style={{ borderLeftColor: '#f59e0b', color: '#92400e' }}>
+                              Re-run recommended — the dataset changed after this step was completed.
+                            </div>
+                          )}
+
+                          {/* Action buttons */}
+                          <div className="ax-pcard-actions">
+                            <button className="ax-pcard-guide-btn" type="button" onClick={() => guideFocusOnStep(step)}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+                              </svg>
+                              Guide Focus
+                            </button>
+                            <button className="ax-pcard-done-btn" type="button" onClick={() => toggleDone(step.id)}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              Mark done
+                            </button>
                           </div>
                         </div>
                       )}
@@ -1258,4 +1173,74 @@ function highlightSection(section) {
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   el.classList.add('ax-fix-highlight')
   window.setTimeout(() => el.classList.remove('ax-fix-highlight'), 2600)
+}
+
+// ─────────────────────────────────────────────────────────────────
+// GuideOnboardingCard — floating explanation card that appears once
+// after the user sets their project goal, styled like AI Explain.
+// ─────────────────────────────────────────────────────────────────
+function GuideOnboardingCard({ guidance, plan, completedCount, totalCount, onDismiss }) {
+  const goal = guidance.question_text || (guidance.goal ? goalLabel(guidance.goal) : 'Your goal')
+  const steps = plan?.steps || []
+  const dataSteps = steps.filter((s) => s.page === 'data').length
+  const modelSteps = steps.filter((s) => s.page === 'models').length
+
+  return (
+    <div className="ax-gob-backdrop" onClick={onDismiss}>
+      <div className="ax-gob-card" onClick={(e) => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="ax-gob-head">
+          <span className="ax-gob-kicker">
+            YOUR GUIDE · {goal.toUpperCase().slice(0, 48)}{goal.length > 48 ? '…' : ''}
+          </span>
+          <button className="ax-gob-close" type="button" onClick={onDismiss} aria-label="Dismiss">×</button>
+        </div>
+
+        {/* Section: What this is */}
+        <div className="ax-gob-section">
+          <h4 className="ax-gob-section-title">WHAT THIS IS</h4>
+          <p className="ax-gob-section-body">
+            Your Guide panel broke your goal into <strong>{totalCount} ordered tasks</strong> — each tied to a specific SimuCast tool.
+            {dataSteps > 0 && ` ${dataSteps} data preparation task${dataSteps > 1 ? 's' : ''} come first.`}
+          </p>
+        </div>
+
+        {/* Section: How to use it */}
+        <div className="ax-gob-section">
+          <h4 className="ax-gob-section-title">HOW TO USE IT</h4>
+          <p className="ax-gob-section-body">
+            Each card shows which tool to open. Click <strong>Guide Focus</strong> on any task and SimuCast jumps to the exact section with a spotlight.
+          </p>
+        </div>
+
+        {/* Section: Tracking */}
+        <div className="ax-gob-section">
+          <h4 className="ax-gob-section-title">TRACKING PROGRESS</h4>
+          <p className="ax-gob-section-body">
+            SimuCast detects completions from your activity automatically. Use <strong>Mark done</strong> to advance tasks you've handled manually.
+          </p>
+        </div>
+
+        {/* Verdict block */}
+        <div className="ax-gob-verdict">
+          <span>
+            {totalCount} tasks ready
+            {modelSteps > 0 ? ` · includes model training` : ''}
+            {` · ${goal}`}
+          </span>
+        </div>
+
+        {/* Actions */}
+        <div className="ax-gob-actions">
+          <button className="ax-gob-btn-secondary" type="button" onClick={onDismiss}>
+            Technical details
+          </button>
+          <button className="ax-gob-btn-primary" type="button" onClick={onDismiss}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }

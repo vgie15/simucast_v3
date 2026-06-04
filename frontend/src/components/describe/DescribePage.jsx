@@ -44,7 +44,8 @@ import {
   Tags,
   Trash2,
   X,
-  LayoutGrid
+  LayoutGrid,
+  Save
 } from 'lucide-react'
 import { prepareChartData, getCohortColor } from '../../utils/chartData'
 
@@ -368,6 +369,23 @@ export default function DescribePage({ dataset, initialData }) {
       .catch(() => {})
   }, [dataset?.id, dataset?.current_stage_id])
 
+  const runCramers = async (vars) => {
+    const allCat = (dataset.variables || [])
+      .filter(v => !['numeric', 'int', 'float'].includes(v.dtype))
+      .map(v => v.name)
+    const catCols = vars ? vars.filter(n => allCat.includes(n)) : allCat
+    if (catCols.length < 2) return
+    setCramersLoading(true)
+    try {
+      const cramers = await api.runTest(dataset.id, { kind: 'cramers_matrix', variables: catCols })
+      if (vars) {
+        const ck = `${dataset.id}|${dataset.current_stage_id}|cramers`
+        describePageCache.set(ck, cramers)
+      }
+      setCramersResult(cramers)
+    } catch {} finally { setCramersLoading(false) }
+  }
+
   // Restore/auto-run Cramér's V matrix
   useEffect(() => {
     if (!dataset?.id) { setCramersResult(null); return }
@@ -478,14 +496,21 @@ export default function DescribePage({ dataset, initialData }) {
 
   if (!dataset) return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
 
-  const runCorrelation = async () => {
-    const numericVars = (dataset.variables || [])
+  const runCorrelation = async (vars) => {
+    const allNumeric = (dataset.variables || [])
       .filter(v => ['numeric', 'int', 'float'].includes(v.dtype))
       .map(v => v.name)
+    const numericVars = vars
+      ? vars.filter(n => allNumeric.includes(n))
+      : allNumeric
     if (numericVars.length < 2) return
     setCorrLoading(true)
     try {
       const corr = await api.runTest(dataset.id, { kind: 'corr', variables: numericVars })
+      if (vars) {
+        const ck = `${dataset.id}|${dataset.current_stage_id}|corr`
+        describePageCache.set(ck, corr)
+      }
       setCorrResult(corr)
     } finally {
       setCorrLoading(false)
@@ -497,9 +522,14 @@ export default function DescribePage({ dataset, initialData }) {
     setDescLoading(true)
     try {
       const result = await api.describe(dataset.id, { variables: selectedVars })
+      const ck = `${dataset.id}|${dataset.current_stage_id}|desc`
+      describePageCache.set(ck, { result, firstCat: (result.stats || []).find(s => s.kind === 'categorical')?.variable })
       setDescResult(result)
       const firstCat = (result.stats || []).find(s => s.kind === 'categorical')
       if (firstCat) setActiveCatVar(prev => prev || firstCat.variable)
+      // Refresh correlations and associations using only the selected variables
+      runCorrelation(selectedVars)
+      runCramers(selectedVars)
     } catch (e) {
       console.error('Describe failed:', e)
     } finally {
@@ -759,6 +789,57 @@ export default function DescribePage({ dataset, initialData }) {
     }
   }
 
+  const handleSaveHeatmap = () => {
+    const newChart = {
+      id: Date.now(),
+      title: 'Correlation Heatmap — Numeric Pairs',
+      type: 'correlation-heatmap',
+      note: 'Grid of Pearson correlation coefficients between numeric variables.',
+      showLabels: true,
+      showLegend: true
+    }
+    const willTruncate = savedCharts.length >= 8
+    setSavedCharts(prev => { const u = [...prev, newChart]; return u.length > 8 ? u.slice(1) : u })
+    setActiveChartId(newChart.id)
+    showCbToast(willTruncate ? 'Max 8 charts saved — oldest removed' : 'Heatmap saved to report')
+  }
+
+  const handleSaveDetailedChart = () => {
+    if (!selectedCorrCell) return
+    const { row, col } = selectedCorrCell
+    const isSelf = row === col
+    const val = Number(corrResult?.matrix?.[row]?.[col] ?? 0)
+    
+    let newChart = null
+    if (isSelf) {
+      newChart = {
+        id: Date.now(),
+        title: `${row} Distribution`,
+        type: 'histogram',
+        xAxis: row,
+        yAxis: null,
+        note: `Histogram showing distribution of values for ${row}.`,
+        showLabels: true,
+        showLegend: false
+      }
+    } else {
+      newChart = {
+        id: Date.now(),
+        title: `${row} vs ${col} Scatter Plot`,
+        type: 'scatter',
+        xAxis: col,
+        yAxis: row,
+        note: `Scatter plot of ${row} by ${col} (Pearson correlation coefficient r = ${val.toFixed(3)}).`,
+        showLabels: true,
+        showLegend: false
+      }
+    }
+    const willTruncate = savedCharts.length >= 8
+    setSavedCharts(prev => { const u = [...prev, newChart]; return u.length > 8 ? u.slice(1) : u })
+    setActiveChartId(newChart.id)
+    showCbToast(willTruncate ? 'Max 8 charts saved — oldest removed' : `Chart saved — ${newChart.title}`)
+  }
+
   const handleSaveChart = () => {
     const savedLayers = isMixedChart ? effectiveLayers.slice(0, activeLayerCount).map(({ type, x, y, color }) => ({ type, x, y, color })) : undefined
     const savedType = isMixedChart ? 'mixed' : chartBuilderType
@@ -925,6 +1006,17 @@ export default function DescribePage({ dataset, initialData }) {
       window.scrollTo({ top: 0, behavior: 'auto' })
     })
   }
+
+  useEffect(() => {
+    const onOpenSection = (event) => {
+      const section = event.detail?.section
+      if (!section) return
+      jumpToDescribeSection(section)
+    }
+    window.addEventListener('simucast:describe-section-open', onOpenSection)
+    return () => window.removeEventListener('simucast:describe-section-open', onOpenSection)
+  }, [dataset?.id])
+
   const describeNavItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard, badge: `${qualityFlags.length} flags` },
     { id: 'numeric', label: 'Numeric variables', icon: Hash, badge: numericStats.length },
@@ -996,6 +1088,7 @@ export default function DescribePage({ dataset, initialData }) {
               const Icon = item.icon
               return (
                 <button
+                  id={`describe-nav-${item.id}`}
                   key={item.id}
                   type="button"
                   {...explainAttrs({ id: `sidebar-tab-${item.id}`, title: `${item.label} tab`, type: 'sidebar-tab', section: item.id }, `ax-desc-nav-item ${activeDescribeSection === item.id ? 'active' : ''}`)}
@@ -1787,13 +1880,26 @@ export default function DescribePage({ dataset, initialData }) {
           style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 20, marginBottom: 20 }}
           onClick={() => { setSelectedCorrCell(null); setSelectedCramerCell(null) }}
         >
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '16px 24px', alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 55%) 1fr', gap: '16px 24px', alignItems: 'start' }}>
 
             {/* Row 1 left: title */}
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Correlation Heatmap — Numeric Pairs
-              </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Correlation Heatmap — Numeric Pairs
+                </p>
+                <button
+                  type="button"
+                  {...explainAttrs({ id: 'save-heatmap-button', title: 'Save heatmap to report', type: 'chart-action' })}
+                  onClick={handleSaveHeatmap}
+                  onMouseEnter={e => { e.currentTarget.style.background = ORANGE_LIGHT; e.currentTarget.style.borderColor = ORANGE_ACCENT; e.currentTarget.style.color = ORANGE_ACCENT }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#374151' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #d1d5db', borderRadius: 6, padding: '3px 8px', background: '#fff', cursor: 'pointer', fontSize: 10, fontWeight: 600, color: '#374151', transition: 'all 0.15s' }}
+                >
+                  <Save size={11} /> Save to report
+                </button>
+              </div>
+
               {/* Filter pills */}
               <div style={{ display: 'flex', gap: 4 }}>
                 {[{ key: 'all', label: 'All' }, { key: 'strong', label: 'Strong (r > 0.7)' }, { key: 'moderate', label: 'Moderate (0.4\u20130.7)' }, { key: 'weak', label: 'Weak (< 0.4)' }].map(f => (
@@ -1806,28 +1912,44 @@ export default function DescribePage({ dataset, initialData }) {
             </div>
 
             {/* Row 1 right: detail panel title */}
-            <div onClick={e => e.stopPropagation()}>
+            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 32 }}>
               {!selectedCorrCell ? (
-                <>
+                <div>
                   <p style={{ fontSize: 11, fontWeight: 700, color: '#111827', marginTop: 0, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Strongest relationships</p>
                   <p style={{ fontSize: 11, color: '#6b7280', marginTop: 0, marginBottom: 0 }}>Click any cell to explore a pair</p>
-                </>
-              ) : selectedCorrCell.row === selectedCorrCell.col ? (
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Distribution of {selectedCorrCell.row}</p>
+                </div>
               ) : (
                 <>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: '#111827', marginTop: 0, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {selectedCorrCell.row} <span style={{ color: '#9ca3af' }}>←→</span> {selectedCorrCell.col}
-                  </p>
-                  <p style={{ fontSize: 11, color: '#6b7280', marginTop: 0, marginBottom: 0 }}>
-                    Correlation: <strong style={{ color: Number(corrResult.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col] ?? 0) > 0 ? ORANGE_ACCENT : '#0284c7' }}>
-                      {Number(corrResult.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col] ?? 0) >= 0 ? '+' : ''}
-                      {Number(corrResult.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col] ?? 0).toFixed(3)}
-                    </strong>
-                    <span style={{ marginLeft: 6, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4, fontWeight: 500 }}>
-                      {getCorrelationLabel(Number(corrResult.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col] ?? 0))}
-                    </span>
-                  </p>
+                  <div>
+                    {selectedCorrCell.row === selectedCorrCell.col ? (
+                      <p style={{ fontSize: 11, fontWeight: 700, color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Distribution of {selectedCorrCell.row}</p>
+                    ) : (
+                      <>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#111827', marginTop: 0, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedCorrCell.row} <span style={{ color: '#9ca3af' }}>←→</span> {selectedCorrCell.col}
+                        </p>
+                        <p style={{ fontSize: 11, color: '#6b7280', marginTop: 0, marginBottom: 0 }}>
+                          Correlation: <strong style={{ color: Number(corrResult.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col] ?? 0) > 0 ? ORANGE_ACCENT : '#0284c7' }}>
+                            {Number(corrResult.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col] ?? 0) >= 0 ? '+' : ''}
+                            {Number(corrResult.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col] ?? 0).toFixed(3)}
+                          </strong>
+                          <span style={{ marginLeft: 6, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4, fontWeight: 500 }}>
+                            {getCorrelationLabel(Number(corrResult.matrix?.[selectedCorrCell.row]?.[selectedCorrCell.col] ?? 0))}
+                          </span>
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    {...explainAttrs({ id: 'save-detailed-chart-button', title: 'Save detailed chart to report', type: 'chart-action' })}
+                    onClick={handleSaveDetailedChart}
+                    onMouseEnter={e => { e.currentTarget.style.background = ORANGE_LIGHT; e.currentTarget.style.borderColor = ORANGE_ACCENT; e.currentTarget.style.color = ORANGE_ACCENT }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#374151' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, border: '1px solid #d1d5db', borderRadius: 6, padding: '3px 8px', background: '#fff', cursor: 'pointer', fontSize: 10, fontWeight: 600, color: '#374151', transition: 'all 0.15s', flexShrink: 0 }}
+                  >
+                    <Save size={11} /> Save to report
+                  </button>
                 </>
               )}
             </div>
@@ -1835,19 +1957,19 @@ export default function DescribePage({ dataset, initialData }) {
             {/* Row 2 left: heatmap table */}
             <div onClick={e => e.stopPropagation()}>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'separate', borderSpacing: '6px', fontSize: 11, fontFamily: 'var(--font-mono)', minWidth: Math.max(420, corrResult.variables.length * 80) }}>
+                <table style={{ borderCollapse: 'separate', borderSpacing: '4px', fontSize: 10, fontFamily: 'var(--font-mono)', minWidth: Math.max(320, corrResult.variables.length * 52) }}>
                   <thead>
                     <tr>
-                      <th style={{ padding: '6px 8px' }}></th>
+                      <th style={{ padding: '4px 6px' }}></th>
                       {corrResult.variables.map((v) => (
-                        <th key={v} style={{ padding: '6px 8px', color: '#6b7280', fontWeight: 600, fontSize: 10 }}>{v}</th>
+                        <th key={v} title={v} style={{ padding: '4px 6px', color: '#6b7280', fontWeight: 600, fontSize: 9, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {corrResult.variables.map((r) => (
                       <tr key={r}>
-                        <td style={{ padding: '6px 8px', fontWeight: 600, fontSize: 10, color: '#4b5563' }}>{r}</td>
+                        <td title={r} style={{ padding: '4px 6px', fontWeight: 600, fontSize: 9, color: '#4b5563', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r}</td>
                         {corrResult.variables.map((c) => {
                           const val = Number(corrResult.matrix?.[r]?.[c] ?? 0)
                           const abs = Math.abs(val)
@@ -1865,7 +1987,7 @@ export default function DescribePage({ dataset, initialData }) {
                               {...explainAttrs({ id: `corr-cell-${r}-${c}`, title: `${r} and ${c} numeric correlation cell`, type: 'correlation-cell', row: r, col: c, value: val })}
                               onClick={() => setSelectedCorrCell(isSelected ? null : { row: r, col: c })}
                               style={{
-                                padding: '8px 12px',
+                                padding: '5px 6px',
                                 textAlign: 'center',
                                 backgroundColor: bg,
                                 color: textColor,
@@ -1887,7 +2009,7 @@ export default function DescribePage({ dataset, initialData }) {
                 </table>
               </div>
               {/* Ranked correlation list */}
-              <div {...explainAttrs({ id: 'strongest-relationships-panel', title: 'Strongest relationships panel', type: 'relationship-panel' }, '', false)} style={{ maxHeight: 200, overflowY: 'auto', marginTop: 12 }}>
+              <div {...explainAttrs({ id: 'strongest-relationships-panel', title: 'Strongest relationships panel', type: 'relationship-panel' }, '', false)} style={{ marginTop: 12 }}>
                 {getTopCorrelations(corrResult, 999)
                   .filter(({ val }) => {
                     const abs = Math.abs(val)
@@ -1922,7 +2044,7 @@ export default function DescribePage({ dataset, initialData }) {
             </div>
 
             {/* Row 2 right: detail panel body */}
-            <div style={{ paddingTop: 12 }} onClick={e => e.stopPropagation()}>
+            <div style={{ paddingTop: 12, minWidth: 0 }} onClick={e => e.stopPropagation()}>
               {!selectedCorrCell ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {getTopCorrelations(corrResult, 5).map(({ a, b, val }) => {
@@ -2008,7 +2130,7 @@ export default function DescribePage({ dataset, initialData }) {
                   }
                   return (
                     <div>
-                      <div style={{ height: 220 }}>
+                      <div {...explainAttrs({ id: `detailed-correlation-histogram-${row}`, title: `${row} distribution detailed histogram`, type: 'correlation-detailed-histogram' })} style={{ height: 220, position: 'relative', width: '100%' }}>
                         <Bar data={histData} options={histOptions} plugins={[histPlugin]} />
                       </div>
                       <div style={{ display: 'flex', gap: 14, marginTop: 6 }}>
@@ -2086,7 +2208,7 @@ export default function DescribePage({ dataset, initialData }) {
                   : { icon: '✅', title: 'Independent Variables', desc: `r = ${val.toFixed(3)} — these variables are largely independent. Safe to include both in your model.`, bg: '#f0fdf4', border: '#bbf7d0', color: '#166534' }
                 return (
                   <div>
-                    <div style={{ height: 200 }}>
+                    <div {...explainAttrs({ id: `detailed-correlation-scatter-${row}-${col}`, title: `${row} vs ${col} detailed correlation scatter plot`, type: 'correlation-detailed-scatter' })} style={{ height: 200, position: 'relative', width: '100%' }}>
                       <Chart type='scatter' data={{ datasets: scatterDatasets }} options={scatterOptions} />
                     </div>
                     <div style={{ background: insight.bg, border: `1px solid ${insight.border}`, borderRadius: 10, padding: '10px 12px', marginTop: 10 }}>
@@ -2122,7 +2244,7 @@ export default function DescribePage({ dataset, initialData }) {
       {/* ──── CRAMÉR'S V HEATMAP ──── */}
       {activeDescribeSection === 'correlations' && cramersResult && cramersResult.variables?.length >= 2 && (
         <div {...explainAttrs({ id: 'categorical-associations-heatmap', title: 'Categorical associations heatmap', type: 'categorical-heatmap' }, '', false)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 20, marginBottom: 20 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '16px 24px', alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 55%) 1fr', gap: '16px 24px', alignItems: 'start' }}>
             <div>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Categorical Associations — Cramér's V
@@ -2146,19 +2268,19 @@ export default function DescribePage({ dataset, initialData }) {
             {/* Left: heatmap */}
             <div onClick={e => e.stopPropagation()}>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'separate', borderSpacing: '6px', fontSize: 11, fontFamily: 'var(--font-mono)', minWidth: Math.max(360, cramersResult.variables.length * 70) }}>
+                <table style={{ borderCollapse: 'separate', borderSpacing: '4px', fontSize: 10, fontFamily: 'var(--font-mono)', minWidth: Math.max(300, cramersResult.variables.length * 52) }}>
                   <thead>
                     <tr>
-                      <th style={{ padding: '6px 8px' }}></th>
+                      <th style={{ padding: '4px 6px' }}></th>
                       {cramersResult.variables.map((v) => (
-                        <th key={v} style={{ padding: '6px 8px', color: '#6b7280', fontWeight: 600, fontSize: 10 }}>{v}</th>
+                        <th key={v} title={v} style={{ padding: '4px 6px', color: '#6b7280', fontWeight: 600, fontSize: 9, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {cramersResult.variables.map((r) => (
                       <tr key={r}>
-                        <td style={{ padding: '6px 8px', fontWeight: 600, fontSize: 10, color: '#4b5563' }}>{r}</td>
+                        <td title={r} style={{ padding: '4px 6px', fontWeight: 600, fontSize: 9, color: '#4b5563', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r}</td>
                         {cramersResult.variables.map((c) => {
                           const v = Number(cramersResult.matrix?.[r]?.[c] ?? 0)
                           const isSelf = r === c
@@ -2172,7 +2294,7 @@ export default function DescribePage({ dataset, initialData }) {
                             <td key={c}
                               {...explainAttrs({ id: `cramers-cell-${r}-${c}`, title: `${r} and ${c} categorical association cell`, type: 'cramers-cell', row: r, col: c, value: v })}
                               onClick={() => setSelectedCramerCell(isSelected ? null : { row: r, col: c })}
-                              style={{ padding: '6px 10px', textAlign: 'center', backgroundColor: bg, color: tc, borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 10, boxShadow: isSelected ? '0 0 0 2px #fff, 0 0 0 4px #374151' : 'none', transition: 'box-shadow 0.15s' }}
+                              style={{ padding: '5px 6px', textAlign: 'center', backgroundColor: bg, color: tc, borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 10, boxShadow: isSelected ? '0 0 0 2px #fff, 0 0 0 4px #374151' : 'none', transition: 'box-shadow 0.15s' }}
                             >{v.toFixed(3)}</td>
                           )
                         })}
@@ -2218,7 +2340,7 @@ export default function DescribePage({ dataset, initialData }) {
               })()}
             </div>
             {/* Right: detail panel */}
-            <div style={{ paddingTop: 0 }} onClick={e => e.stopPropagation()}>
+            <div style={{ paddingTop: 0, minWidth: 0 }} onClick={e => e.stopPropagation()}>
               {!selectedCramerCell ? (
                 <div style={{ fontSize: 11, color: '#9ca3af' }}>Click a cell to view grouped bar chart</div>
               ) : selectedCramerCell.row === selectedCramerCell.col ? (
@@ -2249,7 +2371,7 @@ export default function DescribePage({ dataset, initialData }) {
                       Cramér's V: {v.toFixed(3)} · {strengthLabel}
                     </div>
                     {/* Grouped bar chart: x-axis = col values, grouped by row values */}
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140, paddingBottom: 4, borderBottom: '1px solid #e5e7eb' }}>
+                    <div {...explainAttrs({ id: `detailed-cramers-grouped-bar-${row}-${col}`, title: `${row} by ${col} grouped counts chart`, type: 'cramers-detailed-grouped-bar' })} style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140, paddingBottom: 4, borderBottom: '1px solid #e5e7eb' }}>
                       {colKeys.map(ck => {
                         return (
                           <div key={ck} style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2, height: '100%' }}>
@@ -2397,7 +2519,7 @@ export default function DescribePage({ dataset, initialData }) {
                           <button type="button" onClick={() => setCompareSelected(prev => prev.filter(x => x !== id))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', padding: 0 }}><X size={13} /></button>
                         </div>
                       </div>
-                      <div style={{ height: 240, padding: 10 }}>{renderCompareChart(sc)}</div>
+                      <div style={{ height: 240, padding: 10, position: 'relative' }}>{renderCompareChart(sc)}</div>
                     </div>
                   )
                 })}
@@ -2706,7 +2828,7 @@ export default function DescribePage({ dataset, initialData }) {
                   {cbTypeLabel}
                 </span>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
                 {loadingRows ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><InlineSpinner label="Loading data..." /></div>
                 ) : renderLiveChart()}
@@ -2731,12 +2853,6 @@ export default function DescribePage({ dataset, initialData }) {
           </div>
         )}
 
-        {/* Toast */}
-        {cbToast && (
-          <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', color: '#fff', borderRadius: 20, padding: '8px 18px', fontSize: 12, fontWeight: 500, zIndex: 9999, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
-            {cbToast}
-          </div>
-        )}
 
         {/* Expand/fullscreen modal */}
         {expandChart && (
@@ -2746,11 +2862,19 @@ export default function DescribePage({ dataset, initialData }) {
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{chartTitle}</span>
                 <button type="button" onClick={() => setExpandChart(false)} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '5px 8px', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#6b7280' }}><Minimize2 size={15} /></button>
               </div>
-              <div style={{ flex: 1 }}>{renderLiveChart()}</div>
+              <div style={{ flex: 1, position: 'relative' }}>{renderLiveChart()}</div>
             </div>
           </div>
         )}
       </div>}
+
+      {/* Toast */}
+      {cbToast && (
+        <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: '#1a1a1a', color: '#fff', borderRadius: 20, padding: '8px 18px', fontSize: 12, fontWeight: 500, zIndex: 9999, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+          {cbToast}
+        </div>
+      )}
+
       {explainPopup && (
         <DescribeExplainPopup
           datasetId={dataset.id}

@@ -378,6 +378,7 @@ export default function TestsPage({ dataset, initialData }) {
           <div className="ax-test-pills">
             {TESTS.map((t) => (
               <button
+                id={`test-button-${t.key}`}
                 key={t.key}
                 className={`ax-test-pill ${kind === t.key ? 'active' : ''}`}
                 type="button"

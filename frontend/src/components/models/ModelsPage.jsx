@@ -105,8 +105,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
   const [validationMethod, setValidationMethod] = useState('standard_split')
   const [cvFolds, setCvFolds] = useState(5)
   const [stratify, setStratify] = useState(true)
-  const [classWeight, setClassWeight] = useState(false)
-  const [smote, setSmote] = useState(false)
+  const [classBalanceStrategy, setClassBalanceStrategy] = useState('none') // 'none' | 'balanced' | 'smote'
   const [numericPreprocessing, setNumericPreprocessing] = useState({
     scaling: 'auto',
     log_columns: [],
@@ -270,8 +269,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       setValidationMethod(saved.validationMethod || 'standard_split')
       setCvFolds(saved.cvFolds || 5)
       setStratify(saved.stratify ?? true)
-      setClassWeight(saved.classWeight ?? false)
-      setSmote(saved.smote ?? false)
+      setClassBalanceStrategy(saved.classBalanceStrategy || (saved.smote ? 'smote' : saved.classWeight ? 'balanced' : 'none'))
       setFeatures(saved.features || [])
       setChosenAlgos(saved.chosenAlgos || ['logistic', 'rf'])
       setModelParams(saved.modelParams || defaultModelParams())
@@ -297,8 +295,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       validationMethod,
       cvFolds,
       stratify,
-      classWeight,
-      smote,
+      classBalanceStrategy,
       features,
       chosenAlgos,
       modelParams,
@@ -308,7 +305,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       results,
       activeResultIdx,
     }))
-  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, smote, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders), JSON.stringify(results), activeResultIdx])
+  }, [dataset?.id, draftReady, target, targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classBalanceStrategy, features.join(','), chosenAlgos.join(','), JSON.stringify(modelParams), JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders), JSON.stringify(results), activeResultIdx])
 
   const sectionForModelsTarget = (section) => {
     if (!section) return 'setup'
@@ -364,7 +361,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
           target,
           features,
           algorithms: chosenAlgos,
-          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders, smote),
+          target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classBalanceStrategy, numericPreprocessing, categoricalEncoding, categoricalOrders),
         })
         if (!cancelled) {
           setPlan(r)
@@ -385,7 +382,20 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       cancelled = true
       clearTimeout(t)
     }
-  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, smote, JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders)])
+  }, [dataset?.id, dataset?.current_stage_id, target, features.join(','), chosenAlgos.join(','), targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classBalanceStrategy, JSON.stringify(numericPreprocessing), JSON.stringify(categoricalEncoding), JSON.stringify(categoricalOrders)])
+
+  // Auto-select Balanced class weights as the default when class imbalance is detected on first plan load.
+  const classBalanceAutoApplied = useRef(null)
+  useEffect(() => {
+    if (!plan) return
+    const key = `${dataset?.id}:${target}`
+    if (classBalanceAutoApplied.current === key) return
+    classBalanceAutoApplied.current = key
+    const hasWarning = (plan.validation_checks || []).some(c => c.key === 'class_balance' && c.status === 'warning')
+    if (hasWarning && classBalanceStrategy === 'none') {
+      setClassBalanceStrategy('balanced')
+    }
+  }, [plan]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!dataset) {
     return <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Upload a dataset first.</p>
@@ -436,7 +446,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
         target,
         features,
         algorithms: selectedAlgos,
-        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders, smote),
+        target_options: targetOptions(targetMode, positiveClass, testSize, validationMethod, cvFolds, stratify, classBalanceStrategy, numericPreprocessing, categoricalEncoding, categoricalOrders),
         model_params: modelParams,
       })
       if (r.session) auth.updateSession(r.session)
@@ -574,7 +584,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
     setTestSize(metrics.split?.test_size ?? 0.2)
     setValidationMethod(metrics.validation_method || metrics.split?.validation_method || 'standard_split')
     setStratify(metrics.split?.stratified ?? true)
-    setClassWeight(metrics.class_weight === 'balanced')
+    setClassBalanceStrategy(metrics.class_weight === 'balanced' ? 'balanced' : 'none')
     setNumericPreprocessing(model.preprocessing_pipeline?.numeric_preprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] })
     setCategoricalEncoding(model.preprocessing_pipeline?.encoding?.reduce((acc, item) => {
       acc[item.column] = item.method
@@ -749,11 +759,21 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
     })
   }
 
+  useEffect(() => {
+    const onOpenSection = (event) => {
+      const section = event.detail?.section
+      if (!section) return
+      jumpToModelsSection(section)
+    }
+    window.addEventListener('simucast:models-section-open', onOpenSection)
+    return () => window.removeEventListener('simucast:models-section-open', onOpenSection)
+  }, [dataset?.id, models.length, results?.models?.length, features.length])
+
   const modelsNavItems = [
     { id: 'setup', label: 'Setup', icon: SlidersHorizontal, badge: `${selectedAlgos.length} algos` },
     { id: 'results', label: 'Results', icon: BarChart3, badge: `${models.length || results?.models?.length || 0} model${(models.length || results?.models?.length || 0) === 1 ? '' : 's'}` },
     { id: 'features', label: 'Feature influence', icon: Activity, badge: `${features.length} features` },
-    { id: 'tune', label: 'Tune parameters', icon: Brain, badge: 'Smart defaults' },
+    { id: 'tune', label: 'Tune hyperparameters', icon: Brain, badge: 'Smart defaults' },
     { id: 'history', label: 'History', icon: History, badge: `${models.length} run${models.length === 1 ? '' : 's'}` },
   ]
 
@@ -841,6 +861,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
             const Icon = item.icon
             return (
               <button
+                id={`models-nav-${item.id === 'features' ? 'feature-influence' : item.id}`}
                 key={item.id}
                 type="button"
                 className={`ax-models-nav-item ${activeModelsSection === item.id ? 'active' : ''} ${aiExplainActive ? 'ax-explain-selectable' : ''}`}
@@ -1069,6 +1090,16 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
               setTestSize={setTestSize}
               cvFolds={cvFolds}
               setCvFolds={setCvFolds}
+              plan={plan}
+              stratify={stratify}
+              setStratify={setStratify}
+              classBalanceStrategy={classBalanceStrategy}
+              setClassBalanceStrategy={setClassBalanceStrategy}
+              checks={checks}
+              onNavigateToCategorical={() => {
+                onGo('describe', null)
+                setTimeout(() => window.dispatchEvent(new CustomEvent('simucast:describe-section-open', { detail: { section: 'categorical' } })), 200)
+              }}
             />
             </div>
           </div>
@@ -1097,7 +1128,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
           <div className="ax-models-config-actions">
             <p>{planBlocked ? 'Resolve the active data issue before training.' : 'Ready when target, features, and at least one algorithm are selected.'}</p>
             <button
-              id="models-train-action-setup"
+              id="models-run-training-btn"
               className={`ax-models-train-btn ${aiExplainActive ? 'ax-explain-selectable' : ''}`}
               disabled={!aiExplainActive && (!planBlocked && (training || !target || features.length === 0 || selectedAlgos.length === 0 || guestModelLimitReached || guestSelectionOverLimit))}
               onClick={(event) => {
@@ -1106,7 +1137,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                   metricKey: 'models-setup-train-models-button',
                   section: 'Models setup',
                   title: 'Train models button',
-                  simple: 'This starts model training using the selected target, features, algorithms, validation method, preprocessing, and tuning parameters.',
+                  simple: 'This starts model training using the selected target, features, algorithms, validation method, preprocessing, and tuning hyperparameters.',
                   datasetExplanation: target && features.length && selectedAlgos.length
                     ? `Ready to train ${selectedAlgos.length} algorithm${selectedAlgos.length === 1 ? '' : 's'} to predict ${target} with ${features.length} feature${features.length === 1 ? '' : 's'}.`
                     : 'Training requires a target, at least one feature, and at least one algorithm.',
@@ -1213,7 +1244,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
       </div>
 
       {/* ── Preprocessing plan ─────────────────────────────────── */}
-      <div {...explainAttrs({
+      <div style={{ marginTop: 16 }} {...explainAttrs({
         type: 'preplan-card',
         metricKey: 'models-preplan-card',
         section: 'Preprocessing plan',
@@ -1689,18 +1720,23 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                 )}
                 {plan?.task === 'classification' && (
                   <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                      <input type="checkbox" checked={stratify} onChange={(e) => setStratify(e.target.checked)} />
-                      Keep class proportions
-                    </label>
-                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                      <input type="checkbox" checked={classWeight} onChange={(e) => setClassWeight(e.target.checked)} />
-                      Balanced class weights
-                    </label>
-                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                      <input type="checkbox" checked={smote} onChange={(e) => setSmote(e.target.checked)} />
-                      SMOTE oversampling
-                    </label>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Class Balance</span>
+                    {[
+                      { value: 'none', label: 'Keep class proportions' },
+                      { value: 'balanced', label: 'Balanced class weights' },
+                      { value: 'smote', label: 'SMOTE oversampling' },
+                    ].map(({ value, label }) => (
+                      <label key={value} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                        <input
+                          type="radio"
+                          name="class-balance-strategy-bar"
+                          checked={classBalanceStrategy === value}
+                          onChange={() => setClassBalanceStrategy(value)}
+                          style={{ accentColor: 'var(--color-accent, #f97316)' }}
+                        />
+                        {label}
+                      </label>
+                    ))}
                   </div>
                 )}
               </div>
@@ -2236,9 +2272,9 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
               <div className="ax-tune-head">
                 <div className="ax-tune-head-left">
                   <h3>
-                    Tune parameters
+                    Tune hyperparameters
                     <HelpButton
-                      title="Tune parameters"
+                      title="Tune hyperparameters"
                       text="Adjust algorithm settings after training. Tuning is optional and most useful when model health warns about overfitting."
                     />
                   </h3>
@@ -2276,8 +2312,8 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
           ) : (
             <div className="ax-models-ready-card" style={{ minHeight: 260 }}>
               <div className="ax-models-ready-icon"><Brain size={22} /></div>
-              <h2>Tune parameters</h2>
-              <p>Train at least one model first, then algorithm parameters will appear here for fine-tuning.</p>
+              <h2>Tune hyperparameters</h2>
+              <p>Train at least one model first, then algorithm hyperparameters will appear here for fine-tuning.</p>
             </div>
           )}
         </>
@@ -2491,7 +2527,7 @@ function buildModelsSimpleExplanation(element) {
   if (element?.type === 'preplan-column-encoding') return 'This row displays the active encoding options and ranks for a single categorical column.'
   if (element?.type === 'preplan-column-categories') return 'This list displays the categories found in the column, allowing drag-and-drop ordinal sorting.'
   if (element?.type === 'preplan-column-method') return 'This setting determines how string or boolean values are mapped to numeric values.'
-  if (element?.type === 'parameter') return 'This parameter changes how the selected algorithm learns from data.'
+  if (element?.type === 'parameter') return 'This hyperparameter changes how the selected algorithm learns from data.'
   if (element?.type === 'featureInfluence') return 'This row shows how much one feature contributes to the selected model prediction.'
   if (element?.type === 'comparisonRow') return 'This row compares one trained model against the others.'
   if (element?.type === 'modelHealth') return 'This card compares train and test behavior to show whether the model generalizes.'
@@ -2520,7 +2556,7 @@ function buildModelsDatasetExplanation(element, context) {
 
 function buildModelsWhyItMatters(element) {
   if (element?.whyItMatters) return element.whyItMatters
-  if (element?.type === 'parameter') return 'Parameter changes can improve accuracy, reduce overfitting, or make training more stable, but they can also make a model too complex.'
+  if (element?.type === 'parameter') return 'Hyperparameter changes can improve accuracy, reduce overfitting, or make training more stable, but they can also make a model too complex.'
   if (element?.type === 'featureInfluence') return 'Feature influence helps explain what the model relies on, but it should not be treated as causation.'
   if (element?.type === 'comparisonRow') return 'Comparing rows helps choose a model using multiple metrics instead of one score.'
   if (element?.type === 'modelHealth') return 'A model that performs well on test data is more trustworthy than one that only performs well on training data.'
@@ -2534,7 +2570,7 @@ function buildModelsVerdict(element) {
     if (element?.type === 'preplan-column-categories') return 'Define a natural hierarchy for Ordinal columns to improve model performance.'
     return 'Confirm configuration is correct before training the model.'
   }
-  if (element?.type === 'parameter') return 'Tune carefully and compare the next run against the previous result.'
+  if (element?.type === 'parameter') return 'Tune hyperparameters carefully and compare the next run against the previous result.'
   if (element?.type === 'featureInfluence') return Number(element?.value || 0) >= 15 ? 'Treat this as a key predictor to explain in the report.' : 'This is a supporting predictor; review before removing it.'
   if (element?.metricKey === 'gap') return Math.abs(Number(element?.value || 0)) < 0.05 ? 'Low overfitting risk.' : 'Review model health before relying on this result.'
   return 'Use this as supporting context for model setup and interpretation.'
@@ -3070,78 +3106,8 @@ function formatHistoryMetricValue(value, key, plain = false) {
   return numeric.toFixed(3)
 }
 
-// Dropdown menu that houses config selectors for the model build page.
-function ConfigDropdown({ label, value, children }) {
-
-  const [isOpen, setIsOpen] = useState(false)
-  const ref = useRef()
-
-  useEffect(() => {
-    if (!isOpen) return
-    const handleClickOutside = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
-
-  return (
-    <div ref={ref} className="models-config-dropdown-container" style={{ position: 'relative', flex: 1, minWidth: 140 }}>
-      <div
-        className="models-config-box"
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          padding: '8px 12px',
-          background: 'var(--color-background-primary)',
-          border: isOpen ? '1.5px solid var(--color-accent)' : '1.5px solid var(--color-border-tertiary)',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          height: '100%',
-          userSelect: 'none',
-          transition: 'border-color 0.15s, box-shadow 0.15s',
-          boxShadow: isOpen ? '0 0 0 2px var(--color-accent-light)' : 'none'
-        }}
-      >
-        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
-          {label}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-          <span style={{ fontSize: '13px', fontWeight: 650, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {value}
-          </span>
-          <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-        </div>
-      </div>
-      {isOpen && (
-        <div
-          className="models-config-dropdown-content"
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            left: 0,
-            zIndex: 2005,
-            background: 'var(--color-background-primary)',
-            border: '1.5px solid var(--color-border-secondary)',
-            borderRadius: '12px',
-            boxShadow: 'var(--shadow-card-hover)',
-            padding: '12px',
-            minWidth: '240px',
-            maxWidth: '360px'
-          }}
-        >
-          {children(() => setIsOpen(false))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ValidationDropdown({ validationMethod, setValidationMethod, testSize, setTestSize, cvFolds, setCvFolds }) {
+// Standalone validation dropdown used in the Setup section.
+function ValidationDropdown({ validationMethod, setValidationMethod, testSize, setTestSize, cvFolds, setCvFolds, plan, stratify, setStratify, classBalanceStrategy, setClassBalanceStrategy, checks, onNavigateToCategorical }) {
   const [isOpen, setIsOpen] = useState(false)
   const ref = useRef()
 
@@ -3195,7 +3161,7 @@ function ValidationDropdown({ validationMethod, setValidationMethod, testSize, s
             top: 'calc(100% + 4px)',
             left: 0,
             zIndex: 2005,
-            background: '#fff',
+            background: 'var(--color-background-primary)',
             border: '1px solid var(--color-border-secondary, #e5e7eb)',
             borderRadius: '10px',
             boxShadow: '0 4px 20px rgba(0,0,0,0.10)',
@@ -3268,7 +3234,7 @@ function ValidationDropdown({ validationMethod, setValidationMethod, testSize, s
                       padding: '6px 16px',
                       borderRadius: 20,
                       border: `1.5px solid ${cvFolds === n ? 'var(--color-accent, #f97316)' : '#e5e7eb'}`,
-                      background: cvFolds === n ? 'var(--color-accent, #f97316)' : '#fff',
+                      background: cvFolds === n ? 'var(--color-accent, #f97316)' : 'var(--color-background-primary)',
                       color: cvFolds === n ? '#fff' : 'var(--color-text-secondary, #64748b)',
                       fontSize: 12,
                       fontWeight: 700,
@@ -3282,11 +3248,159 @@ function ValidationDropdown({ validationMethod, setValidationMethod, testSize, s
               </div>
             </div>
           )}
+
+          {plan?.task === 'classification' && setClassBalanceStrategy && (() => {
+            const hasClassBalanceWarning = (checks || []).some(c => c.key === 'class_balance' && c.status === 'warning')
+            const hasCategoryConsistencyError = (checks || []).some(c => c.key === 'category_consistency' && c.status === 'block')
+            const options = [
+              {
+                value: 'none',
+                label: 'Keep class proportions',
+                desc: 'Train on the data as-is. Best when classes are roughly balanced.',
+              },
+              {
+                value: 'balanced',
+                label: 'Balanced class weights',
+                desc: 'Automatically penalizes the model more for misclassifying minority classes. No data modification.',
+              },
+              {
+                value: 'smote',
+                label: 'SMOTE oversampling',
+                desc: 'Generates synthetic minority class samples before training. Only use when class imbalance is severe (>5:1 ratio).',
+                disabled: hasCategoryConsistencyError,
+                disabledReason: 'Resolve category consistency errors before enabling SMOTE.',
+              },
+            ]
+            return (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border-tertiary, #e5e7eb)', display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Class Balance</div>
+                  {hasClassBalanceWarning && classBalanceStrategy === 'none' && (
+                    <span style={{ fontSize: 10, color: '#b45309', background: '#fef3c7', borderRadius: 4, padding: '2px 6px', lineHeight: 1.4 }}>
+                      ℹ️ Imbalance detected
+                    </span>
+                  )}
+                </div>
+                {hasClassBalanceWarning && classBalanceStrategy !== 'balanced' && classBalanceStrategy !== 'smote' && (
+                  <div style={{ fontSize: 10, color: '#92400e', background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 5, padding: '5px 8px', marginBottom: 8, lineHeight: 1.5 }}>
+                    ℹ️ Class imbalance detected — Balanced class weights pre-selected. You can change this.
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {options.map(({ value, label, desc, disabled, disabledReason }) => (
+                    <label
+                      key={value}
+                      title={disabled ? disabledReason : undefined}
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1 }}
+                    >
+                      <input
+                        type="radio"
+                        name="class-balance-strategy-popover"
+                        checked={classBalanceStrategy === value}
+                        disabled={disabled}
+                        onChange={() => !disabled && setClassBalanceStrategy(value)}
+                        style={{ accentColor: 'var(--color-accent, #f97316)', marginTop: 2, flexShrink: 0 }}
+                      />
+                      <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <span style={{ fontWeight: 600 }}>{label}</span>
+                        <span style={{ fontSize: 10, color: 'var(--color-text-tertiary, #9ca3af)', lineHeight: 1.4 }}>{desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {classBalanceStrategy === 'smote' && (
+                  <div style={{ marginTop: 10, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '9px 11px', fontSize: 11, color: '#78350f', lineHeight: 1.5 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>⚠️ SMOTE generates synthetic samples and should only be used when your minority class is severely underrepresented. It is applied only to the training set — never the test set — to prevent data leakage. Verify your class distribution in Describe → Categorical Variables before enabling this.</div>
+                    {onNavigateToCategorical && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToCategorical}
+                        style={{ background: 'none', border: 'none', color: '#b45309', fontWeight: 600, fontSize: 11, cursor: 'pointer', padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }}
+                      >
+                        View class distribution →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>
   )
 }
+
+// Dropdown menu that houses config selectors for the model build page.
+function ConfigDropdown({ label, value, children }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleClickOutside = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
+
+  return (
+    <div ref={ref} className="models-config-dropdown-container" style={{ position: 'relative', flex: 1, minWidth: 140 }}>
+      <div
+        className="models-config-box"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          padding: '8px 12px',
+          background: 'var(--color-background-primary)',
+          border: isOpen ? '1.5px solid var(--color-accent)' : '1.5px solid var(--color-border-tertiary)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          height: '100%',
+          userSelect: 'none',
+          transition: 'border-color 0.15s, box-shadow 0.15s',
+          boxShadow: isOpen ? '0 0 0 2px var(--color-accent-light)' : 'none'
+        }}
+      >
+        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+          {label}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+          <span style={{ fontSize: '13px', fontWeight: 650, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {value}
+          </span>
+          <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        </div>
+      </div>
+      {isOpen && (
+        <div
+          className="models-config-dropdown-content"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            zIndex: 2005,
+            background: 'var(--color-background-primary)',
+            border: '1.5px solid var(--color-border-secondary)',
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-card-hover)',
+            padding: '12px',
+            minWidth: '240px',
+            maxWidth: '360px'
+          }}
+        >
+          {children(() => setIsOpen(false))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 
 // Returns the title text with HTML ampersand entities decoded back to regular ampersands.
 function plainTitle(value) {
@@ -3573,7 +3687,7 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
       <div
         key={merged.key}
         className="ax-tune-param"
-        onClick={(e) => aiExplainActive && onExplain?.({ type: 'parameter', metricKey: 'parameter', section: 'Tune Parameters', paramKey: merged.key, paramValue: value, paramLabel: merged.label, algoName: algoLabelForTask(primaryAlgo, results?.models?.[0]?.metrics?.task) }, e)}
+        onClick={(e) => aiExplainActive && onExplain?.({ type: 'parameter', metricKey: 'parameter', section: 'Tune Hyperparameters', paramKey: merged.key, paramValue: value, paramLabel: merged.label, algoName: algoLabelForTask(primaryAlgo, results?.models?.[0]?.metrics?.task) }, e)}
         style={{ cursor: aiExplainActive ? 'help' : 'default', outline: aiExplainActive ? '1.5px dashed rgba(249,115,22,.5)' : 'none', position: 'relative', transition: 'all .15s ease' }}
       >
         {aiExplainActive && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, fontWeight: 700, color: '#f97316', background: '#FFF7ED', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>?</span>}
@@ -3697,7 +3811,7 @@ function ParameterSettings({ selectedAlgos, modelParams, setModelParams, results
                 gap: 6
               }}
             >
-              <span>{tabKey === 'all' ? 'All Parameters' : algoLabel(tabKey)}</span>
+              <span>{tabKey === 'all' ? 'All Hyperparameters' : algoLabel(tabKey)}</span>
               {health && tone && (
                 <span style={{
                   fontSize: 10,
@@ -5471,7 +5585,7 @@ function algoLabelForTask(algo, task) {
 }
 
 // Builds the training target options payload from the user's validation and class-weight choices.
-function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classWeight, numericPreprocessing, categoricalEncoding, categoricalOrders, smote) {
+function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds, stratify, classBalanceStrategy, numericPreprocessing, categoricalEncoding, categoricalOrders) {
   const options = {}
   if (mode && mode !== 'auto') options.mode = mode
   if (positiveClass) options.positive_class = positiveClass
@@ -5479,8 +5593,8 @@ function targetOptions(mode, positiveClass, testSize, validationMethod, cvFolds,
   options.validation_method = validationMethod || 'standard_split'
   if (options.validation_method === 'cross_validation') options.cv_folds = cvFolds || 5
   options.stratify = stratify
-  if (classWeight) options.class_weight = 'balanced'
-  if (smote) options.smote = true
+  if (classBalanceStrategy === 'balanced') options.class_weight = 'balanced'
+  if (classBalanceStrategy === 'smote') options.smote = true
   options.numeric_preprocessing = numericPreprocessing || { scaling: 'auto', log_columns: [], integer_columns: [] }
   options.categorical_encoding = categoricalEncoding || {}
   options.categorical_order = categoricalOrders || {}

@@ -203,7 +203,7 @@ export default function ExpandPage({ dataset, setDataset }) {
       `}} />
 
       {/* ── LEFT PANEL ── */}
-      <div className="ax-expand-left">
+      <div id="expand-section-controls" className="ax-expand-left">
         {/* Header */}
         <div className="ax-expand-left-head">
           <h1 className="ax-expand-title">Expand data</h1>
@@ -409,7 +409,7 @@ export default function ExpandPage({ dataset, setDataset }) {
       </div>
 
       {/* ── RIGHT PANEL ── */}
-      <div className="ax-expand-right">
+      <div id="expand-preview-panel" className="ax-expand-right">
         <div className="ax-expand-right-scroll">
           <div className="ax-expand-preview-head">
             <span className="ax-expand-section-label">EXPANSION PREVIEW</span>

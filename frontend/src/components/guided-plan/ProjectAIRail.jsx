@@ -10,9 +10,11 @@ export default function ProjectAIRail({
   dataset,
   activeTab,
   panelOpen,
+  showOnboarding,
   onOpenGuidanceSetup,
   onGuidanceUpdated,
   onStartGuideFocus,
+  onDismissOnboarding,
 }) {
   if (!dataset) return null
 
@@ -22,9 +24,11 @@ export default function ProjectAIRail({
         dataset={dataset}
         activeTab={activeTab}
         panelOpen={panelOpen}
+        showOnboarding={showOnboarding}
         onOpenGuidanceSetup={onOpenGuidanceSetup}
         onGuidanceUpdated={onGuidanceUpdated}
         onStartGuideFocus={onStartGuideFocus}
+        onDismissOnboarding={onDismissOnboarding}
       />
     </div>
   )

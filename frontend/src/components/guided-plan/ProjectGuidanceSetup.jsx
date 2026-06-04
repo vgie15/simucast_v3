@@ -45,19 +45,6 @@ export const INTENTS = [
   },
 ]
 
-const GUIDANCE_CHOICES = [
-  {
-    id: true,
-    title: 'Guide me step by step',
-    description: 'SimuCast focuses the next required task and explains what unlocks after it.',
-  },
-  {
-    id: false,
-    title: 'Let me explore',
-    description: 'Keep the Guided Workflow visible while you move through the workspace freely.',
-  },
-]
-
 const CLEAN_QUESTION = {
   question: 'I just want to clean and prepare this data.',
   intent: 'prepare_data',
@@ -83,7 +70,6 @@ export default function ProjectGuidanceSetup({
   const auth = useAuth()
   const current = dataset?.guidance || {}
   const [step, setStep] = useState('question')
-  const [guidedMode, setGuidedMode] = useState(Boolean(current.guided_mode))
   const [question, setQuestion] = useState(current.question_text || '')
   const [selected, setSelected] = useState(null)
   const [suggestions, setSuggestions] = useState([])
@@ -112,7 +98,6 @@ export default function ProjectGuidanceSetup({
         }
       : null
     setStep('question')
-    setGuidedMode(Boolean(current.guided_mode))
     setQuestion(current.question_text || '')
     setSelected(restored)
     setMappedIntent(restored?.intent || '')
@@ -219,14 +204,23 @@ export default function ProjectGuidanceSetup({
   }
 
   const continueWithQuestion = async () => {
+    // If intent is already resolved, save immediately (no step-by-step mode selection)
     if (selected?.intent || mappedIntent || derivedIntent || !dataset?.id) {
       if (!picked?.intent) {
         setIntentChoiceOpen(true)
         return
       }
-      setSelected(picked)
-      setIntentChoiceOpen(false)
-      setStep('guidance')
+      await save({
+        goal: picked.intent,
+        intent: picked.intent,
+        question_text: picked.question,
+        question_source: picked.source,
+        setup_status: 'completed',
+        guided_mode: false,
+        walkthrough_step: null,
+        dismissed_tips: [],
+        completed_tips: [],
+      })
       return
     }
     setMappingLoading(true)
@@ -238,7 +232,17 @@ export default function ProjectGuidanceSetup({
         setMappedIntent(response.intent)
         setSelected(next)
         setIntentChoiceOpen(false)
-        setStep('guidance')
+        await save({
+          goal: next.intent,
+          intent: next.intent,
+          question_text: next.question,
+          question_source: next.source,
+          setup_status: 'completed',
+          guided_mode: false,
+          walkthrough_step: null,
+          dismissed_tips: [],
+          completed_tips: [],
+        })
         return
       }
       setClosestIntents(response?.closest_intents || closestIntentChoices(question))
@@ -321,12 +325,8 @@ export default function ProjectGuidanceSetup({
         <div className="ax-guidance-head">
           <div>
             <p className="ax-kicker">Project start</p>
-            <h2>{step === 'question' ? 'What would you like to find out from this dataset?' : 'Would you like SimuCast to guide you step by step?'}</h2>
-            <p>
-              {step === 'question'
-                ? 'Choose a goal below or let the AI suggest one based on your dataset.'
-                : 'The Guided Workflow stays visible either way. Guided Mode focuses the next required task when you want supervision.'}
-            </p>
+            <h2>What would you like to find out from this dataset?</h2>
+            <p>Choose a goal below or let the AI suggest one based on your dataset.</p>
           </div>
           {allowDismiss && step === 'question' && (
             <button
@@ -340,8 +340,7 @@ export default function ProjectGuidanceSetup({
           )}
         </div>
 
-        {step === 'question' ? (
-          <div className="ax-guidance-question-layout">
+        <div className="ax-guidance-question-layout">
           <div className="ax-guidance-question-main">
             <div className="ax-question-suggestions-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -409,9 +408,20 @@ export default function ProjectGuidanceSetup({
                       key={intent}
                       type="button"
                       onClick={() => {
-                        setSelected({ question: question.trim(), intent, source: 'user' })
+                        const next = { question: question.trim(), intent, source: 'user' }
+                        setSelected(next)
                         setIntentChoiceOpen(false)
-                        setStep('guidance')
+                        save({
+                          goal: next.intent,
+                          intent: next.intent,
+                          question_text: next.question,
+                          question_source: next.source,
+                          setup_status: 'completed',
+                          guided_mode: false,
+                          walkthrough_step: null,
+                          dismissed_tips: [],
+                          completed_tips: [],
+                        })
                       }}
                     >
                       {goalLabel(intent)}
@@ -432,58 +442,14 @@ export default function ProjectGuidanceSetup({
               feedRef={feedRef}
             />
           )}
-          </div>
-        ) : (
-          <>
-            {selectedIntent && <QuestionPathPreview question={picked.question} intent={selectedIntent} />}
-            <div className="ax-guidance-choice-grid">
-              {GUIDANCE_CHOICES.map((item) => (
-                <button
-                  key={String(item.id)}
-                  type="button"
-                  className={`ax-guidance-choice ${guidedMode === item.id ? 'selected' : ''}`}
-                  onClick={() => setGuidedMode(item.id)}
-                >
-                  <strong>{item.title}</strong>
-                  <span>{item.description}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+        </div>
 
         {error && <p className="ax-guidance-error">{error}</p>}
 
         <footer className="ax-guidance-actions">
-          {step === 'guidance' && (
-            <button className="ax-btn" type="button" onClick={() => setStep('question')} disabled={busy}>
-              Back
-            </button>
-          )}
-          {step === 'question' ? (
-            <button className="ax-btn prim" type="button" onClick={continueWithQuestion} disabled={!question.trim() || busy || mappingLoading}>
-              {mappingLoading ? 'Checking path...' : 'Continue'}
-            </button>
-          ) : (
-            <button
-              className="ax-btn prim"
-              type="button"
-              disabled={busy || !picked?.intent}
-              onClick={() => save({
-                goal: picked.intent,
-                intent: picked.intent,
-                question_text: picked.question,
-                question_source: picked.source,
-                setup_status: 'completed',
-                guided_mode: guidedMode,
-                walkthrough_step: guidedMode ? firstCoachStep(picked.intent, dataset)?.id : null,
-                dismissed_tips: [],
-                completed_tips: [],
-              }, firstCoachStep(picked.intent, dataset))}
-            >
-              {busy ? 'Starting...' : 'Start'}
-            </button>
-          )}
+          <button className="ax-btn prim" type="button" onClick={continueWithQuestion} disabled={!question.trim() || busy || mappingLoading}>
+            {busy ? 'Starting...' : mappingLoading ? 'Checking path...' : 'Continue'}
+          </button>
         </footer>
       </section>
     </div>

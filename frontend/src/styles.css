@@ -2995,6 +2995,73 @@ a.ax-btn {
 .ax-guided-focus-target:not(button) {
   background: var(--color-background-primary);
 }
+.ax-simple-guide-spotlight {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+.ax-simple-guide-shade {
+  position: fixed;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.ax-simple-guide-shade.top {
+  top: 0;
+  left: 0;
+  right: 0;
+}
+.ax-simple-guide-shade.left {
+  left: 0;
+}
+.ax-simple-guide-shade.right {
+  right: 0;
+}
+.ax-simple-guide-shade.bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.ax-simple-guide-ring {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px #f59e0b, 0 0 28px rgba(249, 115, 22, 0.55);
+  pointer-events: none;
+}
+.ax-simple-guide-target {
+  z-index: 10002 !important;
+  isolation: isolate;
+}
+
+.ax-simple-guide-target:not(.ax-data-toolbar-popover) {
+  position: relative !important;
+}
+
+.ax-data-toolbar-popover.ax-simple-guide-target {
+  z-index: 10003 !important;
+}
+.ax-simple-guide-dismiss {
+  position: fixed;
+  z-index: 10004;
+  pointer-events: auto;
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  background: #fff;
+  color: #c2410c;
+  border-radius: 999px;
+  padding: 8px 13px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  box-shadow: 0 12px 34px rgba(124, 45, 18, 0.22);
+  cursor: pointer;
+}
+.ax-simple-guide-dismiss:hover {
+  background: #fff7ed;
+}
 .ax-guided-lock-toast {
   width: fit-content;
   padding: 6px 9px;
@@ -4534,6 +4601,7 @@ button.ax-module-head:focus-visible {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .ax-plan-header-fixed {
@@ -8751,6 +8819,29 @@ button.ax-module-head:focus-visible {
   border-color: #ffffff;
 }
 
+/* ── Set / Change goal button ── */
+.ax-plan-set-goal-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.ax-plan-set-goal-btn:hover { background: rgba(255, 255, 255, 0.3); }
+.ax-plan-set-goal-btn--change {
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 10px;
+  opacity: 0.8;
+}
+
 .ax-plan-goal-header-collapse-trigger {
   position: absolute;
   top: 12px;
@@ -8780,10 +8871,11 @@ button.ax-module-head:focus-visible {
 .ax-plan-progress-container {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 12px 14px 14px;
-  padding-bottom: 12px;
-  border-bottom: 0.5px solid var(--color-border-tertiary);
+  justify-content: flex-end;
+  gap: 0;
+  margin: 8px 14px 10px;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .ax-plan-progress-bar-track {
@@ -9143,6 +9235,418 @@ button.ax-module-head:focus-visible {
   border-top: 0.5px solid var(--color-border-tertiary);
   background: var(--color-background-primary);
 }
+
+/* ── Redesigned Plan Task Cards ──────────────────────────────── */
+.ax-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Base card */
+.ax-pcard {
+  border-radius: var(--border-radius-lg, 10px);
+  border: 0.5px solid var(--color-border-tertiary, #e5e7eb);
+  box-shadow: none;
+  overflow: hidden;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+
+/* Active card */
+.ax-pcard--active {
+  border: 0.5px solid #f59e0b;
+  border-left: 3px solid #f59e0b;
+}
+
+/* Pending card */
+.ax-pcard--pending {
+  border: 0.5px solid var(--color-border-tertiary, #e5e7eb);
+}
+
+/* Completed card */
+.ax-pcard--completed {
+  opacity: 0.6;
+  border: 0.5px solid var(--color-border-tertiary, #e5e7eb);
+}
+
+/* ── Card Header ── */
+.ax-pcard-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  user-select: none;
+}
+
+/* Step circle */
+.ax-pcard-circle {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 1px;
+}
+.ax-pcard-circle--active {
+  background: #f97316;
+  color: #fff;
+}
+.ax-pcard-circle--pending {
+  background: transparent;
+  border: 1.5px solid #d1d5db;
+  color: #9ca3af;
+}
+.ax-pcard-circle--completed {
+  background: #16a34a;
+  color: #fff;
+}
+
+/* Title column */
+.ax-pcard-title-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ax-pcard-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary, #111827);
+  line-height: 1.35;
+  display: block;
+}
+.ax-pcard-title--done {
+  text-decoration: line-through;
+  color: var(--color-text-tertiary, #9ca3af);
+}
+
+/* Badges */
+.ax-pcard-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ax-pcard-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.ax-pcard-badge--current {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+.ax-pcard-badge--optional {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+.ax-pcard-badge--done {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.ax-pcard-badge--stale {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+/* Chevron */
+.ax-pcard-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary, #9ca3af);
+  margin-top: 5px;
+  transition: transform 0.15s;
+  display: flex;
+}
+.ax-pcard-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ── Card Body ── */
+.ax-pcard-body {
+  border-top: 0.5px solid var(--color-border-tertiary, #e5e7eb);
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Affects row */
+.ax-pcard-affects {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ax-pcard-affects-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary, #9ca3af);
+  flex-shrink: 0;
+}
+.ax-pcard-col-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ax-pcard-col-chip {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-tertiary, #e5e7eb);
+  background: var(--color-background-secondary, #f9fafb);
+  color: var(--color-text-secondary, #64748b);
+  white-space: nowrap;
+}
+
+/* Tool row */
+.ax-pcard-tool-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.ax-pcard-tool-icon-sq {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #fff7ed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f97316;
+}
+.ax-pcard-tool-info {
+  flex: 1;
+  min-width: 0;
+}
+.ax-pcard-tool-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-primary, #111827);
+  line-height: 1.3;
+}
+.ax-pcard-tool-desc {
+  font-size: 10px;
+  color: var(--color-text-tertiary, #9ca3af);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+.ax-pcard-open-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 999px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ax-pcard-open-btn:hover {
+  background: #ffedd5;
+  border-color: #f97316;
+}
+
+/* Why this matters box */
+.ax-pcard-why-box {
+  border-left: 2px solid var(--color-border-tertiary, #e5e7eb);
+  background: var(--color-background-secondary, #f9fafb);
+  padding: 7px 10px;
+  border-radius: 0 4px 4px 0;
+  font-size: 11px;
+  color: var(--color-text-secondary, #64748b);
+  line-height: 1.6;
+}
+
+/* Action buttons */
+.ax-pcard-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.ax-pcard-guide-btn,
+.ax-pcard-done-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border-radius: var(--border-radius-md, 7px);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid;
+  transition: background 0.12s;
+}
+.ax-pcard-guide-btn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+.ax-pcard-guide-btn:hover {
+  background: #ffedd5;
+}
+.ax-pcard-done-btn {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+.ax-pcard-done-btn:hover {
+  background: #dcfce7;
+}
+
+/* ── Guide Onboarding Card ────────────────────────────────────── */
+/* Floats outside the guide panel, pointing right at it */
+.ax-gob-backdrop {
+  position: fixed;
+  /* sits just to the left of the 420px guide panel */
+  right: 432px;
+  top: 80px;
+  z-index: 5200;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Right-pointing arrow */
+.ax-gob-backdrop::after {
+  content: '';
+  position: absolute;
+  right: -10px;
+  top: 28px;
+  border: 10px solid transparent;
+  border-left-color: #e5e7eb;
+  border-right: 0;
+  filter: drop-shadow(2px 0 0 #fff);
+}
+
+/* Card itself — matches AI Explain popup aesthetic */
+.ax-gob-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  width: 300px;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+/* Card header */
+.ax-gob-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.ax-gob-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  color: #f97316;
+  line-height: 1.3;
+  flex: 1;
+  padding-right: 8px;
+}
+.ax-gob-close {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.ax-gob-close:hover { background: #e5e7eb; color: #111827; }
+
+/* Sections */
+.ax-gob-section {
+  padding: 10px 14px 2px;
+}
+.ax-gob-section-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  color: #f97316;
+  text-transform: uppercase;
+  margin: 0 0 5px;
+}
+.ax-gob-section-body {
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Verdict / highlight block */
+.ax-gob-verdict {
+  margin: 10px 14px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #15803d;
+  line-height: 1.4;
+}
+
+/* Action buttons */
+.ax-gob-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px 14px;
+}
+.ax-gob-btn-secondary,
+.ax-gob-btn-primary {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ax-gob-btn-secondary {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+.ax-gob-btn-secondary:hover { background: #f9fafb; }
+.ax-gob-btn-primary {
+  background: #f97316;
+  border: 1px solid #f97316;
+  color: #fff;
+  font-weight: 600;
+}
+.ax-gob-btn-primary:hover { background: #ea6c0a; border-color: #ea6c0a; }
 
 .ax-plan-footer-expand-btn {
   width: 100%;
@@ -10734,7 +11238,7 @@ button.ax-module-head:focus-visible {
 }
 
 .ax-guide-continue-btn {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   gap: 6px;
