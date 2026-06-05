@@ -481,12 +481,13 @@ export default function DataDetailView({
   useEffect(() => {
     if (!hasMore || loading) return
     if (affectedRowsFilterActive) return
+    if (rows.length === 0) return  // don't observe until first page has loaded
     const sentinel = sentinelRef.current
     const root = scrollRef.current
     if (!sentinel || !root) return
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
+        if (entries[0].isIntersecting && hasMore && !loading && rows.length > 0) {
           setPage((p) => p + 1)
         }
       },
