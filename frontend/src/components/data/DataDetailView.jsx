@@ -299,7 +299,7 @@ export default function DataDetailView({
       const saved = window.localStorage.getItem(`simucast.dataTable.${datasetId}`)
       if (saved) {
         const s = JSON.parse(saved)
-        if (s.page > 0) setPage(s.page)
+        // Don't restore page — always start from row 1 when opening a dataset
         if (s.visibleColumns?.length) setVisibleColumns(s.visibleColumns)
         if (s.viewSort) setViewSort(s.viewSort)
         if (s.viewFilter) setViewFilter(s.viewFilter)
@@ -311,7 +311,7 @@ export default function DataDetailView({
   useEffect(() => {
     if (!datasetId) return
     window.localStorage.setItem(`simucast.dataTable.${datasetId}`, JSON.stringify({
-      page, visibleColumns, viewSort, viewFilter
+      visibleColumns, viewSort, viewFilter
     }))
   }, [datasetId, page, visibleColumns, viewSort, viewFilter])
 
