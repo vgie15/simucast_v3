@@ -8055,6 +8055,38 @@ button.ax-module-head:focus-visible {
   flex-wrap: wrap;
 }
 
+.ax-guidance-own-question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.ax-guidance-own-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--color-text-secondary);
+}
+.ax-guidance-own-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--color-border-secondary, #e2e8f0);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  background: var(--color-background-primary);
+  resize: none;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.ax-guidance-own-textarea:focus {
+  outline: none;
+  border-color: var(--color-accent, #f97316);
+  box-shadow: 0 0 0 3px var(--color-accent-light, #fef3e2);
+}
+.ax-guidance-own-textarea::placeholder { color: var(--color-text-tertiary); }
+
 .ax-guidance-actions {
   position: sticky;
   bottom: -24px;

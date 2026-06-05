@@ -430,6 +430,26 @@ export default function ProjectGuidanceSetup({
                 </div>
               </div>
             )}
+
+            {/* Write your own question */}
+            <div className="ax-guidance-own-question">
+              <label className="ax-guidance-own-label" htmlFor="ax-guidance-own-input">
+                Or write your own question
+              </label>
+              <textarea
+                id="ax-guidance-own-input"
+                className="ax-guidance-own-textarea"
+                placeholder="e.g. What factors most influence student performance?"
+                value={selected?.source === 'user' ? question : (suggestions.some(s => s.question === question) || question === CLEAN_QUESTION.question) ? '' : question}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setQuestion(val)
+                  setSelected(val.trim() ? { question: val.trim(), intent: null, source: 'user' } : null)
+                  setIntentChoiceOpen(false)
+                }}
+                rows={2}
+              />
+            </div>
           </div>
           {assistantOpen && (
             <GoalAssistantPanel
