@@ -150,7 +150,8 @@ export default function ProjectsPage() {
         onClose={() => setModalOpen(false)}
         onCreated={(result) => {
           setModalOpen(false)
-          navigate(`/projects/${result.id}`, { state: { newProject: true } })
+          try { window.sessionStorage.setItem('simucast.newProject', result.id) } catch {}
+          navigate(`/projects/${result.id}`)
         }}
       />
     </>

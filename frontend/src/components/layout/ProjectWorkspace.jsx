@@ -3,7 +3,7 @@
  * Keywords: workspace, tabs, data, describe, tests, models, whatif, report, expand
  * ============================================================ */
 import React, { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import DataPage from '../data/DataPage'
 import ExpandPage from '../expand/ExpandPage'
@@ -246,7 +246,6 @@ function loadEdgeTabPositions() {
 export default function ProjectWorkspace() {
   const { id, tab = 'data' } = useParams()
   const navigate = useNavigate()
-  const location = useLocation()
   const auth = useAuth()
   const [dataset, setDataset] = useState(null)
   const [activeModel, setActiveModel] = useState(null)
@@ -400,14 +399,16 @@ export default function ProjectWorkspace() {
   }, [auth.isGuest, error, navigate])
 
   // Auto-open the goal setup modal when navigating here right after project creation
-  const autoOpenedGoalRef = useRef(false)
   useEffect(() => {
-    if (autoOpenedGoalRef.current) return
-    if (!location.state?.newProject) return
-    autoOpenedGoalRef.current = true
+    if (!id) return
+    try {
+      const newProjectId = window.sessionStorage.getItem('simucast.newProject')
+      if (newProjectId !== id) return
+      window.sessionStorage.removeItem('simucast.newProject')
+    } catch { return }
     const t = setTimeout(() => setGuidanceSetupOpen(true), 800)
     return () => clearTimeout(t)
-  }, [location.state?.newProject]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const go = (next) => navigate(`/projects/${id}/${next}`)
   const refreshDataset = async () => {
