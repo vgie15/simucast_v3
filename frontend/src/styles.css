@@ -1024,6 +1024,12 @@ input[type="range"]::-moz-range-thumb {
   100% { background-position: -100% 0; }
 }
 
+.ax-skeleton {
+  background: linear-gradient(90deg, #eef0f4 0%, #f8fafc 42%, #eef0f4 78%);
+  background-size: 220% 100%;
+  animation: ax-shimmer 1.15s ease-in-out infinite;
+}
+
 /* --- landing page --- */
 .ax-landing {
   min-height: 100vh;
@@ -3243,9 +3249,6 @@ a.ax-btn {
   border-bottom: 0.5px solid var(--color-border-secondary);
   background: var(--color-background-primary);
 }
-.ax-data-toolbar-shell.is-collapsed {
-  border-bottom-color: var(--color-border-tertiary);
-}
 .ax-data-toolbar {
   min-height: 40px;
   display: flex;
@@ -3255,62 +3258,9 @@ a.ax-btn {
   overflow: visible;
   flex-wrap: wrap;
 }
-.ax-data-toolbar-shell.is-collapsed .ax-data-toolbar {
-  min-height: 30px;
-  padding: 0 8px;
+.ax-data-toolbar--hidden {
+  min-height: 32px;
   flex-wrap: nowrap;
-}
-.ax-data-toolbar-collapse {
-  appearance: none;
-  min-height: 30px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 8px 0 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-primary);
-  font: inherit;
-  cursor: pointer;
-}
-.ax-data-toolbar-collapse:hover .ax-data-toolbar-title,
-.ax-data-toolbar-collapse:hover .ax-data-toolbar-collapse-icon {
-  color: var(--color-accent);
-}
-.ax-data-toolbar-collapse-icon {
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--color-border-secondary, #d6d3d1);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--color-text-secondary, #64748b);
-  font-size: 12px;
-  font-weight: 900;
-  line-height: 1;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
-}
-.ax-data-toolbar-collapse:hover .ax-data-toolbar-collapse-icon {
-  border-color: var(--color-accent, #f97316);
-  background: #fff7ed;
-  transform: translateY(-1px);
-}
-.ax-data-toolbar-collapsed-summary {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--color-text-tertiary);
-  font-size: 10.5px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-.ax-data-toolbar-collapsed-summary span + span {
-  padding-left: 10px;
-  border-left: 0.5px solid var(--color-border-tertiary);
 }
 .ax-data-toolbar-title {
   margin-right: 8px;
@@ -3420,6 +3370,253 @@ a.ax-btn {
   border-radius: 999px;
   background: var(--color-accent);
 }
+/* ── Icons-only mode: hide group label text, slim dividers ── */
+.ax-data-toolbar--icons .ax-data-toolbar-group-label { display: none; }
+.ax-data-toolbar--icons .ax-data-toolbar-group { gap: 1px; padding: 0 5px; }
+.ax-data-tool-btn.icons-only { min-width: 28px; padding: 4px; gap: 0; }
+
+/* ── Hidden mode shell ── */
+.ax-data-toolbar-shell.is-hidden { min-height: unset; }
+.ax-data-toolbar--hidden { gap: 6px; }
+
+/* ── Title button (replaces old collapse button) ── */
+.ax-data-toolbar-title-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  flex-shrink: 0;
+}
+.ax-data-toolbar-title-btn.is-hidden-mode {
+  cursor: pointer;
+}
+.ax-data-toolbar-title-btn.is-hidden-mode:hover .ax-data-toolbar-title {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* ── Compact inline separator between groups ── */
+.ax-toolbar-compact-sep {
+  display: inline-block;
+  width: 0.5px;
+  height: 20px;
+  background: var(--color-border-tertiary);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+/* ── Compact inline tool items (appear to right of group label) ── */
+.ax-toolbar-compact-inline-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  animation: ax-fade-in 0.1s ease;
+}
+.ax-toolbar-compact-inline-item:hover { background: #fff7ed; color: var(--color-accent); }
+.ax-toolbar-compact-inline-item.active { background: #fff7ed; color: var(--color-accent); }
+@keyframes ax-fade-in { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: none; } }
+
+/* ── ⋯ mode toggle button ── */
+.ax-toolbar-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.ax-toolbar-mode-btn:hover { background: var(--color-background-secondary); color: var(--color-text-secondary); }
+
+/* ── Pin icon button ── */
+.ax-toolbar-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border-secondary, #e2e8f0);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.ax-toolbar-pin-btn:hover {
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-primary, #d1d5db);
+}
+.ax-toolbar-pin-btn.is-pinned {
+  color: #f59e0b;
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+.ax-toolbar-pin-btn.is-pinned:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+/* ── Mode selector dropdown ── */
+.ax-toolbar-mode-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 7500;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-secondary, #e5e7eb);
+  border-radius: 9px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.10);
+  padding: 5px;
+  min-width: 176px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ax-toolbar-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.ax-toolbar-mode-option:hover { background: var(--color-background-secondary); }
+.ax-toolbar-mode-option.active { color: var(--color-accent); font-weight: 650; }
+.ax-toolbar-mode-check { width: 12px; font-size: 8px; color: var(--color-accent); flex-shrink: 0; }
+
+/* ── Dropdown divider ── */
+.ax-toolbar-mode-divider {
+  height: 1px;
+  background: var(--color-border-tertiary, #e5e7eb);
+  margin: 4px 2px;
+}
+
+/* ── Pin option row ── */
+
+/* ── Pinned notice (session differs from pin) ── */
+.ax-toolbar-pin-notice {
+  padding: 5px 10px 4px;
+  font-size: 10.5px;
+  color: var(--color-text-tertiary);
+  line-height: 1.4;
+  border-top: 1px solid var(--color-border-tertiary);
+  margin-top: 2px;
+}
+
+/* ── Pin toast — fixed bottom center of screen ── */
+.ax-toolbar-pin-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f1a17;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 10px;
+  white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.22);
+  z-index: 9999;
+  pointer-events: none;
+  animation: ax-toast-in 0.18s ease;
+}
+@keyframes ax-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Compact group mode buttons ── */
+.ax-toolbar-compact-group-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1.5px solid var(--color-border-tertiary);
+  border-radius: 20px;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ax-toolbar-compact-group-btn:hover,
+.ax-toolbar-compact-group-btn.active {
+  background: #fff7ed;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── Compact group dropdown ── */
+.ax-toolbar-compact-dropdown {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 7500;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-secondary, #e5e7eb);
+  border-radius: 9px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.10);
+  padding: 5px;
+  min-width: 148px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ax-toolbar-compact-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.ax-toolbar-compact-item:hover { background: var(--color-background-secondary); }
+.ax-toolbar-compact-item.active { background: #fff7ed; color: var(--color-accent); }
+
 .ax-data-toolbar-overlay {
   position: fixed;
   inset: 0;

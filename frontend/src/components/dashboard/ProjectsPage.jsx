@@ -13,6 +13,7 @@ import PageGuide from '../common/PageGuide'
 // Page that lists the user's projects with create and delete actions plus guest signup prompts.
 export default function ProjectsPage() {
   const [datasets, setDatasets] = useState([])
+  const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const navigate = useNavigate()
   const dialog = useDialog()
@@ -22,10 +23,11 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     let cancelled = false
+    setLoading(true)
     setDatasets([])
     api.listDatasets()
-      .then((rows) => { if (!cancelled) setDatasets(rows) })
-      .catch((err) => { if (!cancelled) console.error(err) })
+      .then((rows) => { if (!cancelled) { setDatasets(rows); setLoading(false) } })
+      .catch((err) => { if (!cancelled) { console.error(err); setLoading(false) } })
     return () => { cancelled = true }
   }, [auth.session?.token])
 
@@ -84,7 +86,18 @@ export default function ProjectsPage() {
       <p className="ax-lbl" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
         All projects
       </p>
-      {datasets.length === 0 ? (
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="ax-card" style={{ padding: '10px 12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="ax-skeleton" style={{ width: `${140 + i * 40}px`, height: 14, borderRadius: 6 }} />
+                <div className="ax-skeleton" style={{ width: '60%', height: 11, borderRadius: 5 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : datasets.length === 0 ? (
         <div className="ax-card">
           <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
             No projects yet. Click <strong>+ New project</strong> to upload a dataset and get started.

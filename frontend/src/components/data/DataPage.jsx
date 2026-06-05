@@ -672,8 +672,65 @@ function DataToolsToolbar({
   const [popoverX, setPopoverX] = useState(18)
   const [showRecommendations, setShowRecommendations] = useState(false)
   const [labelIssueCount, setLabelIssueCount] = useState(0)
-  const [collapsed, setCollapsed] = useState(() => window.localStorage.getItem('simucast.dataToolsCollapsed') === '1')
+  const [pinnedMode, setPinnedMode] = useState(() => window.localStorage.getItem('simucast_toolbar_mode_pinned') || null)
+  const [toolbarMode, setToolbarMode] = useState(() => {
+    const pinned = window.localStorage.getItem('simucast_toolbar_mode_pinned')
+    if (pinned) return pinned
+    return window.localStorage.getItem('simucast_toolbar_mode') || 'labels'
+  })
+  const [lastVisibleMode, setLastVisibleMode] = useState(() => {
+    const pinned = window.localStorage.getItem('simucast_toolbar_mode_pinned')
+    const saved = pinned || window.localStorage.getItem('simucast_toolbar_mode') || 'labels'
+    return saved !== 'hidden' ? saved : 'labels'
+  })
+  const [modeMenuOpen, setModeMenuOpen] = useState(false)
+  const [compactOpenGroup, setCompactOpenGroup] = useState(null)
+  const [pinToast, setPinToast] = useState(null) // { msg, timeout }
+  const modeMenuRef = useRef(null)
   const close = () => setOpenTool(null)
+
+  const showPinToast = (msg) => {
+    setPinToast(msg)
+    const t = setTimeout(() => setPinToast(null), 2800)
+    return t
+  }
+
+  const setToolbarModeAndSave = (mode) => {
+    if (mode !== 'hidden') setLastVisibleMode(mode)
+    setToolbarMode(mode)
+    window.localStorage.setItem('simucast_toolbar_mode', mode)
+    setModeMenuOpen(false)
+    if (mode === 'hidden') close()
+  }
+
+  const TOOLBAR_MODE_LABELS = { labels: 'Always show labels', icons: 'Icons only', compact: 'Compact groups', hidden: 'Hidden' }
+
+  const pinCurrentMode = () => {
+    const label = TOOLBAR_MODE_LABELS[toolbarMode] || toolbarMode
+    window.localStorage.setItem('simucast_toolbar_mode_pinned', toolbarMode)
+    setPinnedMode(toolbarMode)
+    setModeMenuOpen(false)
+    showPinToast(`Toolbar mode pinned — ${label} will apply to all projects`)
+  }
+
+  const unpinMode = () => {
+    window.localStorage.removeItem('simucast_toolbar_mode_pinned')
+    window.localStorage.setItem('simucast_toolbar_mode', 'labels')
+    setPinnedMode(null)
+    setToolbarMode('labels')
+    setLastVisibleMode('labels')
+    setModeMenuOpen(false)
+    showPinToast('Toolbar mode unpinned — reverting to default')
+  }
+
+  useEffect(() => {
+    if (!modeMenuOpen) return
+    const handler = (e) => { if (modeMenuRef.current && !modeMenuRef.current.contains(e.target)) setModeMenuOpen(false) }
+    const keyHandler = (e) => { if (e.key === 'Escape') setModeMenuOpen(false) }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('keydown', keyHandler)
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', keyHandler) }
+  }, [modeMenuOpen])
 
   const [renderedTool, setRenderedTool] = useState(null)
   const [popoverState, setPopoverState] = useState('')
@@ -801,14 +858,6 @@ function DataToolsToolbar({
   const effectiveShowRecommendations = renderedTool === 'labels'
     ? showRecommendations && labelIssueCount > 0
     : showRecommendations
-  const toggleCollapsed = () => {
-    setCollapsed((current) => {
-      const next = !current
-      window.localStorage.setItem('simucast.dataToolsCollapsed', next ? '1' : '0')
-      if (next) close()
-      return next
-    })
-  }
   const openFromButton = (toolKey, event) => {
     const shell = event.currentTarget.closest('.ax-data-toolbar-shell')
     const shellLeft = shell?.getBoundingClientRect().left || 0
@@ -823,7 +872,8 @@ function DataToolsToolbar({
     const onOpenTool = (event) => {
       const toolKey = event.detail?.tool
       if (!toolKey || !toolMap[toolKey]) return
-      setCollapsed(false)
+      // Exit hidden mode when a tool is requested programmatically
+      setToolbarMode(prev => prev === 'hidden' ? lastVisibleMode : prev)
       setShowRecommendations(false)
       requestAnimationFrame(() => {
         const shell = document.querySelector('.ax-data-toolbar-shell')
@@ -839,55 +889,170 @@ function DataToolsToolbar({
     return () => window.removeEventListener('simucast:data-tool-open', onOpenTool)
   }, [toolMap])
 
+  const TOOLBAR_MODES = [
+    { key: 'labels', label: 'Always show labels' },
+    { key: 'icons', label: 'Icons only' },
+    { key: 'compact', label: 'Compact groups' },
+    { key: 'hidden', label: 'Hidden' },
+  ]
+
+  const isHidden = toolbarMode === 'hidden'
+
   return (
-    <div className={`ax-data-toolbar-shell ${collapsed ? 'is-collapsed' : ''}`}>
-      <div className="ax-data-toolbar" role="toolbar" aria-label="Dataset tools">
+    <div className={`ax-data-toolbar-shell${isHidden ? ' is-hidden' : ''}`}>
+      <div className={`ax-data-toolbar ax-data-toolbar--${toolbarMode}`} role="toolbar" aria-label="Dataset tools">
+
+        {/* ── Title — clickable in hidden mode to restore last visible mode ── */}
         <button
-          className="ax-data-toolbar-collapse"
           type="button"
-          onClick={toggleCollapsed}
-          aria-expanded={!collapsed}
-          title={collapsed ? 'Show dataset tools' : 'Hide dataset tools'}
+          className={`ax-data-toolbar-title-btn${isHidden ? ' is-hidden-mode' : ''}`}
+          onClick={() => isHidden && setToolbarModeAndSave(lastVisibleMode)}
+          title={isHidden ? `Show toolbar (${TOOLBAR_MODES.find(m => m.key === lastVisibleMode)?.label})` : undefined}
+          style={{ cursor: isHidden ? 'pointer' : 'default' }}
         >
           <span className="ax-data-toolbar-title">Dataset tools</span>
-          <span className="ax-data-toolbar-collapse-icon" aria-hidden="true">{collapsed ? '▾' : '▴'}</span>
         </button>
-        {collapsed ? (
-          <div className="ax-data-toolbar-collapsed-summary">
-            <span>{issueCount ? `${issueCount} issue group${issueCount === 1 ? '' : 's'} flagged` : 'No active issue flags'}</span>
-            <span>{visibilityProps.visibleColumns.length}/{visibilityProps.allColumns.length} columns visible</span>
-          </div>
-        ) : (
-          <>
-            {groups.map((group) => (
-              <div className="ax-data-toolbar-group" key={group.label}>
-                <span className="ax-data-toolbar-group-label">{group.label}</span>
-                {group.tools.map((tool) => (
-                  <ToolbarButton
-                    key={tool.key}
-                    tool={tool}
-                    active={openTool === tool.key}
-                    onClick={(event) => openFromButton(tool.key, event)}
-                  />
-                ))}
+
+        {/* ── Tool content — flex:1 so pin+⋯ always reaches far right ── */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'visible' }}>
+          {!isHidden && toolbarMode === 'compact' ? (
+            /* ── Mode 3: Compact groups — inline expand ── */
+            <>
+              {groups.map((group, gi) => {
+                const groupHasIssue = group.tools.some(t => t.issue)
+                const isOpen = compactOpenGroup === group.label
+                return (
+                  <React.Fragment key={group.label}>
+                    {gi > 0 && <span className="ax-toolbar-compact-sep" />}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                      <button
+                        type="button"
+                        className={`ax-toolbar-compact-group-btn ${isOpen ? 'active' : ''}`}
+                        onClick={() => setCompactOpenGroup(isOpen ? null : group.label)}
+                      >
+                        {group.label.toUpperCase()}
+                        {groupHasIssue && <span className="ax-data-tool-dot" style={{ position: 'relative', top: 'unset', right: 'unset', marginLeft: 4, display: 'inline-block' }} />}
+                      </button>
+                      {isOpen && group.tools.map((tool) => (
+                        <button
+                          key={tool.key}
+                          type="button"
+                          className={`ax-toolbar-compact-inline-item ${openTool === tool.key ? 'active' : ''}`}
+                          onClick={(event) => { openFromButton(tool.key, event); setCompactOpenGroup(null) }}
+                          title={tool.tip || tool.label}
+                        >
+                          <span className="ax-data-tool-icon-wrap">
+                            <TablerIcon name={tool.icon} />
+                            {tool.issue && <span className="ax-data-tool-dot" />}
+                          </span>
+                          <span>{tool.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </React.Fragment>
+                )
+              })}
+              <div style={{ marginLeft: 8, borderLeft: '0.5px solid var(--color-border-tertiary)', paddingLeft: 6 }}>
+                <button
+                  type="button"
+                  className={`ax-data-tool-btn icons-only ${openTool === 'columns' ? 'active' : ''}`}
+                  title={`Show or hide columns (${visibilityProps.visibleColumns.length}/${visibilityProps.allColumns.length})`}
+                  onClick={(event) => openFromButton('columns', event)}
+                >
+                  <span className="ax-data-tool-icon-wrap"><TablerIcon name="eye" /></span>
+                </button>
               </div>
-            ))}
-            <div className="ax-data-toolbar-group ax-data-toolbar-group-last">
-              <ToolbarButton
-                tool={{
-                  key: 'columns',
-                  label: `${visibilityProps.visibleColumns.length}/${visibilityProps.allColumns.length}`,
-                  icon: 'eye',
-                  tip: 'Show or hide columns',
-                }}
-                active={openTool === 'columns'}
-                onClick={(event) => openFromButton('columns', event)}
-              />
+            </>
+          ) : !isHidden ? (
+            /* ── Mode 1 (labels) and Mode 2 (icons) ── */
+            <>
+              {groups.map((group) => (
+                <div className="ax-data-toolbar-group" key={group.label}>
+                  {toolbarMode === 'labels' && <span className="ax-data-toolbar-group-label">{group.label}</span>}
+                  {group.tools.map((tool) => (
+                    <ToolbarButton
+                      key={tool.key}
+                      tool={tool}
+                      active={openTool === tool.key}
+                      onClick={(event) => openFromButton(tool.key, event)}
+                      iconsOnly={toolbarMode === 'icons'}
+                    />
+                  ))}
+                </div>
+              ))}
+              <div className="ax-data-toolbar-group ax-data-toolbar-group-last">
+                <ToolbarButton
+                  tool={{
+                    key: 'columns',
+                    label: `${visibilityProps.visibleColumns.length}/${visibilityProps.allColumns.length}`,
+                    icon: 'eye',
+                    tip: 'Show or hide columns',
+                  }}
+                  active={openTool === 'columns'}
+                  onClick={(event) => openFromButton('columns', event)}
+                  iconsOnly={toolbarMode === 'icons'}
+                />
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        {/* ── Pin + ⋯ — always at far right, never pushed by content ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, paddingLeft: 4 }}>
+          <button
+            type="button"
+            className={`ax-toolbar-pin-btn ${pinnedMode ? 'is-pinned' : ''}`}
+            onClick={pinnedMode ? unpinMode : pinCurrentMode}
+            title={pinnedMode
+              ? `Unpin toolbar mode (currently: ${TOOLBAR_MODES.find(m => m.key === pinnedMode)?.label})`
+              : 'Pin current toolbar mode'}
+            aria-label={pinnedMode ? 'Unpin toolbar mode' : 'Pin toolbar mode'}
+          >
+            <TablerIcon name={pinnedMode ? 'pin-filled' : 'pin'} />
+          </button>
+
+          {/* ── ⋯ mode selector ── */}
+          <div ref={modeMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            type="button"
+            className="ax-toolbar-mode-btn"
+            onClick={() => setModeMenuOpen(v => !v)}
+            title="Toolbar display mode"
+            aria-label="Toolbar display mode"
+          >
+            ···
+          </button>
+          {modeMenuOpen && (
+            <div className="ax-toolbar-mode-menu">
+              {TOOLBAR_MODES.map(m => (
+                <button
+                  key={m.key}
+                  type="button"
+                  className={`ax-toolbar-mode-option ${toolbarMode === m.key ? 'active' : ''}`}
+                  onClick={() => setToolbarModeAndSave(m.key)}
+                >
+                  <span className="ax-toolbar-mode-check">{toolbarMode === m.key ? '●' : ''}</span>
+                  {m.label}
+                </button>
+              ))}
+              {pinnedMode && pinnedMode !== toolbarMode && (
+                <div className="ax-toolbar-pin-notice">
+                  Pinned: {TOOLBAR_MODES.find(m => m.key === pinnedMode)?.label} · Switch resets on next project open
+                </div>
+              )}
             </div>
-          </>
+          )}
+          </div>{/* end ⋯ div */}
+        </div>{/* end pin+⋯ wrapper */}
+
+        {/* ── Pin toast — fixed bottom of screen ── */}
+        {pinToast && (
+          <div className="ax-toolbar-pin-toast">
+            {pinToast}
+          </div>
         )}
       </div>
-      {!collapsed && renderedTool && (
+      {!isHidden && renderedTool && (
         <>
           <button className={`ax-data-toolbar-overlay dim-overlay ${popoverState === 'closing' ? 'hiding' : 'show'}`} type="button" aria-label="Close data tool" onClick={close} />
           <div id={`data-tool-popover-${renderedTool}`} className={`ax-data-toolbar-popover popover ${renderedTool === 'columns' ? 'columns-popover' : ''} ${popoverState}`} style={{ left: popoverX }}>
@@ -938,20 +1103,21 @@ function DataToolsToolbar({
   )
 }
 
-function ToolbarButton({ tool, active, onClick }) {
+function ToolbarButton({ tool, active, onClick, iconsOnly }) {
   return (
     <button
       id={`tb-${tool.key}`}
       type="button"
-      className={`ax-data-tool-btn ${active ? 'active' : ''}`}
-      data-tip={tool.tip}
+      className={`ax-data-tool-btn ${active ? 'active' : ''} ${iconsOnly ? 'icons-only' : ''}`}
+      data-tip={tool.tip || tool.label}
       onClick={onClick}
+      title={iconsOnly ? (tool.tip || tool.label) : undefined}
     >
       <span className="ax-data-tool-icon-wrap">
         <TablerIcon name={tool.icon} />
         {tool.issue && <span className="ax-data-tool-dot" />}
       </span>
-      <span>{tool.label}</span>
+      {!iconsOnly && <span>{tool.label}</span>}
     </button>
   )
 }
@@ -1346,6 +1512,8 @@ function TablerIcon({ name }) {
     'arrows-sort': <><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3" /></>,
     filter: <><path d="M4 5h16l-6 7v5l-4 2v-7L4 5z" /></>,
     eye: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
+    pin: <><path d="M15 4.5l-4 4L7 10l-1.5 1.5 5 5L12 15l1.5-4 4-4" /><path d="M3 21l6-6" /><path d="M14.5 4l5.5 5.5" /></>,
+    'pin-filled': <><path d="M15 4.5l-4 4-4.5 1.5L5 11.5l7 7 1.5-1.5L15 12.5l4-4L15 4.5z" fill="currentColor" stroke="none" /><path d="M3 21l6-6" /></>,
   }[name] || <path d="M5 12h14" />
   return (
     <svg className="ax-data-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
