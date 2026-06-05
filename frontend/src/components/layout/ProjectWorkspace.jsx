@@ -400,14 +400,14 @@ export default function ProjectWorkspace() {
   }, [auth.isGuest, error, navigate])
 
   // Auto-open the goal setup modal when navigating here right after project creation
+  const autoOpenedGoalRef = useRef(false)
   useEffect(() => {
+    if (autoOpenedGoalRef.current) return
     if (!location.state?.newProject) return
-    // Clear the flag so refreshing the page doesn't re-open it
-    navigate(location.pathname, { replace: true, state: {} })
-    // Wait for the dataset to finish loading before opening
-    const t = setTimeout(() => setGuidanceSetupOpen(true), 600)
+    autoOpenedGoalRef.current = true
+    const t = setTimeout(() => setGuidanceSetupOpen(true), 800)
     return () => clearTimeout(t)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.state?.newProject]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const go = (next) => navigate(`/projects/${id}/${next}`)
   const refreshDataset = async () => {
