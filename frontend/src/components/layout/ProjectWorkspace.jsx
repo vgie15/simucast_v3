@@ -3,7 +3,7 @@
  * Keywords: workspace, tabs, data, describe, tests, models, whatif, report, expand
  * ============================================================ */
 import React, { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import DataPage from '../data/DataPage'
 import ExpandPage from '../expand/ExpandPage'
@@ -246,6 +246,7 @@ function loadEdgeTabPositions() {
 export default function ProjectWorkspace() {
   const { id, tab = 'data' } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const auth = useAuth()
   const [dataset, setDataset] = useState(null)
   const [activeModel, setActiveModel] = useState(null)
@@ -397,6 +398,16 @@ export default function ProjectWorkspace() {
       navigate('/dashboard', { replace: true, state: { message: 'That project is not available in this session.' } })
     }
   }, [auth.isGuest, error, navigate])
+
+  // Auto-open the goal setup modal when navigating here right after project creation
+  useEffect(() => {
+    if (!location.state?.newProject) return
+    // Clear the flag so refreshing the page doesn't re-open it
+    navigate(location.pathname, { replace: true, state: {} })
+    // Wait for the dataset to finish loading before opening
+    const t = setTimeout(() => setGuidanceSetupOpen(true), 600)
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const go = (next) => navigate(`/projects/${id}/${next}`)
   const refreshDataset = async () => {

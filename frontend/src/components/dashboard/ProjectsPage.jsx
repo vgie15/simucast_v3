@@ -150,7 +150,7 @@ export default function ProjectsPage() {
         onClose={() => setModalOpen(false)}
         onCreated={(result) => {
           setModalOpen(false)
-          navigate(`/projects/${result.id}`)
+          navigate(`/projects/${result.id}`, { state: { newProject: true } })
         }}
       />
     </>
