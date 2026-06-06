@@ -1400,6 +1400,14 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
 
             {/* ── Outlier treatment ── */}
             <div className="ax-preplan-section" id="fix-outlier-treatment">
+              {plan.outlier_capped_in_data_tab && (
+                <div className="ax-preplan-notice ax-preplan-notice--warn">
+                  <strong>Outlier capping was already applied in the Data tab.</strong>{' '}
+                  That capping was fitted on the full dataset (including test rows), which can cause data leakage.
+                  Selecting IQR Cap or Z-score Cap here will cap again on top of those values.
+                  To avoid double-capping, use only one approach — either the Data tab <em>or</em> the option below.
+                </div>
+              )}
               <h4
                 {...explainAttrs({
                   type: 'preplan-outlier-treatment',

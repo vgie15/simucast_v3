@@ -7,7 +7,7 @@ persists each Model row alongside its preprocessing plan + influence summary.
 import numpy as np
 from flask import Blueprint, jsonify, request, session
 
-from backend.database import db, ActivityLog, Dataset, Model
+from backend.database import db, ActivityLog, Dataset, DatasetStage, Model
 from backend.utils import _parse_num, clean_json, friendly_error_message, jdump, jload
 from backend.activity import log_activity
 from backend.auth_helpers import (
@@ -66,6 +66,10 @@ def preprocessing_plan(ds_id):
             plan = _build_preprocessing_plan(df, target, features, algorithms, target_options)
         except ValueError as e:
             return {"error": str(e)}, 400
+        outlier_stages = s.query(DatasetStage).filter_by(dataset_id=ds_id).filter(
+            DatasetStage.op_type.in_(["group_outliers", "single_outliers", "winsorize"])
+        ).count()
+        plan["outlier_capped_in_data_tab"] = outlier_stages > 0
         return jsonify(clean_json(plan))
     finally:
         s.close()

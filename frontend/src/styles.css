@@ -14606,6 +14606,18 @@ button.ax-module-head:focus-visible {
   color: var(--color-text-secondary, #64748b);
   margin: -6px 0 10px;
 }
+.ax-preplan-notice {
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 6px;
+  padding: 10px 13px;
+  margin-bottom: 12px;
+}
+.ax-preplan-notice--warn {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+}
 
 /* ── Data readiness checks ── */
 .ax-preplan-checks {
