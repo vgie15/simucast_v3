@@ -141,7 +141,7 @@ def _apply_transform(df, op, params):
         if pred == "missing":
             out = df.dropna(subset=[col])
         elif pred == "equals":
-            out = df[df[col] != value]
+            out = df[df[col].astype(str) != str(value)]
         elif pred == "gt":
             out = df[~(df[col] > _coerce_num(value))]
         elif pred == "lt":

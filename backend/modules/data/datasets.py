@@ -348,7 +348,7 @@ def upload_dataset():
             active_sheet = None
             try:
                 if kind == "csv":
-                    df = pd.read_csv(f)
+                    df = pd.read_csv(f, na_values=["."])
                 else:  # kind == "excel"
                     xls = pd.ExcelFile(f)
                     sheet_payload = {}
