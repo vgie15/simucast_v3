@@ -1147,22 +1147,30 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
       ? 'Cap or remove extreme numeric values.'
       : 'Remove exact duplicate rows from the current stage.'
     return (
-      <CleanGroupCard
-        datasetId={dataset.id}
-        stageId={dataset.current_stage_id}
-        group={group}
-        kind={toolKey}
-        title={title}
-        description={description}
-        applying={applying}
-        showRecommendations={showRecommendations}
-        visibilityProps={visibilityProps}
-        close={close}
-        onApply={async (payload) => {
-          await onApplyGroup(payload)
-          close?.()
-        }}
-      />
+      <>
+        {toolKey === 'outliers' && (
+          <div className="ax-preplan-notice ax-preplan-notice--warn" style={{ margin: '0 0 10px' }}>
+            <strong>Heads up:</strong> Capping done here is applied to the <em>full dataset</em> before the train/test split, which can cause data leakage.
+            For a leakage-free approach, skip this and use <strong>Outlier Treatment</strong> in the Model setup — it caps after the split, fitted on training rows only.
+          </div>
+        )}
+        <CleanGroupCard
+          datasetId={dataset.id}
+          stageId={dataset.current_stage_id}
+          group={group}
+          kind={toolKey}
+          title={title}
+          description={description}
+          applying={applying}
+          showRecommendations={showRecommendations}
+          visibilityProps={visibilityProps}
+          close={close}
+          onApply={async (payload) => {
+            await onApplyGroup(payload)
+            close?.()
+          }}
+        />
+      </>
     )
   }
   if (toolKey === 'labels') {
@@ -1176,7 +1184,15 @@ function ToolbarPopoverContent({ toolKey, dataset, group, applying, onApplyGroup
     return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Binned column')} initialTool="bins" compact showRecommendations={showRecommendations} />
   }
   if (toolKey === 'scale') {
-    return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Scaled column')} initialTool="scale" compact showRecommendations={showRecommendations} />
+    return (
+      <>
+        <div className="ax-preplan-notice ax-preplan-notice--info" style={{ margin: '0 0 10px' }}>
+          <strong>Note:</strong> Scaled columns created here are <em>automatically excluded</em> from model training.
+          Simucast applies scaling during training — configure it in <strong>Model setup → Numeric scaling</strong>.
+        </div>
+        <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Scaled column')} initialTool="scale" compact showRecommendations={showRecommendations} />
+      </>
+    )
   }
   if (toolKey === 'encode') {
     return <FeatureEngineeringCard dataset={dataset} onApplied={makeOnApplied('Encoded column')} initialTool="encode" compact showRecommendations={showRecommendations} />

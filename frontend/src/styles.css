@@ -14618,6 +14618,11 @@ button.ax-module-head:focus-visible {
   border: 1px solid #f59e0b;
   color: #92400e;
 }
+.ax-preplan-notice--info {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1e40af;
+}
 
 /* ── Data readiness checks ── */
 .ax-preplan-checks {
