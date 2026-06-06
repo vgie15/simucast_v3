@@ -764,11 +764,19 @@ def _outliers_check(sub_clean, features, algorithms):
 
     fixes = [
         {
-            "label": "Cap or remove outlier rows",
-            "description": "Data → Cleaning — winsorize or drop outlier rows to reduce their influence on linear models",
+            "label": "Use IQR Cap in training",
+            "description": "Models → Preprocessing plan → Outlier treatment — select IQR Cap to cap outliers after the split, fitted on training rows only",
+            "route": "models.outlier_treatment",
+            "section": "fix-outlier-treatment",
+            "category": "recommended",
+        },
+        {
+            "label": "Cap in Data Cleaning",
+            "description": "Data → Cleaning — winsorize outlier rows before training (note: applied to full dataset before split)",
             "route": "data",
             "section": "outliers",
-        }
+            "category": "alternative",
+        },
     ] if status == "warning" else []
 
     return {

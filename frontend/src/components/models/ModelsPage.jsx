@@ -1399,7 +1399,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
             </div>
 
             {/* ── Outlier treatment ── */}
-            <div className="ax-preplan-section">
+            <div className="ax-preplan-section" id="fix-outlier-treatment">
               <h4
                 {...explainAttrs({
                   type: 'preplan-outlier-treatment',
@@ -5677,6 +5677,7 @@ function routeToFixTarget(route) {
     'models.tuning': { page: 'models', section: 'models-tuning' },
     'models.scaling': { page: 'models', section: 'fix-numeric-preprocessing' },
     'models.numeric_preprocessing': { page: 'models', section: 'fix-numeric-preprocessing' },
+    'models.outlier_treatment': { page: 'models', section: 'fix-outlier-treatment' },
     'models.features': { page: 'models', section: 'models-setup-features' },
     'tests.correlation': { page: 'tests', section: 'fix-correlation-test' },
     'expand.recommendation': { page: 'expand', section: 'expand-section-controls' },
