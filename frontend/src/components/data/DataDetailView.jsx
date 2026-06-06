@@ -233,7 +233,8 @@ export default function DataDetailView({
       if (isExcluded) break
       latest = s.id
     }
-    return latest || currentStageId || null
+    // If every stage was excluded (latest stayed null), show original data
+    return latest || 'original'
   }, [currentStageId, stageList])
 
   // For "For Modeling", use the last pre-scale/pre-encode stage.
