@@ -477,8 +477,7 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
             <label className="ax-whatif-model-select-label" htmlFor="whatif-model-select">
               <select
                 id="whatif-model-select"
-                className="ax-whatif-model-select"
-                {...explainAttrs({ id: 'whatif-model-dropdown', title: 'Model Selector Dropdown', type: 'model-dropdown' }, '', true)}
+                {...explainAttrs({ id: 'whatif-model-dropdown', title: 'Model Selector Dropdown', type: 'model-dropdown' }, 'ax-whatif-model-select', true)}
                 value={selectedModel?.id || ''}
                 onChange={(event) => switchModel(event.target.value)}
               >
