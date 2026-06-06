@@ -13433,7 +13433,9 @@ button.ax-module-head:focus-visible {
   padding: 12px;
   min-width: 0;
   max-width: 100%;
+  width: 100%;
   box-sizing: border-box;
+  overflow: hidden;
   border: 1px solid #fed7aa;
   border-radius: 12px;
   background: #fff7ed;
@@ -13524,6 +13526,7 @@ button.ax-module-head:focus-visible {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 18px 18px 18px 24px;
   display: flex;
   flex-direction: column;

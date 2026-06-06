@@ -39,7 +39,8 @@ function formatModelAlgorithmLabel(value) {
 function formatWhatIfModelLabel(model) {
   const algorithm = formatModelAlgorithmLabel(model?.algorithm || model?.name)
   const target = model?.target || model?.target_variable || ''
-  return target ? `${algorithm} · ${target}` : algorithm
+  const shortTarget = target.length > 22 ? target.slice(0, 20) + '…' : target
+  return target ? `${algorithm} · ${shortTarget}` : algorithm
 }
 
 export default function WhatIfPage({ dataset, activeModel, setActiveModel, initialData, onGo }) {
