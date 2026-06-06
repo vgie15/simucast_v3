@@ -4112,12 +4112,12 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
     const top = sorted[0]
     const topPct = Math.round((top?.relative_strength ?? top?.strength ?? 0) * 100)
     const insights = []
-    if (top && topPct > 50) {
+    if (top && topPct > 25) {
       insights.push(`The model relies mostly on ${top.feature} when predicting ${targetName}.`)
     }
     const strong = sorted.find((f) => {
       const pct = Math.round((f.relative_strength ?? f.strength ?? 0) * 100)
-      return pct >= 15 && pct <= 80 && (f.direction === 'positive' || f.direction === 'negative')
+      return pct >= 10 && pct <= 50 && (f.direction === 'positive' || f.direction === 'negative')
     })
     if (strong) {
       const dir = strong.direction === 'positive' ? 'higher' : 'lower'
@@ -4690,8 +4690,8 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
                 const isNegative = item.direction === 'negative'
                 const strengthPercent = Math.round((item.relative_strength ?? item.strength ?? 0) * 100)
                 const barColor = isPositive ? 'var(--color-accent)' : isNegative ? '#334155' : 'var(--color-border-primary)'
-                const strengthLabel = strengthPercent >= 80 ? 'Very Strong' : strengthPercent >= 40 ? 'Strong' : strengthPercent >= 15 ? 'Moderate' : strengthPercent >= 1 ? 'Weak' : 'No influence'
-                const strengthColor = strengthPercent >= 80 ? '#C2410C' : strengthPercent >= 40 ? '#f97316' : strengthPercent >= 15 ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)'
+                const strengthLabel = strengthPercent >= 30 ? 'Very Strong' : strengthPercent >= 15 ? 'Strong' : strengthPercent >= 5 ? 'Moderate' : strengthPercent >= 1 ? 'Weak' : 'No influence'
+                const strengthColor = strengthPercent >= 30 ? '#C2410C' : strengthPercent >= 15 ? '#f97316' : strengthPercent >= 5 ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)'
                 const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : null
 
                 return (
@@ -5527,11 +5527,11 @@ function normalizeInfluence(value) {
   if (Array.isArray(value)) return value
   if (!value || typeof value !== 'object') return []
   const entries = Object.entries(value)
-  const max = Math.max(...entries.map(([, v]) => Number(v) || 0), 1)
+  const total = entries.reduce((acc, [, v]) => acc + (Number(v) || 0), 0) || 1
   return entries.map(([feature, strength]) => ({
     feature,
     strength: Number(strength) || 0,
-    relative_strength: (Number(strength) || 0) / max,
+    relative_strength: (Number(strength) || 0) / total,
     direction: null,
   }))
 }

@@ -41,7 +41,7 @@ def _feature_influence_from_model(clf, encoded_columns, original_features, algo)
 
     if not rows:
         return []
-    max_strength = max((v["strength"] for v in rows.values()), default=1.0) or 1.0
+    total_strength = sum(v["strength"] for v in rows.values()) or 1.0
     influence = []
     for entry in rows.values():
         strength = entry["strength"]
@@ -55,7 +55,7 @@ def _feature_influence_from_model(clf, encoded_columns, original_features, algo)
         influence.append({
             "feature": entry["feature"],
             "strength": float(strength),
-            "relative_strength": float(strength / max_strength),
+            "relative_strength": float(strength / total_strength),
             "direction": direction,
         })
     return sorted(influence, key=lambda x: -x["strength"])[:15]
