@@ -214,20 +214,23 @@ export default function DataDetailView({
     return () => { cancelled = true }
   }, [datasetId, currentStageId])
 
-  // Last stage BEFORE any exploratory scale/encode operations — used for "For Modeling" view.
+  // Last stage BEFORE any exploratory scale/encode/outlier-cap operations — used for "For Modeling" view.
+  // Outlier capping is excluded because it should be applied after the train/test split (via Model setup
+  // Outlier Treatment), not to the full dataset before splitting.
   const modelingStageId = useMemo(() => {
     const stages = stageList.filter((s) => s.id !== 'original')
     if (!stages.length) return currentStageId || null
     let latest = null
     for (const s of stages) {
       const text = `${s.op_type || ''} ${s.summary || ''}`.toLowerCase()
-      const isScaleEncode = (
+      const isExcluded = (
         text.includes('zscore') || text.includes('z-score') ||
         text.includes('minmax') || text.includes('min-max') ||
         text.includes('scaled') || text.includes('standardize_numeric') ||
-        text.includes('encoded')
+        text.includes('encoded') ||
+        s.op_type === 'group_outliers' || text.includes('winsoriz') || text.includes('outlier')
       )
-      if (isScaleEncode) break
+      if (isExcluded) break
       latest = s.id
     }
     return latest || currentStageId || null
@@ -991,8 +994,8 @@ export default function DataDetailView({
         <div className="ax-dd-modeling-banner">
           <span className="ax-dd-modeling-banner-icon">✦</span>
           <span>
-            Showing data as it enters the model — scaled and encoded columns are excluded.
-            Scaling and encoding are applied automatically during training.
+            Showing data as it enters the model — outlier capping, scaled, and encoded columns are excluded.
+            Outlier treatment, scaling, and encoding are applied automatically during training.
           </span>
         </div>
       )}
