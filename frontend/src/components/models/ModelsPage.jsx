@@ -108,6 +108,7 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
   const [classBalanceStrategy, setClassBalanceStrategy] = useState('none') // 'none' | 'balanced' | 'smote'
   const [numericPreprocessing, setNumericPreprocessing] = useState({
     scaling: 'auto',
+    outlier_treatment: 'none',
     log_columns: [],
     integer_columns: [],
   })
@@ -1394,6 +1395,65 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
               </div>
               <p className="ax-preplan-section-sub" style={{ marginTop: 8, fontStyle: 'italic' }}>
                 Your choice will be applied during training. Auto is recommended for most cases.
+              </p>
+            </div>
+
+            {/* ── Outlier treatment ── */}
+            <div className="ax-preplan-section">
+              <h4
+                {...explainAttrs({
+                  type: 'preplan-outlier-treatment',
+                  metricKey: 'models-preplan-outlier-treatment',
+                  section: 'Preprocessing plan',
+                  title: 'Outlier treatment section',
+                  simple: 'Caps extreme values in numeric features using bounds computed from training data only, preventing data leakage from the test set.',
+                  datasetExplanation: `Current choice: ${(numericPreprocessing.outlier_treatment || 'none').toUpperCase()}.`,
+                  whyItMatters: 'Applying outlier bounds to the full dataset before splitting leaks test-set information into the model. This option caps after the split, fitted on training rows only.',
+                  verdict: 'Use IQR Cap if you applied outlier capping in the Outliers toolbar — this re-applies it correctly inside the training pipeline.',
+                  verdictTone: 'good',
+                }, 'ax-preplan-section-title')}
+              >
+                Outlier treatment
+              </h4>
+              <div className="ax-preplan-scale-cards">
+                {[
+                  { value: 'none',   label: 'None',      tag: 'Default', desc: 'No outlier capping during training' },
+                  { value: 'iqr',    label: 'IQR Cap',   tag: null,      desc: 'Cap to Q1−1.5×IQR / Q3+1.5×IQR fitted on training rows' },
+                  { value: 'zscore', label: 'Z-score Cap', tag: null,    desc: 'Cap to μ ± 3σ fitted on training rows' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    {...explainAttrs({
+                      type: 'preplan-outlier-option',
+                      metricKey: `preplan-outlier-option-${opt.value}`,
+                      section: 'Preprocessing plan',
+                      title: `${opt.label} outlier option`,
+                      label: opt.label,
+                      simple: opt.desc,
+                      datasetExplanation: (numericPreprocessing.outlier_treatment || 'none') === opt.value ? 'This option is currently selected.' : 'This option is not selected.',
+                      whyItMatters: opt.value === 'none'
+                        ? 'Use None if you did not apply outlier capping in the toolbar, or if your dataset has meaningful extreme values.'
+                        : opt.value === 'iqr'
+                          ? 'IQR Cap matches what the Outliers toolbar applies, but fitted correctly on training data only.'
+                          : 'Z-score Cap trims values beyond 3 standard deviations from the training mean.',
+                      verdict: (numericPreprocessing.outlier_treatment || 'none') === opt.value ? 'Currently active.' : 'Turn off Explain Mode to select this option.',
+                      verdictTone: 'good',
+                    }, `ax-preplan-scale-card ${(numericPreprocessing.outlier_treatment || 'none') === opt.value ? 'is-active' : ''}`, true)}
+                    onClick={() => {
+                      if (!aiExplainActive) {
+                        setNumericPreprocessing(prev => ({ ...prev, outlier_treatment: opt.value }))
+                      }
+                    }}
+                  >
+                    <span className="ax-preplan-scale-name">{opt.label}</span>
+                    {opt.tag && <span className="ax-preplan-scale-tag">{opt.tag}</span>}
+                    <span className="ax-preplan-scale-desc">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="ax-preplan-section-sub" style={{ marginTop: 8, fontStyle: 'italic' }}>
+                Bounds are computed from training rows only — the test set never influences the caps.
               </p>
             </div>
 

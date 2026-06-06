@@ -383,6 +383,10 @@ def _numeric_preprocessing_plan(sub_clean, features, algorithms, target_options)
     if scaling_method == "auto" and not needs_scaling:
         effective_scaling = "none"
 
+    outlier_treatment = (numeric_options.get("outlier_treatment") or "none").lower()
+    if outlier_treatment not in ("none", "iqr", "zscore"):
+        outlier_treatment = "none"
+
     scaling = _scaling_plan(algorithms, numeric_features, scaling_method, effective_scaling)
     log_columns = [c for c in numeric_options.get("log_columns") or [] if c in numeric_features]
     integer_columns = [c for c in numeric_options.get("integer_columns") or [] if c in numeric_features]
@@ -392,6 +396,7 @@ def _numeric_preprocessing_plan(sub_clean, features, algorithms, target_options)
         "numeric_preprocessing": {
             "scaling": scaling_method,
             "effective_scaling": effective_scaling,
+            "outlier_treatment": outlier_treatment,
             "log_columns": log_columns,
             "integer_columns": integer_columns,
             "numeric_features": numeric_features,
@@ -669,12 +674,12 @@ def _multicollinearity_pairs(sub_clean, features):
     for i, a in enumerate(numeric_features):
         for b in numeric_features[i + 1:]:
             val = corr.loc[a, b]
-            if pd.notna(val) and val >= 0.85:
+            if pd.notna(val) and val >= 0.75:
                 pairs.append({
                     "feature_a": a,
                     "feature_b": b,
                     "correlation": float(val),
-                    "severity": "high" if val >= 0.95 else "medium",
+                    "severity": "high" if val >= 0.90 else "medium",
                 })
     return pairs
 
