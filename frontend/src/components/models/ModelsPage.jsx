@@ -1425,9 +1425,10 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
               </h4>
               <div className="ax-preplan-scale-cards">
                 {[
-                  { value: 'none',   label: 'None',      tag: 'Default', desc: 'No outlier capping during training' },
-                  { value: 'iqr',    label: 'IQR Cap',   tag: null,      desc: 'Cap to Q1−1.5×IQR / Q3+1.5×IQR fitted on training rows' },
-                  { value: 'zscore', label: 'Z-score Cap', tag: null,    desc: 'Cap to μ ± 3σ fitted on training rows' },
+                  { value: 'none',   label: 'None',        tag: 'Default', desc: 'No outlier treatment during training' },
+                  { value: 'iqr',    label: 'IQR Cap',     tag: null,      desc: 'Cap to Q1−1.5×IQR / Q3+1.5×IQR fitted on training rows' },
+                  { value: 'zscore', label: 'Z-score Cap', tag: null,      desc: 'Cap to μ ± 3σ fitted on training rows' },
+                  { value: 'remove', label: 'Remove Rows', tag: null,      desc: 'Drop training rows outside IQR bounds (test rows are kept)' },
                 ].map(opt => (
                   <button
                     key={opt.value}
@@ -1441,10 +1442,12 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
                       simple: opt.desc,
                       datasetExplanation: (numericPreprocessing.outlier_treatment || 'none') === opt.value ? 'This option is currently selected.' : 'This option is not selected.',
                       whyItMatters: opt.value === 'none'
-                        ? 'Use None if you did not apply outlier capping in the toolbar, or if your dataset has meaningful extreme values.'
+                        ? 'Use None if your dataset has meaningful extreme values or you want no automatic outlier handling.'
                         : opt.value === 'iqr'
                           ? 'IQR Cap matches what the Outliers toolbar applies, but fitted correctly on training data only.'
-                          : 'Z-score Cap trims values beyond 3 standard deviations from the training mean.',
+                          : opt.value === 'zscore'
+                            ? 'Z-score Cap trims values beyond 3 standard deviations from the training mean.'
+                            : 'Remove Rows drops training rows where any feature exceeds IQR bounds. Test rows are always kept for evaluation.',
                       verdict: (numericPreprocessing.outlier_treatment || 'none') === opt.value ? 'Currently active.' : 'Turn off Explain Mode to select this option.',
                       verdictTone: 'good',
                     }, `ax-preplan-scale-card ${(numericPreprocessing.outlier_treatment || 'none') === opt.value ? 'is-active' : ''}`, true)}

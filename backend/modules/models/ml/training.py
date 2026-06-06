@@ -207,22 +207,33 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
         X, y, test_size=test_size, random_state=42, stratify=stratify
     )
 
-    # ── Outlier capping fitted on training data only (prevents leakage) ──
+    # ── Outlier treatment fitted on training data only (prevents leakage) ──
     outlier_treatment = (numeric_preprocessing.get("outlier_treatment") or "none").lower()
     if outlier_treatment != "none":
-        # Only cap original numeric columns; skip one-hot dummies (they contain "=")
+        # Only treat original numeric columns; skip one-hot dummies (they contain "=")
         orig_num_cols = [c for c in X_train.columns if "=" not in c]
-        for col in orig_num_cols:
-            if outlier_treatment == "iqr":
+        if outlier_treatment == "remove":
+            # Drop training rows outside IQR bounds; leave test set intact
+            keep_mask = pd.Series(True, index=X_train.index)
+            for col in orig_num_cols:
                 q1, q3 = float(X_train[col].quantile(0.25)), float(X_train[col].quantile(0.75))
                 iqr = q3 - q1
                 lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-            else:  # zscore
-                mu = float(X_train[col].mean())
-                sigma = float(X_train[col].std()) or 1.0
-                lo, hi = mu - 3 * sigma, mu + 3 * sigma
-            X_train[col] = X_train[col].clip(lower=lo, upper=hi)
-            X_test[col] = X_test[col].clip(lower=lo, upper=hi)
+                keep_mask &= X_train[col].between(lo, hi)
+            X_train = X_train[keep_mask]
+            y_train = y_train[keep_mask] if hasattr(y_train, '__getitem__') else y_train[keep_mask.values]
+        else:
+            for col in orig_num_cols:
+                if outlier_treatment == "iqr":
+                    q1, q3 = float(X_train[col].quantile(0.25)), float(X_train[col].quantile(0.75))
+                    iqr = q3 - q1
+                    lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+                else:  # zscore
+                    mu = float(X_train[col].mean())
+                    sigma = float(X_train[col].std()) or 1.0
+                    lo, hi = mu - 3 * sigma, mu + 3 * sigma
+                X_train[col] = X_train[col].clip(lower=lo, upper=hi)
+                X_test[col] = X_test[col].clip(lower=lo, upper=hi)
 
     scaler = None
     if scaler_kind != "none":

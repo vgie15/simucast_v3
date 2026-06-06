@@ -1071,6 +1071,12 @@ export default function DataDetailView({
                       key={col}
                       data-change-cell={`${rowIndex}:${col}`}
                       onClick={() => !removedRow && !readOnly && startEdit(row, col, row[col])}
+                      onMouseEnter={(change || removedRow) ? (e) => {
+                        const tooltip = e.currentTarget.querySelector('.ax-dd-change-tooltip')
+                        if (!tooltip) return
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        tooltip.classList.toggle('flip-left', rect.left + 320 > window.innerWidth)
+                      } : undefined}
                       className={[
                         readOnly || removedRow ? 'readonly' : '',
                         removedRow ? 'ax-dd-removed-cell' : '',

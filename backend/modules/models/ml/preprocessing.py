@@ -384,7 +384,7 @@ def _numeric_preprocessing_plan(sub_clean, features, algorithms, target_options)
         effective_scaling = "none"
 
     outlier_treatment = (numeric_options.get("outlier_treatment") or "none").lower()
-    if outlier_treatment not in ("none", "iqr", "zscore"):
+    if outlier_treatment not in ("none", "iqr", "zscore", "remove"):
         outlier_treatment = "none"
 
     scaling = _scaling_plan(algorithms, numeric_features, scaling_method, effective_scaling)
