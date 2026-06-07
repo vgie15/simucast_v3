@@ -11,10 +11,12 @@ import { Database, Highlighter, Info, Sparkles } from 'lucide-react'
 
 const PAGE_SIZE = 100
 const VIEW_MODES = [
-  { id: 'original', label: 'Original', icon: Database },
-  { id: 'cleaned', label: 'Cleaned', icon: Sparkles },
-  { id: 'highlight', label: 'Highlighted', icon: Highlighter },
-  { id: 'modeling', label: 'For Modeling', icon: Sparkles },
+  { id: 'original',  label: 'Original',     icon: Database },
+  { id: 'cleaned',   label: 'Cleaned',       icon: Sparkles },
+  { id: 'highlight', label: 'Highlighted',   icon: Highlighter },
+  { id: 'modeling',  label: 'For Modeling',  icon: Sparkles },
+  { id: 'train',     label: 'Train Data',    icon: Database, modelOnly: true },
+  { id: 'test',      label: 'Test Data',     icon: Database, modelOnly: true },
 ]
 const TYPE_ICON = {
   numeric: '#',
@@ -45,7 +47,7 @@ const CHANGE_TYPE_OPTIONS = [
 ]
 
 // Compact read-only dataset table for pages without the full Data table.
-export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) {
+export default function FloatingDatasetPreview({ dataset, activeTab = 'data', activeModel = null }) {
   const datasetId = dataset?.id
   const [dataTableInView, setDataTableInView] = useState(false)
   const hidden = !datasetId || (activeTab === 'data' && dataTableInView)
@@ -77,6 +79,9 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
   const [hasMore, setHasMore] = useState(false)
   const [loadingRows, setLoadingRows] = useState(false)
   const [error, setError] = useState('')
+
+  // The model to use for train/test split view — driven by the parent (currently inspected model)
+  const splitModel = activeModel || null
 
   const scrollRef = useRef(null)
   const sentinelRef = useRef(null)
@@ -245,16 +250,40 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     }
   }, [datasetId, open, variableColumns])
 
+
   useEffect(() => {
     setRows([])
     setRowColumns([])
     setPage(1)
     setHasMore(false)
     setError('')
-  }, [dataset?.current_stage_id, datasetId, modelingStageId, open, viewMode])
+  }, [dataset?.current_stage_id, datasetId, modelingStageId, open, viewMode, activeModel?.id])
 
   useEffect(() => {
     if (!open || !datasetId || !dataset) return
+    // Train/Test split views — fetch from the model split endpoint
+    if (viewMode === 'train' || viewMode === 'test') {
+      if (!splitModel?.id) { setRows([]); setTotalRows(0); setHasMore(false); setLoadingRows(false); return }
+      let cancelled = false
+      setLoadingRows(true)
+      setError('')
+      api.getModelSplitRows(splitModel.id, viewMode, page, PAGE_SIZE)
+        .then((response) => {
+          if (cancelled) return
+          const nextRows = Array.isArray(response.rows) ? response.rows : []
+          setRows((current) => (page === 1 ? nextRows : [...current, ...nextRows]))
+          if (page === 1 && nextRows[0]) {
+            setRowColumns(Object.keys(nextRows[0]).filter((key) => key !== '__row_index'))
+          }
+          const total = Number(response.total || 0)
+          setTotalRows(total)
+          setHasMore(page * PAGE_SIZE < total)
+        })
+        .catch((err) => { if (!cancelled) setError(err.message || 'Split rows could not load.') })
+        .finally(() => { if (!cancelled) setLoadingRows(false) })
+      return () => { cancelled = true }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- splitModel.id covers splitModelId changes
     if (viewMode !== 'original' && modelingStageId === 'original') {
       setRows([])
       setRowColumns([])
@@ -296,7 +325,7 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
     return () => {
       cancelled = true
     }
-  }, [dataset, datasetId, modelingStageId, open, page, viewMode])
+  }, [dataset, datasetId, modelingStageId, open, page, viewMode, splitModel?.id])
 
   const scopedChangeStages = useMemo(() => {
     if (!changeStages.length) return []
@@ -450,19 +479,35 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
                 {VIEW_MODES.map((mode, index) => {
                   const active = viewMode === mode.id
                   const Icon = mode.icon
-                  const disabled = mode.id !== 'original' && !hasChanges
+                  const isModelMode = mode.modelOnly
+                  const hasModel = Boolean(splitModel?.id)
+                  const splitCounts = splitModel?.metrics?.split_rows || {}
+                  const disabled = isModelMode
+                    ? !hasModel
+                    : (mode.id !== 'original' && !hasChanges)
+                  const splitCount = isModelMode && hasModel
+                    ? (mode.id === 'train' ? splitCounts.train : splitCounts.test)
+                    : null
+                  const titleText = isModelMode && !hasModel
+                    ? 'Train a model first to see the split'
+                    : mode.label
+                  // Insert a divider before the Train pill to visually group split views
+                  const showGroupDivider = isModelMode && index > 0 && !VIEW_MODES[index - 1].modelOnly
                   return (
                     <React.Fragment key={mode.id}>
-                      {index > 0 && <span className="ax-floating-dataset-control-divider" aria-hidden="true" />}
+                      {showGroupDivider
+                        ? <span className="ax-floating-dataset-control-divider ax-floating-dataset-control-divider--group" aria-hidden="true" />
+                        : index > 0 && <span className="ax-floating-dataset-control-divider" aria-hidden="true" />}
                       <button
                         type="button"
-                        className={`ax-segmented-item ${active ? 'active' : ''}`}
+                        className={`ax-segmented-item ${active ? 'active' : ''} ${isModelMode ? 'ax-segmented-item--split' : ''}`}
                         onClick={() => setViewMode(mode.id)}
                         disabled={disabled}
-                        title={disabled ? 'Apply a change first to enable this view' : mode.label}
+                        title={titleText}
                       >
                         <Icon size={14} />
                         <span className="ax-segmented-label">{mode.label}</span>
+                        {splitCount != null && <em className="ax-segmented-split-count">{splitCount}</em>}
                       </button>
                     </React.Fragment>
                   )
@@ -628,7 +673,9 @@ export default function FloatingDatasetPreview({ dataset, activeTab = 'data' }) 
 
           <footer className="ax-floating-dataset-footer">
             <span>
-              Showing {rows.length.toLocaleString()} of {Number(effectiveRows || rows.length).toLocaleString()} rows from the {viewMode === 'original' ? 'uploaded' : 'modeling'} dataset.
+              {viewMode === 'train' || viewMode === 'test'
+                ? `Showing ${rows.length.toLocaleString()} of ${Number(totalRows || rows.length).toLocaleString()} rows used for ${viewMode === 'train' ? 'training' : 'testing'} — ${splitModel?.algorithm || 'model'} · ${splitModel?.target || ''}.`
+                : `Showing ${rows.length.toLocaleString()} of ${Number(effectiveRows || rows.length).toLocaleString()} rows from the ${viewMode === 'original' ? 'uploaded' : 'modeling'} dataset.`}
             </span>
             {viewMode === 'highlight' && visibleChanges.length > 0 && (
               <strong>

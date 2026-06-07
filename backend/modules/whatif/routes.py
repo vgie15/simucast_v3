@@ -9,6 +9,7 @@ from backend.database import db, Dataset, Model
 from backend.shared.utils import clean_json, jdump, jload
 from backend.core.activity import activity_payload, log_activity
 from backend.shared.dataframe import df_from_dataset
+from backend.core.auth_helpers import _model_scope
 from backend.ml import (
     ALGORITHM_CATALOG, _build_preprocessing_plan, _deserialize_estimator,
     _model_default_params, _train_one, _whatif_extrapolation_risk,
@@ -29,7 +30,7 @@ def prepare_model_for_whatif(model_id):
     """Backfill prediction metadata for older models so What-if can use them."""
     s = db()
     try:
-        m = s.query(Model).filter_by(id=model_id).first()
+        m = _model_scope(model_id, s)
         if not m:
             return {"error": "model not found"}, 404
         if m.coefficients:
@@ -81,7 +82,7 @@ def whatif_predict(model_id):
 
     s = db()
     try:
-        m = s.query(Model).filter_by(id=model_id).first()
+        m = _model_scope(model_id, s)
         if not m:
             return {"error": "model not found"}, 404
         coef = jload(m.coefficients)
@@ -115,7 +116,8 @@ def whatif_predict(model_id):
                     predicted_class = positive if str(predicted_raw) in ("1", "1.0", "True", "true") else class_labels[0] if class_labels else str(predicted_raw)
                 else:
                     try:
-                        predicted_class = class_labels[int(predicted_raw)]
+                        idx = classes.index(predicted_raw)
+                        predicted_class = class_labels[idx]
                     except Exception:
                         predicted_class = str(predicted_raw)
                 prob = 1.0 if prob is None else prob
@@ -150,33 +152,14 @@ def whatif_predict(model_id):
                 "extrapolation": extrapolation,
             }))
 
-        features = coef["features"]
         weights = coef["coef"]
         intercept = coef["intercept"]
-        means = coef["feature_means"]
-        stds = coef.get("feature_stds") or {}
-        sep = coef.get("dummy_sep", "=")
-        extrapolation = _whatif_extrapolation_risk(inputs, coef.get("raw_features") or [])
 
-        # build vector — use provided values, fallback to means
-        x = []
-        for f in features:
-            raw_value = means.get(f, 0)
-            raw_name = f.split(sep, 1)[0] if sep in f else f
-            if sep in f and raw_name in inputs:
-                expected = f.split(sep, 1)[1]
-                raw_value = 1.0 if str(inputs.get(raw_name)) == expected else 0.0
-            elif f in inputs:
-                try:
-                    raw_value = float(inputs[f])
-                except Exception:
-                    raw_value = means.get(f, 0)
-            if coef.get("scaled"):
-                scale = stds.get(f, 1) or 1
-                x.append((raw_value - means.get(f, 0)) / scale)
-            else:
-                x.append(raw_value)
-
+        # Reuse the same preprocessing pipeline as the primary estimator path so
+        # log transforms, categorical encodings, outlier caps, and scaling are all
+        # applied consistently (the old manual loop skipped these steps).
+        X_fallback = _whatif_input_matrix(coef, inputs)
+        x = X_fallback.iloc[0].tolist()
         z = intercept + sum(w * v for w, v in zip(weights, x))
         target_context = coef.get("target_context")
         warning = None
@@ -229,7 +212,7 @@ def save_whatif_scenario(model_id):
     extrapolation = body.get("extrapolation") or prediction.get("extrapolation") or {}
     s = db()
     try:
-        m = s.query(Model).filter_by(id=model_id).first()
+        m = _model_scope(model_id, s)
         if not m:
             return {"error": "model not found"}, 404
         entry = log_activity(

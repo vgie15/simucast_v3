@@ -12,9 +12,10 @@ from backend.shared.utils import _parse_num, clean_json, friendly_error_message,
 from backend.core.activity import log_activity
 from backend.core.auth_helpers import (
     _auth_from_request, _dataset_scope, _guest_model_limit_response,
-    _session_payload,
+    _model_scope, _session_payload,
 )
-from backend.shared.dataframe import df_from_dataset
+import pandas as pd
+from backend.shared.dataframe import df_from_dataset, _current_rows, infer_variables
 from backend.ml import (
     ALGORITHM_CATALOG, _algo_label_for_task, _build_preprocessing_plan,
     _model_default_params, _train_one,
@@ -83,6 +84,7 @@ def train_model(ds_id):
     _sync_preprocessing_session(target_options)
     model_params = body.get("model_params") or {}
     test_size = min(max(_parse_num(body.get("test_size", target_options.get("test_size")), 0.2, float), 0.05), 0.5)
+    target_options["test_size"] = test_size  # keep plan and training split in sync
 
     s = db()
     try:
@@ -165,6 +167,7 @@ def train_many_models(ds_id):
     _sync_preprocessing_session(target_options)
     model_params = body.get("model_params") or {}
     test_size = min(max(_parse_num(body.get("test_size", target_options.get("test_size")), 0.2, float), 0.05), 0.5)
+    target_options["test_size"] = test_size  # keep plan and training split in sync
 
     s = db()
     try:
@@ -261,6 +264,9 @@ def list_models(ds_id):
     """Return every persisted Model for the dataset (no estimator payload)."""
     s = db()
     try:
+        ds = _dataset_scope(s.query(Dataset), s).filter_by(id=ds_id).first()
+        if not ds:
+            return {"error": "not found"}, 404
         rows = s.query(Model).filter_by(dataset_id=ds_id).order_by(Model.created_at.desc()).all()
         return jsonify([{
             "id": r.id, "name": r.name, "algorithm": r.algorithm,
@@ -282,7 +288,7 @@ def get_model(model_id):
     """Return one Model with What-if metadata derived from its coefficients."""
     s = db()
     try:
-        m = s.query(Model).filter_by(id=model_id).first()
+        m = _model_scope(model_id, s)
         if not m:
             return {"error": "not found"}, 404
         coef = jload(m.coefficients)
@@ -320,13 +326,111 @@ def get_model(model_id):
     finally:
         s.close()
 
+# ANCHOR: Model: Train/Test Split Rows
+@bp.route("/api/models/<model_id>/split-rows", methods=["GET"])
+def get_model_split_rows(model_id):
+    """Return dataset rows that went into the train or test split for a model.
+
+    ?split=train|test  (default: test)
+    ?page=1&page_size=100
+    """
+    split = request.args.get("split", "test")
+    page = max(_parse_num(request.args.get("page"), 1, int), 1)
+    page_size = min(max(_parse_num(request.args.get("page_size"), 100, int), 1), 1000)
+    s = db()
+    try:
+        m = _model_scope(model_id, s)
+        if not m:
+            return jsonify({"error": "model not found"}), 404
+
+        metrics = jload(m.metrics) if isinstance(m.metrics, str) else (m.metrics or {})
+        train_indices = metrics.get("train_row_indices")
+        test_indices = set(metrics.get("test_row_indices") or [])
+        split_counts = metrics.get("split_rows") or {}
+
+        ds = s.query(Dataset).filter_by(id=m.dataset_id).first()
+        if not ds:
+            return jsonify({"error": "dataset not found"}), 404
+
+        all_rows = _current_rows(ds, s)
+        total = len(all_rows)
+
+        # complete_case_row_indices tells us which original rows were kept after
+        # dropna().  Rows absent from this set were excluded before training —
+        # they must not appear under either split label.
+        complete_case = metrics.get("complete_case_row_indices")
+        if complete_case is None:
+            # Legacy model: re-derive complete-case set from stored features/target.
+            features_stored = jload(m.features) or []
+            if features_stored and m.target:
+                try:
+                    df_full = df_from_dataset(ds, s)
+                    cols = [c for c in features_stored + [m.target] if c in df_full.columns]
+                    complete_case = df_full[cols].dropna().index.tolist()
+                except Exception:
+                    complete_case = list(range(total))
+            else:
+                complete_case = list(range(total))
+        complete_case_set = set(complete_case)
+
+        if not test_indices:
+            # Legacy model: re-derive test split with the same seed and stratification.
+            from sklearn.model_selection import train_test_split as _tts
+            test_size = float((metrics.get("split") or {}).get("test_size") or 0.2)
+            stratified = (metrics.get("split") or {}).get("stratified", False)
+            cc_list = sorted(complete_case_set)
+            stratify_labels = None
+            if stratified and m.target:
+                try:
+                    df_full = df_from_dataset(ds, s)
+                    stratify_labels = [df_full.iloc[i][m.target] for i in cc_list]
+                    # only stratify when every label has ≥ 2 samples
+                    from collections import Counter
+                    if min(Counter(stratify_labels).values()) < 2:
+                        stratify_labels = None
+                except Exception:
+                    stratify_labels = None
+            _, test_idx = _tts(cc_list, test_size=test_size, random_state=42, stratify=stratify_labels)
+            test_indices = set(test_idx)
+
+        if split == "train":
+            train_index_set = set(train_indices) if train_indices is not None else complete_case_set - test_indices
+            filtered = [(i, r) for i, r in enumerate(all_rows) if i in train_index_set]
+        else:
+            filtered = [(i, r) for i, r in enumerate(all_rows) if i in test_indices]
+
+        split_total = len(filtered)
+        start = (page - 1) * page_size
+        page_slice = filtered[start: start + page_size]
+
+        variables = infer_variables(pd.DataFrame([r for _, r in page_slice])) if page_slice else []
+
+        page_rows = []
+        for orig_idx, row in page_slice:
+            out = dict(row)
+            out["__row_index"] = orig_idx
+            page_rows.append(out)
+
+        return jsonify({
+            "rows": page_rows,
+            "page": page,
+            "page_size": page_size,
+            "total": split_total,
+            "split": split,
+            "split_rows": split_counts,
+            "variables": variables,
+        })
+    finally:
+        s.close()
+
+
 # ANCHOR: Model: Delete Model
 @bp.route("/api/models/<model_id>", methods=["DELETE"])
 def delete_model(model_id):
     """Delete a Model row plus the activity-log entries that reference it."""
     s = db()
     try:
-        m = s.query(Model).filter_by(id=model_id).first()
+        m = _model_scope(model_id, s)
         if not m:
             return {"error": "model not found"}, 404
         dataset_id = m.dataset_id

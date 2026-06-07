@@ -112,6 +112,31 @@ def _report_account_required_response(session):
     return None
 
 
+def _model_scope(model_id, session):
+    """Return the Model if the current caller owns the dataset it belongs to.
+
+    Mirrors the same ownership logic as ``_dataset_scope``: user-scoped when a
+    real account is present, session-scoped for guests.  Returns ``None`` when
+    the model does not exist or the caller does not own it.
+    """
+    m = session.query(Model).filter_by(id=model_id).first()
+    if not m:
+        return None
+    sess, user = _auth_from_request(session)
+    if not sess:
+        return None
+    ds = session.query(Dataset).filter_by(id=m.dataset_id).first()
+    if not ds:
+        return None
+    if user:
+        if ds.user_id != user.id:
+            return None
+    else:
+        if ds.session_id != sess.id:
+            return None
+    return m
+
+
 def _guest_model_limit_response(session, sess, ds_id, requested_count=1):
     """Enforce the cumulative model-training cap for guest sessions."""
     if not sess or not sess.is_guest:

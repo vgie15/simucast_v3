@@ -14,7 +14,7 @@ from backend.auth_helpers import (
     _auth_from_request, _dataset_scope, _guest_model_limit_response,
     _session_payload,
 )
-from backend.dataframe_utils import df_from_dataset
+from backend.dataframe_utils import df_from_dataset, _current_rows, infer_variables
 from backend.ml import (
     ALGORITHM_CATALOG, _algo_label_for_task, _build_preprocessing_plan,
     _model_default_params, _train_one,
@@ -321,6 +321,75 @@ def get_model(model_id):
         })
     finally:
         s.close()
+
+# ANCHOR: Model: Train/Test Split Rows
+@bp.route("/api/models/<model_id>/split-rows", methods=["GET"])
+def get_model_split_rows(model_id):
+    """Return the dataset rows that went into the train or test split for a model.
+
+    ?split=train|test  (default: test)
+    ?page=1&page_size=100
+    """
+    split = request.args.get("split", "test")
+    page = max(_parse_num(request.args.get("page"), 1, int), 1)
+    page_size = min(max(_parse_num(request.args.get("page_size"), 100, int), 1), 1000)
+    s = db()
+    try:
+        m = s.query(Model).filter_by(id=model_id).first()
+        if not m:
+            return jsonify({"error": "model not found"}), 404
+
+        metrics = jload(m.metrics) if isinstance(m.metrics, str) else (m.metrics or {})
+        test_indices = set(metrics.get("test_row_indices") or [])
+        split_counts = metrics.get("split_rows") or {}
+
+        ds = s.query(Dataset).filter_by(id=m.dataset_id).first()
+        if not ds:
+            return jsonify({"error": "dataset not found"}), 404
+
+        all_rows = _current_rows(ds, s)
+        total = len(all_rows)
+
+        if not test_indices:
+            # Model was trained before split indices were stored — re-derive them
+            # using the same seed so they match what was actually used.
+            from sklearn.model_selection import train_test_split as _tts
+            import pandas as pd
+            test_size = float((metrics.get("split") or {}).get("test_size") or 0.2)
+            indices = list(range(total))
+            train_idx, test_idx = _tts(indices, test_size=test_size, random_state=42)
+            test_indices = set(test_idx)
+
+        if split == "train":
+            filtered = [(i, r) for i, r in enumerate(all_rows) if i not in test_indices]
+        else:
+            filtered = [(i, r) for i, r in enumerate(all_rows) if i in test_indices]
+
+        split_total = len(filtered)
+        start = (page - 1) * page_size
+        page_slice = filtered[start: start + page_size]
+
+        import pandas as pd
+        variables = infer_variables(pd.DataFrame([r for _, r in page_slice])) if page_slice else []
+
+        page_rows = []
+        for orig_idx, row in page_slice:
+            out = dict(row)
+            out["__row_index"] = orig_idx
+            page_rows.append(out)
+
+        return jsonify({
+            "rows": page_rows,
+            "page": page,
+            "page_size": page_size,
+            "total": split_total,
+            "split": split,
+            "split_rows": split_counts,
+            "variables": variables,
+        })
+    finally:
+        s.close()
+
 
 # ANCHOR: Model: Delete Model
 @bp.route("/api/models/<model_id>", methods=["DELETE"])

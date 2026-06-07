@@ -60,8 +60,7 @@ def _normalize_encoding_value(val):
     return text
 
 def _get_binary_mapping(unique_values):
-    norm_to_raw = {_normalize_encoding_value(v): v for v in unique_values}
-    norms = list(norm_to_raw.keys())
+    norms = list(dict.fromkeys(_normalize_encoding_value(v) for v in unique_values))
     
     no_norm = None
     for n in norms:
@@ -80,13 +79,11 @@ def _get_binary_mapping(unique_values):
         
     mapping = {}
     for rank, norm in enumerate(sorted_norms):
-        raw_val = norm_to_raw[norm]
-        mapping[raw_val] = rank
+        mapping[norm] = rank
     return mapping
 
 def _get_ordinal_mapping(unique_values):
-    norm_to_raw = {_normalize_encoding_value(v): v for v in unique_values}
-    norms = list(norm_to_raw.keys())
+    norms = list(dict.fromkeys(_normalize_encoding_value(v) for v in unique_values))
     
     best_group = None
     for group in ORDERED_GROUPS:
@@ -101,23 +98,21 @@ def _get_ordinal_mapping(unique_values):
         
     mapping = {}
     for rank, norm in enumerate(sorted_norms):
-        raw_val = norm_to_raw[norm]
-        mapping[raw_val] = rank
+        mapping[norm] = rank
     return mapping
 
 def _get_ordered_mapping(unique_values, preferred_order):
-    norm_to_raw = {_normalize_encoding_value(v): v for v in unique_values}
+    norms = set(_normalize_encoding_value(v) for v in unique_values)
     preferred_norms = [_normalize_encoding_value(v) for v in preferred_order or []]
     sorted_norms = []
     for norm in preferred_norms:
-        if norm in norm_to_raw and norm not in sorted_norms:
+        if norm in norms and norm not in sorted_norms:
             sorted_norms.append(norm)
-    sorted_norms.extend(sorted(n for n in norm_to_raw.keys() if n not in sorted_norms))
+    sorted_norms.extend(sorted(n for n in norms if n not in sorted_norms))
 
     mapping = {}
     for rank, norm in enumerate(sorted_norms):
-        raw_val = norm_to_raw[norm]
-        mapping[raw_val] = rank
+        mapping[norm] = rank
     return mapping
 
 def _detect_encoding_suggestion(series):
@@ -163,7 +158,8 @@ def _apply_categorical_encoding(df, plan_encoding, categorical_mappings=None):
                 mapping = _get_ordinal_mapping(unique_vals)
             mappings_to_save[col] = mapping
             
-        df_out[col] = series_str.map(lambda val: mapping.get(str(val), 0)).astype(float)
+        normalized_mapping = {_normalize_encoding_value(k): v for k, v in mapping.items()}
+        df_out[col] = series_str.map(lambda val: normalized_mapping.get(_normalize_encoding_value(val), 0)).astype(float)
         
     return df_out, mappings_to_save
 

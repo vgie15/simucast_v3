@@ -71,8 +71,14 @@ def _deserialize_estimator(payload):
     return pickle.loads(base64.b64decode(payload.encode("ascii")))
 
 
-def _apply_numeric_preprocessing_frame(X_raw, numeric_config):
-    """Apply optional log1p / integer-rounding to a feature DataFrame."""
+def _apply_numeric_preprocessing_frame(X_raw, numeric_config, precomputed_shifts=None):
+    """Apply optional log1p / integer-rounding to a feature DataFrame.
+
+    ``precomputed_shifts`` maps column name → the shift used at training time.
+    Pass it during what-if so the same shift is reused instead of being
+    recalculated from the single input row (which would give a different shift
+    whenever the user's value happens to be negative).
+    """
     X = X_raw.copy()
     numeric_config = numeric_config or {}
     log_columns = set(numeric_config.get("log_columns") or [])
@@ -87,10 +93,19 @@ def _apply_numeric_preprocessing_frame(X_raw, numeric_config):
             X[col] = numeric
             applied.append({"column": col, "transform": "integer_enforcement"})
         if col in log_columns:
-            min_val = numeric.min(skipna=True)
-            shift = float(abs(min_val) + 1) if pd.notna(min_val) and min_val <= -1 else 0.0
-            X[col] = np.log1p(numeric + shift)
-            applied.append({"column": col, "transform": "log1p", "shift": shift})
+            if precomputed_shifts and col in precomputed_shifts:
+                shift = precomputed_shifts[col]
+            else:
+                min_val = numeric.min(skipna=True)
+                shift = float(abs(min_val) + 1) if pd.notna(min_val) and min_val <= -1 else 0.0
+            shifted = numeric + shift
+            clipped_count = int((shifted <= -1).sum())
+            safe_shifted = shifted.clip(lower=-1 + 1e-12)
+            X[col] = np.log1p(safe_shifted)
+            item = {"column": col, "transform": "log1p", "shift": shift}
+            if clipped_count:
+                item["clipped_below_domain"] = clipped_count
+            applied.append(item)
     return X, applied
 
 def _whatif_raw_features(X_raw):

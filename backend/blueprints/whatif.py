@@ -150,33 +150,11 @@ def whatif_predict(model_id):
                 "extrapolation": extrapolation,
             }))
 
-        features = coef["features"]
         weights = coef["coef"]
         intercept = coef["intercept"]
-        means = coef["feature_means"]
-        stds = coef.get("feature_stds") or {}
-        sep = coef.get("dummy_sep", "=")
-        extrapolation = _whatif_extrapolation_risk(inputs, coef.get("raw_features") or [])
 
-        # build vector — use provided values, fallback to means
-        x = []
-        for f in features:
-            raw_value = means.get(f, 0)
-            raw_name = f.split(sep, 1)[0] if sep in f else f
-            if sep in f and raw_name in inputs:
-                expected = f.split(sep, 1)[1]
-                raw_value = 1.0 if str(inputs.get(raw_name)) == expected else 0.0
-            elif f in inputs:
-                try:
-                    raw_value = float(inputs[f])
-                except Exception:
-                    raw_value = means.get(f, 0)
-            if coef.get("scaled"):
-                scale = stds.get(f, 1) or 1
-                x.append((raw_value - means.get(f, 0)) / scale)
-            else:
-                x.append(raw_value)
-
+        X_fallback = _whatif_input_matrix(coef, inputs)
+        x = X_fallback.iloc[0].tolist()
         z = intercept + sum(w * v for w, v in zip(weights, x))
         target_context = coef.get("target_context")
         warning = None

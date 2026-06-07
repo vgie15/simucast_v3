@@ -94,7 +94,7 @@ const PARAM_DEFS = {
 }
 
 // Page that configures targets, features, validation, algorithms, and trains predictive models.
-export default function ModelsPage({ dataset, setActiveModel, onGo, initialData }) {
+export default function ModelsPage({ dataset, setActiveModel, setInspectedModel, onGo, initialData }) {
   const dialog = useDialog()
   const auth = useAuth()
   const navigate = useNavigate()
@@ -121,6 +121,13 @@ export default function ModelsPage({ dataset, setActiveModel, onGo, initialData 
   const [training, setTraining] = useState(false)
   const [results, setResults] = useState(null)
   const [activeResultIdx, setActiveResultIdx] = useState(0)
+
+  // Keep the parent workspace aware of which model is currently being inspected
+  // so the Dataset preview's Train/Test pills always reflect the right split.
+  useEffect(() => {
+    const model = results?.models?.[activeResultIdx] || results?.models?.[0] || null
+    setInspectedModel?.(model)
+  }, [results, activeResultIdx])
   const [models, setModels] = useState(initialData?.tab === 'models' && initialData?.datasetId === dataset?.id ? (initialData.models || []) : [])
   const [draftReady, setDraftReady] = useState(false)
   const [dismissedChecks, setDismissedChecks] = useState([])

@@ -249,6 +249,7 @@ export default function ProjectWorkspace() {
   const auth = useAuth()
   const [dataset, setDataset] = useState(null)
   const [activeModel, setActiveModel] = useState(null)
+  const [inspectedModel, setInspectedModel] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -517,7 +518,7 @@ export default function ProjectWorkspace() {
     )
   }
 
-  const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, go, viewStageRequest, refreshKey, initialData: tabPreload })
+  const page = renderTab(activeTab, { dataset, setDataset, activeModel, setActiveModel, setInspectedModel, go, viewStageRequest, refreshKey, initialData: tabPreload })
 
   const startGuideFocus = async (step) => {
     if (!dataset?.id || !dataset?.guidance) return
@@ -629,7 +630,7 @@ export default function ProjectWorkspace() {
       {guideSpotlight && (
         <GuideSpotlightOverlay spotlight={guideSpotlight} onClose={clearGuideSpotlight} />
       )}
-      <FloatingDatasetPreview dataset={dataset} activeTab={activeTab} />
+      <FloatingDatasetPreview dataset={dataset} activeTab={activeTab} activeModel={inspectedModel || activeModel} />
       <ProjectGuidanceSetup
         dataset={dataset}
         open={guidanceSetupOpen}
@@ -798,6 +799,7 @@ function renderTab(tab, props) {
           key={k}
           dataset={props.dataset}
           setActiveModel={props.setActiveModel}
+          setInspectedModel={props.setInspectedModel}
           onGo={props.go}
           initialData={props.initialData}
         />

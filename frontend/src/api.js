@@ -357,6 +357,8 @@ export const api = {
     }),
   listModels: (id) => request(`/api/datasets/${id}/models`),
   getModel: (mid) => request(`/api/models/${mid}`),
+  getModelSplitRows: (mid, split = 'test', page = 1, pageSize = 100) =>
+    request(`/api/models/${mid}/split-rows?split=${split}&page=${page}&page_size=${pageSize}`),
   deleteModel: (mid) =>
     request(`/api/models/${mid}`, {
       method: 'DELETE',
