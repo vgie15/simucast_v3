@@ -442,7 +442,7 @@ def _train_one(df, target, features, algo, test_size, plan, model_params=None):
         "feature_stds": feature_stds,
         "feature_mins": feature_mins,
         "feature_ranges": feature_ranges,
-        "raw_features": _whatif_raw_features(X_raw),
+        "raw_features": _whatif_raw_features(X_train_raw),
         "dummy_sep": "=",
         "scaled": scaler is not None,
         "scaler_kind": scaler_kind if scaler is not None else None,
