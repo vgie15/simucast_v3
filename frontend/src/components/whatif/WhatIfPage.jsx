@@ -30,7 +30,7 @@ function formatModelAlgorithmLabel(value) {
   const key = String(value || '').trim().toLowerCase().replace(/[_-]+/g, ' ')
   if (!key) return 'Selected model'
   if (key.includes('random forest') || key === 'rf') return 'Random Forest'
-  if (key.includes('decision tree') || key === 'tree') return 'Decision Tree'
+  if (key.includes('decision tree') || key === 'tree') return 'Decision Tree (CART)'
   if (key.includes('linear')) return 'Linear Regression'
   if (key.includes('logistic')) return 'Logistic Regression'
   return key.replace(/\b\w/g, (char) => char.toUpperCase())
@@ -597,6 +597,11 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
               <p id="whatif-current-prediction-value" {...explainAttrs({ id: 'whatif-current-prediction-value', title: 'Current prediction value', type: 'current-prediction-value' })} style={{ fontSize: 40, fontWeight: 700, margin: '4px 0 2px', color: 'var(--color-text-primary)', lineHeight: 1.1 }}>
                 {isProb ? `${Math.round(currentPred * 100)}%` : fmt(currentPred)}
               </p>
+              {isProb && pred?.predicted_class && (
+                <p id="whatif-predicted-class" style={{ fontSize: 13, fontWeight: 600, margin: '2px 0 0', color: 'var(--color-text-secondary)' }}>
+                  Predicted: <span style={{ color: 'var(--color-text-primary)' }}>{pred.predicted_class}</span>
+                </p>
+              )}
               {baseline && (
                 <p id="whatif-difference-from-baseline" {...explainAttrs({ id: 'whatif-difference-from-baseline', title: 'Difference from baseline', type: 'difference-from-baseline' })} style={{ fontSize: 12, margin: '4px 0 0', color: delta > 0 ? 'var(--color-text-success, #16a34a)' : delta < 0 ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary)' }}>
                   {formatDelta(delta, isProb)} vs baseline
@@ -621,6 +626,9 @@ export default function WhatIfPage({ dataset, activeModel, setActiveModel, initi
               <p id="whatif-baseline-value" {...explainAttrs({ id: 'whatif-baseline-value', title: 'Baseline value', type: 'baseline-panel' })} style={{ fontSize: 22, fontWeight: 500, margin: '4px 0 0', color: 'var(--color-text-secondary)' }}>
                 {isProb ? `${Math.round(baselinePred * 100)}%` : fmt(baselinePred)}
               </p>
+              {isProb && baseline?.predicted_class && (
+                <p id="whatif-baseline-predicted-class" style={{ fontSize: 11, fontWeight: 600, margin: '2px 0 0', color: 'var(--color-text-tertiary)' }}>{baseline.predicted_class}</p>
+              )}
               <p id="whatif-baseline-caption" {...explainAttrs({ id: 'whatif-baseline-caption', title: 'Baseline caption', type: 'baseline-panel' })} style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '2px 0 0' }}>mean prediction</p>
             </div>
           </div>
@@ -1131,7 +1139,11 @@ function fmt(value) {
 
 function formatPrediction(prediction) {
   if (!prediction) return '-'
-  return prediction.kind === 'probability' ? `${Math.round(prediction.prediction * 100)}%` : fmt(prediction.prediction)
+  if (prediction.kind === 'probability') {
+    const pct = `${Math.round(prediction.prediction * 100)}%`
+    return prediction.predicted_class ? `${pct} (${prediction.predicted_class})` : pct
+  }
+  return fmt(prediction.prediction)
 }
 
 function formatDelta(delta, isProb) {

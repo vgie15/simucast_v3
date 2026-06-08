@@ -153,7 +153,7 @@ export function ResultsSummary({ models, activeIdx, isClassification }) {
 
 function algoLabelForTask(algo, task) {
   if (!algo) return 'Model'
-  const labels = { logistic: 'Logistic Regression', rf: 'Random Forest', tree: 'Decision Tree', linear: 'Linear Regression' }
+  const labels = { logistic: 'Logistic Regression', rf: 'Random Forest', tree: 'Decision Tree (CART)', linear: 'Linear Regression' }
   return labels[algo] || algo
 }
 

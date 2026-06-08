@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Gauge,
   History,
+  Info,
   RotateCcw,
   SlidersHorizontal,
   Sparkles,
@@ -36,7 +37,7 @@ const ALGOS = [
     desc: 'Linear, fast, interpretable. Good baseline for classification.' },
   { key: 'rf',       label: 'Random Forest',       task: 'both',           interpretable: false,
     desc: 'Ensemble of trees. Handles non-linearity, less tuning needed.' },
-  { key: 'tree',     label: 'Decision Tree',       task: 'both',           interpretable: false,
+  { key: 'tree',     label: 'Decision Tree (CART)', task: 'both',           interpretable: false,
     desc: 'Single tree model. Easy to inspect, but can overfit without depth limits.' },
   { key: 'linear',   label: 'Linear Regression',   task: 'regression',     interpretable: true,
     desc: 'Linear baseline for regression. Coefficients directly interpretable.' },
@@ -50,7 +51,7 @@ const SETUP_ALGO_DETAILS = {
     color: '#f97316',
   },
   tree: {
-    name: 'Decision Tree',
+    name: 'Decision Tree (CART)',
     description: 'Splits data into branches based on feature thresholds.',
     bestFor: 'interpretable models, smaller datasets',
     color: '#2563eb',
@@ -4503,7 +4504,7 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
               <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                MODEL HEALTH
+                MODEL FITTING RISK
               </span>
               <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
                 {algoLabelForTask(active.algorithm, active.metrics?.task)}
@@ -4625,8 +4626,20 @@ function ResultsPanel({ results, activeIdx, setActiveIdx, onUseInWhatIf, dataset
         {section === 'features' && <div id="models-features" className="ax-card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
-              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 FEATURE INFLUENCE
+                <span
+                  title={
+                    featureModel.algorithm === 'rf' || featureModel.algorithm === 'tree'
+                      ? 'Computed using mean decrease in Gini impurity (sklearn feature_importances_). Each feature\'s score reflects how often it is used across all splits and how much it reduces prediction error. One-hot encoded features are summed back to their original column.'
+                      : featureModel.algorithm === 'logistic' || featureModel.algorithm === 'linear'
+                        ? 'Computed using absolute coefficient values (|coef_|). A larger value means the feature shifts the prediction more per unit change. For multiclass logistic regression, the mean absolute value across all class-vs-rest coefficients is used. One-hot encoded features are summed back to their original column.'
+                        : 'Reflects how much each feature contributes to the model\'s predictions.'
+                  }
+                  style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help', color: 'var(--color-text-tertiary)', opacity: 0.7 }}
+                >
+                  <Info size={11} />
+                </span>
               </span>
               <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '4px 0 0', color: 'var(--color-text-primary)' }}>
                 {algoLabelForTask(featureModel.algorithm, featureModel.metrics?.task)}
@@ -4923,7 +4936,7 @@ function ComparisonTable({ models, activeIdx, onPick, aiExplainActive, onExplain
         <thead>
           <tr>
             <th>Algorithm</th>
-            <th>Health</th>
+            <th>Model Fitting Risk</th>
             {task === 'classification' ? (
               <>
                 <th>Accuracy</th>
@@ -4959,7 +4972,7 @@ function ComparisonTable({ models, activeIdx, onPick, aiExplainActive, onExplain
                 key={m.id}
                 onClick={(e) => {
                   if (aiExplainActive) {
-                    onExplain?.({ type: 'comparisonRow', metricKey: 'comparisonRow', section: 'Comparison Table', model: m, label: m.label, index: i }, e)
+                    onExplain?.({ type: 'comparisonRow', metricKey: 'comparisonRow', section: 'Comparison Table', model: m, label: algoLabelForTask(m.algorithm, m.metrics?.task), index: i }, e)
                   }
                 }}
                 style={{
@@ -4968,7 +4981,7 @@ function ComparisonTable({ models, activeIdx, onPick, aiExplainActive, onExplain
                 }}
               >
                 <td>
-                  <strong style={{ color: 'var(--color-text-primary)' }}>{m.label}</strong>
+                  <strong style={{ color: 'var(--color-text-primary)' }}>{algoLabelForTask(m.algorithm, m.metrics?.task)}</strong>
                   {isBest && (
                     <span
                       className="ax-chip"
@@ -5658,7 +5671,7 @@ function algoLabel(algo) {
 // Returns a task-aware algorithm label that distinguishes classifier and regressor variants.
 function algoLabelForTask(algo, task) {
   if (algo === 'rf') return task === 'classification' ? 'Random Forest Classifier' : task === 'regression' ? 'Random Forest Regressor' : 'Random Forest'
-  if (algo === 'tree') return task === 'classification' ? 'Decision Tree Classifier' : task === 'regression' ? 'Decision Tree Regressor' : 'Decision Tree'
+  if (algo === 'tree') return task === 'classification' ? 'Decision Tree Classifier (CART)' : task === 'regression' ? 'Decision Tree Regressor (CART)' : 'Decision Tree (CART)'
   return algoLabel(algo)
 }
 

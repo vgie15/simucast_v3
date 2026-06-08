@@ -7,7 +7,7 @@ from backend.shared.utils import _parse_num
 ALGORITHM_CATALOG = {
     "logistic": {"label": "Logistic regression", "task": "classification", "needs_scaling": True,  "interpretable": True},
     "rf":       {"label": "Random forest",       "task": "both",          "needs_scaling": False, "interpretable": False},
-    "tree":     {"label": "Decision tree",       "task": "both",          "needs_scaling": False, "interpretable": False},
+    "tree":     {"label": "Decision tree (CART)", "task": "both",          "needs_scaling": False, "interpretable": False},
     "linear":   {"label": "Linear regression",   "task": "regression",    "needs_scaling": True,  "interpretable": True},
 }
 
@@ -34,7 +34,7 @@ def _algo_label_for_task(algo, task=None):
     if algo == "rf":
         return "Random Forest Classifier" if task == "classification" else "Random Forest Regressor" if task == "regression" else "Random Forest"
     if algo == "tree":
-        return "Decision Tree Classifier" if task == "classification" else "Decision Tree Regressor" if task == "regression" else "Decision Tree"
+        return "Decision Tree Classifier (CART)" if task == "classification" else "Decision Tree Regressor (CART)" if task == "regression" else "Decision Tree (CART)"
     return ALGORITHM_CATALOG.get(algo, {}).get("label", algo)
 
 
